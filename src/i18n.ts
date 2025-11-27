@@ -1,32 +1,42 @@
-// Dueli Internationalization (i18n)
-// نظام الترجمة والتعريب
+// Dueli Internationalization (i18n) - Updated Design
+// نظام الترجمة والتعريب - التصميم الجديد
 
 export type Language = 'ar' | 'en';
 
 export const translations = {
   ar: {
     // العامة
-    app_name: 'Dueli',
-    app_tagline: 'منصة المنافسات والحوارات',
+    app_title: 'ديولي',
+    app_subtitle: 'تواصل عبر التنافس',
     home: 'الرئيسية',
     explore: 'استكشف',
-    live: 'مباشر',
+    live: 'بث مباشر',
     recorded: 'مسجل',
     profile: 'الملف الشخصي',
     settings: 'الإعدادات',
     logout: 'تسجيل الخروج',
-    login: 'تسجيل الدخول',
+    login: 'دخول',
     register: 'إنشاء حساب',
-    search: 'بحث...',
+    search_placeholder: 'ابحث عن منافسة، عالم، أو موهبة...',
     filter: 'تصفية',
-    sort: 'ترتيب',
-    all: 'الكل',
+    all: 'الجميع',
+    help: 'مساعدة',
+    theme: 'الوضع الليلي/النهاري',
+    language: 'اللغة',
     
     // الأقسام
     categories: 'الأقسام',
     dialogue: 'الحوار',
     science: 'العلوم',
     talents: 'المواهب',
+    
+    // أقسام العرض
+    sections: {
+      suggested: 'مقترح لك',
+      dialogue: 'ساحة الحوار',
+      science: 'المختبر العلمي',
+      talents: 'مسرح المواهب'
+    },
     
     // أقسام الحوار الفرعية
     religions: 'الأديان',
@@ -67,13 +77,16 @@ export const translations = {
     select_category: 'اختر القسم',
     select_subcategory: 'اختر القسم الفرعي',
     scheduled_time: 'موعد البدء',
+    request_join: 'طلب الانضمام',
+    cancel_request: 'إلغاء الطلب',
     
     // الحالات
     status_pending: 'في انتظار منافس',
     status_accepted: 'تم القبول',
-    status_live: 'مباشر الآن',
+    status_live: 'مباشر',
     status_completed: 'منتهية',
     status_cancelled: 'ملغاة',
+    status_ongoing: 'مستمر',
     
     // التفاعل
     invite: 'دعوة',
@@ -90,10 +103,7 @@ export const translations = {
     // التقييم
     rate: 'قيّم',
     rating: 'التقييم',
-    ratings: 'التقييمات',
-    rate_competitor: 'قيّم المتنافس',
-    your_rating: 'تقييمك',
-    average_rating: 'متوسط التقييم',
+    viewers: 'مشاهدة',
     
     // التعليقات
     comment: 'تعليق',
@@ -101,142 +111,91 @@ export const translations = {
     add_comment: 'أضف تعليقاً',
     live_chat: 'المحادثة المباشرة',
     
+    // تسجيل الدخول
+    login_with_google: 'الدخول بحساب Google',
+    login_with_facebook: 'الدخول بحساب Facebook',
+    login_with_microsoft: 'الدخول بحساب Microsoft',
+    login_with_twitter: 'الدخول بحساب X',
+    login_welcome: 'مرحباً بك في ديولي',
+    login_subtitle: 'سجل دخولك للمشاركة في المنافسات',
+    or_continue_with: 'أو تابع باستخدام',
+    
     // المستخدم
     user: 'مستخدم',
     username: 'اسم المستخدم',
     email: 'البريد الإلكتروني',
-    password: 'كلمة المرور',
-    confirm_password: 'تأكيد كلمة المرور',
     display_name: 'الاسم المعروض',
     bio: 'نبذة عني',
     country: 'الدولة',
-    language: 'اللغة',
+    my_competitions: 'منافساتي',
+    my_requests: 'طلباتي',
     
     // الإحصائيات
     stats: 'الإحصائيات',
     total_competitions: 'إجمالي المنافسات',
     total_wins: 'الانتصارات',
     total_views: 'المشاهدات',
-    total_earnings: 'الأرباح',
     followers: 'المتابعون',
     following: 'يتابع',
     
-    // البث
-    start_live: 'ابدأ البث',
-    end_live: 'إنهاء البث',
-    connect_youtube: 'ربط حساب يوتيوب',
-    youtube_connected: 'يوتيوب متصل',
-    camera: 'الكاميرا',
-    microphone: 'الميكروفون',
-    screen_share: 'مشاركة الشاشة',
-    
-    // الإشعارات
-    notifications: 'الإشعارات',
-    new_invite: 'دعوة جديدة للمنافسة',
-    new_follower: 'متابع جديد',
-    competition_starting: 'المنافسة ستبدأ قريباً',
-    
-    // الفلترة
-    filter_by_country: 'فلترة حسب الدولة',
-    filter_by_language: 'فلترة حسب اللغة',
-    filter_by_category: 'فلترة حسب القسم',
-    filter_by_status: 'فلترة حسب الحالة',
-    
-    // الرسائل
-    messages: 'الرسائل',
-    send_message: 'إرسال رسالة',
-    no_messages: 'لا توجد رسائل',
-    
-    // المنشورات
-    posts: 'المنشورات',
-    create_post: 'منشور جديد',
-    whats_new: 'ما الجديد؟',
-    
     // الأخطاء
     error: 'خطأ',
-    error_occurred: 'حدث خطأ',
     not_found: 'غير موجود',
-    unauthorized: 'غير مصرح',
     login_required: 'يجب تسجيل الدخول',
+    no_duels: 'عذراً، لا توجد منافسات هنا حالياً.',
     
     // النجاح
     success: 'تم بنجاح',
-    saved: 'تم الحفظ',
-    created: 'تم الإنشاء',
-    deleted: 'تم الحذف',
-    
-    // التأكيدات
-    confirm: 'تأكيد',
-    are_you_sure: 'هل أنت متأكد؟',
-    yes: 'نعم',
-    no: 'لا',
-    
-    // الأرباح
-    earnings: 'الأرباح',
-    ad_revenue: 'إيرادات الإعلانات',
-    your_share: 'حصتك',
-    platform_fee: 'رسوم المنصة (20%)',
-    
-    // الوصف
-    platform_description: 'منصة تتيح التواصل عن طريق التنافس في الحوارات والعلوم والمواهب',
-    open_source: 'مفتوحة المصدر',
-    non_profit: 'غير ربحية',
+    request_sent: 'تم إرسال الطلب',
     
     // Footer
+    footer: '© 2025 ديولي. جميع الحقوق محفوظة.',
     about: 'عن المنصة',
     contact: 'تواصل معنا',
     terms: 'الشروط والأحكام',
     privacy: 'سياسة الخصوصية',
-    github: 'المصدر على GitHub',
     
-    // الصفحة الرئيسية
-    hero_title: 'نافس، ناقش، تألق',
-    hero_subtitle: 'منصة عالمية للمنافسات الحوارية والعلمية والمواهب',
-    get_started: 'ابدأ الآن',
-    watch_live: 'شاهد البث المباشر',
-    featured_competitions: 'منافسات مميزة',
-    trending_now: 'الأكثر رواجاً',
-    upcoming: 'القادمة',
-    
-    // أزرار الإجراءات
+    // الإجراءات
     view_all: 'عرض الكل',
     load_more: 'تحميل المزيد',
-    refresh: 'تحديث',
     back: 'رجوع',
-    next: 'التالي',
-    previous: 'السابق',
-    submit: 'إرسال',
     close: 'إغلاق',
-
-    // المشاهدين
-    viewers: 'مشاهد',
-    watching_now: 'يشاهدون الآن',
-    registered_only: 'المسجلون فقط يمكنهم التعليق والتقييم',
+    submit: 'إرسال',
   },
   
   en: {
     // General
-    app_name: 'Dueli',
-    app_tagline: 'Competition & Dialogue Platform',
+    app_title: 'Dueli',
+    app_subtitle: 'Connect via Competition',
     home: 'Home',
     explore: 'Explore',
-    live: 'Live',
+    live: 'Live Stream',
     recorded: 'Recorded',
     profile: 'Profile',
     settings: 'Settings',
     logout: 'Logout',
     login: 'Login',
     register: 'Register',
-    search: 'Search...',
+    search_placeholder: 'Search for a duel, scientist, or talent...',
     filter: 'Filter',
-    sort: 'Sort',
     all: 'All',
+    help: 'Help',
+    theme: 'Dark/Light Mode',
+    language: 'Language',
     
     // Categories
     categories: 'Categories',
     dialogue: 'Dialogue',
     science: 'Science',
     talents: 'Talents',
+    
+    // Sections
+    sections: {
+      suggested: 'Suggested for You',
+      dialogue: 'Dialogue Arena',
+      science: 'Science Lab',
+      talents: 'Talent Stage'
+    },
     
     // Dialogue subcategories
     religions: 'Religions',
@@ -277,13 +236,16 @@ export const translations = {
     select_category: 'Select Category',
     select_subcategory: 'Select Subcategory',
     scheduled_time: 'Scheduled Time',
+    request_join: 'Request to Join',
+    cancel_request: 'Cancel Request',
     
     // Statuses
     status_pending: 'Waiting for opponent',
     status_accepted: 'Accepted',
-    status_live: 'Live Now',
+    status_live: 'Live',
     status_completed: 'Completed',
     status_cancelled: 'Cancelled',
+    status_ongoing: 'Ongoing',
     
     // Actions
     invite: 'Invite',
@@ -300,10 +262,7 @@ export const translations = {
     // Rating
     rate: 'Rate',
     rating: 'Rating',
-    ratings: 'Ratings',
-    rate_competitor: 'Rate Competitor',
-    your_rating: 'Your Rating',
-    average_rating: 'Average Rating',
+    viewers: 'views',
     
     // Comments
     comment: 'Comment',
@@ -311,122 +270,110 @@ export const translations = {
     add_comment: 'Add Comment',
     live_chat: 'Live Chat',
     
+    // Login
+    login_with_google: 'Continue with Google',
+    login_with_facebook: 'Continue with Facebook',
+    login_with_microsoft: 'Continue with Microsoft',
+    login_with_twitter: 'Continue with X',
+    login_welcome: 'Welcome to Dueli',
+    login_subtitle: 'Sign in to participate in competitions',
+    or_continue_with: 'Or continue with',
+    
     // User
     user: 'User',
     username: 'Username',
     email: 'Email',
-    password: 'Password',
-    confirm_password: 'Confirm Password',
     display_name: 'Display Name',
     bio: 'Bio',
     country: 'Country',
-    language: 'Language',
+    my_competitions: 'My Competitions',
+    my_requests: 'My Requests',
     
     // Stats
     stats: 'Statistics',
     total_competitions: 'Total Competitions',
     total_wins: 'Wins',
     total_views: 'Views',
-    total_earnings: 'Earnings',
     followers: 'Followers',
     following: 'Following',
     
-    // Streaming
-    start_live: 'Start Live',
-    end_live: 'End Live',
-    connect_youtube: 'Connect YouTube',
-    youtube_connected: 'YouTube Connected',
-    camera: 'Camera',
-    microphone: 'Microphone',
-    screen_share: 'Screen Share',
-    
-    // Notifications
-    notifications: 'Notifications',
-    new_invite: 'New competition invite',
-    new_follower: 'New follower',
-    competition_starting: 'Competition starting soon',
-    
-    // Filtering
-    filter_by_country: 'Filter by Country',
-    filter_by_language: 'Filter by Language',
-    filter_by_category: 'Filter by Category',
-    filter_by_status: 'Filter by Status',
-    
-    // Messages
-    messages: 'Messages',
-    send_message: 'Send Message',
-    no_messages: 'No messages',
-    
-    // Posts
-    posts: 'Posts',
-    create_post: 'New Post',
-    whats_new: "What's new?",
-    
     // Errors
     error: 'Error',
-    error_occurred: 'An error occurred',
     not_found: 'Not Found',
-    unauthorized: 'Unauthorized',
     login_required: 'Login required',
+    no_duels: 'Sorry, no duels available here currently.',
     
     // Success
     success: 'Success',
-    saved: 'Saved',
-    created: 'Created',
-    deleted: 'Deleted',
-    
-    // Confirmations
-    confirm: 'Confirm',
-    are_you_sure: 'Are you sure?',
-    yes: 'Yes',
-    no: 'No',
-    
-    // Earnings
-    earnings: 'Earnings',
-    ad_revenue: 'Ad Revenue',
-    your_share: 'Your Share',
-    platform_fee: 'Platform Fee (20%)',
-    
-    // Description
-    platform_description: 'A platform for competing in dialogues, sciences, and talents',
-    open_source: 'Open Source',
-    non_profit: 'Non-Profit',
+    request_sent: 'Request sent',
     
     // Footer
+    footer: '© 2025 Dueli. All rights reserved.',
     about: 'About',
     contact: 'Contact Us',
     terms: 'Terms of Service',
     privacy: 'Privacy Policy',
-    github: 'Source on GitHub',
     
-    // Home page
-    hero_title: 'Compete, Discuss, Shine',
-    hero_subtitle: 'Global platform for dialogue, science, and talent competitions',
-    get_started: 'Get Started',
-    watch_live: 'Watch Live',
-    featured_competitions: 'Featured Competitions',
-    trending_now: 'Trending Now',
-    upcoming: 'Upcoming',
-    
-    // Action buttons
+    // Actions
     view_all: 'View All',
     load_more: 'Load More',
-    refresh: 'Refresh',
     back: 'Back',
-    next: 'Next',
-    previous: 'Previous',
-    submit: 'Submit',
     close: 'Close',
-
-    // Viewers
-    viewers: 'viewers',
-    watching_now: 'watching now',
-    registered_only: 'Only registered users can comment and rate',
+    submit: 'Submit',
   }
 };
 
-export function t(key: keyof typeof translations.ar, lang: Language = 'ar'): string {
-  return translations[lang][key] || translations.ar[key] || key;
+// Country data
+export const countries = [
+  { code: 'ar', country: 'EG', name: 'مصر', nameEn: 'Egypt', flag: '🇪🇬', dir: 'rtl' },
+  { code: 'ar', country: 'SA', name: 'السعودية', nameEn: 'Saudi Arabia', flag: '🇸🇦', dir: 'rtl' },
+  { code: 'ar', country: 'AE', name: 'الإمارات', nameEn: 'UAE', flag: '🇦🇪', dir: 'rtl' },
+  { code: 'ar', country: 'KW', name: 'الكويت', nameEn: 'Kuwait', flag: '🇰🇼', dir: 'rtl' },
+  { code: 'ar', country: 'QA', name: 'قطر', nameEn: 'Qatar', flag: '🇶🇦', dir: 'rtl' },
+  { code: 'ar', country: 'JO', name: 'الأردن', nameEn: 'Jordan', flag: '🇯🇴', dir: 'rtl' },
+  { code: 'ar', country: 'LB', name: 'لبنان', nameEn: 'Lebanon', flag: '🇱🇧', dir: 'rtl' },
+  { code: 'ar', country: 'SY', name: 'سوريا', nameEn: 'Syria', flag: '🇸🇾', dir: 'rtl' },
+  { code: 'ar', country: 'IQ', name: 'العراق', nameEn: 'Iraq', flag: '🇮🇶', dir: 'rtl' },
+  { code: 'ar', country: 'PS', name: 'فلسطين', nameEn: 'Palestine', flag: '🇵🇸', dir: 'rtl' },
+  { code: 'ar', country: 'YE', name: 'اليمن', nameEn: 'Yemen', flag: '🇾🇪', dir: 'rtl' },
+  { code: 'ar', country: 'TN', name: 'تونس', nameEn: 'Tunisia', flag: '🇹🇳', dir: 'rtl' },
+  { code: 'ar', country: 'DZ', name: 'الجزائر', nameEn: 'Algeria', flag: '🇩🇿', dir: 'rtl' },
+  { code: 'ar', country: 'MA', name: 'المغرب', nameEn: 'Morocco', flag: '🇲🇦', dir: 'rtl' },
+  { code: 'ar', country: 'SD', name: 'السودان', nameEn: 'Sudan', flag: '🇸🇩', dir: 'rtl' },
+  { code: 'en', country: 'US', name: 'الولايات المتحدة', nameEn: 'United States', flag: '🇺🇸', dir: 'ltr' },
+  { code: 'en', country: 'GB', name: 'المملكة المتحدة', nameEn: 'United Kingdom', flag: '🇬🇧', dir: 'ltr' },
+  { code: 'en', country: 'CA', name: 'كندا', nameEn: 'Canada', flag: '🇨🇦', dir: 'ltr' },
+  { code: 'en', country: 'AU', name: 'أستراليا', nameEn: 'Australia', flag: '🇦🇺', dir: 'ltr' },
+  { code: 'fr', country: 'FR', name: 'فرنسا', nameEn: 'France', flag: '🇫🇷', dir: 'ltr' },
+  { code: 'de', country: 'DE', name: 'ألمانيا', nameEn: 'Germany', flag: '🇩🇪', dir: 'ltr' },
+  { code: 'tr', country: 'TR', name: 'تركيا', nameEn: 'Turkey', flag: '🇹🇷', dir: 'ltr' },
+  { code: 'id', country: 'ID', name: 'إندونيسيا', nameEn: 'Indonesia', flag: '🇮🇩', dir: 'ltr' },
+  { code: 'pk', country: 'PK', name: 'باكستان', nameEn: 'Pakistan', flag: '🇵🇰', dir: 'rtl' },
+  { code: 'my', country: 'MY', name: 'ماليزيا', nameEn: 'Malaysia', flag: '🇲🇾', dir: 'ltr' },
+];
+
+export function t(key: string, lang: Language = 'ar'): string {
+  const keys = key.split('.');
+  let value: any = translations[lang];
+  
+  for (const k of keys) {
+    if (value && typeof value === 'object' && k in value) {
+      value = value[k];
+    } else {
+      // Fallback to Arabic
+      value = translations.ar;
+      for (const k2 of keys) {
+        if (value && typeof value === 'object' && k2 in value) {
+          value = value[k2];
+        } else {
+          return key;
+        }
+      }
+      break;
+    }
+  }
+  
+  return typeof value === 'string' ? value : key;
 }
 
 export function isRTL(lang: Language): boolean {
