@@ -1,16 +1,20 @@
+```
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "dueli",
-  "compatibility_date": "2024-01-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "./dist",
-  
-  // D1 Database for Dueli
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "dueli-db",
-      "database_id": "local-dev-db"
-    }
-  ]
+  "compatibility_date": {
+    "name": "dueli",
+    "compatibility_date": "2024-01-01",
+    "pages_build_output_dir": "dist",
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "dueli-db",
+        "database_id": "f877f573-e31f-452a-8991-8e5035539d56"
+      }
+    ]
+  }f877f573-e31f-452a-8991-8e5035539d56"
 }
+]
+}
+```
