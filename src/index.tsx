@@ -594,6 +594,41 @@ app.get('/api/users/:username', async (c) => {
   }
 })
 
+// Update user preferences
+app.put('/api/users/preferences', async (c) => {
+  const { DB } = c.env
+  const sessionId = c.req.header('Authorization')?.replace('Bearer ', '')
+
+  if (!sessionId) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    // Verify session
+    const session = await DB.prepare('SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime("now")').bind(sessionId).first()
+
+    if (!session) {
+      return c.json({ success: false, error: 'Unauthorized' }, 401)
+    }
+
+    const body = await c.req.json()
+    const { country, language } = body
+
+    if (!country || !language) {
+      return c.json({ success: false, error: 'Missing required fields' }, 400)
+    }
+
+    // Update user
+    await DB.prepare('UPDATE users SET country = ?, language = ? WHERE id = ?')
+      .bind(country, language, (session as any).user_id)
+      .run()
+
+    return c.json({ success: true })
+  } catch (error) {
+    return c.json({ success: false, error: 'Failed to update preferences' }, 500)
+  }
+})
+
 // Get user's pending requests
 app.get('/api/users/:id/requests', async (c) => {
   const { DB } = c.env
@@ -727,7 +762,7 @@ const getNavigation = (lang: Language) => {
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
         <!-- Logo -->
         <a href="/?lang=${lang}" class="flex items-center gap-2 cursor-pointer group">
-          ${DueliLogo}
+          <img src="/static/dueli-icon.png" alt="Dueli" class="w-10 h-10 object-contain">
           <span class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 hidden sm:inline">
             ${tr.app_title}
           </span>
@@ -736,33 +771,42 @@ const getNavigation = (lang: Language) => {
         <!-- Right Side Actions -->
         <div class="flex items-center gap-1.5">
           <!-- Settings/Help -->
-          <button onclick="showHelp()" title="${tr.help}" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400">
-            <i class="fas fa-cog text-lg"></i>
+          <!-- Settings/Help -->
+          <button onclick="showHelp()" title="${tr.help}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors">
+            <i class="far fa-question-circle text-2xl"></i>
           </button>
           
-          <!-- Language Switcher -->
+          <!-- Country/Language Switcher -->
           <div class="relative">
-            <button onclick="toggleLangMenu()" class="nav-icon text-purple-600 dark:text-purple-400" title="${tr.language}">
-              <i class="fas fa-globe text-lg"></i>
+            <button onclick="toggleCountryMenu()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${lang === 'ar' ? 'البلد واللغة' : 'Country & Language'}">
+              <i class="fas fa-globe text-xl"></i>
             </button>
-            <div id="langMenu" class="hidden user-menu ${isRTL ? 'left-0' : 'right-0'}">
-              <a href="?lang=ar" class="user-menu-item ${lang === 'ar' ? 'bg-purple-50 dark:bg-purple-900/30' : ''}">
-                <span class="text-lg">🇸🇦</span>
-                <span class="font-medium">العربية</span>
-                ${lang === 'ar' ? `<i class="fas fa-check text-purple-600 ${isRTL ? 'mr-auto' : 'ml-auto'}"></i>` : ''}
-              </a>
-              <a href="?lang=en" class="user-menu-item ${lang === 'en' ? 'bg-purple-50 dark:bg-purple-900/30' : ''}">
-                <span class="text-lg">🇺🇸</span>
-                <span class="font-medium">English</span>
-                ${lang === 'en' ? `<i class="fas fa-check text-purple-600 ${isRTL ? 'mr-auto' : 'ml-auto'}"></i>` : ''}
-              </a>
+            <div id="countryMenu" class="hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
+              <!-- Search Box -->
+              <div class="p-3 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-[#1a1a1a]">
+                <div class="relative">
+                  <input 
+                    type="text" 
+                    id="countrySearch" 
+                    placeholder="${lang === 'ar' ? 'ابحث عن بلد...' : 'Search country...'}" 
+                    class="w-full px-3 py-2 ${isRTL ? 'pr-9' : 'pl-9'} text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    oninput="filterCountries(this.value)"
+                  />
+                  <i class="fas fa-search absolute top-1/2 -translate-y-1/2 ${isRTL ? 'right-3' : 'left-3'} text-gray-400 text-sm"></i>
+                </div>
+              </div>
+              <!-- Countries List -->
+              <div id="countriesList" class="overflow-y-auto flex-1">
+                <!-- Will be populated by JavaScript -->
+              </div>
             </div>
           </div>
           
           <!-- Dark Mode Toggle -->
-          <button onclick="toggleDarkMode()" class="nav-icon text-purple-600 dark:text-amber-400" title="${tr.theme}">
-            <i class="fas fa-moon dark:hidden text-lg"></i>
-            <i class="fas fa-sun hidden dark:block text-lg"></i>
+          <!-- Dark Mode Toggle -->
+          <button onclick="toggleDarkMode()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors ${isRTL ? 'scale-x-[-1]' : ''}" title="${tr.theme}">
+            <i class="far fa-moon dark:hidden text-2xl"></i>
+            <i class="fas fa-moon hidden dark:block text-2xl text-amber-400"></i>
           </button>
 
           <!-- Separator -->
@@ -770,9 +814,8 @@ const getNavigation = (lang: Language) => {
 
           <!-- Auth Section - Login Button (hidden when logged in) -->
           <div id="authSection">
-            <button onclick="showLoginModal()" class="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-full font-semibold text-sm hover:opacity-90 transition-all shadow-lg shadow-purple-500/25">
-              <i class="fas fa-sign-in-alt"></i>
-              <span>${tr.login}</span>
+            <button onclick="showLoginModal()" class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30 ${isRTL ? 'scale-x-[-1]' : ''}" title="${tr.login}">
+              <i class="fas fa-arrow-right-to-bracket text-lg"></i>
             </button>
           </div>
           
@@ -869,7 +912,7 @@ const getFooter = (lang: Language) => {
     <footer class="bg-gray-50 dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-gray-800 py-6 mt-auto">
       <div class="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
         <div class="flex items-center gap-2">
-          ${DueliLogo}
+          <img src="/static/dueli-icon.png" alt="Dueli" class="w-8 h-8 object-contain opacity-70 grayscale hover:grayscale-0 transition-all">
           <span class="font-bold text-gray-700 dark:text-white">${tr.app_title}</span>
         </div>
         <p>${tr.footer}</p>
@@ -1102,7 +1145,9 @@ app.get('/', (c) => {
                   </div>
                 </div>
 
-                <span class="vs-text text-2xl font-black text-white">VS</span>
+                <div class="w-12 h-12 bg-white rounded-full p-1.5 shadow-lg z-20 flex items-center justify-center">
+                  <img src="/static/dueli-icon.png" alt="VS" class="w-full h-full object-contain">
+                </div>
 
                 <div class="flex flex-col items-center">
                   <div class="competitor-avatar p-0.5">

@@ -23,13 +23,13 @@ export const translations = {
     help: 'مساعدة',
     theme: 'الوضع الليلي/النهاري',
     language: 'اللغة',
-    
+
     // الأقسام
     categories: 'الأقسام',
     dialogue: 'الحوار',
     science: 'العلوم',
     talents: 'المواهب',
-    
+
     // أقسام العرض
     sections: {
       suggested: 'مقترح لك',
@@ -37,7 +37,7 @@ export const translations = {
       science: 'المختبر العلمي',
       talents: 'مسرح المواهب'
     },
-    
+
     // أقسام الحوار الفرعية
     religions: 'الأديان',
     sects: 'المذاهب',
@@ -45,7 +45,7 @@ export const translations = {
     economics: 'الاقتصاد',
     current_affairs: 'قضايا الساعة',
     disputes: 'النزاعات الأخرى',
-    
+
     // أقسام العلوم الفرعية
     physics: 'الفيزياء',
     biology: 'الأحياء',
@@ -54,7 +54,7 @@ export const translations = {
     technology: 'التقنية',
     medicine: 'الطب',
     philosophy: 'الفلسفة',
-    
+
     // أقسام المواهب الفرعية
     singing: 'الغناء',
     poetry: 'الشعر',
@@ -64,7 +64,7 @@ export const translations = {
     cooking: 'الطبخ',
     gaming: 'الألعاب',
     magic: 'الخدع',
-    
+
     // المنافسات
     competition: 'منافسة',
     competitions: 'المنافسات',
@@ -79,7 +79,7 @@ export const translations = {
     scheduled_time: 'موعد البدء',
     request_join: 'طلب الانضمام',
     cancel_request: 'إلغاء الطلب',
-    
+
     // الحالات
     status_pending: 'في انتظار منافس',
     status_accepted: 'تم القبول',
@@ -87,7 +87,7 @@ export const translations = {
     status_completed: 'منتهية',
     status_cancelled: 'ملغاة',
     status_ongoing: 'مستمر',
-    
+
     // التفاعل
     invite: 'دعوة',
     accept: 'قبول',
@@ -99,18 +99,18 @@ export const translations = {
     delete: 'حذف',
     follow: 'متابعة',
     unfollow: 'إلغاء المتابعة',
-    
+
     // التقييم
     rate: 'قيّم',
     rating: 'التقييم',
     viewers: 'مشاهدة',
-    
+
     // التعليقات
     comment: 'تعليق',
     comments: 'التعليقات',
     add_comment: 'أضف تعليقاً',
     live_chat: 'المحادثة المباشرة',
-    
+
     // تسجيل الدخول
     login_with_google: 'الدخول بحساب Google',
     login_with_facebook: 'الدخول بحساب Facebook',
@@ -119,7 +119,7 @@ export const translations = {
     login_welcome: 'مرحباً بك في ديولي',
     login_subtitle: 'سجل دخولك للمشاركة في المنافسات',
     or_continue_with: 'أو تابع باستخدام',
-    
+
     // المستخدم
     user: 'مستخدم',
     username: 'اسم المستخدم',
@@ -129,7 +129,7 @@ export const translations = {
     country: 'الدولة',
     my_competitions: 'منافساتي',
     my_requests: 'طلباتي',
-    
+
     // الإحصائيات
     stats: 'الإحصائيات',
     total_competitions: 'إجمالي المنافسات',
@@ -137,24 +137,24 @@ export const translations = {
     total_views: 'المشاهدات',
     followers: 'المتابعون',
     following: 'يتابع',
-    
+
     // الأخطاء
     error: 'خطأ',
     not_found: 'غير موجود',
     login_required: 'يجب تسجيل الدخول',
     no_duels: 'عذراً، لا توجد منافسات هنا حالياً.',
-    
+
     // النجاح
     success: 'تم بنجاح',
     request_sent: 'تم إرسال الطلب',
-    
+
     // Footer
     footer: '© 2025 ديولي. جميع الحقوق محفوظة.',
     about: 'عن المنصة',
     contact: 'تواصل معنا',
     terms: 'الشروط والأحكام',
     privacy: 'سياسة الخصوصية',
-    
+
     // الإجراءات
     view_all: 'عرض الكل',
     load_more: 'تحميل المزيد',
@@ -162,7 +162,7 @@ export const translations = {
     close: 'إغلاق',
     submit: 'إرسال',
   },
-  
+
   en: {
     // General
     app_title: 'Dueli',
@@ -182,13 +182,13 @@ export const translations = {
     help: 'Help',
     theme: 'Dark/Light Mode',
     language: 'Language',
-    
+
     // Categories
     categories: 'Categories',
     dialogue: 'Dialogue',
     science: 'Science',
     talents: 'Talents',
-    
+
     // Sections
     sections: {
       suggested: 'Suggested for You',
@@ -196,7 +196,7 @@ export const translations = {
       science: 'Science Lab',
       talents: 'Talent Stage'
     },
-    
+
     // Dialogue subcategories
     religions: 'Religions',
     sects: 'Sects',
@@ -204,7 +204,7 @@ export const translations = {
     economics: 'Economics',
     current_affairs: 'Current Affairs',
     disputes: 'Other Disputes',
-    
+
     // Science subcategories
     physics: 'Physics',
     biology: 'Biology',
@@ -213,7 +213,7 @@ export const translations = {
     technology: 'Technology',
     medicine: 'Medicine',
     philosophy: 'Philosophy',
-    
+
     // Talents subcategories
     singing: 'Singing',
     poetry: 'Poetry',
@@ -223,7 +223,7 @@ export const translations = {
     cooking: 'Cooking',
     gaming: 'Gaming',
     magic: 'Magic',
-    
+
     // Competitions
     competition: 'Competition',
     competitions: 'Competitions',
@@ -238,7 +238,7 @@ export const translations = {
     scheduled_time: 'Scheduled Time',
     request_join: 'Request to Join',
     cancel_request: 'Cancel Request',
-    
+
     // Statuses
     status_pending: 'Waiting for opponent',
     status_accepted: 'Accepted',
@@ -246,7 +246,7 @@ export const translations = {
     status_completed: 'Completed',
     status_cancelled: 'Cancelled',
     status_ongoing: 'Ongoing',
-    
+
     // Actions
     invite: 'Invite',
     accept: 'Accept',
@@ -258,18 +258,18 @@ export const translations = {
     delete: 'Delete',
     follow: 'Follow',
     unfollow: 'Unfollow',
-    
+
     // Rating
     rate: 'Rate',
     rating: 'Rating',
     viewers: 'views',
-    
+
     // Comments
     comment: 'Comment',
     comments: 'Comments',
     add_comment: 'Add Comment',
     live_chat: 'Live Chat',
-    
+
     // Login
     login_with_google: 'Continue with Google',
     login_with_facebook: 'Continue with Facebook',
@@ -278,7 +278,7 @@ export const translations = {
     login_welcome: 'Welcome to Dueli',
     login_subtitle: 'Sign in to participate in competitions',
     or_continue_with: 'Or continue with',
-    
+
     // User
     user: 'User',
     username: 'Username',
@@ -288,7 +288,7 @@ export const translations = {
     country: 'Country',
     my_competitions: 'My Competitions',
     my_requests: 'My Requests',
-    
+
     // Stats
     stats: 'Statistics',
     total_competitions: 'Total Competitions',
@@ -296,24 +296,24 @@ export const translations = {
     total_views: 'Views',
     followers: 'Followers',
     following: 'Following',
-    
+
     // Errors
     error: 'Error',
     not_found: 'Not Found',
     login_required: 'Login required',
     no_duels: 'Sorry, no duels available here currently.',
-    
+
     // Success
     success: 'Success',
     request_sent: 'Request sent',
-    
+
     // Footer
     footer: '© 2025 Dueli. All rights reserved.',
     about: 'About',
     contact: 'Contact Us',
     terms: 'Terms of Service',
     privacy: 'Privacy Policy',
-    
+
     // Actions
     view_all: 'View All',
     load_more: 'Load More',
@@ -323,39 +323,32 @@ export const translations = {
   }
 };
 
-// Country data
-export const countries = [
-  { code: 'ar', country: 'EG', name: 'مصر', nameEn: 'Egypt', flag: '🇪🇬', dir: 'rtl' },
-  { code: 'ar', country: 'SA', name: 'السعودية', nameEn: 'Saudi Arabia', flag: '🇸🇦', dir: 'rtl' },
-  { code: 'ar', country: 'AE', name: 'الإمارات', nameEn: 'UAE', flag: '🇦🇪', dir: 'rtl' },
-  { code: 'ar', country: 'KW', name: 'الكويت', nameEn: 'Kuwait', flag: '🇰🇼', dir: 'rtl' },
-  { code: 'ar', country: 'QA', name: 'قطر', nameEn: 'Qatar', flag: '🇶🇦', dir: 'rtl' },
-  { code: 'ar', country: 'JO', name: 'الأردن', nameEn: 'Jordan', flag: '🇯🇴', dir: 'rtl' },
-  { code: 'ar', country: 'LB', name: 'لبنان', nameEn: 'Lebanon', flag: '🇱🇧', dir: 'rtl' },
-  { code: 'ar', country: 'SY', name: 'سوريا', nameEn: 'Syria', flag: '🇸🇾', dir: 'rtl' },
-  { code: 'ar', country: 'IQ', name: 'العراق', nameEn: 'Iraq', flag: '🇮🇶', dir: 'rtl' },
-  { code: 'ar', country: 'PS', name: 'فلسطين', nameEn: 'Palestine', flag: '🇵🇸', dir: 'rtl' },
-  { code: 'ar', country: 'YE', name: 'اليمن', nameEn: 'Yemen', flag: '🇾🇪', dir: 'rtl' },
-  { code: 'ar', country: 'TN', name: 'تونس', nameEn: 'Tunisia', flag: '🇹🇳', dir: 'rtl' },
-  { code: 'ar', country: 'DZ', name: 'الجزائر', nameEn: 'Algeria', flag: '🇩🇿', dir: 'rtl' },
-  { code: 'ar', country: 'MA', name: 'المغرب', nameEn: 'Morocco', flag: '🇲🇦', dir: 'rtl' },
-  { code: 'ar', country: 'SD', name: 'السودان', nameEn: 'Sudan', flag: '🇸🇩', dir: 'rtl' },
-  { code: 'en', country: 'US', name: 'الولايات المتحدة', nameEn: 'United States', flag: '🇺🇸', dir: 'ltr' },
-  { code: 'en', country: 'GB', name: 'المملكة المتحدة', nameEn: 'United Kingdom', flag: '🇬🇧', dir: 'ltr' },
-  { code: 'en', country: 'CA', name: 'كندا', nameEn: 'Canada', flag: '🇨🇦', dir: 'ltr' },
-  { code: 'en', country: 'AU', name: 'أستراليا', nameEn: 'Australia', flag: '🇦🇺', dir: 'ltr' },
-  { code: 'fr', country: 'FR', name: 'فرنسا', nameEn: 'France', flag: '🇫🇷', dir: 'ltr' },
-  { code: 'de', country: 'DE', name: 'ألمانيا', nameEn: 'Germany', flag: '🇩🇪', dir: 'ltr' },
-  { code: 'tr', country: 'TR', name: 'تركيا', nameEn: 'Turkey', flag: '🇹🇷', dir: 'ltr' },
-  { code: 'id', country: 'ID', name: 'إندونيسيا', nameEn: 'Indonesia', flag: '🇮🇩', dir: 'ltr' },
-  { code: 'pk', country: 'PK', name: 'باكستان', nameEn: 'Pakistan', flag: '🇵🇰', dir: 'rtl' },
-  { code: 'my', country: 'MY', name: 'ماليزيا', nameEn: 'Malaysia', flag: '🇲🇾', dir: 'ltr' },
-];
+// Re-export countries from countries.ts
+export { countries, getCountriesList, getCountry, getCountriesByLanguage, type Country } from './countries';
+
+// Supported languages for UI translations (we only have ar and en for now)
+export type Language = 'ar' | 'en';
+
+// Get language code from country code
+export function getLanguageFromCountry(countryCode: string): Language {
+  const { getCountry } = require('./countries');
+  const country = getCountry(countryCode);
+  if (!country) return 'ar'; // Default to Arabic
+
+  // Map primary language to supported UI language
+  const langMap: Record<string, Language> = {
+    'ar': 'ar',
+    'en': 'en',
+    // All other languages default to English for now
+  };
+
+  return langMap[country.primaryLang] || 'en';
+}
 
 export function t(key: string, lang: Language = 'ar'): string {
   const keys = key.split('.');
   let value: any = translations[lang];
-  
+
   for (const k of keys) {
     if (value && typeof value === 'object' && k in value) {
       value = value[k];
@@ -372,7 +365,7 @@ export function t(key: string, lang: Language = 'ar'): string {
       break;
     }
   }
-  
+
   return typeof value === 'string' ? value : key;
 }
 
