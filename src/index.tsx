@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { translations, countries, getDir, Language } from './i18n'
+import jitsiRoutes from './routes/jitsi'
 
 // Types
 type Bindings = {
@@ -22,16 +23,19 @@ app.use('*', async (c, next) => {
   const langParam = c.req.query('lang')
   const cookieLang = c.req.header('Cookie')?.match(/lang=(\w+)/)?.[1]
   let lang: Language = 'ar'
-  
+
   if (langParam === 'en' || langParam === 'ar') {
     lang = langParam
   } else if (cookieLang === 'en' || cookieLang === 'ar') {
     lang = cookieLang as Language
   }
-  
+
   c.set('lang', lang)
   await next()
 })
+
+// Mount Jitsi routes
+app.route('/api/jitsi', jitsiRoutes)
 
 // ============ API Routes ============
 
@@ -73,7 +77,7 @@ app.get('/api/competitions', async (c) => {
   const search = c.req.query('search')
   const limit = parseInt(c.req.query('limit') || '20')
   const offset = parseInt(c.req.query('offset') || '0')
-  
+
   try {
     let query = `
       SELECT c.*, 
@@ -99,7 +103,7 @@ app.get('/api/competitions', async (c) => {
       WHERE 1=1
     `
     const params: any[] = []
-    
+
     if (status !== 'all') {
       if (status === 'live') {
         query += ' AND c.status = ?'
@@ -112,30 +116,30 @@ app.get('/api/competitions', async (c) => {
         params.push('pending')
       }
     }
-    
+
     if (category) {
       query += ' AND (c.category_id = ? OR c.subcategory_id = ? OR cat.slug = ?)'
       params.push(category, category, category)
     }
-    
+
     if (country) {
       query += ' AND c.country = ?'
       params.push(country)
     }
-    
+
     if (language) {
       query += ' AND c.language = ?'
       params.push(language)
     }
-    
+
     if (search) {
       query += ' AND (c.title LIKE ? OR c.description LIKE ?)'
       params.push(`%${search}%`, `%${search}%`)
     }
-    
+
     query += ' ORDER BY CASE WHEN c.status = "live" THEN 0 WHEN c.status = "pending" THEN 1 ELSE 2 END, c.total_views DESC, c.created_at DESC LIMIT ? OFFSET ?'
     params.push(limit, offset)
-    
+
     const competitions = await DB.prepare(query).bind(...params).all()
     return c.json({ success: true, data: competitions.results })
   } catch (error) {
@@ -148,7 +152,7 @@ app.get('/api/competitions', async (c) => {
 app.get('/api/competitions/:id', async (c) => {
   const { DB } = c.env
   const id = c.req.param('id')
-  
+
   try {
     const competition = await DB.prepare(`
       SELECT c.*, 
@@ -173,14 +177,14 @@ app.get('/api/competitions/:id', async (c) => {
       LEFT JOIN users u2 ON c.opponent_id = u2.id
       WHERE c.id = ?
     `).bind(id).first()
-    
+
     if (!competition) {
       return c.json({ success: false, error: 'Competition not found' }, 404)
     }
-    
+
     // Increment views
     await DB.prepare('UPDATE competitions SET total_views = total_views + 1 WHERE id = ?').bind(id).run()
-    
+
     // Get comments
     const comments = await DB.prepare(`
       SELECT cm.*, u.display_name, u.avatar_url, u.username
@@ -190,7 +194,7 @@ app.get('/api/competitions/:id', async (c) => {
       ORDER BY cm.created_at DESC
       LIMIT 100
     `).bind(id).all()
-    
+
     // Get ratings summary
     const ratings = await DB.prepare(`
       SELECT competitor_id, AVG(rating) as avg_rating, COUNT(*) as count
@@ -198,7 +202,7 @@ app.get('/api/competitions/:id', async (c) => {
       WHERE competition_id = ?
       GROUP BY competitor_id
     `).bind(id).all()
-    
+
     // Get join requests for this competition
     const requests = await DB.prepare(`
       SELECT cr.*, u.display_name, u.avatar_url, u.username
@@ -207,9 +211,9 @@ app.get('/api/competitions/:id', async (c) => {
       WHERE cr.competition_id = ?
       ORDER BY cr.created_at DESC
     `).bind(id).all()
-    
-    return c.json({ 
-      success: true, 
+
+    return c.json({
+      success: true,
       data: {
         ...competition,
         comments: comments.results,
@@ -225,20 +229,20 @@ app.get('/api/competitions/:id', async (c) => {
 // Create competition
 app.post('/api/competitions', async (c) => {
   const { DB } = c.env
-  
+
   try {
     const body = await c.req.json()
     const { title, description, rules, category_id, subcategory_id, creator_id, language, country, scheduled_at } = body
-    
+
     if (!title || !rules || !category_id || !creator_id) {
       return c.json({ success: false, error: 'Missing required fields' }, 400)
     }
-    
+
     const result = await DB.prepare(`
       INSERT INTO competitions (title, description, rules, category_id, subcategory_id, creator_id, language, country, scheduled_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(title, description, rules, category_id, subcategory_id || null, creator_id, language || 'ar', country, scheduled_at || null).run()
-    
+
     return c.json({ success: true, data: { id: result.meta.last_row_id } })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to create competition' }, 500)
@@ -249,30 +253,30 @@ app.post('/api/competitions', async (c) => {
 app.post('/api/competitions/:id/request', async (c) => {
   const { DB } = c.env
   const competitionId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { requester_id, message } = body
-    
+
     if (!requester_id) {
       return c.json({ success: false, error: 'Requester ID required' }, 400)
     }
-    
+
     // Check if already requested
     const existing = await DB.prepare(`
       SELECT id FROM competition_requests 
       WHERE competition_id = ? AND requester_id = ? AND status = 'pending'
     `).bind(competitionId, requester_id).first()
-    
+
     if (existing) {
       return c.json({ success: false, error: 'Already requested' }, 400)
     }
-    
+
     const result = await DB.prepare(`
       INSERT INTO competition_requests (competition_id, requester_id, message)
       VALUES (?, ?, ?)
     `).bind(competitionId, requester_id, message || null).run()
-    
+
     // Create notification for competition creator
     const comp = await DB.prepare('SELECT creator_id, title FROM competitions WHERE id = ?').bind(competitionId).first() as any
     if (comp) {
@@ -281,7 +285,7 @@ app.post('/api/competitions/:id/request', async (c) => {
         VALUES (?, 'request', 'طلب انضمام جديد', ?, 'competition', ?)
       `).bind(comp.creator_id, `طلب انضمام للمنافسة: ${comp.title}`, competitionId).run()
     }
-    
+
     return c.json({ success: true, data: { id: result.meta.last_row_id } })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to send request' }, 500)
@@ -292,16 +296,16 @@ app.post('/api/competitions/:id/request', async (c) => {
 app.delete('/api/competitions/:id/request', async (c) => {
   const { DB } = c.env
   const competitionId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { requester_id } = body
-    
+
     await DB.prepare(`
       DELETE FROM competition_requests 
       WHERE competition_id = ? AND requester_id = ? AND status = 'pending'
     `).bind(competitionId, requester_id).run()
-    
+
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to cancel request' }, 500)
@@ -312,35 +316,35 @@ app.delete('/api/competitions/:id/request', async (c) => {
 app.post('/api/competitions/:id/accept-request', async (c) => {
   const { DB } = c.env
   const competitionId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { request_id, requester_id } = body
-    
+
     // Update request status
     await DB.prepare(`
       UPDATE competition_requests SET status = 'accepted', responded_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(request_id).run()
-    
+
     // Set opponent
     await DB.prepare(`
       UPDATE competitions SET opponent_id = ?, status = 'accepted', updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(requester_id, competitionId).run()
-    
+
     // Decline other requests
     await DB.prepare(`
       UPDATE competition_requests SET status = 'declined', responded_at = CURRENT_TIMESTAMP
       WHERE competition_id = ? AND id != ? AND status = 'pending'
     `).bind(competitionId, request_id).run()
-    
+
     // Notify accepted user
     await DB.prepare(`
       INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id)
       VALUES (?, 'accepted', 'تم قبول طلبك', 'تم قبول طلبك للانضمام للمنافسة', 'competition', ?)
     `).bind(requester_id, competitionId).run()
-    
+
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to accept request' }, 500)
@@ -351,17 +355,17 @@ app.post('/api/competitions/:id/accept-request', async (c) => {
 app.post('/api/competitions/:id/start', async (c) => {
   const { DB } = c.env
   const competitionId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { youtube_live_id } = body
-    
+
     await DB.prepare(`
       UPDATE competitions 
       SET status = 'live', started_at = CURRENT_TIMESTAMP, youtube_live_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(youtube_live_id || null, competitionId).run()
-    
+
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to start competition' }, 500)
@@ -372,17 +376,17 @@ app.post('/api/competitions/:id/start', async (c) => {
 app.post('/api/competitions/:id/end', async (c) => {
   const { DB } = c.env
   const competitionId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { youtube_video_url } = body
-    
+
     await DB.prepare(`
       UPDATE competitions 
       SET status = 'completed', ended_at = CURRENT_TIMESTAMP, youtube_video_url = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(youtube_video_url, competitionId).run()
-    
+
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to end competition' }, 500)
@@ -393,22 +397,22 @@ app.post('/api/competitions/:id/end', async (c) => {
 app.post('/api/competitions/:id/comments', async (c) => {
   const { DB } = c.env
   const competitionId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { user_id, content, is_live } = body
-    
+
     if (!user_id || !content) {
       return c.json({ success: false, error: 'Missing required fields' }, 400)
     }
-    
+
     const result = await DB.prepare(`
       INSERT INTO comments (competition_id, user_id, content, is_live)
       VALUES (?, ?, ?, ?)
     `).bind(competitionId, user_id, content, is_live ? 1 : 0).run()
-    
+
     await DB.prepare('UPDATE competitions SET total_comments = total_comments + 1 WHERE id = ?').bind(competitionId).run()
-    
+
     return c.json({ success: true, data: { id: result.meta.last_row_id } })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to add comment' }, 500)
@@ -419,20 +423,20 @@ app.post('/api/competitions/:id/comments', async (c) => {
 app.post('/api/competitions/:id/rate', async (c) => {
   const { DB } = c.env
   const competitionId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { user_id, competitor_id, rating } = body
-    
+
     if (!user_id || !competitor_id || !rating || rating < 1 || rating > 5) {
       return c.json({ success: false, error: 'Invalid rating data' }, 400)
     }
-    
+
     await DB.prepare(`
       INSERT OR REPLACE INTO ratings (competition_id, user_id, competitor_id, rating)
       VALUES (?, ?, ?, ?)
     `).bind(competitionId, user_id, competitor_id, rating).run()
-    
+
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to add rating' }, 500)
@@ -442,18 +446,18 @@ app.post('/api/competitions/:id/rate', async (c) => {
 // OAuth Login simulation
 app.post('/api/auth/oauth', async (c) => {
   const { DB } = c.env
-  
+
   try {
     const body = await c.req.json()
     const { provider, email, name, avatar } = body
-    
+
     if (!provider || !email) {
       return c.json({ success: false, error: 'Missing provider or email' }, 400)
     }
-    
+
     // Check if user exists
     let user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first()
-    
+
     if (!user) {
       // Create new user
       const username = email.split('@')[0] + '_' + Math.random().toString(36).substring(7)
@@ -461,21 +465,21 @@ app.post('/api/auth/oauth', async (c) => {
         INSERT INTO users (email, username, password_hash, display_name, avatar_url)
         VALUES (?, ?, ?, ?, ?)
       `).bind(email, username, 'oauth_' + provider, name || username, avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`).run()
-      
+
       user = await DB.prepare('SELECT * FROM users WHERE id = ?').bind(result.meta.last_row_id).first()
     }
-    
+
     // Create session
     const sessionId = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    
+
     await DB.prepare(`
       INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)
     `).bind(sessionId, (user as any).id, expiresAt).run()
-    
-    return c.json({ 
-      success: true, 
-      data: { 
+
+    return c.json({
+      success: true,
+      data: {
         user: {
           id: (user as any).id,
           email: (user as any).email,
@@ -485,7 +489,7 @@ app.post('/api/auth/oauth', async (c) => {
           country: (user as any).country,
           language: (user as any).language
         },
-        sessionId 
+        sessionId
       }
     })
   } catch (error) {
@@ -498,11 +502,11 @@ app.post('/api/auth/oauth', async (c) => {
 app.get('/api/auth/session', async (c) => {
   const { DB } = c.env
   const sessionId = c.req.header('Authorization')?.replace('Bearer ', '')
-  
+
   if (!sessionId) {
     return c.json({ success: false, user: null })
   }
-  
+
   try {
     const session = await DB.prepare(`
       SELECT s.*, u.id as user_id, u.email, u.username, u.display_name, u.avatar_url, u.country, u.language, u.is_admin
@@ -510,13 +514,13 @@ app.get('/api/auth/session', async (c) => {
       JOIN users u ON s.user_id = u.id
       WHERE s.id = ? AND s.expires_at > datetime('now')
     `).bind(sessionId).first()
-    
+
     if (!session) {
       return c.json({ success: false, user: null })
     }
-    
-    return c.json({ 
-      success: true, 
+
+    return c.json({
+      success: true,
       user: {
         id: (session as any).user_id,
         email: (session as any).email,
@@ -537,13 +541,13 @@ app.get('/api/auth/session', async (c) => {
 app.post('/api/auth/logout', async (c) => {
   const { DB } = c.env
   const sessionId = c.req.header('Authorization')?.replace('Bearer ', '')
-  
+
   if (sessionId) {
     try {
       await DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run()
-    } catch (error) {}
+    } catch (error) { }
   }
-  
+
   return c.json({ success: true })
 })
 
@@ -551,7 +555,7 @@ app.post('/api/auth/logout', async (c) => {
 app.get('/api/users/:username', async (c) => {
   const { DB } = c.env
   const username = c.req.param('username')
-  
+
   try {
     const user = await DB.prepare(`
       SELECT id, username, display_name, avatar_url, bio, country, language,
@@ -559,14 +563,14 @@ app.get('/api/users/:username', async (c) => {
              is_verified, created_at
       FROM users WHERE username = ?
     `).bind(username).first()
-    
+
     if (!user) {
       return c.json({ success: false, error: 'User not found' }, 404)
     }
-    
+
     const followers = await DB.prepare('SELECT COUNT(*) as count FROM follows WHERE following_id = ?').bind((user as any).id).first()
     const following = await DB.prepare('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?').bind((user as any).id).first()
-    
+
     const competitions = await DB.prepare(`
       SELECT c.*, cat.name_ar, cat.name_en, cat.icon, cat.color
       FROM competitions c
@@ -575,9 +579,9 @@ app.get('/api/users/:username', async (c) => {
       ORDER BY c.created_at DESC
       LIMIT 10
     `).bind((user as any).id, (user as any).id).all()
-    
-    return c.json({ 
-      success: true, 
+
+    return c.json({
+      success: true,
       data: {
         ...user,
         followers_count: (followers as any)?.count || 0,
@@ -594,7 +598,7 @@ app.get('/api/users/:username', async (c) => {
 app.get('/api/users/:id/requests', async (c) => {
   const { DB } = c.env
   const userId = c.req.param('id')
-  
+
   try {
     const requests = await DB.prepare(`
       SELECT cr.*, c.title as competition_title, c.status as competition_status
@@ -603,7 +607,7 @@ app.get('/api/users/:id/requests', async (c) => {
       WHERE cr.requester_id = ?
       ORDER BY cr.created_at DESC
     `).bind(userId).all()
-    
+
     return c.json({ success: true, data: requests.results })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to fetch requests' }, 500)
@@ -614,13 +618,13 @@ app.get('/api/users/:id/requests', async (c) => {
 app.post('/api/users/:id/follow', async (c) => {
   const { DB } = c.env
   const followingId = c.req.param('id')
-  
+
   try {
     const body = await c.req.json()
     const { follower_id } = body
-    
+
     await DB.prepare('INSERT OR IGNORE INTO follows (follower_id, following_id) VALUES (?, ?)').bind(follower_id, followingId).run()
-    
+
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to follow' }, 500)
@@ -631,16 +635,16 @@ app.post('/api/users/:id/follow', async (c) => {
 app.get('/api/notifications', async (c) => {
   const { DB } = c.env
   const userId = c.req.query('user_id')
-  
+
   if (!userId) {
     return c.json({ success: false, error: 'User ID required' }, 400)
   }
-  
+
   try {
     const notifications = await DB.prepare(`
       SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
     `).bind(userId).all()
-    
+
     return c.json({ success: true, data: notifications.results })
   } catch (error) {
     return c.json({ success: false, error: 'Failed to fetch notifications' }, 500)
@@ -671,7 +675,7 @@ const DueliLogo = `
 const generateHTML = (content: string, lang: Language, title: string = 'Dueli') => {
   const dir = getDir(lang)
   const tr = translations[lang]
-  
+
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
 <head>
@@ -717,7 +721,7 @@ const generateHTML = (content: string, lang: Language, title: string = 'Dueli') 
 const getNavigation = (lang: Language) => {
   const tr = translations[lang]
   const isRTL = lang === 'ar'
-  
+
   return `
     <nav class="sticky top-0 z-50 bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -812,7 +816,7 @@ const getNavigation = (lang: Language) => {
 const getLoginModal = (lang: Language) => {
   const tr = translations[lang]
   const isRTL = lang === 'ar'
-  
+
   return `
     <div id="loginModal" class="hidden fixed inset-0 z-[100]">
       <div class="modal-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideLoginModal()"></div>
@@ -860,7 +864,7 @@ const getLoginModal = (lang: Language) => {
 // Footer component
 const getFooter = (lang: Language) => {
   const tr = translations[lang]
-  
+
   return `
     <footer class="bg-gray-50 dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-gray-800 py-6 mt-auto">
       <div class="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
@@ -879,7 +883,7 @@ app.get('/', (c) => {
   const lang = c.get('lang')
   const tr = translations[lang]
   const isRTL = lang === 'ar'
-  
+
   const content = `
     ${getNavigation(lang)}
     ${getLoginModal(lang)}
@@ -1196,7 +1200,7 @@ app.get('/', (c) => {
       }, 500));
     </script>
   `
-  
+
   return c.html(generateHTML(content, lang, tr.home))
 })
 
@@ -1206,7 +1210,7 @@ app.get('/competition/:id', async (c) => {
   const tr = translations[lang]
   const id = c.req.param('id')
   const isRTL = lang === 'ar'
-  
+
   const content = `
     ${getNavigation(lang)}
     ${getLoginModal(lang)}
@@ -1566,7 +1570,7 @@ app.get('/competition/:id', async (c) => {
       }
     </script>
   `
-  
+
   return c.html(generateHTML(content, lang, tr.competition))
 })
 
@@ -1575,7 +1579,7 @@ app.get('/create', (c) => {
   const lang = c.get('lang')
   const tr = translations[lang]
   const isRTL = lang === 'ar'
-  
+
   const content = `
     ${getNavigation(lang)}
     ${getLoginModal(lang)}
@@ -1723,7 +1727,7 @@ app.get('/create', (c) => {
       }
     </script>
   `
-  
+
   return c.html(generateHTML(content, lang, tr.create_competition))
 })
 
@@ -1732,7 +1736,7 @@ app.get('/explore', (c) => {
   const lang = c.get('lang')
   const tr = translations[lang]
   const isRTL = lang === 'ar'
-  
+
   const content = `
     ${getNavigation(lang)}
     ${getLoginModal(lang)}
@@ -1815,7 +1819,7 @@ app.get('/explore', (c) => {
       });
     </script>
   `
-  
+
   return c.html(generateHTML(content, lang, tr.explore))
 })
 
