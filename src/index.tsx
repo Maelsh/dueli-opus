@@ -6,6 +6,7 @@ import jitsiRoutes from './routes/jitsi'
 // Types
 type Bindings = {
   DB: D1Database;
+  RESEND_API_KEY: string;
 }
 
 type Variables = {
@@ -629,6 +630,275 @@ app.put('/api/users/preferences', async (c) => {
   }
 })
 
+// ============================================
+// AUTH ENDPOINTS
+// ============================================
+
+// Helper function to send verification email
+async function sendVerificationEmail(email: string, token: string, name: string, lang: string, resendApiKey: string) {
+  const verifyUrl = `https://project-8e7c178d.pages.dev/verify?token=${token}&lang=${lang}`
+
+  const subject = lang === 'ar' ? 'تفعيل حسابك في ديولي' : 'Activate your Dueli account'
+  const htmlContent = lang === 'ar' ? `
+    <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #7c3aed; margin: 0;">ديولي</h1>
+      </div>
+      <h2 style="color: #1f2937;">مرحباً ${name}!</h2>
+      <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
+        شكراً لتسجيلك في منصة ديولي. يرجى الضغط على الزر أدناه لتفعيل حسابك:
+      </p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${verifyUrl}" style="background: linear-gradient(135deg, #7c3aed 0%, #f59e0b 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 50px; font-weight: bold; display: inline-block;">
+          تفعيل الحساب
+        </a>
+      </div>
+      <p style="color: #6b7280; font-size: 14px;">
+        أو انسخ هذا الرابط:
+        <br>
+        <a href="${verifyUrl}" style="color: #7c3aed;">${verifyUrl}</a>
+      </p>
+      <p style="color: #9ca3af; font-size: 12px; margin-top: 40px">
+        إذا لم تقم بإنشاء حساب، يمكنك تجاهل هذه الرسالة.
+      </p>
+    </div>
+  ` : `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #7c3aed; margin: 0;">Dueli</h1>
+      </div>
+      <h2 style="color: #1f2937;">Welcome ${name}!</h2>
+      <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
+        Thank you for signing up for Dueli. Please click the button below to activate your account:
+      </p>
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${verifyUrl}" style="background: linear-gradient(135deg, #7c3aed 0%, #f59e0b 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 50px; font-weight: bold; display: inline-block;">
+          Activate Account
+        </a>
+      </div>
+      <p style="color: #6b7280; font-size: 14px;">
+        Or copy this link:
+        <br>
+        <a href="${verifyUrl}" style="color: #7c3aed;">${verifyUrl}</a>
+      </p>
+      <p style="color: #9ca3af; font-size: 12px; margin-top: 40px;">
+        If you didn't create an account, you can ignore this message.
+      </p>
+    </div>
+  `
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: 'Dueli <onboarding@resend.dev>',
+      to: [email],
+      subject,
+      html: htmlContent
+    })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to send verification email')
+  }
+
+  return await response.json()
+}
+
+// Helper to hash password
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// Register new user
+app.post('/api/auth/register', async (c) => {
+  const { DB, RESEND_API_KEY } = c.env
+  const lang = c.req.query('lang') || 'ar'
+
+  try {
+    const body = await c.req.json()
+    const { name, email, password } = body
+
+    if (!name || !email || !password) {
+      return c.json({ success: false, error: lang === 'ar' ? 'جميع الحقول مطلوبة' : 'All fields are required' }, 400)
+    }
+
+    // Check if email already exists
+    const existingUser = await DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first()
+    if (existingUser) {
+      return c.json({ success: false, error: lang === 'ar' ? 'البريد الإلكتروني مستخدم بالفعل' : 'Email already exists' }, 400)
+    }
+
+    // Hash password
+    const passwordHash = await hashPassword(password)
+
+    // Generate verification token
+    const verificationToken = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+
+    // Create user
+    const result = await DB.prepare(`
+      INSERT INTO users (name, email, password_hash, verification_token, verification_expires, email_verified, created_at)
+      VALUES (?, ?, ?, ?, ?, 0, datetime('now'))
+    `).bind(name, email, passwordHash, verificationToken, expiresAt).run()
+
+    // Send verification email
+    await sendVerificationEmail(email, verificationToken, name, lang, RESEND_API_KEY)
+
+    return c.json({
+      success: true,
+      message: lang === 'ar' ? 'تم التسجيل بنجاح! يرجى التحقق من بريدك الإلكتروني.' : 'Registration successful! Please check your email.'
+    })
+  } catch (error) {
+    console.error('Registration error:', error)
+    return c.json({ success: false, error: lang === 'ar' ? 'حدث خطأ أثناء التسجيل' : 'Registration failed' }, 500)
+  }
+})
+
+// Verify email
+app.get('/api/auth/verify', async (c) => {
+  const { DB } = c.env
+  const token = c.req.query('token')
+  const lang = c.req.query('lang') || 'ar'
+
+  if (!token) {
+    return c.json({ success: false, error: 'Invalid token' }, 400)
+  }
+
+  try {
+    // Find user with valid token
+    const user = await DB.prepare(`
+      SELECT id, email FROM users 
+      WHERE verification_token = ? 
+      AND verification_expires > datetime('now')
+      AND email_verified = 0
+    `).bind(token).first()
+
+    if (!user) {
+      return c.json({ success: false, error: lang === 'ar' ? 'رابط التفعيل غير صالح أو منتهي' : 'Invalid or expired verification link' }, 400)
+    }
+
+    // Update user
+    await DB.prepare(`
+      UPDATE users 
+      SET email_verified = 1, verification_token = NULL, verification_expires = NULL
+      WHERE id = ?
+    `).bind((user as any).id).run()
+
+    return c.json({
+      success: true,
+      message: lang === 'ar' ? 'تم تفعيل حسابك بنجاح!' : 'Account activated successfully!'
+    })
+  } catch (error) {
+    console.error('Verification error:', error)
+    return c.json({ success: false, error: 'Verification failed' }, 500)
+  }
+})
+
+// Login
+app.post('/api/auth/login', async (c) => {
+  const { DB } = c.env
+  const lang = c.req.query('lang') || 'ar'
+
+  try {
+    const body = await c.req.json()
+    const { email, password } = body
+
+    if (!email || !password) {
+      return c.json({ success: false, error: lang === 'ar' ? 'البريد الإلكتروني وكلمة المرور مطلوبان' : 'Email and password are required' }, 400)
+    }
+
+    // Get user
+    const user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first()
+    if (!user) {
+      return c.json({ success: false, error: lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password' }, 401)
+    }
+
+    // Check if verified
+    if (!(user as any).email_verified) {
+      return c.json({ success: false, error: lang === 'ar' ? 'يرجى تفعيل حسابك أولاً' : 'Please verify your email first' }, 403)
+    }
+
+    // Verify password
+    const passwordHash = await hashPassword(password)
+    if ((user as any).password_hash !== passwordHash) {
+      return c.json({ success: false, error: lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password' }, 401)
+    }
+
+    // Create session
+    const sessionId = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
+
+    await DB.prepare(`
+      INSERT INTO sessions (id, user_id, expires_at, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).bind(sessionId, (user as any).id, expiresAt).run()
+
+    return c.json({
+      success: true,
+      sessionId,
+      user: {
+        id: (user as any).id,
+        name: (user as any).name,
+        email: (user as any).email,
+        avatar: (user as any).avatar
+      }
+    })
+  } catch (error) {
+    console.error('Login error:', error)
+    return c.json({ success: false, error: 'Login failed' }, 500)
+  }
+})
+
+// Resend verification email
+app.post('/api/auth/resend-verification', async (c) => {
+  const { DB, RESEND_API_KEY } = c.env
+  const lang = c.req.query('lang') || 'ar'
+
+  try {
+    const body = await c.req.json()
+    const { email } = body
+
+    if (!email) {
+      return c.json({ success: false, error: lang === 'ar' ? 'البريد الإلكتروني مطلوب' : 'Email is required' }, 400)
+    }
+
+    // Get user
+    const user = await DB.prepare('SELECT * FROM users WHERE email = ? AND email_verified = 0').bind(email).first()
+    if (!user) {
+      return c.json({ success: false, error: lang === 'ar' ? 'المستخدم غير موجود أو تم تفعيله بالفعل' : 'User not found or already verified' }, 404)
+    }
+
+    // Generate new token
+    const verificationToken = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
+    await DB.prepare(`
+      UPDATE users 
+      SET verification_token = ?, verification_expires = ?
+      WHERE id = ?
+    `).bind(verificationToken, expiresAt, (user as any).id).run()
+
+    // Send email
+    await sendVerificationEmail(email, verificationToken, (user as any).name, lang, RESEND_API_KEY)
+
+    return c.json({
+      success: true,
+      message: lang === 'ar' ? 'تم إرسال رابط التفعيل مرة أخرى' : 'Verification email resent'
+    })
+  } catch (error) {
+    console.error('Resend verification error:', error)
+    return c.json({ success: false, error: 'Failed to resend verification' }, 500)
+  }
+})
+
 // Get user's pending requests
 app.get('/api/users/:id/requests', async (c) => {
   const { DB } = c.env
@@ -772,9 +1042,9 @@ const getNavigation = (lang: Language) => {
         <div class="flex items-center gap-1.5">
           <!-- Settings/Help -->
           <!-- Settings/Help -->
-          <button onclick="showHelp()" title="${tr.help}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors">
+          <a href="/about?lang=${lang}" title="${tr.help}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors">
             <i class="far fa-question-circle text-2xl"></i>
-          </button>
+          </a>
           
           <!-- Country/Language Switcher -->
           <div class="relative">
@@ -868,32 +1138,78 @@ const getLoginModal = (lang: Language) => {
           <i class="fas fa-times text-xl"></i>
         </button>
         
-        <div class="text-center mb-8">
-          <div class="flex justify-center mb-4">${DueliLogo}</div>
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">${tr.login_welcome}</h2>
-          <p class="text-gray-500 mt-2 text-sm">${tr.login_subtitle}</p>
+        <div class="text-center mb-6">
+          <div class="flex justify-center mb-4"><img src="/static/dueli-icon.png" alt="Dueli" class="w-12 h-12 object-contain"></div>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white" id="modalTitle">${tr.login_welcome}</h2>
+          <p class="text-gray-500 mt-2 text-sm" id="modalSubtitle">${tr.login_subtitle}</p>
         </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+          <button onclick="switchAuthTab('login')" id="loginTab" class="flex-1 py-2 rounded-md text-sm font-semibold transition-all bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm">
+            ${lang === 'ar' ? 'تسجيل الدخول' : 'Login'}
+          </button>
+          <button onclick="switchAuthTab('register')" id="registerTab" class="flex-1 py-2 rounded-md text-sm font-semibold transition-all text-gray-600 dark:text-gray-400">
+            ${lang === 'ar' ? 'إنشاء حساب' : 'Register'}
+          </button>
+        </div>
+
+        <!-- Messages -->
+        <div id="authMessage" class="hidden mb-4 p-3 rounded-lg text-sm"></div>
+
+        <!-- Login Form -->
+        <div id="loginForm">
+          <form onsubmit="handleLogin(event)" class="space-y-4 mb-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
+              <input type="email" id="loginEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'كلمة المرور' : 'Password'}</label>
+              <input type="password" id="loginPassword" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+            <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
+              ${lang === 'ar' ? 'تسجيل الدخول' : 'Login'}
+            </button>
+          </form>
+
+          <div class="relative my-6">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200 dark:border-gray-700"></div></div>
+            <div class="relative flex justify-center text-sm"><span class="px-2 bg-white dark:bg-[#1a1a1a] text-gray-500">${lang === 'ar' ? 'أو' : 'Or'}</span></div>
+          </div>
         
-        <div class="space-y-3">
-          <button onclick="loginWith('google')" class="social-btn">
-            <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-            <span class="font-medium text-gray-700 dark:text-gray-200">${tr.login_with_google}</span>
-          </button>
-          
-          <button onclick="loginWith('facebook')" class="social-btn">
-            <i class="fab fa-facebook text-xl text-[#1877F2]"></i>
-            <span class="font-medium text-gray-700 dark:text-gray-200">${tr.login_with_facebook}</span>
-          </button>
-          
-          <button onclick="loginWith('microsoft')" class="social-btn">
-            <i class="fab fa-microsoft text-xl text-[#00A4EF]"></i>
-            <span class="font-medium text-gray-700 dark:text-gray-200">${tr.login_with_microsoft}</span>
-          </button>
-          
-          <button onclick="loginWith('twitter')" class="social-btn">
-            <i class="fab fa-x-twitter text-xl text-gray-800 dark:text-white"></i>
-            <span class="font-medium text-gray-700 dark:text-gray-200">${tr.login_with_twitter}</span>
-          </button>
+          <div class="space-y-2">
+            <button onclick="loginWith('google')" class="social-btn">
+              <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+              <span class="font-medium text-gray-700 dark:text-gray-200">${tr.login_with_google}</span>
+            </button>
+            <button onclick="loginWith('facebook')" class="social-btn">
+              <i class="fab fa-facebook text-xl text-[#1877F2]"></i>
+              <span class="font-medium text-gray-700 dark:text-gray-200">${tr.login_with_facebook}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerForm" class="hidden">
+          <form onsubmit="handleRegister(event)" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'الاسم' : 'Name'}</label>
+              <input type="text" id="registerName" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
+              <input type="email" id="registerEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'كلمة المرور' : 'Password'}</label>
+              <input type="password" id="registerPassword" required minlength="6" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+              <p class="text-xs text-gray-500 mt-1">${lang === 'ar' ? 'يجب أن تكون 6 أحرف على الأقل' : 'Must be at least 6 characters'}</p>
+            </div>
+            <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
+              ${lang === 'ar' ? 'إنشاء حساب' : 'Create Account'}
+            </button>
+          </form>
         </div>
         
         <p class="text-xs text-gray-400 text-center mt-6">
@@ -1247,6 +1563,206 @@ app.get('/', (c) => {
   `
 
   return c.html(generateHTML(content, lang, tr.home))
+})
+
+// Email Verification Page
+app.get('/verify', async (c) => {
+  const lang = c.get('lang')
+  const tr = translations[lang]
+  const token = c.req.query('token')
+
+  let message = ''
+  let isSuccess = false
+
+  if (token) {
+    try {
+      const res = await fetch(`${c.req.url.split('/verify')[0]}/api/auth/verify?token=${token}&lang=${lang}`)
+      const data = await res.json()
+      message = data.message || data.error
+      isSuccess = data.success
+    } catch (error) {
+      message = lang === 'ar' ? 'حدث خطأ أثناء التحقق' : 'Verification failed'
+    }
+  } else {
+    message = lang === 'ar' ? 'رابط غير صالح' : 'Invalid link'
+  }
+
+  const content = `
+    ${getNavigation(lang)}
+    
+    <div class="min-h-screen bg-white dark:bg-[#0f0f0f] flex items-center justify-center px-4">
+      <div class="max-w-md w-full text-center">
+        <div class="mb-6">
+          <img src="/static/dueli-icon.png" alt="Dueli" class="w-20 h-20 mx-auto mb-6 object-contain">
+        </div>
+        
+        ${isSuccess ? `
+          <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <i class="fas fa-check text-4xl text-green-600 dark:text-green-400"></i>
+          </div>
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">${message}</h1>
+          <p class="text-gray-600 dark:text-gray-400 mb-8">
+            ${lang === 'ar' ? 'يمكنك الآن تسجيل الدخول إلى حسابك' : 'You can now log into your account'}
+          </p>
+          <a href="/?lang=${lang}" class="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-semibold hover:opacity-90 transition-all">
+            ${lang === 'ar' ? 'اذهب إلى الرئيسية' : 'Go to Home'}
+          </a>
+        ` : `
+          <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <i class="fas fa-times text-4xl text-red-600 dark:text-red-400"></i>
+          </div>
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">${message}</h1>
+          <p class="text-gray-600 dark:text-gray-400 mb-8">
+            ${lang === 'ar' ? 'يرجى التحقق من الرابط أو طلب رابط جديد' : 'Please check the link or request a new one'}
+          </p>
+          <a href="/?lang=${lang}" class="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-semibold hover:opacity-90 transition-all">
+            ${lang === 'ar' ? 'العودة' : 'Go Back'}
+          </a>
+        `}
+      </div>
+    </div>
+    
+    ${getFooter(lang)}
+  `
+
+  return c.html(generateHTML(content, lang, lang === 'ar' ? 'تفعيل الحساب' : 'Account Verification'))
+})
+
+// About Page Route
+app.get('/about', (c) => {
+  const lang = c.get('lang')
+  const tr = translations[lang]
+  const isRTL = lang === 'ar'
+
+  const content = `
+    ${getNavigation(lang)}
+    ${getLoginModal(lang)}
+    
+    <div class="min-h-screen bg-white dark:bg-[#0f0f0f] animate-fade-in">
+      <main class="container mx-auto px-4 py-12">
+        <!-- Hero Section -->
+        <div class="text-center mb-16 max-w-4xl mx-auto">
+          <div class="inline-block p-3 rounded-2xl bg-gradient-to-br from-purple-500/10 to-amber-500/10 mb-6">
+            <img src="/static/dueli-icon.png" alt="Dueli" class="w-20 h-20 object-contain drop-shadow-xl">
+          </div>
+          <h1 class="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 mb-6 leading-tight">
+            ${lang === 'ar' ? 'منصة ديولي للمنافسات' : 'Dueli Competition Platform'}
+          </h1>
+          <p class="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
+            ${lang === 'ar'
+      ? 'المنصة الأولى من نوعها التي تجمع بين المنافسات الحية، الحوارات البناءة، واكتشاف المواهب في بيئة تفاعلية عادلة.'
+      : 'The first platform of its kind combining live competitions, constructive dialogues, and talent discovery in a fair interactive environment.'}
+          </p>
+        </div>
+
+        <!-- Features Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
+          <div class="p-8 rounded-3xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800 hover:border-purple-500/30 transition-all group">
+            <div class="w-14 h-14 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 text-2xl mb-6 group-hover:scale-110 transition-transform">
+              <i class="fas fa-video"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
+              ${lang === 'ar' ? 'بث مباشر وتفاعل حي' : 'Live Streaming & Interaction'}
+            </h3>
+            <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
+              ${lang === 'ar'
+      ? 'نظام بث متطور يجمع المتنافسين جنباً إلى جنب مع إمكانية تفاعل الجمهور والتصويت المباشر.'
+      : 'Advanced streaming system bringing competitors side-by-side with audience interaction and live voting.'}
+            </p>
+          </div>
+
+          <div class="p-8 rounded-3xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800 hover:border-amber-500/30 transition-all group">
+            <div class="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600 dark:text-amber-400 text-2xl mb-6 group-hover:scale-110 transition-transform">
+              <i class="fas fa-trophy"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
+              ${lang === 'ar' ? 'نظام تحكيم عادل' : 'Fair Judging System'}
+            </h3>
+            <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
+              ${lang === 'ar'
+      ? 'آليات تحكيم شفافة تعتمد على تصويت الجمهور ولجان التحكيم المختصة لضمان العدالة.'
+      : 'Transparent judging mechanisms based on audience voting and expert panels to ensure fairness.'}
+            </p>
+          </div>
+
+          <div class="p-8 rounded-3xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800 hover:border-cyan-500/30 transition-all group">
+            <div class="w-14 h-14 rounded-2xl bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 text-2xl mb-6 group-hover:scale-110 transition-transform">
+              <i class="fas fa-globe"></i>
+            </div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
+              ${lang === 'ar' ? 'مجتمع عالمي' : 'Global Community'}
+            </h3>
+            <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
+              ${lang === 'ar'
+      ? 'تواصل مع مبدعين ومفكرين من مختلف أنحاء العالم وشارك في منافسات عابرة للحدود.'
+      : 'Connect with creators and thinkers from around the world and participate in cross-border competitions.'}
+            </p>
+          </div>
+        </div>
+
+        <!-- Gallery Section -->
+        <div class="mb-20">
+          <h2 class="text-3xl font-bold text-center text-gray-900 dark:text-white mb-10">
+            ${lang === 'ar' ? 'نظرة على المنصة' : 'Platform Preview'}
+          </h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group h-64">
+              <img src="/static/about/image-1.png" alt="Preview 1" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            </div>
+            <div class="rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group h-64 lg:col-span-2">
+              <img src="/static/about/image-2.png" alt="Preview 2" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            </div>
+            <div class="rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group h-64 lg:col-span-2">
+              <img src="/static/about/image-3.jpg" alt="Preview 3" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            </div>
+            <div class="rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group h-64">
+              <img src="/static/about/image-4.jpg" alt="Preview 4" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            </div>
+            <div class="rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group h-64 md:col-span-2 lg:col-span-3">
+              <img src="/static/about/image-5.jpg" alt="Preview 5" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+            </div>
+          </div>
+        </div>
+
+        <!-- Maelsh Section -->
+        <div class="bg-gradient-to-br from-gray-900 to-black rounded-3xl p-8 md:p-12 text-white relative overflow-hidden">
+          <div class="absolute top-0 right-0 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+          <div class="absolute bottom-0 left-0 w-64 h-64 bg-amber-600/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+          
+          <div class="relative z-10 flex flex-col md:flex-row items-center gap-10">
+            <div class="w-32 h-32 md:w-40 md:h-40 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center border-2 border-white/20 shadow-2xl shrink-0">
+              <span class="text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-amber-400">M</span>
+            </div>
+            <div class="text-center md:text-${isRTL ? 'right' : 'left'}">
+              <h2 class="text-3xl font-bold mb-4">
+                ${lang === 'ar' ? 'تم التطوير بواسطة Maelsh' : 'Developed by Maelsh'}
+              </h2>
+              <p class="text-gray-300 text-lg leading-relaxed max-w-2xl">
+                ${lang === 'ar'
+      ? 'نحن في Maelsh نؤمن بقوة الحوار والمنافسة الشريفة في بناء المجتمعات. نسعى لتقديم حلول برمجية مبتكرة تجمع بين الجمالية والوظيفة لخدمة المستخدم العربي والعالمي.'
+      : 'At Maelsh, we believe in the power of dialogue and fair competition in building communities. We strive to provide innovative software solutions that combine aesthetics and functionality to serve the Arab and global user.'}
+              </p>
+              <div class="mt-8 flex gap-4 justify-center md:justify-start">
+                <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                  <i class="fab fa-twitter"></i>
+                </a>
+                <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                  <i class="fab fa-github"></i>
+                </a>
+                <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                  <i class="fas fa-envelope"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </main>
+        
+        ${getFooter(lang)}
+      </div>
+    </div>
+  `
+
+  return c.html(generateHTML(content, lang, lang === 'ar' ? 'عن ديولي' : 'About Dueli'))
 })
 
 // Competition detail page

@@ -115,7 +115,130 @@ function hideLoginModal() {
     setTimeout(() => {
       modal.classList.add('hidden');
       document.body.style.overflow = '';
-    }, 300);
+      // Reset forms
+      document.getElementById('loginForm')?.querySelector('form')?.reset();
+      document.getElementById('registerForm')?.querySelector('form')?.reset();
+      hideAuthMessage();
+    }, 200);
+  }
+}
+
+// Switch between login and register tabs
+function switchAuthTab(tab) {
+  const loginTab = document.getElementById('loginTab');
+  const registerTab = document.getElementById('registerTab');
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+
+  hideAuthMessage();
+
+  if (tab === 'login') {
+    loginTab?.classList.add('bg-white', 'dark:bg-gray-700', 'text-purple-600', 'dark:text-purple-400', 'shadow-sm');
+    loginTab?.classList.remove('text-gray-600', 'dark:text-gray-400');
+    registerTab?.classList.remove('bg-white', 'dark:bg-gray-700', 'text-purple-600', 'dark:text-purple-400', 'shadow-sm');
+    registerTab?.classList.add('text-gray-600', 'dark:text-gray-400');
+    loginForm?.classList.remove('hidden');
+    registerForm?.classList.add('hidden');
+  } else {
+    registerTab?.classList.add('bg-white', 'dark:bg-gray-700', 'text-purple-600', 'dark:text-purple-400', 'shadow-sm');
+    registerTab?.classList.remove('text-gray-600', 'dark:text-gray-400');
+    loginTab?.classList.remove('bg-white', 'dark:bg-gray-700', 'text-purple-600', 'dark:text-purple-400', 'shadow-sm');
+    loginTab?.classList.add('text-gray-600', 'dark:text-gray-400');
+    registerForm?.classList.remove('hidden');
+    loginForm?.classList.add('hidden');
+  }
+}
+
+// Show auth message
+function showAuthMessage(message, type = 'error') {
+  const msg = document.getElementById('authMessage');
+  if (msg) {
+    msg.textContent = message;
+    msg.classList.remove('hidden', 'bg-red-100', 'bg-green-100', 'bg-blue-100', 'text-red-700', 'text-green-700', 'text-blue-700');
+    if (type === 'success') {
+      msg.classList.add('bg-green-100', 'text-green-700');
+    } else if (type === 'info') {
+      msg.classList.add('bg-blue-100', 'text-blue-700');
+    } else {
+      msg.classList.add('bg-red-100', 'text-red-700');
+    }
+  }
+}
+
+function hideAuthMessage() {
+  const msg = document.getElementById('authMessage');
+  if (msg) msg.classList.add('hidden');
+}
+
+// Handle registration
+async function handleRegister(e) {
+  e.preventDefault();
+  hideAuthMessage();
+
+  const name = document.getElementById('registerName').value;
+  const email = document.getElementById('registerEmail').value;
+  const password = document.getElementById('registerPassword').value;
+
+  try {
+    const res = await fetch(`/api/auth/register?lang=${window.lang}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      showAuthMessage(data.message, 'success');
+      document.getElementById('registerForm')?.querySelector('form')?.reset();
+      // Switch to login tab after 2 seconds
+      setTimeout(() => switchAuthTab('login'), 2000);
+    } else {
+      showAuthMessage(data.error || 'Registration failed', 'error');
+    }
+  } catch (error) {
+    console.error('Registration error:', error);
+    showAuthMessage('فشل الاتصال بالخادم', 'error');
+  }
+}
+
+// Handle login
+async function handleLogin(e) {
+  e.preventDefault();
+  hideAuthMessage();
+
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+
+  try {
+    const res = await fetch(`/api/auth/login?lang=${window.lang}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      // Save session
+      window.currentUser = data.user;
+      window.sessionId = data.sessionId;
+      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('sessionId', data.sessionId);
+
+      // Update UI
+      updateAuthUI();
+      hideLoginModal();
+      showToast(window.lang === 'ar' ? 'مرحباً بك!' : 'Welcome!', 'success');
+
+      // Reload to refresh data
+      setTimeout(() => window.location.reload(), 500);
+    } else {
+      showAuthMessage(data.error || 'Login failed', 'error');
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    showAuthMessage('فشل الاتصال بالخادم', 'error');
   }
 }
 
