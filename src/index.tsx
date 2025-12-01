@@ -702,7 +702,9 @@ async function sendVerificationEmail(email: string, token: string, name: string,
   })
 
   if (!response.ok) {
-    throw new Error('Failed to send verification email')
+    const errorText = await response.text()
+    console.error('Resend API Error:', errorText)
+    throw new Error(`Failed to send verification email: ${errorText}`)
   }
 
   return await response.json()
@@ -721,6 +723,11 @@ async function hashPassword(password: string): Promise<string> {
 app.post('/api/auth/register', async (c) => {
   const { DB, RESEND_API_KEY } = c.env
   const lang = c.req.query('lang') || 'ar'
+
+  if (!RESEND_API_KEY) {
+    console.error('Missing RESEND_API_KEY')
+    return c.json({ success: false, error: 'Server configuration error: Missing Email API Key' }, 500)
+  }
 
   try {
     const body = await c.req.json()
