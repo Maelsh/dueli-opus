@@ -2,11 +2,26 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { translations, countries, getDir, Language } from './i18n'
 import jitsiRoutes from './routes/jitsi'
+import { GoogleOAuth } from './lib/oauth/google'
+import { FacebookOAuth } from './lib/oauth/facebook'
+import { MicrosoftOAuth } from './lib/oauth/microsoft'
+import { TikTokOAuth } from './lib/oauth/tiktok'
+import { isEmailAllowed, generateState } from './lib/oauth/utils'
+
 
 // Types
 type Bindings = {
   DB: D1Database;
   RESEND_API_KEY: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  FACEBOOK_CLIENT_ID: string;
+  FACEBOOK_CLIENT_SECRET: string;
+  MICROSOFT_CLIENT_ID: string;
+  MICROSOFT_CLIENT_SECRET: string;
+  MICROSOFT_TENANT_ID: string;
+  TIKTOK_CLIENT_KEY: string;
+  TIKTOK_CLIENT_SECRET: string;
 }
 
 type Variables = {
@@ -933,6 +948,136 @@ app.post('/api/auth/logout', async (c) => {
     return c.json({ success: false, error: 'Logout failed' }, 500)
   }
 })
+
+// Helper to get OAuth provider
+function getOAuthProvider(provider: string, env: Bindings, redirectBase: string) {
+  const redirectUri = `${redirectBase}/api/auth/oauth/${provider}/callback`
+
+  switch (provider) {
+    case 'google':
+      return new GoogleOAuth(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, redirectUri)
+    case 'facebook':
+      return new FacebookOAuth(env.FACEBOOK_CLIENT_ID, env.FACEBOOK_CLIENT_SECRET, redirectUri)
+    case 'microsoft':
+      return new MicrosoftOAuth(env.MICROSOFT_CLIENT_ID, env.MICROSOFT_CLIENT_SECRET, env.MICROSOFT_TENANT_ID, redirectUri)
+    case 'tiktok':
+      return new TikTokOAuth(env.TIKTOK_CLIENT_KEY, env.TIKTOK_CLIENT_SECRET, redirectUri)
+    default:
+      return null
+  }
+}
+
+// OAuth Init
+app.get('/api/auth/oauth/:provider', async (c) => {
+  const provider = c.req.param('provider')
+  const lang = c.req.query('lang') || 'ar'
+  const url = new URL(c.req.url)
+  const origin = `${url.protocol}//${url.host}`
+
+  const oauth = getOAuthProvider(provider, c.env, origin)
+  if (!oauth) {
+    return c.json({ success: false, error: 'Invalid provider' }, 400)
+  }
+
+  const state = generateState()
+  const authUrl = oauth.getAuthUrl(state, lang)
+  return c.redirect(authUrl)
+})
+
+// OAuth Callback
+app.get('/api/auth/oauth/:provider/callback', async (c) => {
+  const provider = c.req.param('provider')
+  const code = c.req.query('code')
+  const stateParam = c.req.query('state')
+  const { DB } = c.env
+  const url = new URL(c.req.url)
+  const origin = `${url.protocol}//${url.host}`
+
+  // Parse state to get lang
+  let lang = 'ar'
+  try {
+    if (stateParam) {
+      const stateObj = JSON.parse(stateParam)
+      lang = stateObj.lang || 'ar'
+    }
+  } catch (e) {
+    // Ignore parse error, default to ar
+  }
+
+  if (!code) {
+    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+  }
+
+  const oauth = getOAuthProvider(provider, c.env, origin)
+  if (!oauth) {
+    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+  }
+
+  try {
+    const oauthUser = await oauth.getUser(code)
+
+    // 1. Check email domain
+    if (oauthUser.email && !isEmailAllowed(oauthUser.email)) {
+      return c.redirect(`/?error=INVALID_EMAIL_DOMAIN&lang=${lang}`)
+    }
+
+    // 2. Check if user exists
+    let user = null
+    if (oauthUser.email) {
+      user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(oauthUser.email).first()
+    } else if (oauthUser.id) {
+      // Fallback for providers without email (like TikTok sometimes)
+      user = await DB.prepare('SELECT * FROM users WHERE oauth_provider = ? AND oauth_id = ?').bind(provider, oauthUser.id).first()
+    }
+
+    if (user) {
+      // Update OAuth info
+      await DB.prepare(`
+        UPDATE users 
+        SET oauth_provider = ?, oauth_id = ?, avatar_url = COALESCE(avatar_url, ?)
+        WHERE id = ?
+      `).bind(provider, oauthUser.id, oauthUser.picture, (user as any).id).run()
+    } else {
+      // Create new user
+      const password = crypto.randomUUID() // Random password
+      const passwordHash = await hashPassword(password)
+      const username = oauthUser.email ? oauthUser.email.split('@')[0].replace(/[^a-z0-9]/g, '') : `user_${crypto.randomUUID().substring(0, 8)}`
+
+      const result = await DB.prepare(`
+        INSERT INTO users (username, email, password_hash, display_name, country, language, email_verified, oauth_provider, oauth_id, avatar_url, is_active, created_at)
+        VALUES (?, ?, ?, ?, 'SA', ?, 1, ?, ?, ?, 1, datetime('now'))
+      `).bind(
+        username,
+        oauthUser.email || '',
+        passwordHash,
+        oauthUser.name,
+        lang,
+        provider,
+        oauthUser.id,
+        oauthUser.picture
+      ).run()
+
+      user = await DB.prepare('SELECT * FROM users WHERE id = ?').bind(result.meta.last_row_id).first()
+    }
+
+    // 3. Create session
+    const sessionId = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
+
+    await DB.prepare(`
+      INSERT INTO sessions (id, user_id, expires_at, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).bind(sessionId, (user as any).id, expiresAt).run()
+
+    // Redirect to home with session
+    return c.redirect(`/?session=${sessionId}&lang=${lang}`)
+
+  } catch (error) {
+    console.error('OAuth Error:', error)
+    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+  }
+})
+
 
 // ============================================
 // PASSWORD RESET
