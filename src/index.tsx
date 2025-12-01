@@ -908,13 +908,29 @@ app.post('/api/auth/resend-verification', async (c) => {
     // Send email
     await sendVerificationEmail(email, verificationToken, (user as any).name, lang, RESEND_API_KEY)
 
-    return c.json({
-      success: true,
-      message: lang === 'ar' ? 'تم إرسال رابط التفعيل مرة أخرى' : 'Verification email resent'
-    })
+    return c.json({ success: true, message: lang === 'ar' ? 'تم إرسال رابط التفعيل مجدداً' : 'Verification email sent' })
   } catch (error) {
     console.error('Resend verification error:', error)
     return c.json({ success: false, error: 'Failed to resend verification' }, 500)
+  }
+})
+
+// Logout
+app.post('/api/auth/logout', async (c) => {
+  const { DB } = c.env
+  const sessionId = c.req.header('Authorization')?.replace('Bearer ', '')
+
+  if (!sessionId) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401)
+  }
+
+  try {
+    // Delete session
+    await DB.prepare('DELETE FROM sessions WHERE id = ?').bind(sessionId).run()
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('Logout error:', error)
+    return c.json({ success: false, error: 'Logout failed' }, 500)
   }
 })
 

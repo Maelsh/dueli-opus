@@ -57,6 +57,34 @@ async function checkAuth() {
   return false;
 }
 
+// Logout function
+async function logout() {
+  const sessionId = localStorage.getItem('sessionId'); // Corrected from 'session' to 'sessionId'
+
+  if (sessionId) {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionId}`
+        }
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  }
+
+  // Clear local storage regardless of API call result
+  localStorage.removeItem('sessionId'); // Corrected from 'session' to 'sessionId'
+  localStorage.removeItem('user');
+
+  // Update UI
+  updateAuthUI();
+
+  // Redirect to home
+  window.location.href = '/';
+}
+
 function updateAuthUI() {
   const authSection = document.getElementById('authSection');
   const userSection = document.getElementById('userSection');
