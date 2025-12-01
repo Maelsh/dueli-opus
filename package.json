@@ -1,0 +1,32 @@
+{
+  "name": "dueli",
+  "version": "1.0.0",
+  "description": "منصة المنافسات والحوارات - Dueli Competition & Dialogue Platform",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:sandbox": "wrangler pages dev dist --d1=dueli-db --local --ip 0.0.0.0 --port 3000",
+    "build": "vite build",
+    "preview": "wrangler pages dev dist",
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name dueli",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:migrate:local": "wrangler d1 migrations apply dueli-db --local",
+    "db:migrate:prod": "wrangler d1 migrations apply dueli-db",
+    "db:seed": "wrangler d1 execute dueli-db --local --file=./seed.sql",
+    "db:reset": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local && npm run db:seed"
+  },
+  "dependencies": {
+    "@hono/vite-cloudflare-pages": "^0.4.2",
+    "hono": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250705.0",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "wrangler": "^3.78.0"
+  },
+  "keywords": ["dueli", "competition", "dialogue", "platform", "debate"],
+  "author": "",
+  "license": "MIT"
+}
