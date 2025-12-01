@@ -146,6 +146,117 @@ function switchAuthTab(tab) {
     loginTab?.classList.add('text-gray-600', 'dark:text-gray-400');
     registerForm?.classList.remove('hidden');
     loginForm?.classList.add('hidden');
+    registerForm?.classList.remove('hidden');
+    loginForm?.classList.add('hidden');
+  }
+}
+
+// Show forgot password form
+function showForgotPassword() {
+  document.getElementById('loginForm')?.classList.add('hidden');
+  document.getElementById('forgotPasswordForm')?.classList.remove('hidden');
+  document.getElementById('resetStep1')?.classList.remove('hidden');
+  document.getElementById('resetStep2')?.classList.add('hidden');
+  document.getElementById('resetStep3')?.classList.add('hidden');
+  hideAuthMessage();
+}
+
+// Show login form (back from forgot password)
+function showLogin() {
+  document.getElementById('forgotPasswordForm')?.classList.add('hidden');
+  document.getElementById('loginForm')?.classList.remove('hidden');
+  hideAuthMessage();
+}
+
+// Handle Forgot Password - Step 1: Request Code
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  hideAuthMessage();
+
+  const email = document.getElementById('resetEmail').value;
+
+  try {
+    const res = await fetch(`/api/auth/forgot-password?lang=${window.lang}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      showAuthMessage(data.message, 'success');
+      document.getElementById('resetStep1').classList.add('hidden');
+      document.getElementById('resetStep2').classList.remove('hidden');
+    } else {
+      showAuthMessage(data.error || 'Failed to send code', 'error');
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    showAuthMessage('فشل الاتصال بالخادم', 'error');
+  }
+}
+
+// Handle Forgot Password - Step 2: Verify Code
+async function handleVerifyResetCode(e) {
+  e.preventDefault();
+  hideAuthMessage();
+
+  const email = document.getElementById('resetEmail').value;
+  const code = document.getElementById('resetCode').value;
+
+  try {
+    const res = await fetch(`/api/auth/verify-reset-code?lang=${window.lang}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      showAuthMessage(data.message, 'success');
+      document.getElementById('resetStep2').classList.add('hidden');
+      document.getElementById('resetStep3').classList.remove('hidden');
+    } else {
+      showAuthMessage(data.error || 'Invalid code', 'error');
+    }
+  } catch (error) {
+    console.error('Verify code error:', error);
+    showAuthMessage('فشل الاتصال بالخادم', 'error');
+  }
+}
+
+// Handle Forgot Password - Step 3: Reset Password
+async function handleResetPassword(e) {
+  e.preventDefault();
+  hideAuthMessage();
+
+  const email = document.getElementById('resetEmail').value;
+  const code = document.getElementById('resetCode').value;
+  const newPassword = document.getElementById('newPassword').value;
+
+  try {
+    const res = await fetch(`/api/auth/reset-password?lang=${window.lang}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code, newPassword })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      showAuthMessage(data.message, 'success');
+      setTimeout(() => {
+        showLogin();
+        document.getElementById('forgotPasswordForm').querySelector('form').reset();
+      }, 2000);
+    } else {
+      showAuthMessage(data.error || 'Failed to reset password', 'error');
+    }
+  } catch (error) {
+    console.error('Reset password error:', error);
+    showAuthMessage('فشل الاتصال بالخادم', 'error');
   }
 }
 
@@ -245,69 +356,61 @@ async function handleLogin(e) {
 // Login with OAuth provider
 async function loginWith(provider) {
   // In production, this would redirect to actual OAuth flow
-  // For demo, we'll simulate OAuth login with mock data
-
-  const mockUsers = {
-    google: {
-      email: 'demo.user@gmail.com',
-      name: window.lang === 'ar' ? 'مستخدم تجريبي' : 'Demo User',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=google'
-    },
-    facebook: {
-      email: 'demo.user@facebook.com',
+  facebook: {
+    email: 'demo.user@facebook.com',
       name: window.lang === 'ar' ? 'مستخدم فيسبوك' : 'Facebook User',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=facebook'
-    },
-    microsoft: {
-      email: 'demo.user@outlook.com',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=facebook'
+  },
+  microsoft: {
+    email: 'demo.user@outlook.com',
       name: window.lang === 'ar' ? 'مستخدم مايكروسوفت' : 'Microsoft User',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=microsoft'
-    },
-    twitter: {
-      email: 'demo.user@twitter.com',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=microsoft'
+  },
+  twitter: {
+    email: 'demo.user@twitter.com',
       name: window.lang === 'ar' ? 'مستخدم تويتر' : 'Twitter User',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=twitter'
-    }
-  };
-
-  const mockUser = mockUsers[provider] || mockUsers.google;
-
-  try {
-    const res = await fetch('/api/auth/oauth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: provider,
-        email: mockUser.email,
-        name: mockUser.name,
-        avatar: mockUser.avatar
-      })
-    });
-
-    const data = await res.json();
-
-    if (data.success) {
-      window.currentUser = data.data.user;
-      window.sessionId = data.data.sessionId;
-
-      localStorage.setItem('user', JSON.stringify(data.data.user));
-      localStorage.setItem('sessionId', data.data.sessionId);
-
-      hideLoginModal();
-      updateAuthUI();
-      showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح!' : 'Login successful!', 'success');
-
-      // Reload competitions if on home page
-      if (typeof loadCompetitions === 'function') {
-        loadCompetitions();
-      }
-    } else {
-      showToast(data.error || 'Login failed', 'error');
-    }
-  } catch (err) {
-    console.error('Login error:', err);
-    showToast(window.lang === 'ar' ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login error occurred', 'error');
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=twitter'
   }
+};
+
+const mockUser = mockUsers[provider] || mockUsers.google;
+
+try {
+  const res = await fetch('/api/auth/oauth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      provider: provider,
+      email: mockUser.email,
+      name: mockUser.name,
+      avatar: mockUser.avatar
+    })
+  });
+
+  const data = await res.json();
+
+  if (data.success) {
+    window.currentUser = data.data.user;
+    window.sessionId = data.data.sessionId;
+
+    localStorage.setItem('user', JSON.stringify(data.data.user));
+    localStorage.setItem('sessionId', data.data.sessionId);
+
+    hideLoginModal();
+    updateAuthUI();
+    showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح!' : 'Login successful!', 'success');
+
+    // Reload competitions if on home page
+    if (typeof loadCompetitions === 'function') {
+      loadCompetitions();
+    }
+  } else {
+    showToast(data.error || 'Login failed', 'error');
+  }
+} catch (err) {
+  console.error('Login error:', err);
+  showToast(window.lang === 'ar' ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login error occurred', 'error');
+}
 }
 
 // Logout
