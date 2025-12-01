@@ -635,8 +635,10 @@ app.put('/api/users/preferences', async (c) => {
 // ============================================
 
 // Helper function to send verification email
-async function sendVerificationEmail(email: string, token: string, name: string, lang: string, resendApiKey: string) {
-  const verifyUrl = `https://project-8e7c178d.pages.dev/verify?token=${token}&lang=${lang}`
+async function sendVerificationEmail(email: string, token: string, name: string, lang: string, resendApiKey: string, origin: string) {
+  // Use the request origin (localhost for dev, production domain for prod)
+  const baseUrl = origin || 'https://project-8e7c178d.pages.dev'
+  const verifyUrl = `${baseUrl}/verify?token=${token}&lang=${lang}`
 
   const subject = lang === 'ar' ? 'تفعيل حسابك في ديولي' : 'Activate your Dueli account'
   const htmlContent = lang === 'ar' ? `
@@ -763,8 +765,11 @@ app.post('/api/auth/register', async (c) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
     `).bind(username, email, passwordHash, name, userCountry, userLanguage, verificationToken, expiresAt).run()
 
+    // Get origin from request for proper URL generation
+    const origin = c.req.header('origin') || `http://${c.req.header('host')}`
+
     // Send verification email
-    await sendVerificationEmail(email, verificationToken, name, lang, RESEND_API_KEY)
+    await sendVerificationEmail(email, verificationToken, name, lang, RESEND_API_KEY, origin)
 
     return c.json({
       success: true,
