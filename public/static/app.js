@@ -282,6 +282,7 @@ function hideAuthMessage() {
 }
 
 // Handle registration
+// Handle registration
 async function handleRegister(e) {
   e.preventDefault();
   hideAuthMessage();
@@ -290,11 +291,15 @@ async function handleRegister(e) {
   const email = document.getElementById('registerEmail').value;
   const password = document.getElementById('registerPassword').value;
 
+  // Get country and language from cookies
+  const country = getCookie('country') || 'SA';
+  const language = window.lang || 'ar';
+
   try {
     const res = await fetch(`/api/auth/register?lang=${window.lang}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password })
+      body: JSON.stringify({ name, email, password, country, language })
     });
 
     const data = await res.json();
@@ -354,63 +359,27 @@ async function handleLogin(e) {
 }
 
 // Login with OAuth provider
+// Login with OAuth provider
 async function loginWith(provider) {
-  // In production, this would redirect to actual OAuth flow
-  facebook: {
-    email: 'demo.user@facebook.com',
-      name: window.lang === 'ar' ? 'مستخدم فيسبوك' : 'Facebook User',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=facebook'
-  },
-  microsoft: {
-    email: 'demo.user@outlook.com',
-      name: window.lang === 'ar' ? 'مستخدم مايكروسوفت' : 'Microsoft User',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=microsoft'
-  },
-  twitter: {
-    email: 'demo.user@twitter.com',
-      name: window.lang === 'ar' ? 'مستخدم تويتر' : 'Twitter User',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=twitter'
-  }
-};
+  const providerNames = {
+    google: 'Google',
+    facebook: 'Facebook',
+    microsoft: 'Microsoft Outlook',
+    twitter: 'X (Twitter)',
+    tiktok: 'TikTok',
+    snapchat: 'Snapchat'
+  };
 
-const mockUser = mockUsers[provider] || mockUsers.google;
+  const name = providerNames[provider] || provider;
 
-try {
-  const res = await fetch('/api/auth/oauth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      provider: provider,
-      email: mockUser.email,
-      name: mockUser.name,
-      avatar: mockUser.avatar
-    })
-  });
+  // Show redirect message
+  showToast(`${window.lang === 'ar' ? 'جاري التحويل إلى' : 'Redirecting to'} ${name}...`, 'info');
 
-  const data = await res.json();
-
-  if (data.success) {
-    window.currentUser = data.data.user;
-    window.sessionId = data.data.sessionId;
-
-    localStorage.setItem('user', JSON.stringify(data.data.user));
-    localStorage.setItem('sessionId', data.data.sessionId);
-
-    hideLoginModal();
-    updateAuthUI();
-    showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح!' : 'Login successful!', 'success');
-
-    // Reload competitions if on home page
-    if (typeof loadCompetitions === 'function') {
-      loadCompetitions();
-    }
-  } else {
-    showToast(data.error || 'Login failed', 'error');
-  }
-} catch (err) {
-  console.error('Login error:', err);
-  showToast(window.lang === 'ar' ? 'حدث خطأ أثناء تسجيل الدخول' : 'Login error occurred', 'error');
-}
+  // Simulate redirect delay
+  setTimeout(() => {
+    // In a real app, this would be: window.location.href = `/api/auth/oauth/${provider}`;
+    showToast(`${window.lang === 'ar' ? 'يتطلب إعداد API Keys' : 'Requires API Keys configuration'}`, 'warning');
+  }, 1000);
 }
 
 // Logout

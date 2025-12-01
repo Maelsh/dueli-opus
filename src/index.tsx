@@ -724,7 +724,7 @@ app.post('/api/auth/register', async (c) => {
 
   try {
     const body = await c.req.json()
-    const { name, email, password } = body
+    const { name, email, password, country, language } = body
 
     if (!name || !email || !password) {
       return c.json({ success: false, error: lang === 'ar' ? 'جميع الحقول مطلوبة' : 'All fields are required' }, 400)
@@ -743,11 +743,18 @@ app.post('/api/auth/register', async (c) => {
     const verificationToken = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
 
+    // Generate username from email (before @)
+    const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')
+
+    // Use provided country/language or defaults
+    const userCountry = country || 'SA'
+    const userLanguage = language || 'ar'
+
     // Create user
     const result = await DB.prepare(`
-      INSERT INTO users (name, email, password_hash, verification_token, verification_expires, email_verified, created_at)
-      VALUES (?, ?, ?, ?, ?, 0, datetime('now'))
-    `).bind(name, email, passwordHash, verificationToken, expiresAt).run()
+      INSERT INTO users (username, email, password_hash, display_name, country, language, verification_token, verification_expires, email_verified, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
+    `).bind(username, email, passwordHash, name, userCountry, userLanguage, verificationToken, expiresAt).run()
 
     // Send verification email
     await sendVerificationEmail(email, verificationToken, name, lang, RESEND_API_KEY)
