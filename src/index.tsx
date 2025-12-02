@@ -921,7 +921,8 @@ app.post('/api/auth/resend-verification', async (c) => {
     `).bind(verificationToken, expiresAt, (user as any).id).run()
 
     // Send email
-    await sendVerificationEmail(email, verificationToken, (user as any).name, lang, RESEND_API_KEY)
+    const origin = c.req.header('origin') || `http://${c.req.header('host')}`
+    await sendVerificationEmail(email, verificationToken, (user as any).name, lang, RESEND_API_KEY, origin)
 
     return c.json({ success: true, message: lang === 'ar' ? 'تم إرسال رابط التفعيل مجدداً' : 'Verification email sent' })
   } catch (error) {
@@ -2008,7 +2009,7 @@ app.get('/verify', async (c) => {
   if (token) {
     try {
       const res = await fetch(`${c.req.url.split('/verify')[0]}/api/auth/verify?token=${token}&lang=${lang}`)
-      const data = await res.json()
+      const data = await res.json() as any
       message = data.message || data.error
       isSuccess = data.success
     } catch (error) {
@@ -2080,9 +2081,7 @@ app.get('/about', (c) => {
             ${lang === 'ar' ? 'منصة ديولي للمنافسات' : 'Dueli Competition Platform'}
           </h1>
           <p class="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-            ${lang === 'ar'
-      ? 'المنصة الأولى من نوعها التي تجمع بين المنافسات الحية، الحوارات البناءة، واكتشاف المواهب في بيئة تفاعلية عادلة.'
-      : 'The first platform of its kind combining live competitions, constructive dialogues, and talent discovery in a fair interactive environment.'}
+            ${lang === 'ar' ? 'المنصة الأولى من نوعها التي تجمع بين المنافسات الحية، الحوارات البناءة، واكتشاف المواهب في بيئة تفاعلية عادلة.' : 'The first platform of its kind combining live competitions, constructive dialogues, and talent discovery in a fair interactive environment.'}
           </p>
         </div>
 
@@ -2096,9 +2095,7 @@ app.get('/about', (c) => {
               ${lang === 'ar' ? 'بث مباشر وتفاعل حي' : 'Live Streaming & Interaction'}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar'
-      ? 'نظام بث متطور يجمع المتنافسين جنباً إلى جنب مع إمكانية تفاعل الجمهور والتصويت المباشر.'
-      : 'Advanced streaming system bringing competitors side-by-side with audience interaction and live voting.'}
+              ${lang === 'ar' ? 'نظام بث متطور يجمع المتنافسين جنباً إلى جنب مع إمكانية تفاعل الجمهور والتصويت المباشر.' : 'Advanced streaming system bringing competitors side-by-side with audience interaction and live voting.'}
             </p>
           </div>
 
@@ -2110,9 +2107,7 @@ app.get('/about', (c) => {
               ${lang === 'ar' ? 'نظام تحكيم عادل' : 'Fair Judging System'}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar'
-      ? 'آليات تحكيم شفافة تعتمد على تصويت الجمهور ولجان التحكيم المختصة لضمان العدالة.'
-      : 'Transparent judging mechanisms based on audience voting and expert panels to ensure fairness.'}
+              ${lang === 'ar' ? 'آليات تحكيم شفافة تعتمد على تصويت الجمهور ولجان التحكيم المختصة لضمان العدالة.' : 'Transparent judging mechanisms based on audience voting and expert panels to ensure fairness.'}
             </p>
           </div>
 
@@ -2124,9 +2119,7 @@ app.get('/about', (c) => {
               ${lang === 'ar' ? 'مجتمع عالمي' : 'Global Community'}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar'
-      ? 'تواصل مع مبدعين ومفكرين من مختلف أنحاء العالم وشارك في منافسات عابرة للحدود.'
-      : 'Connect with creators and thinkers from around the world and participate in cross-border competitions.'}
+              ${lang === 'ar' ? 'تواصل مع مبدعين ومفكرين من مختلف أنحاء العالم وشارك في منافسات عابرة للحدود.' : 'Connect with creators and thinkers from around the world and participate in cross-border competitions.'}
             </p>
           </div>
         </div>
@@ -2169,9 +2162,7 @@ app.get('/about', (c) => {
                 ${lang === 'ar' ? 'تم التطوير بواسطة Maelsh' : 'Developed by Maelsh'}
               </h2>
               <p class="text-gray-300 text-lg leading-relaxed max-w-2xl">
-                ${lang === 'ar'
-      ? 'نحن في Maelsh نؤمن بقوة الحوار والمنافسة الشريفة في بناء المجتمعات. نسعى لتقديم حلول برمجية مبتكرة تجمع بين الجمالية والوظيفة لخدمة المستخدم العربي والعالمي.'
-      : 'At Maelsh, we believe in the power of dialogue and fair competition in building communities. We strive to provide innovative software solutions that combine aesthetics and functionality to serve the Arab and global user.'}
+                ${lang === 'ar' ? 'نحن في Maelsh نؤمن بقوة الحوار والمنافسة الشريفة في بناء المجتمعات. نسعى لتقديم حلول برمجية مبتكرة تجمع بين الجمالية والوظيفة لخدمة المستخدم العربي والعالمي.' : 'At Maelsh, we believe in the power of dialogue and fair competition in building communities. We strive to provide innovative software solutions that combine aesthetics and functionality to serve the Arab and global user.'}
               </p>
               <div class="mt-8 flex gap-4 justify-center md:justify-start">
                 <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
@@ -2186,8 +2177,9 @@ app.get('/about', (c) => {
               </div>
             </div>
           </div>
-        </main>
-        
+        </div>
+      </main>
+      <div>  
         ${getFooter(lang)}
       </div>
     </div>
@@ -2813,6 +2805,13 @@ app.get('/explore', (c) => {
   `
 
   return c.html(generateHTML(content, lang, tr.explore))
+})
+
+app.notFound((c) => c.text('Not Found', 404))
+
+app.onError((err, c) => {
+  console.error(err)
+  return c.text('Internal Server Error', 500)
 })
 
 export default app
