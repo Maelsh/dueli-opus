@@ -36,7 +36,7 @@ export class FacebookOAuth {
             throw new Error('Failed to get Facebook token');
         }
 
-        const tokenData = await tokenResponse.json();
+        const tokenData = await tokenResponse.json() as any;
 
         // 2. Get User Info
         const userUrl = `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`;
@@ -46,7 +46,7 @@ export class FacebookOAuth {
             throw new Error('Failed to get Facebook user info');
         }
 
-        const userData = await userResponse.json();
+        const userData = await userResponse.json() as any;
 
         return {
             id: userData.id,

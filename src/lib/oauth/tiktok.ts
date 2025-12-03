@@ -40,7 +40,7 @@ export class TikTokOAuth {
             throw new Error('Failed to get TikTok token');
         }
 
-        const tokenData = await tokenResponse.json();
+        const tokenData = await tokenResponse.json() as any;
 
         // 2. Get User Info
         const userResponse = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name', {
@@ -51,7 +51,7 @@ export class TikTokOAuth {
             throw new Error('Failed to get TikTok user info');
         }
 
-        const userData = await userResponse.json();
+        const userData = await userResponse.json() as any;
         const user = userData.data.user;
 
         return {

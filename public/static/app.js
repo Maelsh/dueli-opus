@@ -9,6 +9,19 @@ window.sessionId = null;
 window.lang = 'ar';
 window.isDarkMode = false;
 
+// Helper function for debouncing
+window.debounce = function (func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
 // ============================================
 // Initialize
 // ============================================
@@ -521,14 +534,23 @@ function toggleDarkMode() {
 }
 
 function applyDarkMode() {
+  const moonIcon = document.getElementById('moonIcon');
+  const sunIcon = document.getElementById('sunIcon');
+
   if (window.isDarkMode) {
     document.documentElement.classList.add('dark');
     document.body.classList.add('dark');
-    document.body.classList.remove('light');
+
+    // Show sun icon in dark mode, hide moon
+    if (moonIcon) moonIcon.classList.add('hidden');
+    if (sunIcon) sunIcon.classList.remove('hidden');
   } else {
     document.documentElement.classList.remove('dark');
     document.body.classList.remove('dark');
-    document.body.classList.add('light');
+
+    // Show moon icon in light mode, hide sun
+    if (moonIcon) moonIcon.classList.remove('hidden');
+    if (sunIcon) sunIcon.classList.add('hidden');
   }
 }
 
@@ -980,7 +1002,6 @@ window.dueli = {
   loginWith,
   logout,
   toggleDarkMode,
-  toggleLangMenu,
   toggleUserMenu,
   showHelp,
   showToast,

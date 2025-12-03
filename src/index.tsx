@@ -1341,37 +1341,17 @@ const DueliLogo = `
 const generateHTML = (content: string, lang: Language, title: string = 'Dueli') => {
   const dir = getDir(lang)
   const tr = translations[lang]
-
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title} - ${tr.app_title}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            fontFamily: {
-              'cairo': ['Cairo', 'system-ui', 'sans-serif'],
-              'inter': ['Inter', 'system-ui', 'sans-serif'],
-            },
-            colors: {
-              primary: '#8B5CF6',
-              secondary: '#F59E0B',
-              dialogue: '#8B5CF6',
-              science: '#06B6D4',
-              talents: '#F59E0B',
-            }
-          }
-        }
-      }
-    </script>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    
     <style>
       body { font-family: ${lang === 'ar' ? "'Cairo'" : "'Inter'"}, system-ui, sans-serif; }
     </style>
@@ -1389,12 +1369,12 @@ const getNavigation = (lang: Language) => {
   const isRTL = lang === 'ar'
 
   return `
-    <nav class="sticky top-0 z-50 bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
+    <nav class="sticky top-0 z-50 bg-white dark:bg-[#0f0f0f] backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
         <!-- Logo -->
         <a href="/?lang=${lang}" class="flex items-center gap-2 cursor-pointer group">
           <img src="/static/dueli-icon.png" alt="Dueli" class="w-10 h-10 object-contain">
-          <span class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 hidden sm:inline">
+          <span class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500  sm:inline">
             ${tr.app_title}
           </span>
         </a>
@@ -1434,10 +1414,9 @@ const getNavigation = (lang: Language) => {
           </div>
           
           <!-- Dark Mode Toggle -->
-          <!-- Dark Mode Toggle -->
-          <button onclick="toggleDarkMode()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors ${isRTL ? 'scale-x-[-1]' : ''}" title="${tr.theme}">
-            <i class="far fa-moon dark:hidden text-2xl"></i>
-            <i class="fas fa-moon hidden dark:block text-2xl text-amber-400"></i>
+          <button onclick="toggleDarkMode()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors" title="${tr.theme}">
+            <i id="moonIcon" class="fas fa-moon text-2xl"></i>
+            <i id="sunIcon" class="fas fa-sun text-2xl text-amber-400 hidden"></i>
           </button>
 
           <!-- Separator -->
@@ -1893,7 +1872,7 @@ app.get('/', (c) => {
                   </div>
                 </div>
 
-                <div class="w-12 h-12 bg-white rounded-full p-1.5 shadow-lg z-20 flex items-center justify-center">
+                <div class="w-12 h-12 bg-white rounded-full shadow-lg z-20 flex items-center justify-center">
                   <img src="/static/dueli-icon.png" alt="VS" class="w-full h-full object-contain">
                 </div>
 
@@ -1984,13 +1963,20 @@ app.get('/', (c) => {
         loadCompetitions();
       }
       
-      // Search handler
-      document.getElementById('searchInput')?.addEventListener('input', debounce((e) => {
-        const query = e.target.value.trim();
-        if (query.length >= 2) {
-          window.location.href = '/explore?search=' + encodeURIComponent(query) + '&lang=' + lang;
-        }
-      }, 500));
+      // Search handler with debouncing
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => {
+            const query = e.target.value.trim();
+            if (query.length >= 2) {
+              window.location.href = '/explore?search=' + encodeURIComponent(query) + '&lang=' + lang;
+            }
+          }, 500);
+        });
+      }
     </script>
   `
 
@@ -2807,7 +2793,34 @@ app.get('/explore', (c) => {
   return c.html(generateHTML(content, lang, tr.explore))
 })
 
-app.notFound((c) => c.text('Not Found', 404))
+// .well-known handler for dev tools
+
+app.get('/.well-known/*', (c) => {
+  return c.notFound()
+})
+
+// Catch-all 404 handler
+app.notFound((c) => {
+  const lang = c.get('lang') || 'ar'
+  const tr = translations[lang]
+
+  const content = `
+    ${getNavigation(lang)}
+    <div class="flex-1 flex items-center justify-center py-20">
+      <div class="text-center">
+        <h1 class="text-6xl font-black text-gray-200 dark:text-gray-800 mb-4">404</h1>
+        <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">${lang === 'ar' ? 'الصفحة غير موجودة' : 'Page Not Found'}</p>
+        <a href="/?lang=${lang}" class="btn-primary inline-block">
+          ${lang === 'ar' ? 'العودة للرئيسية' : 'Back to Home'}
+        </a>
+      </div>
+    </div>
+    ${getFooter(lang)}
+  `
+
+  return c.html(generateHTML(content, lang, '404'))
+})
+
 
 app.onError((err, c) => {
   console.error(err)

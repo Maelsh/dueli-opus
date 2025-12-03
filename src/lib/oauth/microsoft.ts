@@ -44,7 +44,7 @@ export class MicrosoftOAuth {
             throw new Error('Failed to get Microsoft token');
         }
 
-        const tokenData = await tokenResponse.json();
+        const tokenData = await tokenResponse.json() as any;
 
         // 2. Get User Info
         const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
@@ -55,7 +55,7 @@ export class MicrosoftOAuth {
             throw new Error('Failed to get Microsoft user info');
         }
 
-        const userData = await userResponse.json();
+        const userData = await userResponse.json() as any;
 
         return {
             id: userData.id,

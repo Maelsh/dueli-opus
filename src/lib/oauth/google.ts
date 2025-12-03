@@ -42,7 +42,7 @@ export class GoogleOAuth {
             throw new Error('Failed to get Google token');
         }
 
-        const tokenData = await tokenResponse.json();
+        const tokenData = await tokenResponse.json() as any;
 
         // 2. Get User Info
         const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -53,7 +53,7 @@ export class GoogleOAuth {
             throw new Error('Failed to get Google user info');
         }
 
-        const userData = await userResponse.json();
+        const userData = await userResponse.json() as any;
 
         return {
             id: userData.id,
