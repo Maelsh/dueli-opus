@@ -45,7 +45,7 @@ export async function getJitsiServerUrl(env: { CLOUDFLARE_API_TOKEN: string }): 
             throw new Error(`Cloudflare API error: ${response.status}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as any;
         const tunnel: TunnelInfo = data.result;
 
         // Check if tunnel is active

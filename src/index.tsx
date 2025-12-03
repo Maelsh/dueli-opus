@@ -2,11 +2,26 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { translations, countries, getDir, Language } from './i18n'
 import jitsiRoutes from './routes/jitsi'
+import { GoogleOAuth } from './lib/oauth/google'
+import { FacebookOAuth } from './lib/oauth/facebook'
+import { MicrosoftOAuth } from './lib/oauth/microsoft'
+import { TikTokOAuth } from './lib/oauth/tiktok'
+import { isEmailAllowed, generateState } from './lib/oauth/utils'
+
 
 // Types
 type Bindings = {
   DB: D1Database;
   RESEND_API_KEY: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  FACEBOOK_CLIENT_ID: string;
+  FACEBOOK_CLIENT_SECRET: string;
+  MICROSOFT_CLIENT_ID: string;
+  MICROSOFT_CLIENT_SECRET: string;
+  MICROSOFT_TENANT_ID: string;
+  TIKTOK_CLIENT_KEY: string;
+  TIKTOK_CLIENT_SECRET: string;
 }
 
 type Variables = {
@@ -906,7 +921,8 @@ app.post('/api/auth/resend-verification', async (c) => {
     `).bind(verificationToken, expiresAt, (user as any).id).run()
 
     // Send email
-    await sendVerificationEmail(email, verificationToken, (user as any).name, lang, RESEND_API_KEY)
+    const origin = c.req.header('origin') || `http://${c.req.header('host')}`
+    await sendVerificationEmail(email, verificationToken, (user as any).name, lang, RESEND_API_KEY, origin)
 
     return c.json({ success: true, message: lang === 'ar' ? 'تم إرسال رابط التفعيل مجدداً' : 'Verification email sent' })
   } catch (error) {
@@ -933,6 +949,136 @@ app.post('/api/auth/logout', async (c) => {
     return c.json({ success: false, error: 'Logout failed' }, 500)
   }
 })
+
+// Helper to get OAuth provider
+function getOAuthProvider(provider: string, env: Bindings, redirectBase: string) {
+  const redirectUri = `${redirectBase}/api/auth/oauth/${provider}/callback`
+
+  switch (provider) {
+    case 'google':
+      return new GoogleOAuth(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, redirectUri)
+    case 'facebook':
+      return new FacebookOAuth(env.FACEBOOK_CLIENT_ID, env.FACEBOOK_CLIENT_SECRET, redirectUri)
+    case 'microsoft':
+      return new MicrosoftOAuth(env.MICROSOFT_CLIENT_ID, env.MICROSOFT_CLIENT_SECRET, env.MICROSOFT_TENANT_ID, redirectUri)
+    case 'tiktok':
+      return new TikTokOAuth(env.TIKTOK_CLIENT_KEY, env.TIKTOK_CLIENT_SECRET, redirectUri)
+    default:
+      return null
+  }
+}
+
+// OAuth Init
+app.get('/api/auth/oauth/:provider', async (c) => {
+  const provider = c.req.param('provider')
+  const lang = c.req.query('lang') || 'ar'
+  const url = new URL(c.req.url)
+  const origin = `${url.protocol}//${url.host}`
+
+  const oauth = getOAuthProvider(provider, c.env, origin)
+  if (!oauth) {
+    return c.json({ success: false, error: 'Invalid provider' }, 400)
+  }
+
+  const state = generateState()
+  const authUrl = oauth.getAuthUrl(state, lang)
+  return c.redirect(authUrl)
+})
+
+// OAuth Callback
+app.get('/api/auth/oauth/:provider/callback', async (c) => {
+  const provider = c.req.param('provider')
+  const code = c.req.query('code')
+  const stateParam = c.req.query('state')
+  const { DB } = c.env
+  const url = new URL(c.req.url)
+  const origin = `${url.protocol}//${url.host}`
+
+  // Parse state to get lang
+  let lang = 'ar'
+  try {
+    if (stateParam) {
+      const stateObj = JSON.parse(stateParam)
+      lang = stateObj.lang || 'ar'
+    }
+  } catch (e) {
+    // Ignore parse error, default to ar
+  }
+
+  if (!code) {
+    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+  }
+
+  const oauth = getOAuthProvider(provider, c.env, origin)
+  if (!oauth) {
+    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+  }
+
+  try {
+    const oauthUser = await oauth.getUser(code)
+
+    // 1. Check email domain
+    if (oauthUser.email && !isEmailAllowed(oauthUser.email)) {
+      return c.redirect(`/?error=INVALID_EMAIL_DOMAIN&lang=${lang}`)
+    }
+
+    // 2. Check if user exists
+    let user = null
+    if (oauthUser.email) {
+      user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(oauthUser.email).first()
+    } else if (oauthUser.id) {
+      // Fallback for providers without email (like TikTok sometimes)
+      user = await DB.prepare('SELECT * FROM users WHERE oauth_provider = ? AND oauth_id = ?').bind(provider, oauthUser.id).first()
+    }
+
+    if (user) {
+      // Update OAuth info
+      await DB.prepare(`
+        UPDATE users 
+        SET oauth_provider = ?, oauth_id = ?, avatar_url = COALESCE(avatar_url, ?)
+        WHERE id = ?
+      `).bind(provider, oauthUser.id, oauthUser.picture, (user as any).id).run()
+    } else {
+      // Create new user
+      const password = crypto.randomUUID() // Random password
+      const passwordHash = await hashPassword(password)
+      const username = oauthUser.email ? oauthUser.email.split('@')[0].replace(/[^a-z0-9]/g, '') : `user_${crypto.randomUUID().substring(0, 8)}`
+
+      const result = await DB.prepare(`
+        INSERT INTO users (username, email, password_hash, display_name, country, language, email_verified, oauth_provider, oauth_id, avatar_url, is_active, created_at)
+        VALUES (?, ?, ?, ?, 'SA', ?, 1, ?, ?, ?, 1, datetime('now'))
+      `).bind(
+        username,
+        oauthUser.email || '',
+        passwordHash,
+        oauthUser.name,
+        lang,
+        provider,
+        oauthUser.id,
+        oauthUser.picture
+      ).run()
+
+      user = await DB.prepare('SELECT * FROM users WHERE id = ?').bind(result.meta.last_row_id).first()
+    }
+
+    // 3. Create session
+    const sessionId = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days
+
+    await DB.prepare(`
+      INSERT INTO sessions (id, user_id, expires_at, created_at)
+      VALUES (?, ?, ?, datetime('now'))
+    `).bind(sessionId, (user as any).id, expiresAt).run()
+
+    // Redirect to home with session
+    return c.redirect(`/?session=${sessionId}&lang=${lang}`)
+
+  } catch (error) {
+    console.error('OAuth Error:', error)
+    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+  }
+})
+
 
 // ============================================
 // PASSWORD RESET
@@ -1195,37 +1341,17 @@ const DueliLogo = `
 const generateHTML = (content: string, lang: Language, title: string = 'Dueli') => {
   const dir = getDir(lang)
   const tr = translations[lang]
-
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title} - ${tr.app_title}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            fontFamily: {
-              'cairo': ['Cairo', 'system-ui', 'sans-serif'],
-              'inter': ['Inter', 'system-ui', 'sans-serif'],
-            },
-            colors: {
-              primary: '#8B5CF6',
-              secondary: '#F59E0B',
-              dialogue: '#8B5CF6',
-              science: '#06B6D4',
-              talents: '#F59E0B',
-            }
-          }
-        }
-      }
-    </script>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    
     <style>
       body { font-family: ${lang === 'ar' ? "'Cairo'" : "'Inter'"}, system-ui, sans-serif; }
     </style>
@@ -1243,12 +1369,12 @@ const getNavigation = (lang: Language) => {
   const isRTL = lang === 'ar'
 
   return `
-    <nav class="sticky top-0 z-50 bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
+    <nav class="sticky top-0 z-50 bg-white dark:bg-[#0f0f0f] backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
         <!-- Logo -->
         <a href="/?lang=${lang}" class="flex items-center gap-2 cursor-pointer group">
           <img src="/static/dueli-icon.png" alt="Dueli" class="w-10 h-10 object-contain">
-          <span class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 hidden sm:inline">
+          <span class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500  sm:inline">
             ${tr.app_title}
           </span>
         </a>
@@ -1288,10 +1414,9 @@ const getNavigation = (lang: Language) => {
           </div>
           
           <!-- Dark Mode Toggle -->
-          <!-- Dark Mode Toggle -->
-          <button onclick="toggleDarkMode()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors ${isRTL ? 'scale-x-[-1]' : ''}" title="${tr.theme}">
-            <i class="far fa-moon dark:hidden text-2xl"></i>
-            <i class="fas fa-moon hidden dark:block text-2xl text-amber-400"></i>
+          <button onclick="toggleDarkMode()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors" title="${tr.theme}">
+            <i id="moonIcon" class="fas fa-moon text-2xl"></i>
+            <i id="sunIcon" class="fas fa-sun text-2xl text-amber-400 hidden"></i>
           </button>
 
           <!-- Separator -->
@@ -1747,7 +1872,7 @@ app.get('/', (c) => {
                   </div>
                 </div>
 
-                <div class="w-12 h-12 bg-white rounded-full p-1.5 shadow-lg z-20 flex items-center justify-center">
+                <div class="w-12 h-12 bg-white rounded-full shadow-lg z-20 flex items-center justify-center">
                   <img src="/static/dueli-icon.png" alt="VS" class="w-full h-full object-contain">
                 </div>
 
@@ -1838,13 +1963,20 @@ app.get('/', (c) => {
         loadCompetitions();
       }
       
-      // Search handler
-      document.getElementById('searchInput')?.addEventListener('input', debounce((e) => {
-        const query = e.target.value.trim();
-        if (query.length >= 2) {
-          window.location.href = '/explore?search=' + encodeURIComponent(query) + '&lang=' + lang;
-        }
-      }, 500));
+      // Search handler with debouncing
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) {
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {
+          clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => {
+            const query = e.target.value.trim();
+            if (query.length >= 2) {
+              window.location.href = '/explore?search=' + encodeURIComponent(query) + '&lang=' + lang;
+            }
+          }, 500);
+        });
+      }
     </script>
   `
 
@@ -1863,7 +1995,7 @@ app.get('/verify', async (c) => {
   if (token) {
     try {
       const res = await fetch(`${c.req.url.split('/verify')[0]}/api/auth/verify?token=${token}&lang=${lang}`)
-      const data = await res.json()
+      const data = await res.json() as any
       message = data.message || data.error
       isSuccess = data.success
     } catch (error) {
@@ -1935,9 +2067,7 @@ app.get('/about', (c) => {
             ${lang === 'ar' ? 'منصة ديولي للمنافسات' : 'Dueli Competition Platform'}
           </h1>
           <p class="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-            ${lang === 'ar'
-      ? 'المنصة الأولى من نوعها التي تجمع بين المنافسات الحية، الحوارات البناءة، واكتشاف المواهب في بيئة تفاعلية عادلة.'
-      : 'The first platform of its kind combining live competitions, constructive dialogues, and talent discovery in a fair interactive environment.'}
+            ${lang === 'ar' ? 'المنصة الأولى من نوعها التي تجمع بين المنافسات الحية، الحوارات البناءة، واكتشاف المواهب في بيئة تفاعلية عادلة.' : 'The first platform of its kind combining live competitions, constructive dialogues, and talent discovery in a fair interactive environment.'}
           </p>
         </div>
 
@@ -1951,9 +2081,7 @@ app.get('/about', (c) => {
               ${lang === 'ar' ? 'بث مباشر وتفاعل حي' : 'Live Streaming & Interaction'}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar'
-      ? 'نظام بث متطور يجمع المتنافسين جنباً إلى جنب مع إمكانية تفاعل الجمهور والتصويت المباشر.'
-      : 'Advanced streaming system bringing competitors side-by-side with audience interaction and live voting.'}
+              ${lang === 'ar' ? 'نظام بث متطور يجمع المتنافسين جنباً إلى جنب مع إمكانية تفاعل الجمهور والتصويت المباشر.' : 'Advanced streaming system bringing competitors side-by-side with audience interaction and live voting.'}
             </p>
           </div>
 
@@ -1965,9 +2093,7 @@ app.get('/about', (c) => {
               ${lang === 'ar' ? 'نظام تحكيم عادل' : 'Fair Judging System'}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar'
-      ? 'آليات تحكيم شفافة تعتمد على تصويت الجمهور ولجان التحكيم المختصة لضمان العدالة.'
-      : 'Transparent judging mechanisms based on audience voting and expert panels to ensure fairness.'}
+              ${lang === 'ar' ? 'آليات تحكيم شفافة تعتمد على تصويت الجمهور ولجان التحكيم المختصة لضمان العدالة.' : 'Transparent judging mechanisms based on audience voting and expert panels to ensure fairness.'}
             </p>
           </div>
 
@@ -1979,9 +2105,7 @@ app.get('/about', (c) => {
               ${lang === 'ar' ? 'مجتمع عالمي' : 'Global Community'}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar'
-      ? 'تواصل مع مبدعين ومفكرين من مختلف أنحاء العالم وشارك في منافسات عابرة للحدود.'
-      : 'Connect with creators and thinkers from around the world and participate in cross-border competitions.'}
+              ${lang === 'ar' ? 'تواصل مع مبدعين ومفكرين من مختلف أنحاء العالم وشارك في منافسات عابرة للحدود.' : 'Connect with creators and thinkers from around the world and participate in cross-border competitions.'}
             </p>
           </div>
         </div>
@@ -2024,9 +2148,7 @@ app.get('/about', (c) => {
                 ${lang === 'ar' ? 'تم التطوير بواسطة Maelsh' : 'Developed by Maelsh'}
               </h2>
               <p class="text-gray-300 text-lg leading-relaxed max-w-2xl">
-                ${lang === 'ar'
-      ? 'نحن في Maelsh نؤمن بقوة الحوار والمنافسة الشريفة في بناء المجتمعات. نسعى لتقديم حلول برمجية مبتكرة تجمع بين الجمالية والوظيفة لخدمة المستخدم العربي والعالمي.'
-      : 'At Maelsh, we believe in the power of dialogue and fair competition in building communities. We strive to provide innovative software solutions that combine aesthetics and functionality to serve the Arab and global user.'}
+                ${lang === 'ar' ? 'نحن في Maelsh نؤمن بقوة الحوار والمنافسة الشريفة في بناء المجتمعات. نسعى لتقديم حلول برمجية مبتكرة تجمع بين الجمالية والوظيفة لخدمة المستخدم العربي والعالمي.' : 'At Maelsh, we believe in the power of dialogue and fair competition in building communities. We strive to provide innovative software solutions that combine aesthetics and functionality to serve the Arab and global user.'}
               </p>
               <div class="mt-8 flex gap-4 justify-center md:justify-start">
                 <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
@@ -2041,8 +2163,9 @@ app.get('/about', (c) => {
               </div>
             </div>
           </div>
-        </main>
-        
+        </div>
+      </main>
+      <div>  
         ${getFooter(lang)}
       </div>
     </div>
@@ -2668,6 +2791,40 @@ app.get('/explore', (c) => {
   `
 
   return c.html(generateHTML(content, lang, tr.explore))
+})
+
+// .well-known handler for dev tools
+
+app.get('/.well-known/*', (c) => {
+  return c.notFound()
+})
+
+// Catch-all 404 handler
+app.notFound((c) => {
+  const lang = c.get('lang') || 'ar'
+  const tr = translations[lang]
+
+  const content = `
+    ${getNavigation(lang)}
+    <div class="flex-1 flex items-center justify-center py-20">
+      <div class="text-center">
+        <h1 class="text-6xl font-black text-gray-200 dark:text-gray-800 mb-4">404</h1>
+        <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">${lang === 'ar' ? 'الصفحة غير موجودة' : 'Page Not Found'}</p>
+        <a href="/?lang=${lang}" class="btn-primary inline-block">
+          ${lang === 'ar' ? 'العودة للرئيسية' : 'Back to Home'}
+        </a>
+      </div>
+    </div>
+    ${getFooter(lang)}
+  `
+
+  return c.html(generateHTML(content, lang, '404'))
+})
+
+
+app.onError((err, c) => {
+  console.error(err)
+  return c.text('Internal Server Error', 500)
 })
 
 export default app

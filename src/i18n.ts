@@ -326,13 +326,10 @@ export const translations = {
 // Re-export countries from countries.ts
 export { countries, getCountriesList, getCountry, getCountriesByLanguage, type Country } from './countries';
 
-// Supported languages for UI translations (we only have ar and en for now)
-export type Language = 'ar' | 'en';
-
 // Get language code from country code
+import { getCountry as getCountryFn } from './countries';
 export function getLanguageFromCountry(countryCode: string): Language {
-  const { getCountry } = require('./countries');
-  const country = getCountry(countryCode);
+  const country = getCountryFn(countryCode);
   if (!country) return 'ar'; // Default to Arabic
 
   // Map primary language to supported UI language

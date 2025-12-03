@@ -1,0 +1,718 @@
+/* Dueli Custom Styles - New Design */
+/* منصة المنافسات والحوارات -/* Tailwind CSS Import */
+@import "tailwindcss";
+
+/* Configure dark mode for Tailwind v4 - must be after @import */
+/* stylelint-disable-next-line at-rule-no-unknown */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Override Font Awesome's display property to fix icon visibility */
+.hidden {
+    display: none !important;
+}
+
+/* Base styles */
+body {
+    font-family: 'Cairo', system-ui, sans-serif;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+body.dark {
+    background-color: #0f0f0f;
+    color: #f3f4f6;
+}
+
+body.light {
+    background-color: #ffffff;
+    color: #1f2937;
+}
+
+/* Animation keyframes */
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse-live {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes bounce-in {
+    0% {
+        transform: scale(0.3);
+        opacity: 0;
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+
+    70% {
+        transform: scale(0.9);
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Utility classes */
+.animate-fade-in {
+    animation: fade-in 0.4s ease-out;
+}
+
+.animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+
+.animate-bounce-in {
+    animation: bounce-in 0.5s ease-out;
+}
+
+.live-pulse {
+    animation: pulse-live 2s infinite;
+}
+
+.spinner {
+    animation: spin 1s linear infinite;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+body.dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+}
+
+body.dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+/* Glass effect */
+.glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+body.dark .glass {
+    background: rgba(17, 17, 17, 0.7);
+}
+
+/* Card styles */
+.card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+body.dark .card {
+    background: #1f1f1f;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* Duel card gradient backgrounds */
+.duel-bg-dialogue {
+    background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
+}
+
+.duel-bg-science {
+    background: linear-gradient(135deg, #06B6D4 0%, #0891B2 100%);
+}
+
+.duel-bg-talents {
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+/* Category colors */
+.bg-dialogue {
+    background-color: #8B5CF6;
+}
+
+.text-dialogue {
+    color: #8B5CF6;
+}
+
+.border-dialogue {
+    border-color: #8B5CF6;
+}
+
+.bg-science {
+    background-color: #06B6D4;
+}
+
+.text-science {
+    color: #06B6D4;
+}
+
+.border-science {
+    border-color: #06B6D4;
+}
+
+.bg-talents {
+    background-color: #F59E0B;
+}
+
+.text-talents {
+    color: #F59E0B;
+}
+
+.border-talents {
+    border-color: #F59E0B;
+}
+
+/* Button styles */
+.btn-primary {
+    background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #374151;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+body.dark .btn-secondary {
+    background: #374151;
+    color: #f3f4f6;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+body.dark .btn-secondary:hover {
+    background: #4b5563;
+}
+
+/* Tab styles */
+.tab-active {
+    background: #8B5CF6;
+    color: white;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.tab-inactive {
+    background: transparent;
+    color: #6b7280;
+}
+
+.tab-inactive:hover {
+    background: rgba(139, 92, 246, 0.1);
+    color: #8B5CF6;
+}
+
+/* Category tab styles */
+.category-tab-active {
+    background: #1f2937;
+    color: white;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+body.dark .category-tab-active {
+    background: white;
+    color: #1f2937;
+}
+
+.category-tab-inactive {
+    background: #f3f4f6;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+}
+
+body.dark .category-tab-inactive {
+    background: #1f1f1f;
+    color: #9ca3af;
+    border: 1px solid #374151;
+}
+
+/* Search input */
+.search-input {
+    background: #f3f4f6;
+    border: 2px solid transparent;
+    border-radius: 24px;
+    padding: 0.875rem 3rem 0.875rem 3rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    width: 100%;
+}
+
+body.dark .search-input {
+    background: #1f1f1f;
+    color: #f3f4f6;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+}
+
+body.dark .search-input:focus {
+    background: #1f1f1f;
+}
+
+/* Modal styles */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal-backdrop.show {
+    opacity: 1;
+}
+
+.modal-content {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    z-index: 101;
+    width: 90vw;
+    max-width: 28rem;
+    /* max-w-md equivalent for medium size */
+    max-height: 90vh;
+    overflow: auto;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.modal-content.show {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+/* Social login buttons */
+.social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 20px;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    background: white;
+    cursor: pointer;
+}
+
+body.dark .social-btn {
+    background: #1f1f1f;
+    border-color: #374151;
+    color: #f3f4f6;
+}
+
+.social-btn:hover {
+    background: #f9fafb;
+    border-color: #8B5CF6;
+}
+
+body.dark .social-btn:hover {
+    background: #2d2d2d;
+}
+
+/* Status badges */
+.badge-live {
+    background: #fee2e2;
+    color: #dc2626;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+body.dark .badge-live {
+    /*background: rgba(239, 68, 68, 0.2);*/
+    /*color: #f87171;*/
+}
+
+.badge-recorded {
+    background: #e5e7eb;
+    color: #374151;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+body.dark .badge-recorded {
+    background: #374151;
+    color: #9ca3af;
+}
+
+.badge-pending {
+    background: #fef3c7;
+    color: #d97706;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Line clamp */
+.line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Video container */
+.aspect-video {
+    aspect-ratio: 16 / 9;
+}
+
+/* Rating stars */
+.rating-star {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #d1d5db;
+}
+
+.rating-star:hover,
+.rating-star.active {
+    color: #F59E0B;
+    transform: scale(1.2);
+}
+
+/* Chat messages */
+#chatMessages {
+    scroll-behavior: smooth;
+}
+
+/* Nav icons */
+.nav-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.nav-icon:hover {
+    background: rgba(139, 92, 246, 0.1);
+}
+
+body.dark .nav-icon:hover {
+    background: rgba(139, 92, 246, 0.2);
+}
+
+/* Section headers */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.section-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(139, 92, 246, 0.1);
+    color: #8B5CF6;
+}
+
+body.dark .section-icon {
+    background: rgba(139, 92, 246, 0.2);
+}
+
+/* Duel card */
+.duel-card {
+    width: 280px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.duel-card:hover {
+    transform: translateY(-4px);
+}
+
+.duel-card:hover .duel-thumbnail {
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.duel-thumbnail {
+    aspect-ratio: 16/9;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+/* Competitor avatars */
+.competitor-avatar {
+    width: 75px;
+    height: 75px;
+    border-radius: 50%;
+    /*border: 3px solid rgba(255, 255, 255, 0.5);*/
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    transition: transform 0.3s ease;
+}
+
+.duel-card:hover .competitor-avatar {
+    transform: scale(1.1);
+}
+
+/* VS text */
+.vs-text {
+    font-family: Impact, 'Arial Black', sans-serif;
+    font-style: italic;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Join button */
+.join-btn {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: white;
+    padding: 10px 24px;
+    border-radius: 24px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.join-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+}
+
+/* Form styles */
+input,
+textarea,
+select {
+    transition: all 0.2s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: #8B5CF6 !important;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+}
+
+/* User menu dropdown */
+.user-menu {
+    position: absolute;
+    top: 100%;
+    margin-top: 8px;
+    width: 220px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+}
+
+body.dark .user-menu {
+    background: #1f1f1f;
+    border-color: #374151;
+}
+
+.user-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    transition: background 0.2s ease;
+    cursor: pointer;
+}
+
+.user-menu-item:hover {
+    background: #f3f4f6;
+}
+
+body.dark .user-menu-item:hover {
+    background: #2d2d2d;
+}
+
+/* Toast notifications */
+.toast {
+    position: fixed;
+    bottom: 24px;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-weight: 500;
+    z-index: 200;
+    animation: slide-in 0.3s ease;
+}
+
+.toast-success {
+    background: #10B981;
+    color: white;
+}
+
+.toast-error {
+    background: #EF4444;
+    color: white;
+}
+
+.toast-info {
+    background: #3B82F6;
+    color: white;
+}
+
+/* RTL Support */
+[dir="rtl"] .toast {
+    left: 24px;
+    right: auto;
+}
+
+[dir="ltr"] .toast {
+    right: 24px;
+    left: auto;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .duel-card {
+        width: 260px;
+    }
+
+    .search-input {
+        font-size: 16px;
+        /* Prevent zoom on iOS */
+    }
+}
+
+/* Print styles */
+@media print {
+
+    nav,
+    footer,
+    .no-print,
+    #loginModal,
+    #createCompBtn {
+        display: none !important;
+    }
+}

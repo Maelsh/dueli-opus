@@ -9,7 +9,7 @@ const app = new Hono();
  */
 app.get('/config', async (c) => {
     try {
-        const config = await getJitsiConfig(c.env);
+        const config = await getJitsiConfig(c.env as any);
 
         return c.json({
             success: true,
@@ -31,7 +31,7 @@ app.get('/config', async (c) => {
  */
 app.get('/status', async (c) => {
     try {
-        const config = await getJitsiConfig(c.env);
+        const config = await getJitsiConfig(c.env as any);
 
         // Try to reach the Jitsi server
         const response = await fetch(config.serverUrl, {

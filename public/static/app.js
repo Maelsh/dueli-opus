@@ -9,6 +9,19 @@ window.sessionId = null;
 window.lang = 'ar';
 window.isDarkMode = false;
 
+// Helper function for debouncing
+window.debounce = function (func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
 // ============================================
 // Initialize
 // ============================================
@@ -16,6 +29,37 @@ document.addEventListener('DOMContentLoaded', () => {
   // Get current language from URL
   const urlParams = new URLSearchParams(window.location.search);
   window.lang = urlParams.get('lang') || 'ar';
+
+  // Handle OAuth Callback
+  const session = urlParams.get('session');
+  const error = urlParams.get('error');
+
+  if (session) {
+    localStorage.setItem('sessionId', session);
+    // Remove params from URL without reload
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/[\?&]session=[^&]+/, '').replace(/^&/, '?'));
+
+    // Fetch user info immediately
+    fetch('/api/auth/session', {
+      headers: { 'Authorization': 'Bearer ' + session }
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          window.currentUser = data.user;
+          window.sessionId = session;
+          updateAuthUI();
+          showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
+        }
+      });
+  }
+
+  if (error) {
+    showOAuthError(error);
+    // Remove error from URL
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/[\?&]error=[^&]+/, '').replace(/^&/, '?'));
+  }
 
   // Load dark mode preference
   const savedDarkMode = localStorage.getItem('darkMode');
@@ -392,22 +436,67 @@ async function loginWith(provider) {
   const providerNames = {
     google: 'Google',
     facebook: 'Facebook',
-    microsoft: 'Microsoft Outlook',
-    twitter: 'X (Twitter)',
+    microsoft: 'Microsoft',
     tiktok: 'TikTok',
+    twitter: 'X (Twitter)',
     snapchat: 'Snapchat'
   };
 
-  const name = providerNames[provider] || provider;
+  if (provider === 'twitter' || provider === 'snapchat') {
+    showComingSoonModal(providerNames[provider]);
+    return;
+  }
 
-  // Show redirect message
-  showToast(`${window.lang === 'ar' ? 'جاري التحويل إلى' : 'Redirecting to'} ${name}...`, 'info');
+  // Redirect to OAuth endpoint
+  window.location.href = `/api/auth/oauth/${provider}?lang=${window.lang}`;
+}
 
-  // Simulate redirect delay
-  setTimeout(() => {
-    // In a real app, this would be: window.location.href = `/api/auth/oauth/${provider}`;
-    showToast(`${window.lang === 'ar' ? 'يتطلب إعداد API Keys' : 'Requires API Keys configuration'}`, 'warning');
-  }, 1000);
+function showComingSoonModal(providerName) {
+  const title = window.lang === 'ar' ? 'قريباً جداً!' : 'Coming Very Soon!';
+  const message = window.lang === 'ar'
+    ? `نعمل حالياً على إضافة التسجيل عبر ${providerName}. يرجى استخدام طريقة أخرى حالياً.`
+    : `We are working on adding ${providerName} login. Please use another method for now.`;
+  const btnText = window.lang === 'ar' ? 'حسناً' : 'Got it';
+
+  showCustomModal(title, message, btnText, 'rocket');
+}
+
+function showOAuthError(errorCode) {
+  let title = window.lang === 'ar' ? 'تنبيه' : 'Notice';
+  let message = window.lang === 'ar' ? 'حدث خطأ أثناء تسجيل الدخول' : 'An error occurred during login';
+  let icon = 'exclamation-circle';
+
+  if (errorCode === 'INVALID_EMAIL_DOMAIN') {
+    title = window.lang === 'ar' ? 'بريد غير مدعوم' : 'Unsupported Email';
+    message = window.lang === 'ar'
+      ? 'نعتذر، نقبل فقط حسابات Gmail و Outlook و Yahoo.'
+      : 'Sorry, we only accept Gmail, Outlook, and Yahoo accounts.';
+  } else if (errorCode === 'PROVIDER_ERROR') {
+    message = window.lang === 'ar'
+      ? 'حدث خطأ في الاتصال مع مزود الخدمة. يرجى المحاولة مرة أخرى.'
+      : 'Connection error with the provider. Please try again.';
+  }
+
+  showCustomModal(title, message, window.lang === 'ar' ? 'إغلاق' : 'Close', icon);
+}
+
+function showCustomModal(title, message, btnText, iconName) {
+  // Create modal element
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in';
+  modal.innerHTML = `
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all scale-95 animate-scale-in border border-gray-100 dark:border-gray-700">
+      <div class="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i class="fas fa-${iconName} text-2xl text-purple-600 dark:text-purple-400"></i>
+      </div>
+      <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">${title}</h3>
+      <p class="text-gray-600 dark:text-gray-300 mb-6">${message}</p>
+      <button onclick="this.closest('div.fixed').remove()" class="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-purple-500/25">
+        ${btnText}
+      </button>
+    </div>
+  `;
+  document.body.appendChild(modal);
 }
 
 // Logout
@@ -445,14 +534,23 @@ function toggleDarkMode() {
 }
 
 function applyDarkMode() {
+  const moonIcon = document.getElementById('moonIcon');
+  const sunIcon = document.getElementById('sunIcon');
+
   if (window.isDarkMode) {
     document.documentElement.classList.add('dark');
     document.body.classList.add('dark');
-    document.body.classList.remove('light');
+
+    // Show sun icon in dark mode, hide moon
+    if (moonIcon) moonIcon.classList.add('hidden');
+    if (sunIcon) sunIcon.classList.remove('hidden');
   } else {
     document.documentElement.classList.remove('dark');
     document.body.classList.remove('dark');
-    document.body.classList.add('light');
+
+    // Show moon icon in light mode, hide sun
+    if (moonIcon) moonIcon.classList.remove('hidden');
+    if (sunIcon) sunIcon.classList.add('hidden');
   }
 }
 
@@ -904,7 +1002,6 @@ window.dueli = {
   loginWith,
   logout,
   toggleDarkMode,
-  toggleLangMenu,
   toggleUserMenu,
   showHelp,
   showToast,
