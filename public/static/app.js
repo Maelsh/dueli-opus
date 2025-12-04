@@ -431,7 +431,6 @@ async function handleLogin(e) {
 }
 
 // Login with OAuth provider
-// Login with OAuth provider
 async function loginWith(provider) {
   const providerNames = {
     google: 'Google',
@@ -447,8 +446,61 @@ async function loginWith(provider) {
     return;
   }
 
-  // Redirect to OAuth endpoint
-  window.location.href = `/api/auth/oauth/${provider}?lang=${window.lang}`;
+  // Open OAuth in popup window
+  const width = 600;
+  const height = 700;
+  const left = (window.screen.width - width) / 2;
+  const top = (window.screen.height - height) / 2;
+
+  const popup = window.open(
+    `/api/auth/oauth/${provider}?lang=${window.lang}`,
+    'oauth_popup',
+    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
+
+  if (!popup) {
+    showToast(window.lang === 'ar' ? 'يرجى السماح بالنوافذ المنبثقة' : 'Please allow popups', 'warning');
+    return;
+  }
+
+  // Listen for OAuth callback
+  window.addEventListener('message', function handleOAuthCallback(event) {
+    // Verify origin
+    if (event.origin !== window.location.origin) return;
+
+    if (event.data.type === 'oauth_success' && event.data.session) {
+      localStorage.setItem('sessionId', event.data.session);
+
+      // Fetch user info
+      fetch('/api/auth/session', {
+        headers: { 'Authorization': 'Bearer ' + event.data.session }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            localStorage.setItem('user', JSON.stringify(data.user));
+            window.currentUser = data.user;
+            window.sessionId = event.data.session;
+            updateAuthUI();
+            showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
+
+            // Close login modal if open
+            const loginModal = document.getElementById('authModal');
+            if (loginModal) loginModal.style.display = 'none';
+          }
+        });
+
+      // Close popup
+      if (popup && !popup.closed) popup.close();
+
+      // Remove event listener
+      window.removeEventListener('message', handleOAuthCallback);
+    } else if (event.data.type === 'oauth_error') {
+      showOAuthError(event.data.error);
+      if (popup && !popup.closed) popup.close();
+      window.removeEventListener('message', handleOAuthCallback);
+    }
+  });
 }
 
 function showComingSoonModal(providerName) {
@@ -481,9 +533,9 @@ function showOAuthError(errorCode) {
 }
 
 function showCustomModal(title, message, btnText, iconName) {
-  // Create modal element
+  // Create modal element with higher z-index to appear above login modal
   const modal = document.createElement('div');
-  modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in';
+  modal.className = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in';
   modal.innerHTML = `
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all scale-95 animate-scale-in border border-gray-100 dark:border-gray-700">
       <div class="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-4">

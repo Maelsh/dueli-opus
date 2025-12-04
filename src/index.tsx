@@ -1006,12 +1006,48 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
   }
 
   if (!code) {
-    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>OAuth Error</title></head>
+      <body>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ type: 'oauth_error', error: 'PROVIDER_ERROR' }, window.location.origin);
+            window.close();
+          } else {
+            window.location.href = '/?error=PROVIDER_ERROR&lang=${lang}';
+          }
+        </script>
+        <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
+          ${lang === 'ar' ? 'حدث خطأ! جاري الإغلاق...' : 'Error! Closing...'}
+        </p>
+      </body>
+      </html>
+    `)
   }
 
   const oauth = getOAuthProvider(provider, c.env, origin)
   if (!oauth) {
-    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>OAuth Error</title></head>
+      <body>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({ type: 'oauth_error', error: 'PROVIDER_ERROR' }, window.location.origin);
+            window.close();
+          } else {
+            window.location.href = '/?error=PROVIDER_ERROR&lang=${lang}';
+          }
+        </script>
+        <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
+          ${lang === 'ar' ? 'حدث خطأ! جاري الإغلاق...' : 'Error! Closing...'}
+        </p>
+      </body>
+      </html>
+    `)
   }
 
   try {
@@ -1019,7 +1055,25 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
 
     // 1. Check email domain
     if (oauthUser.email && !isEmailAllowed(oauthUser.email)) {
-      return c.redirect(`/?error=INVALID_EMAIL_DOMAIN&lang=${lang}`)
+      return c.html(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Invalid Email</title></head>
+        <body>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'oauth_error', error: 'INVALID_EMAIL_DOMAIN' }, window.location.origin);
+              window.close();
+            } else {
+              window.location.href = '/?error=INVALID_EMAIL_DOMAIN&lang=${lang}';
+            }
+          </script>
+          <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
+            ${lang === 'ar' ? 'البريد الإلكتروني غير مدعوم!' : 'Email not supported!'}
+          </p>
+        </body>
+        </html>
+      `)
     }
 
     // 2. Check if user exists
@@ -1070,12 +1124,56 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
       VALUES (?, ?, ?, datetime('now'))
     `).bind(sessionId, (user as any).id, expiresAt).run()
 
-    // Redirect to home with session
-    return c.redirect(`/?session=${sessionId}&lang=${lang}`)
+    // Send success message to opener window (popup pattern)
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>OAuth Success</title></head>
+      <body>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({
+              type: 'oauth_success',
+              session: '${sessionId}'
+            }, window.location.origin);
+            window.close();
+          } else {
+            // Fallback if not in popup
+            window.location.href = '/?session=${sessionId}&lang=${lang}';
+          }
+        </script>
+        <p style="text-align:center;padding:20px;font-family:Arial;">
+          ${lang === 'ar' ? 'تم التسجيل بنجاح! جاري الإغلاق...' : 'Login successful! Closing...'}
+        </p>
+      </body>
+      </html>
+    `)
 
   } catch (error) {
     console.error('OAuth Error:', error)
-    return c.redirect(`/?error=PROVIDER_ERROR&lang=${lang}`)
+    // Send error message to opener window
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>OAuth Error</title></head>
+      <body>
+        <script>
+          if (window.opener) {
+            window.opener.postMessage({
+              type: 'oauth_error',
+              error: 'PROVIDER_ERROR'
+            }, window.location.origin);
+            window.close();
+          } else {
+            window.location.href = '/?error=PROVIDER_ERROR&lang=${lang}';
+          }
+        </script>
+        <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
+          ${lang === 'ar' ? 'حدث خطأ! جاري الإغلاق...' : 'An error occurred! Closing...'}
+        </p>
+      </body>
+      </html>
+    `)
   }
 })
 
