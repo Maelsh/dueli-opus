@@ -956,12 +956,16 @@ function getOAuthProvider(provider: string, env: Bindings, redirectBase: string)
 
   switch (provider) {
     case 'google':
+      console.log(`[DEBUG] Google Client ID starts with: ${env.GOOGLE_CLIENT_ID?.substring(0, 5)}`);
       return new GoogleOAuth(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, redirectUri)
     case 'facebook':
+      console.log(`[DEBUG] Facebook Client ID starts with: ${env.FACEBOOK_CLIENT_ID?.substring(0, 5)}`);
       return new FacebookOAuth(env.FACEBOOK_CLIENT_ID, env.FACEBOOK_CLIENT_SECRET, redirectUri)
     case 'microsoft':
+      console.log(`[DEBUG] Microsoft Client ID starts with: ${env.MICROSOFT_CLIENT_ID?.substring(0, 5)}`);
       return new MicrosoftOAuth(env.MICROSOFT_CLIENT_ID, env.MICROSOFT_CLIENT_SECRET, env.MICROSOFT_TENANT_ID, redirectUri)
     case 'tiktok':
+      console.log(`[DEBUG] TikTok Client Key starts with: ${env.TIKTOK_CLIENT_KEY?.substring(0, 5)}`);
       return new TikTokOAuth(env.TIKTOK_CLIENT_KEY, env.TIKTOK_CLIENT_SECRET, redirectUri)
     default:
       return null
