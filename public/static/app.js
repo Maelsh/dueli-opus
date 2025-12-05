@@ -486,7 +486,6 @@ async function loginWith(provider) {
 
             // Close login modal if open
             const loginModal = document.getElementById('authModal');
-            if (loginModal) loginModal.style.display = 'none';
             hideLoginModal();
           }
         });
