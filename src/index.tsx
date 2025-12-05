@@ -995,6 +995,74 @@ app.get('/api/debug/oauth-info', async (c) => {
   })
 })
 
+// DEBUG: Test OAuth Token Exchange (captures actual error from provider)
+app.get('/api/debug/oauth-test/:provider', async (c) => {
+  const provider = c.req.param('provider')
+  const code = c.req.query('code') || 'test_code_123'
+  const url = new URL(c.req.url)
+  const origin = `${url.protocol}//${url.host}`
+  const redirectUri = `${origin}/api/auth/oauth/${provider}/callback`
+
+  let tokenUrl = ''
+  let body: Record<string, string> = {}
+
+  if (provider === 'google') {
+    tokenUrl = 'https://oauth2.googleapis.com/token'
+    body = {
+      client_id: c.env.GOOGLE_CLIENT_ID,
+      client_secret: c.env.GOOGLE_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+    }
+  } else if (provider === 'microsoft') {
+    tokenUrl = `https://login.microsoftonline.com/${c.env.MICROSOFT_TENANT_ID}/oauth2/v2.0/token`
+    body = {
+      client_id: c.env.MICROSOFT_CLIENT_ID,
+      client_secret: c.env.MICROSOFT_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+      scope: 'openid email profile User.Read',
+    }
+  } else {
+    return c.json({ error: 'Unsupported provider. Use google or microsoft' })
+  }
+
+  try {
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(body),
+    })
+
+    const responseText = await response.text()
+    let responseJson = null
+    try {
+      responseJson = JSON.parse(responseText)
+    } catch (e) {
+      // Not JSON
+    }
+
+    return c.json({
+      provider,
+      tokenUrl,
+      redirectUri,
+      request_body_keys: Object.keys(body),
+      response_status: response.status,
+      response_ok: response.ok,
+      response_body: responseJson || responseText,
+    })
+  } catch (error: any) {
+    return c.json({
+      provider,
+      tokenUrl,
+      redirectUri,
+      error: error.message,
+    })
+  }
+})
+
 // OAuth Init
 app.get('/api/auth/oauth/:provider', async (c) => {
   const provider = c.req.param('provider')
