@@ -987,6 +987,7 @@ app.get('/api/debug/oauth-info', async (c) => {
     scope: 'user.info.profile',
     response_type: 'code',
     state: JSON.stringify({ state: 'debug_test', lang: 'ar' }),
+    sandbox: '1',
   })
   const tiktokAuthUrl = `https://www.tiktok.com/v2/auth/authorize/?${tiktokParams.toString()}`
 

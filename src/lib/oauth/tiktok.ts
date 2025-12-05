@@ -18,6 +18,7 @@ export class TikTokOAuth {
             scope: 'user.info.profile',
             response_type: 'code',
             state: JSON.stringify({ state, lang }),
+            sandbox: '1',
         });
         return `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`;
     }
