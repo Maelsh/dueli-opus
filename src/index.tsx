@@ -2901,9 +2901,8 @@ app.get('/.well-known/*', (c) => {
   return c.notFound()
 })
 
-// Privacy Policy Page
-app.get('/privacy-policy.html', (c) => {
-  return c.html(`<!DOCTYPE html>
+// Privacy Policy HTML content
+const getPrivacyPolicyHTML = () => `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -2944,12 +2943,10 @@ app.get('/privacy-policy.html', (c) => {
         <div class="footer"><p>&copy; 2025 Maelsh Pro. All rights reserved.</p></div>
     </div>
 </body>
-</html>`)
-})
+</html>`
 
-// Data Deletion Page
-app.get('/data-deletion.html', (c) => {
-  return c.html(`<!DOCTYPE html>
+// Data Deletion HTML content
+const getDataDeletionHTML = () => `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -2991,8 +2988,15 @@ app.get('/data-deletion.html', (c) => {
         </ul>
     </div>
 </body>
-</html>`)
-})
+</html>`
+
+// Privacy Policy Routes (both with and without .html)
+app.get('/privacy-policy.html', (c) => c.html(getPrivacyPolicyHTML()))
+app.get('/privacy-policy', (c) => c.html(getPrivacyPolicyHTML()))
+
+// Data Deletion Routes (both with and without .html)
+app.get('/data-deletion.html', (c) => c.html(getDataDeletionHTML()))
+app.get('/data-deletion', (c) => c.html(getDataDeletionHTML()))
 
 // Catch-all 404 handler
 app.notFound((c) => {
