@@ -1255,28 +1255,31 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
       error
     })
 
-    // Send error message to opener window
+    // Show error page with full details (don't close popup immediately for debugging)
     return c.html(`
       <!DOCTYPE html>
       <html>
-      <head><title>OAuth Error</title></head>
+      <head>
+        <title>OAuth Error</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+          .error-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+          h2 { color: #dc2626; margin-top: 0; }
+          pre { background: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+          button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+          button:hover { background: #2563eb; }
+        </style>
+      </head>
       <body>
-        <script>
-          if (window.opener) {
-            window.opener.postMessage({
-              type: 'oauth_error',
-              error: 'PROVIDER_ERROR',
-              details: '${errorMessage.replace(/'/g, "\\'")}'
-            }, window.location.origin);
-            window.close();
-          } else {
-            window.location.href = '/?error=PROVIDER_ERROR&lang=${lang}';
-          }
-        </script>
-        <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
-          ${lang === 'ar' ? 'حدث خطأ! جاري الإغلاق...' : 'An error occurred! Closing...'}
-          <br><small style="color:#666;">${errorMessage}</small>
-        </p>
+        <div class="error-box">
+          <h2>OAuth Error</h2>
+          <p><strong>Provider:</strong> ${provider}</p>
+          <p><strong>Error:</strong></p>
+          <pre>${errorMessage}</pre>
+          <p><strong>Origin:</strong> ${origin}</p>
+          <button onclick="window.close()">Close Window</button>
+          <button onclick="window.opener?.postMessage({ type: 'oauth_error', error: 'PROVIDER_ERROR' }, window.location.origin); window.close();">Close & Report Error</button>
+        </div>
       </body>
       </html>
     `)
