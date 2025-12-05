@@ -1194,17 +1194,17 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
       const username = oauthUser.email ? oauthUser.email.split('@')[0].replace(/[^a-z0-9]/g, '') : `user_${crypto.randomUUID().substring(0, 8)}`
 
       const result = await DB.prepare(`
-        INSERT INTO users (username, email, password_hash, display_name, country, language, email_verified, oauth_provider, oauth_id, avatar_url, is_active, created_at)
-        VALUES (?, ?, ?, ?, 'SA', ?, 1, ?, ?, ?, 1, datetime('now'))
+        INSERT INTO users (username, email, password_hash, display_name, country, language, oauth_provider, oauth_id, avatar_url, is_active, created_at)
+        VALUES (?, ?, ?, ?, 'SA', ?, ?, ?, ?, 1, datetime('now'))
       `).bind(
         username,
         oauthUser.email || '',
         passwordHash,
-        oauthUser.name,
+        oauthUser.name || username,
         lang,
         provider,
         oauthUser.id,
-        oauthUser.picture
+        oauthUser.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
       ).run()
 
       user = await DB.prepare('SELECT * FROM users WHERE id = ?').bind(result.meta.last_row_id).first()
