@@ -1027,8 +1027,17 @@ app.get('/api/debug/oauth-test/:provider', async (c) => {
       redirect_uri: redirectUri,
       scope: 'openid email profile User.Read',
     }
+  } else if (provider === 'tiktok') {
+    tokenUrl = 'https://open.tiktokapis.com/v2/oauth/token/'
+    body = {
+      client_key: c.env.TIKTOK_CLIENT_KEY,
+      client_secret: c.env.TIKTOK_CLIENT_SECRET,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: redirectUri,
+    }
   } else {
-    return c.json({ error: 'Unsupported provider. Use google or microsoft' })
+    return c.json({ error: 'Unsupported provider. Use google, microsoft, or tiktok' })
   }
 
   try {
@@ -1843,6 +1852,65 @@ const getLoginModal = (lang: Language) => {
         </p>
       </div>
     </div>
+    
+    <script>
+      // Modal functions
+      function showLoginModal() {
+        const modal = document.getElementById('loginModal');
+        if (modal) {
+          modal.classList.remove('hidden');
+          setTimeout(() => {
+            modal.querySelector('.modal-backdrop').classList.add('show');
+            modal.querySelector('.modal-content').classList.add('show');
+          }, 10);
+        }
+      }
+      
+      function hideLoginModal() {
+        const modal = document.getElementById('loginModal');
+        if (modal) {
+          modal.querySelector('.modal-backdrop').classList.remove('show');
+          modal.querySelector('.modal-content').classList.remove('show');
+          setTimeout(() => modal.classList.add('hidden'), 300);
+        }
+      }
+      
+      // OAuth popup function
+      function loginWith(provider) {
+        const width = 500;
+        const height = 600;
+        const left = (window.innerWidth - width) / 2;
+        const top = (window.innerHeight - height) / 2;
+        const lang = new URLSearchParams(window.location.search).get('lang') || 'ar';
+        
+        window.open(
+          '/api/auth/oauth/' + provider + '?lang=' + lang,
+          'oauth_popup',
+          'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top
+        );
+      }
+      
+      // Listen for OAuth messages from popup
+      window.addEventListener('message', function(event) {
+        if (event.data.type === 'oauth_success') {
+          // Save session
+          if (event.data.session) {
+            localStorage.setItem('session_id', event.data.session);
+          }
+          // Close login modal
+          hideLoginModal();
+          // Reload page to show logged in state
+          window.location.reload();
+        } else if (event.data.type === 'oauth_error') {
+          // Show error message
+          const msgEl = document.getElementById('authMessage');
+          if (msgEl) {
+            msgEl.className = 'mb-4 p-3 rounded-lg text-sm bg-red-100 text-red-700';
+            msgEl.textContent = '${lang === 'ar' ? 'حدث خطأ في تسجيل الدخول. يرجى المحاولة مرة أخرى.' : 'Login error. Please try again.'}';
+          }
+        }
+      });
+    </script>
   `
 }
 
