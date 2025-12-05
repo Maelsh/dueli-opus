@@ -973,9 +973,22 @@ function getOAuthProvider(provider: string, env: Bindings, redirectBase: string)
 }
 
 // DEBUG: OAuth Info Endpoint (remove in production)
+// DEBUG: OAuth Info Endpoint (remove in production)
 app.get('/api/debug/oauth-info', async (c) => {
   const url = new URL(c.req.url)
   const origin = `${url.protocol}//${url.host}`
+
+  // Generate TikTok Auth URL for inspection
+  const tiktokRedirectUri = `${origin}/api/auth/oauth/tiktok/callback`
+  const tiktokClientKey = c.env.TIKTOK_CLIENT_KEY || ''
+  const tiktokParams = new URLSearchParams({
+    client_key: tiktokClientKey,
+    redirect_uri: tiktokRedirectUri,
+    scope: 'user.info.profile',
+    response_type: 'code',
+    state: JSON.stringify({ state: 'debug_test', lang: 'ar' }),
+  })
+  const tiktokAuthUrl = `https://www.tiktok.com/v2/auth/authorize/?${tiktokParams.toString()}`
 
   return c.json({
     origin,
@@ -983,7 +996,7 @@ app.get('/api/debug/oauth-info', async (c) => {
       google: `${origin}/api/auth/oauth/google/callback`,
       microsoft: `${origin}/api/auth/oauth/microsoft/callback`,
       facebook: `${origin}/api/auth/oauth/facebook/callback`,
-      tiktok: `${origin}/api/auth/oauth/tiktok/callback`,
+      tiktok: tiktokRedirectUri,
     },
     env_check: {
       google_client_id: c.env.GOOGLE_CLIENT_ID ? `${c.env.GOOGLE_CLIENT_ID.substring(0, 10)}...` : 'NOT SET',
@@ -993,6 +1006,12 @@ app.get('/api/debug/oauth-info', async (c) => {
       microsoft_tenant_id: c.env.MICROSOFT_TENANT_ID ? `${c.env.MICROSOFT_TENANT_ID.substring(0, 10)}...` : 'NOT SET',
       tiktok_client_key: c.env.TIKTOK_CLIENT_KEY ? `${c.env.TIKTOK_CLIENT_KEY.substring(0, 10)}...` : 'NOT SET',
       tiktok_client_secret: c.env.TIKTOK_CLIENT_SECRET ? 'SET' : 'NOT SET',
+    },
+    tiktok_validation: {
+      client_key_length: tiktokClientKey.length,
+      has_whitespace_key: /\s/.test(tiktokClientKey),
+      has_whitespace_secret: /\s/.test(c.env.TIKTOK_CLIENT_SECRET || ''),
+      generated_auth_url: tiktokAuthUrl
     }
   })
 })
