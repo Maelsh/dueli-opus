@@ -25,6 +25,8 @@ export class GoogleOAuth {
     }
 
     async getUser(code: string): Promise<OAuthUser> {
+        console.log('[Google OAuth] Starting getUser with redirect_uri:', this.redirectUri);
+
         // 1. Get Token
         const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
@@ -39,10 +41,17 @@ export class GoogleOAuth {
         });
 
         if (!tokenResponse.ok) {
-            throw new Error('Failed to get Google token');
+            const errorText = await tokenResponse.text();
+            console.error('[Google OAuth] Token request failed:', {
+                status: tokenResponse.status,
+                statusText: tokenResponse.statusText,
+                error: errorText
+            });
+            throw new Error(`Failed to get Google token: ${tokenResponse.status} - ${errorText}`);
         }
 
         const tokenData = await tokenResponse.json() as any;
+        console.log('[Google OAuth] Token received successfully');
 
         // 2. Get User Info
         const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -50,10 +59,17 @@ export class GoogleOAuth {
         });
 
         if (!userResponse.ok) {
-            throw new Error('Failed to get Google user info');
+            const errorText = await userResponse.text();
+            console.error('[Google OAuth] User info request failed:', {
+                status: userResponse.status,
+                statusText: userResponse.statusText,
+                error: errorText
+            });
+            throw new Error(`Failed to get Google user info: ${userResponse.status} - ${errorText}`);
         }
 
         const userData = await userResponse.json() as any;
+        console.log('[Google OAuth] User info received:', { id: userData.id, email: userData.email, name: userData.name });
 
         return {
             id: userData.id,
@@ -65,3 +81,4 @@ export class GoogleOAuth {
         };
     }
 }
+

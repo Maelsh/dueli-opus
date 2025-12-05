@@ -1153,8 +1153,17 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
       </html>
     `)
 
-  } catch (error) {
-    console.error('OAuth Error:', error)
+  } catch (error: any) {
+    // Enhanced error logging
+    const errorMessage = error?.message || 'Unknown error'
+    const errorStack = error?.stack || ''
+    console.error('OAuth Error Details:', {
+      provider: c.req.param('provider'),
+      errorMessage,
+      errorStack,
+      error
+    })
+
     // Send error message to opener window
     return c.html(`
       <!DOCTYPE html>
@@ -1165,7 +1174,8 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
           if (window.opener) {
             window.opener.postMessage({
               type: 'oauth_error',
-              error: 'PROVIDER_ERROR'
+              error: 'PROVIDER_ERROR',
+              details: '${errorMessage.replace(/'/g, "\\'")}'
             }, window.location.origin);
             window.close();
           } else {
@@ -1174,6 +1184,7 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
         </script>
         <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
           ${lang === 'ar' ? 'حدث خطأ! جاري الإغلاق...' : 'An error occurred! Closing...'}
+          <br><small style="color:#666;">${errorMessage}</small>
         </p>
       </body>
       </html>
