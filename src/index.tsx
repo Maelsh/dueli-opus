@@ -991,6 +991,8 @@ app.get('/api/debug/oauth-info', async (c) => {
       microsoft_client_id: c.env.MICROSOFT_CLIENT_ID ? `${c.env.MICROSOFT_CLIENT_ID.substring(0, 10)}...` : 'NOT SET',
       microsoft_client_secret: c.env.MICROSOFT_CLIENT_SECRET ? 'SET' : 'NOT SET',
       microsoft_tenant_id: c.env.MICROSOFT_TENANT_ID ? `${c.env.MICROSOFT_TENANT_ID.substring(0, 10)}...` : 'NOT SET',
+      tiktok_client_key: c.env.TIKTOK_CLIENT_KEY ? `${c.env.TIKTOK_CLIENT_KEY.substring(0, 10)}...` : 'NOT SET',
+      tiktok_client_secret: c.env.TIKTOK_CLIENT_SECRET ? 'SET' : 'NOT SET',
     }
   })
 })
