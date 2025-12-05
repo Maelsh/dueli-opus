@@ -1191,7 +1191,8 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
       // Create new user
       const password = crypto.randomUUID() // Random password
       const passwordHash = await hashPassword(password)
-      const username = oauthUser.email ? oauthUser.email.split('@')[0].replace(/[^a-z0-9]/g, '') : `user_${crypto.randomUUID().substring(0, 8)}`
+      const baseUsername = oauthUser.email ? oauthUser.email.split('@')[0].replace(/[^a-z0-9]/g, '').substring(0, 10) : 'user'
+      const username = `${baseUsername}_${Date.now().toString(36)}`
 
       const result = await DB.prepare(`
         INSERT INTO users (username, email, password_hash, display_name, country, language, oauth_provider, oauth_id, avatar_url, is_active, created_at)
