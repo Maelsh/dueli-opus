@@ -1253,7 +1253,6 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
               }, '*');
               setTimeout(function() {
                 window.close();
-                hideLoginModal();
               }, 300);
             }
           }, 100);
