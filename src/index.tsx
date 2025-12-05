@@ -1239,23 +1239,20 @@ app.get('/api/auth/oauth/:provider/callback', async (c) => {
       <body style="font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f0fdf4;">
         <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto;">
           <h2 style="color: #22c55e; margin: 0 0 20px 0;">✓ ${lang === 'ar' ? 'تم التسجيل بنجاح!' : 'Login Successful!'}</h2>
-          <p style="color: #666; margin: 0 0 20px 0;">${lang === 'ar' ? 'جاري إغلاق النافذة...' : 'Closing window...'}</p>
-          <button onclick="window.close()" style="background: #22c55e; color: white; border: none; padding: 10px 30px; border-radius: 6px; cursor: pointer; font-size: 16px;">
-            ${lang === 'ar' ? 'إغلاق' : 'Close'}
-          </button>
+          <p style="color: #666; margin: 0;">${lang === 'ar' ? 'جاري إغلاق النافذة...' : 'Closing window...'}</p>
         </div>
         <script>
           setTimeout(function() {
             if (window.opener) {
-              window.opener.postMessage({
-                type: 'oauth_success',
-                session: '${sessionId}'
-              }, '*');
-              setTimeout(function() {
-                window.close();
-              }, 300);
+              // Call hideLoginModal from app.js
+              if (window.opener.hideLoginModal) {
+                window.opener.hideLoginModal();
+              }
+              // Reload parent page to show logged in state
+              window.opener.location.reload();
             }
-          }, 100);
+            window.close();
+          }, 500);
         </script>
       </body>
       </html>
