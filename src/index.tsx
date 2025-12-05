@@ -1317,7 +1317,6 @@ app.post('/api/auth/verify-reset-code', async (c) => {
   }
 })
 
-
 // Reset password with code
 app.post('/api/auth/reset-password', async (c) => {
   const { DB } = c.env
