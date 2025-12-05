@@ -59,9 +59,9 @@ export class MicrosoftOAuth {
 
         return {
             id: userData.id,
-            email: userData.mail || userData.userPrincipalName,
-            name: userData.displayName,
-            picture: undefined, // Requires another call, skipping for now
+            email: userData.mail || userData.userPrincipalName || '',
+            name: userData.displayName || 'User',
+            picture: null, // D1 doesn't accept undefined, use null instead
             provider: 'microsoft',
             raw: userData,
         };
