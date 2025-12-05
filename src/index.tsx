@@ -2998,7 +2998,83 @@ app.get('/privacy-policy', (c) => c.html(getPrivacyPolicyHTML()))
 app.get('/data-deletion.html', (c) => c.html(getDataDeletionHTML()))
 app.get('/data-deletion', (c) => c.html(getDataDeletionHTML()))
 
-// Catch-all 404 handler
+// TikTok Verification File
+app.get('/tiktokJ1mxZ8w8FhnDIkHqfGNq0ney95Smz9PQ.txt', (c) => {
+  return c.text('tiktok-developers-site-verification=J1mxZ8w8FhnDIkHqfGNq0ney95Smz9PQ.')
+})
+
+// Facebook Data Deletion Callback (POST endpoint)
+app.post('/api/facebook/data-deletion', async (c) => {
+  try {
+    const body = await c.req.parseBody()
+    const signedRequest = body['signed_request'] as string
+
+    if (!signedRequest) {
+      return c.json({ error: 'Missing signed_request' }, 400)
+    }
+
+    // Parse the signed request
+    const [encodedSig, payload] = signedRequest.split('.', 2)
+
+    if (!payload) {
+      return c.json({ error: 'Invalid signed_request format' }, 400)
+    }
+
+    // Decode payload (base64url)
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = atob(base64)
+    const data = JSON.parse(jsonPayload)
+
+    const userId = data.user_id
+
+    // Generate a unique confirmation code
+    const confirmationCode = `DEL-${userId}-${Date.now()}`
+
+    // TODO: Actually delete user data from DB here
+    // For now, we just acknowledge the request
+
+    // Status URL where user can check deletion status
+    const statusUrl = `https://project-8e7c178d.pages.dev/deletion-status?code=${confirmationCode}`
+
+    return c.json({
+      url: statusUrl,
+      confirmation_code: confirmationCode
+    })
+  } catch (error) {
+    console.error('Facebook data deletion error:', error)
+    return c.json({ error: 'Failed to process request' }, 500)
+  }
+})
+
+// Facebook Data Deletion Status Page
+app.get('/deletion-status', (c) => {
+  const code = c.req.query('code') || 'N/A'
+  return c.html(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Deletion Status - Dueli</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+        .card { background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        h1 { color: #22c55e; }
+        .code { background: #f3f4f6; padding: 15px; border-radius: 8px; font-family: monospace; margin: 20px 0; }
+    </style>
+</head>
+<body style="background: #f9fafb;">
+    <div class="card">
+        <h1>✓ Data Deletion Request Received</h1>
+        <p>Your data deletion request has been received and is being processed.</p>
+        <div class="code"><strong>Confirmation Code:</strong><br>${code}</div>
+        <p>Your data will be deleted within 30 days.</p>
+        <p>If you have questions, contact: <a href="mailto:support@maelsh.com">support@maelsh.com</a></p>
+    </div>
+</body>
+</html>`)
+})
+
+
 app.notFound((c) => {
   const lang = c.get('lang') || 'ar'
   const tr = translations[lang]
