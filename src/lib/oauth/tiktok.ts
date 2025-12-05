@@ -15,7 +15,7 @@ export class TikTokOAuth {
         const params = new URLSearchParams({
             client_key: this.clientKey,
             redirect_uri: this.redirectUri,
-            scope: 'user.info.profile',
+            scope: 'user.info.basic',
             response_type: 'code',
             state: JSON.stringify({ state, lang }),
             sandbox: '1',
