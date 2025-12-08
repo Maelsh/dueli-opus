@@ -420,7 +420,7 @@ async function handleLogin(e) {
       showToast(window.lang === 'ar' ? 'مرحباً بك!' : 'Welcome!', 'success');
 
       // Reload to refresh data
-      //setTimeout(() => window.location.reload(), 500);
+      setTimeout(() => window.location.reload(), 500);
     } else {
       showAuthMessage(data.error || 'Login failed', 'error');
     }
@@ -430,6 +430,101 @@ async function handleLogin(e) {
   }
 }
 
+async function loginWith(provider) {
+  const providerNames = {
+    google: 'Google',
+    facebook: 'Facebook',
+    microsoft: 'Microsoft',
+    tiktok: 'TikTok',
+    twitter: 'X (Twitter)',
+    snapchat: 'Snapchat'
+  };
+
+  if (provider === 'twitter' || provider === 'snapchat') {
+    showComingSoonModal(providerNames[provider]);
+    return;
+  }
+
+  // Open OAuth in popup window
+  const width = 600;
+  const height = 700;
+  const left = (window.screen.width - width) / 2;
+  const top = (window.screen.height - height) / 2;
+
+  const popup = window.open(
+    `/api/auth/oauth/${provider}?lang=${window.lang}`,
+    'oauth_popup',
+    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
+
+  if (!popup) {
+    showToast(window.lang === 'ar' ? 'يرجى السماح بالنوافذ المنبثقة' : 'Please allow popups', 'warning');
+    return;
+  }
+
+  // Listen for OAuth callback
+  window.addEventListener('message', async function handleOAuthCallback(event) {
+    // Verify origin
+    if (event.origin !== window.location.origin) return;
+
+    if (event.data.type === 'oauth_success' && event.data.session) {
+      try {
+        // Fetch user info
+        const response = await fetch('/api/auth/session', {
+          headers: {
+            'Authorization': 'Bearer ' + event.data.session,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include' // مهم جداً للكوكيز
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.user) {
+          // حفظ في localStorage
+          localStorage.setItem('sessionId', event.data.session);
+          localStorage.setItem('user', JSON.stringify(data.user));
+
+          // حفظ في المتغيرات العامة
+          window.currentUser = data.user;
+          window.sessionId = event.data.session;
+
+          // تحديث الواجهة
+          updateAuthUI();
+
+          // إغلاق النافذة المنبثقة
+          if (popup && !popup.closed) popup.close();
+
+          // إغلاق نافذة تسجيل الدخول
+          hideLoginModal();
+
+          // إظهار رسالة النجاح
+          showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
+
+          // إعادة تحميل الصفحة بعد ثانية واحدة
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          throw new Error('Invalid session data');
+        }
+      } catch (error) {
+        console.error('OAuth callback error:', error);
+        showToast(window.lang === 'ar' ? 'حدث خطأ في تسجيل الدخول' : 'Login error occurred', 'error');
+        if (popup && !popup.closed) popup.close();
+      }
+
+      // Remove event listener
+      window.removeEventListener('message', handleOAuthCallback);
+
+    } else if (event.data.type === 'oauth_error') {
+      showOAuthError(event.data.error);
+      if (popup && !popup.closed) popup.close();
+      window.removeEventListener('message', handleOAuthCallback);
+    }
+  });
+}
+/*
 // Login with OAuth provider
 async function loginWith(provider) {
   const providerNames = {
@@ -502,7 +597,7 @@ async function loginWith(provider) {
     }
   });
 }
-
+*/
 function showComingSoonModal(providerName) {
   const title = window.lang === 'ar' ? 'قريباً جداً!' : 'Coming Very Soon!';
   const message = window.lang === 'ar'
