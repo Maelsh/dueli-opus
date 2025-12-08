@@ -420,7 +420,7 @@ async function handleLogin(e) {
       showToast(window.lang === 'ar' ? 'مرحباً بك!' : 'Welcome!', 'success');
 
       // Reload to refresh data
-      setTimeout(() => window.location.reload(), 500);
+      //setTimeout(() => window.location.reload(), 500);
     } else {
       showAuthMessage(data.error || 'Login failed', 'error');
     }
