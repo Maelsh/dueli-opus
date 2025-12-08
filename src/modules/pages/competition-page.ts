@@ -1,0 +1,268 @@
+/**
+ * Competition Detail Page
+ * صفحة تفاصيل المنافسة
+ */
+
+import type { Context } from 'hono';
+import type { Bindings, Variables } from '../../config/types';
+import { translations } from '../../i18n';
+import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { generateHTML } from '../../shared/templates/layout';
+
+export async function competitionPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+  const lang = c.get('lang');
+  const tr = translations[lang];
+  const id = c.req.param('id');
+  const isRTL = lang === 'ar';
+
+  const content = `
+    ${getNavigation(lang)}
+    ${getLoginModal(lang)}
+    
+    <div class="container mx-auto px-4 py-6" id="competitionContainer">
+      <div class="flex flex-col items-center justify-center py-16">
+        <i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i>
+        <p class="text-gray-500">${lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+      </div>
+    </div>
+    
+    ${getFooter(lang)}
+    
+    <script>
+      const lang = '${lang}';
+      const isRTL = ${isRTL};
+      const competitionId = '${id}';
+      const tr = ${JSON.stringify(tr)};
+      let competitionData = null;
+      
+      document.addEventListener('DOMContentLoaded', async () => {
+        await checkAuth();
+        loadCompetition();
+      });
+      
+      async function loadCompetition() {
+        try {
+          const res = await fetch('/api/competitions/' + competitionId);
+          const data = await res.json();
+          
+          if (!data.success) {
+            document.getElementById('competitionContainer').innerHTML = \`
+              <div class="text-center py-16">
+                <i class="fas fa-exclamation-circle text-6xl text-red-400 mb-4"></i>
+                <h2 class="text-2xl font-bold text-gray-600">\${tr.not_found || 'غير موجود'}</h2>
+              </div>
+            \`;
+            return;
+          }
+          
+          competitionData = data.data;
+          renderCompetition(competitionData);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      
+      function renderCompetition(comp) {
+        const isLive = comp.status === 'live';
+        const isPending = comp.status === 'pending';
+        const isCreator = window.currentUser && window.currentUser.id === comp.creator_id;
+        const isOpponent = window.currentUser && window.currentUser.id === comp.opponent_id;
+        const hasRequested = comp.requests?.some(r => r.requester_id === window.currentUser?.id && r.status === 'pending');
+        const needsOpponent = isPending && !comp.opponent_id;
+        
+        const bgColors = {
+          1: 'from-purple-600 to-purple-800',
+          2: 'from-cyan-500 to-cyan-700',
+          3: 'from-amber-500 to-orange-600'
+        };
+        const bgColor = bgColors[comp.category_id] || 'from-gray-600 to-gray-800';
+        
+        document.getElementById('competitionContainer').innerHTML = \`
+          <div class="max-w-6xl mx-auto">
+            <div class="flex items-center gap-4 mb-6">
+              <a href="/?lang=\${lang}" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
+                <i class="fas fa-arrow-\${isRTL ? 'right' : 'left'} text-xl text-gray-600 dark:text-gray-300"></i>
+              </a>
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="\${
+                    isLive ? 'badge-live' :
+                    isPending ? 'badge-pending' :
+                    'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold'
+                  } flex items-center gap-1">
+                    \${isLive ? '<span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>' : ''}
+                    \${isLive ? tr.status_live : isPending ? tr.status_pending : tr.status_completed}
+                  </span>
+                  <span class="text-sm text-gray-500">
+                    <i class="\${comp.category_icon} mr-1"></i>
+                    \${lang === 'ar' ? comp.category_name_ar : comp.category_name_en}
+                  </span>
+                </div>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">\${comp.title}</h1>
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div class="lg:col-span-2 space-y-6">
+                <div class="bg-gradient-to-br \${bgColor} rounded-2xl overflow-hidden shadow-xl aspect-video flex items-center justify-center relative">
+                  \${comp.youtube_live_id && isLive ? \`
+                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_live_id}?autoplay=1" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
+                  \` : comp.youtube_video_url ? \`
+                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_video_url.split('v=')[1] || comp.youtube_video_url}" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
+                  \` : \`
+                    <div class="text-center text-white">
+                      <i class="fas fa-video text-6xl opacity-50 mb-4"></i>
+                      <p>\${isPending ? tr.status_pending : (lang === 'ar' ? 'البث غير متاح' : 'Stream not available')}</p>
+                    </div>
+                  \`}
+                </div>
+                
+                <div class="card p-6">
+                  <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">\${lang === 'ar' ? 'المتنافسون' : 'Competitors'}</h3>
+                  <div class="grid grid-cols-2 gap-6">
+                    <div class="text-center">
+                      <img src="\${comp.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.creator_name}" class="w-20 h-20 rounded-full mx-auto mb-3 border-4 border-purple-200 dark:border-purple-800">
+                      <h4 class="font-bold text-gray-900 dark:text-white">\${comp.creator_name}</h4>
+                      <p class="text-sm text-gray-500">@\${comp.creator_username}</p>
+                    </div>
+                    
+                    <div class="text-center">
+                      \${comp.opponent_id ? \`
+                        <img src="\${comp.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.opponent_name}" class="w-20 h-20 rounded-full mx-auto mb-3 border-4 border-amber-200 dark:border-amber-800">
+                        <h4 class="font-bold text-gray-900 dark:text-white">\${comp.opponent_name}</h4>
+                        <p class="text-sm text-gray-500">@\${comp.opponent_username}</p>
+                      \` : \`
+                        <div class="w-20 h-20 rounded-full mx-auto mb-3 bg-gray-100 dark:bg-gray-700 flex items-center justify-center border-4 border-dashed border-gray-300 dark:border-gray-600">
+                          <i class="fas fa-question text-3xl text-gray-400"></i>
+                        </div>
+                        <h4 class="font-bold text-gray-400">\${lang === 'ar' ? 'بانتظار منافس' : 'Awaiting Opponent'}</h4>
+                        \${window.currentUser && !isCreator && !hasRequested ? \`
+                          <button onclick="requestJoin()" class="join-btn mt-3">
+                            <i class="fas fa-hand-paper"></i>
+                            \${tr.request_join}
+                          </button>
+                        \` : hasRequested ? \`
+                          <button onclick="cancelRequest()" class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-300 transition-all">
+                            <i class="fas fa-times mr-1"></i>
+                            \${tr.cancel_request}
+                          </button>
+                        \` : !window.currentUser ? \`
+                          <button onclick="showLoginModal()" class="join-btn mt-3">
+                            <i class="fas fa-sign-in-alt"></i>
+                            \${lang === 'ar' ? 'سجل دخول للمنافسة' : 'Login to Compete'}
+                          </button>
+                        \` : ''}
+                      \`}
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="card p-6">
+                  <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">\${tr.competition_rules}</h3>
+                  <pre class="whitespace-pre-wrap text-gray-600 dark:text-gray-300 text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-xl">\${comp.rules}</pre>
+                </div>
+              </div>
+              
+              <div class="space-y-6">
+                <div class="card p-6">
+                  <div class="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p class="text-3xl font-bold text-purple-600">\${(comp.total_views || 0).toLocaleString()}</p>
+                      <p class="text-sm text-gray-500">\${tr.viewers}</p>
+                    </div>
+                    <div>
+                      <p class="text-3xl font-bold text-purple-600">\${comp.total_comments || 0}</p>
+                      <p class="text-sm text-gray-500">\${tr.comments}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="card overflow-hidden">
+                  <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                    <h3 class="font-bold text-gray-900 dark:text-white">\${tr.live_chat}</h3>
+                  </div>
+                  <div class="h-80 overflow-y-auto p-4 space-y-3" id="chatMessages">
+                    \${comp.comments?.length ? comp.comments.map(cm => \`
+                      <div class="flex gap-2 animate-fade-in">
+                        <img src="\${cm.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + cm.username}" class="w-8 h-8 rounded-full">
+                        <div>
+                          <p class="text-sm"><span class="font-semibold text-purple-600">\${cm.display_name}</span></p>
+                          <p class="text-sm text-gray-600 dark:text-gray-300">\${cm.content}</p>
+                        </div>
+                      </div>
+                    \`).join('') : '<p class="text-center text-gray-400">' + (lang === 'ar' ? 'لا توجد تعليقات بعد' : 'No comments yet') + '</p>'}
+                  </div>
+                  <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                    \${window.currentUser ? \`
+                      <form onsubmit="sendComment(event)" class="flex gap-2">
+                        <input type="text" id="commentInput" placeholder="\${tr.add_comment}..." class="flex-1 border dark:border-gray-600 dark:bg-gray-700 rounded-full px-4 py-2 text-sm">
+                        <button type="submit" class="p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors">
+                          <i class="fas fa-paper-plane"></i>
+                        </button>
+                      </form>
+                    \` : \`
+                      <button onclick="showLoginModal()" class="w-full py-2 text-center text-purple-600 hover:underline text-sm font-medium">
+                        \${tr.login_required}
+                      </button>
+                    \`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      async function requestJoin() {
+        if (!window.currentUser) { showLoginModal(); return; }
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requester_id: window.currentUser.id })
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast(tr.request_sent || (lang === 'ar' ? 'تم إرسال الطلب' : 'Request sent'), 'success');
+            loadCompetition();
+          }
+        } catch (err) { console.error(err); }
+      }
+      
+      async function cancelRequest() {
+        if (!window.currentUser) return;
+        try {
+          await fetch('/api/competitions/' + competitionId + '/request', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requester_id: window.currentUser.id })
+          });
+          loadCompetition();
+        } catch (err) { console.error(err); }
+      }
+      
+      async function sendComment(e) {
+        e.preventDefault();
+        if (!window.currentUser) return;
+        const input = document.getElementById('commentInput');
+        const content = input.value.trim();
+        if (!content) return;
+        try {
+          await fetch('/api/competitions/' + competitionId + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: window.currentUser.id,
+              content: content,
+              is_live: competitionData?.status === 'live'
+            })
+          });
+          input.value = '';
+          loadCompetition();
+        } catch (err) { console.error(err); }
+      }
+    </script>
+  `;
+
+  return c.html(generateHTML(content, lang, tr.competition));
+}
