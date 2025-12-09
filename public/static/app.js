@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================
 // Authentication Functions
 // ============================================
+/*
 async function checkAuth() {
   const savedUser = localStorage.getItem('user');
   const savedSession = localStorage.getItem('sessionId');
@@ -100,8 +101,62 @@ async function checkAuth() {
   updateAuthUI();
   return false;
 }
+*/
+async function checkAuth() {
+  // محاولة القراءة من الكوكيز أولاً
+  const cookieSession = getCookie('sessionId');
+  const savedSession = cookieSession || localStorage.getItem('sessionId');
+  const savedUser = localStorage.getItem('user');
 
+  if (savedSession) {
+    try {
+      const res = await fetch('/api/auth/session', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer ' + savedSession,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
 
+      const data = await res.json();
+      const user = data.user || data.data?.user || data;
+
+      if (user && (user.id || user.user_id || user.email)) {
+        window.currentUser = user;
+        window.sessionId = savedSession;
+
+        // تحديث localStorage
+        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('sessionId', savedSession);
+
+        // تحديث الكوكيز
+        document.cookie = `sessionId=${savedSession}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+
+        updateAuthUI();
+        return true;
+      } else {
+        // الجلسة غير صالحة
+        clearAuth();
+      }
+    } catch (err) {
+      console.error('Auth check failed:', err);
+      clearAuth();
+    }
+  }
+
+  updateAuthUI();
+  return false;
+}
+
+// دالة مساعدة لحذف بيانات المصادقة
+function clearAuth() {
+  localStorage.removeItem('user');
+  localStorage.removeItem('sessionId');
+  document.cookie = 'sessionId=; path=/; max-age=0';
+  window.currentUser = null;
+  window.sessionId = null;
+}
 
 function updateAuthUI() {
   const authSection = document.getElementById('authSection');
