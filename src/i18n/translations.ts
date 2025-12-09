@@ -396,6 +396,31 @@ export const translations: Record<Language, TranslationSchema> = {
     defaults: {
       rules_placeholder: '1. مدة الحديث لكل طرف\n2. قواعد الحوار\n3. معايير التقييم',
     },
+
+    // ===============================
+    // العميل - Client-side
+    // ===============================
+    client: {
+      toast: {
+        welcome: 'مرحباً بك!',
+        allow_popups: 'يرجى السماح بالنوافذ المنبثقة',
+      },
+      modal: {
+        coming_soon_provider: 'نعمل حالياً على إضافة التسجيل عبر {provider}. يرجى استخدام طريقة أخرى حالياً.',
+        oauth_error: 'حدث خطأ أثناء تسجيل الدخول',
+        unsupported_email_desc: 'نعتذر، نقبل فقط حسابات Gmail و Outlook و Yahoo.',
+        provider_connection_error: 'حدث خطأ في الاتصال مع مزود الخدمة. يرجى المحاولة مرة أخرى.',
+      },
+      help: {
+        content: '• شاهد المنافسات المباشرة والمسجلة\n• سجل دخول للمشاركة وإنشاء منافسات\n• قيّم المتنافسين وشارك بالتعليقات\n\nللمزيد من المعلومات، تواصل معنا عبر البريد: support@dueli.com',
+      },
+      time: {
+        now: 'الآن',
+        minutes_ago: 'منذ {n} دقيقة',
+        hours_ago: 'منذ {n} ساعة',
+        days_ago: 'منذ {n} يوم',
+      },
+    },
   },
 
   /**
@@ -777,6 +802,31 @@ export const translations: Record<Language, TranslationSchema> = {
     // ===============================
     defaults: {
       rules_placeholder: '1. Speaking time per side\n2. Dialogue rules\n3. Evaluation criteria',
+    },
+
+    // ===============================
+    // Client-side
+    // ===============================
+    client: {
+      toast: {
+        welcome: 'Welcome!',
+        allow_popups: 'Please allow popups',
+      },
+      modal: {
+        coming_soon_provider: 'We are working on adding {provider} login. Please use another method for now.',
+        oauth_error: 'An error occurred during login',
+        unsupported_email_desc: 'Sorry, we only accept Gmail, Outlook, and Yahoo accounts.',
+        provider_connection_error: 'Connection error with the provider. Please try again.',
+      },
+      help: {
+        content: '• Watch live and recorded competitions\n• Login to participate and create competitions\n• Rate competitors and share comments\n\nFor more info, contact us at: support@dueli.com',
+      },
+      time: {
+        now: 'Just now',
+        minutes_ago: '{n}m ago',
+        hours_ago: '{n}h ago',
+        days_ago: '{n}d ago',
+      },
     },
   },
 };

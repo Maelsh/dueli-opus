@@ -396,6 +396,31 @@ export interface DefaultsTranslations {
 }
 
 /**
+ * هيكل قسم ترجمات العميل
+ */
+export interface ClientTranslations {
+  toast: {
+    welcome: string;
+    allow_popups: string;
+  };
+  modal: {
+    coming_soon_provider: string;
+    oauth_error: string;
+    unsupported_email_desc: string;
+    provider_connection_error: string;
+  };
+  help: {
+    content: string;
+  };
+  time: {
+    now: string;
+    minutes_ago: string;
+    hours_ago: string;
+    days_ago: string;
+  };
+}
+
+/**
  * الهيكل الكامل لنظام الترجمة
  * @description يحتوي على جميع أقسام الترجمة
  */
@@ -418,4 +443,6 @@ export interface TranslationSchema {
   emails: EmailsTranslations;
   notifications: NotificationsTranslations;
   defaults: DefaultsTranslations;
+  client: ClientTranslations;
 }
+

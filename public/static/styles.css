@@ -1213,6 +1213,9 @@
   .text-white {
     color: var(--color-white);
   }
+  .lowercase {
+    text-transform: lowercase;
+  }
   .opacity-20 {
     opacity: 20%;
   }

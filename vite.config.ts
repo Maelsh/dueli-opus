@@ -6,8 +6,20 @@ export default defineConfig({
     entry: 'src/main.ts'
   })],
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    rollupOptions: {
+      input: {
+        client: 'src/client/index.ts',
+      },
+      output: {
+        entryFileNames: 'static/[name].js',
+        chunkFileNames: 'static/chunks/[name]-[hash].js',
+        assetFileNames: 'static/assets/[name]-[hash][extname]'
+      }
+    }
   }
 })
+
+
 
 
