@@ -431,6 +431,7 @@ async function handleLogin(e) {
   }
 }
 
+
 async function loginWith(provider) {
   const providerNames = {
     google: 'Google',
@@ -464,13 +465,29 @@ async function loginWith(provider) {
   }
 
   // Listen for OAuth callback
-  window.addEventListener('message', async function handleOAuthCallback(event) {
-    // Verify origin
-    if (event.origin !== window.location.origin) return;
+  const handleOAuthCallback = async (event) => {
+    // تحقق أكثر مرونة من الـ origin
+    const allowedOrigins = [
+      window.location.origin,
+      'https://accounts.google.com',
+      'https://www.facebook.com',
+      'https://login.microsoftonline.com'
+    ];
+
+    // تجاهل الرسائل من مصادر غير معروفة بدون إيقاف
+    if (!allowedOrigins.some(origin => event.origin.startsWith(origin)) &&
+      event.origin !== window.location.origin) {
+      console.log('Ignored message from:', event.origin);
+      return;
+    }
 
     if (event.data.type === 'oauth_success' && event.data.session) {
+      // إزالة المستمع فوراً لمنع التكرار
+      window.removeEventListener('message', handleOAuthCallback);
+
       try {
-        console.log('🔑 Session received:', event.data.session); // للتشخيص
+        // إغلاق النافذة المنبثقة فوراً
+        if (popup && !popup.closed) popup.close();
 
         // Fetch user info
         const response = await fetch('/api/auth/session', {
@@ -481,58 +498,49 @@ async function loginWith(provider) {
           credentials: 'include'
         });
 
-        console.log('📡 Response status:', response.status); // للتشخيص
-
         const data = await response.json();
-        console.log('📦 Response data:', data); // للتشخيص - هذا المهم!
 
-        // تحقق من صيغة الاستجابة المختلفة
+        // تحقق مرن من البيانات
         const user = data.user || data.data?.user || data;
-        const isSuccess = data.success !== false && user && (user.id || user.user_id || user.email);
+        const isSuccess = user && (user.id || user.user_id || user.email);
 
         if (isSuccess) {
-          // حفظ في localStorage
+          // حفظ البيانات
           localStorage.setItem('sessionId', event.data.session);
           localStorage.setItem('user', JSON.stringify(user));
-
-          // حفظ في المتغيرات العامة
           window.currentUser = user;
           window.sessionId = event.data.session;
 
           // تحديث الواجهة
           updateAuthUI();
-
-          // إغلاق النوافذ
-          if (popup && !popup.closed) popup.close();
           hideLoginModal();
 
-          // إظهار رسالة النجاح
+          // رسالة النجاح
           showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
 
-          // إعادة تحميل الصفحة
+          // إعادة التحميل بعد وقت كافٍ
           setTimeout(() => {
             window.location.reload();
-          }, 1000);
+          }, 800);
         } else {
-          console.error('❌ Invalid data structure:', data);
-          throw new Error('Invalid session data: ' + JSON.stringify(data));
+          throw new Error('Invalid user data');
         }
       } catch (error) {
-        console.error('OAuth callback error:', error);
-        showToast(window.lang === 'ar' ? 'حدث خطأ في تسجيل الدخول' : 'Login error occurred', 'error');
+        console.error('OAuth error:', error);
+        showToast(window.lang === 'ar' ? 'حدث خطأ في تسجيل الدخول' : 'Login error', 'error');
         if (popup && !popup.closed) popup.close();
       }
 
-      // Remove event listener
-      window.removeEventListener('message', handleOAuthCallback);
-
     } else if (event.data.type === 'oauth_error') {
+      window.removeEventListener('message', handleOAuthCallback);
       showOAuthError(event.data.error);
       if (popup && !popup.closed) popup.close();
-      window.removeEventListener('message', handleOAuthCallback);
     }
-  });
+  };
+
+  window.addEventListener('message', handleOAuthCallback);
 }
+
 /*
 // Login with OAuth provider
 async function loginWith(provider) {
