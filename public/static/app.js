@@ -25,6 +25,7 @@ window.debounce = function (func, wait) {
 // ============================================
 // Initialize
 // ============================================
+/*
 document.addEventListener('DOMContentLoaded', () => {
   // Get current language from URL
   const urlParams = new URLSearchParams(window.location.search);
@@ -66,6 +67,87 @@ document.addEventListener('DOMContentLoaded', () => {
   window.isDarkMode = savedDarkMode === 'true';
   applyDarkMode();
 });
+*/
+document.addEventListener('DOMContentLoaded', () => {
+  // استعادة الجلسة من الكوكيز/localStorage
+  checkAuth();
+
+  // Get current language from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  window.lang = urlParams.get('lang') || 'ar';
+
+  // Handle OAuth Callback من URL (للـ redirect method)
+  const session = urlParams.get('session');
+  const error = urlParams.get('error');
+
+  if (session) {
+    handleOAuthSuccess(session, true); // true = من URL
+  }
+
+  if (error) {
+    showOAuthError(error);
+    // Remove error from URL
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/[\?&]error=[^&]+/, '').replace(/^&/, '?'));
+  }
+
+  // Load dark mode preference
+  const savedDarkMode = localStorage.getItem('darkMode');
+  window.isDarkMode = savedDarkMode === 'true';
+  applyDarkMode();
+});
+
+// دالة موحدة لمعالجة نجاح OAuth
+async function handleOAuthSuccess(session, fromUrl = false) {
+  try {
+    // حفظ في الكوكيز
+    document.cookie = `sessionId=${session}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+
+    // حفظ في localStorage
+    localStorage.setItem('sessionId', session);
+
+    // إذا كان من URL، احذف الـ session parameter
+    if (fromUrl) {
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search.replace(/[\?&]session=[^&]+/, '').replace(/^&/, '?'));
+    }
+
+    // جلب معلومات المستخدم
+    const response = await fetch('/api/auth/session', {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + session,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+
+    const data = await response.json();
+    const user = data.user || data.data?.user || data;
+
+    if (user && (user.id || user.user_id || user.email)) {
+      // حفظ البيانات
+      localStorage.setItem('user', JSON.stringify(user));
+      window.currentUser = user;
+      window.sessionId = session;
+
+      // تحديث الواجهة
+      updateAuthUI();
+      hideLoginModal();
+
+      // رسالة النجاح
+      showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
+
+      // إعادة تحميل الصفحة بعد ثانية
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } else {
+      throw new Error('Invalid user data');
+    }
+  } catch (error) {
+    console.error('OAuth success handler error:', error);
+    showToast(window.lang === 'ar' ? 'فشل تسجيل الدخول' : 'Login failed', 'error');
+  }
+}
 
 // ============================================
 // Authentication Functions
@@ -449,7 +531,7 @@ async function handleLogin(e) {
       showToast(window.lang === 'ar' ? 'مرحباً بك!' : 'Welcome!', 'success');
 
       // Reload to refresh data
-      setTimeout(() => window.location.reload(), 2500);
+      setTimeout(() => window.location.origin(), 3000);
     } else {
       showAuthMessage(data.error || 'Login failed', 'error');
     }
@@ -459,6 +541,8 @@ async function handleLogin(e) {
   }
 }
 
+
+/*
 // Login with OAuth provider
 async function loginWith(provider) {
   const providerNames = {
@@ -531,6 +615,62 @@ async function loginWith(provider) {
     }
   });
 }
+*/
+async function loginWith(provider) {
+  const providerNames = {
+    google: 'Google',
+    facebook: 'Facebook',
+    microsoft: 'Microsoft',
+    tiktok: 'TikTok',
+    twitter: 'X (Twitter)',
+    snapchat: 'Snapchat'
+  };
+
+  if (provider === 'twitter' || provider === 'snapchat') {
+    showComingSoonModal(providerNames[provider]);
+    return;
+  }
+
+  const width = 600;
+  const height = 700;
+  const left = (window.screen.width - width) / 2;
+  const top = (window.screen.height - height) / 2;
+
+  const popup = window.open(
+    `/api/auth/oauth/${provider}?lang=${window.lang}`,
+    'oauth_popup',
+    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
+
+  if (!popup) {
+    showToast(window.lang === 'ar' ? 'يرجى السماح بالنوافذ المنبثقة' : 'Please allow popups', 'warning');
+    return;
+  }
+
+  // Listen for OAuth callback
+  const handleOAuthCallback = async (event) => {
+    if (event.origin !== window.location.origin) return;
+
+    if (event.data.type === 'oauth_success' && event.data.session) {
+      // إزالة المستمع
+      window.removeEventListener('message', handleOAuthCallback);
+
+      // إغلاق النافذة المنبثقة
+      if (popup && !popup.closed) popup.close();
+
+      // استخدام الدالة المشتركة
+      await handleOAuthSuccess(event.data.session, false); // false = من popup
+
+    } else if (event.data.type === 'oauth_error') {
+      window.removeEventListener('message', handleOAuthCallback);
+      showOAuthError(event.data.error);
+      if (popup && !popup.closed) popup.close();
+    }
+  };
+
+  window.addEventListener('message', handleOAuthCallback);
+}
+
 
 function showComingSoonModal(providerName) {
   const title = window.lang === 'ar' ? 'قريباً جداً!' : 'Coming Very Soon!';
@@ -978,12 +1118,12 @@ document.addEventListener('click', (e) => {
     userMenu.classList.add('hidden');
   }
 });
-
+/*
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
   initCountries();
 });
-
+*/
 // ============================================
 // User Menu Functions
 // ============================================
