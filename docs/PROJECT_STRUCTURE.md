@@ -1,262 +1,182 @@
-# Dueli Platform - Project Structure
-# هيكلة مشروع ديولي
+# هيكلية المشروع النهائية - منصة ديولي
+# Final Project Structure - Dueli Platform
 
-**Version:** 2.0.0
-**Last Updated:** 2025-12-07
+**تاريخ التحديث:** 2025-12-09
+**Version:** 3.0.0
 
 ---
 
-## Complete File Tree / شجرة الملفات الكاملة
+## الهيكل الكامل | Complete Structure
 
 ```
-dueli/
-├── 📁 docs/                           # Documentation
-│   ├── ARCHITECTURE_PLAN.md          # خطة الهيكلة
-│   ├── REFACTORING_REPORT.md         # تقرير إعادة الهيكلة
-│   ├── PROJECT_STRUCTURE.md          # هيكلة المشروع (هذا الملف)
-│   └── API_REFERENCE.md              # مرجع الدوال والكلاسات
+dueli-platform/
+├── 📁 docs/                           # التوثيق
+│   ├── PROJECT_STRUCTURE.md           # هذا الملف
+│   ├── ARCHITECTURE_PLAN.md
+│   └── API_REFERENCE.md
 │
-├── 📁 src/                            # Source Code
+├── 📁 public/                         # الملفات الثابتة
+│   └── static/
+│       ├── styles.css
+│       ├── dueli-icon.png
+│       └── about/
+│
+├── 📁 src/                            # الكود المصدري
 │   │
-│   ├── 📁 core/                       # ═══ CORE LAYER ═══
-│   │   │
-│   │   ├── 📁 http/                   # HTTP Components
-│   │   │   ├── types.ts              # 🔷 All TypeScript interfaces
-│   │   │   ├── Validator.ts          # 🔷 Generic DTO Validator class
-│   │   │   ├── BaseController.ts     # 🔷 Abstract BaseController class
-│   │   │   └── index.ts              # Exports
-│   │   │
-│   │   ├── 📁 database/               # Database Components
-│   │   │   ├── BaseRepository.ts     # 🔷 Generic BaseRepository class
-│   │   │   └── index.ts              # Exports
-│   │   │
-│   │   ├── 📁 i18n/                   # Internationalization
-│   │   │   ├── I18nService.ts        # 🔷 Singleton I18nService class
-│   │   │   └── index.ts              # Exports
-│   │   │
-│   │   └── index.ts                   # Core exports
+│   ├── 📁 config/                     # الإعدادات والأنواع
+│   │   └── types.ts                   # تعريفات TypeScript الرئيسية
 │   │
-│   ├── 📁 modules/                    # ═══ MODULES (Vertical Slices) ═══
-│   │   │
-│   │   ├── 📁 auth/                   # 🔐 Authentication Module
-│   │   │   ├── AuthRepository.ts     # 🔷 UserRepository, SessionRepository
-│   │   │   ├── AuthService.ts        # 🔷 AuthService class
-│   │   │   ├── AuthController.ts     # 🔷 AuthController class
-│   │   │   ├── routes.ts             # Hono routes
-│   │   │   └── index.ts              # Exports
-│   │   │
-│   │   ├── 📁 competitions/           # 🏆 Competition Module
-│   │   │   ├── CompetitionRepository.ts  # 🔷 Competition, Rating, Comment repos
-│   │   │   ├── CompetitionService.ts     # 🔷 CompetitionService class
-│   │   │   ├── CompetitionController.ts  # 🔷 CompetitionController class
-│   │   │   ├── routes.ts             # Hono routes
-│   │   │   └── index.ts              # Exports
-│   │   │
-│   │   ├── 📁 users/                  # 👤 User Module
-│   │   │   ├── UserRepository.ts     # 🔷 UserProfile, Follow, Notification repos
-│   │   │   ├── UserService.ts        # 🔷 UserService class
-│   │   │   ├── UserController.ts     # 🔷 UserController class
-│   │   │   ├── routes.ts             # Hono routes
-│   │   │   └── index.ts              # Exports
-│   │   │
-│   │   ├── 📁 categories/             # 📂 Category Module
-│   │   │   ├── CategoryRepository.ts # 🔷 CategoryRepository class
-│   │   │   ├── CategoryController.ts # 🔷 CategoryController class
-│   │   │   ├── routes.ts             # Hono routes
-│   │   │   └── index.ts              # Exports
-│   │   │
-│   │   └── index.ts                   # All modules export
+│   ├── 📁 client/                     # 🆕 Frontend Client Modules
+│   │   ├── index.ts                   # نقطة الدخول للعميل
+│   │   ├── 📁 core/                   # المكونات الأساسية
+│   │   │   ├── State.ts               # إدارة الحالة
+│   │   │   ├── ApiClient.ts           # عميل API
+│   │   │   ├── CookieUtils.ts         # أدوات الكوكيز
+│   │   │   └── index.ts
+│   │   ├── 📁 services/               # الخدمات
+│   │   │   ├── AuthService.ts         # خدمة المصادقة
+│   │   │   ├── ThemeService.ts        # الوضع الليلي
+│   │   │   ├── CountryService.ts      # الدول واللغات
+│   │   │   └── index.ts
+│   │   ├── 📁 ui/                     # مكونات UI
+│   │   │   ├── Toast.ts               # الإشعارات
+│   │   │   ├── Modal.ts               # النوافذ المنبثقة
+│   │   │   ├── Menu.ts                # القوائم المنسدلة
+│   │   │   └── index.ts
+│   │   └── 📁 helpers/                # الأدوات المساعدة
+│   │       ├── DateFormatter.ts       # تنسيق التاريخ
+│   │       ├── NumberFormatter.ts     # تنسيق الأرقام
+│   │       ├── YouTubeHelpers.ts      # أدوات يوتيوب
+│   │       ├── Utils.ts               # أدوات عامة
+│   │       └── index.ts
 │   │
-│   ├── 📁 lib/                        # ═══ EXTERNAL LIBRARIES ═══
-│   │   └── 📁 oauth/                  # OAuth Providers
-│   │       ├── google.ts             # 🔷 GoogleOAuth class
-│   │       ├── facebook.ts           # 🔷 FacebookOAuth class
-│   │       ├── microsoft.ts          # 🔷 MicrosoftOAuth class
-│   │       ├── tiktok.ts             # 🔷 TikTokOAuth class
-│   │       ├── types.ts              # OAuth types
-│   │       └── utils.ts              # OAuth utilities
+│   ├── 📁 modules/                    # الوحدات الرئيسية (VSA)
+│   │   │
+│   │   ├── 📁 api/                    # API Routes
+│   │   │   ├── 📁 auth/               # المصادقة
+│   │   │   │   ├── helpers.ts
+│   │   │   │   ├── routes.ts
+│   │   │   │   └── oauth-routes.ts
+│   │   │   ├── 📁 categories/         # الفئات
+│   │   │   ├── 📁 competitions/       # المنافسات
+│   │   │   ├── 📁 countries/          # الدول
+│   │   │   ├── 📁 notifications/      # الإشعارات
+│   │   │   └── 📁 users/              # المستخدمين
+│   │   │
+│   │   ├── 📁 auth/                   # Auth Module (OOP)
+│   │   │   ├── AuthRepository.ts
+│   │   │   ├── AuthService.ts
+│   │   │   ├── AuthController.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── 📁 competitions/           # Competitions Module
+│   │   │   ├── CompetitionRepository.ts
+│   │   │   ├── CompetitionService.ts
+│   │   │   ├── CompetitionController.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── 📁 users/                  # Users Module
+│   │   │   ├── UserRepository.ts
+│   │   │   ├── UserService.ts
+│   │   │   └── index.ts
+│   │   │
+│   │   ├── 📁 categories/             # Categories Module
+│   │   │
+│   │   └── 📁 pages/                  # صفحات HTML
+│   │       ├── about-page.ts
+│   │       ├── verify-page.ts
+│   │       ├── competition-page.ts
+│   │       ├── create-page.ts
+│   │       ├── explore-page.ts
+│   │       └── static-pages.ts
 │   │
-│   ├── 📁 routes/                     # ═══ ADDITIONAL ROUTES ═══
-│   │   └── jitsi.ts                  # Jitsi integration routes
+│   ├── 📁 shared/                     # المكونات المشتركة
+│   │   ├── 📁 components/
+│   │   │   ├── navigation.ts
+│   │   │   ├── login-modal.ts
+│   │   │   └── footer.ts
+│   │   └── 📁 templates/
+│   │       └── layout.ts
 │   │
-│   ├── app.ts                         # 🚀 NEW Main Application Entry
-│   ├── index.tsx                      # 📜 OLD Monolithic file (legacy)
-│   ├── styles.css                     # TailwindCSS source
-│   ├── i18n.ts                        # Legacy i18n
-│   └── countries.ts                   # Country data
+│   ├── 📁 i18n/                       # نظام الترجمة
+│   │   ├── translations.ts            # النصوص المترجمة
+│   │   ├── types.ts                   # أنواع الترجمة
+│   │   └── index.ts
+│   │
+│   ├── 📁 lib/                        # المكتبات الخارجية
+│   │   └── 📁 oauth/
+│   │       ├── google.ts
+│   │       ├── facebook.ts
+│   │       ├── microsoft.ts
+│   │       └── tiktok.ts
+│   │
+│   ├── 📁 routes/                     # مسارات إضافية
+│   │   └── jitsi.ts
+│   │
+│   ├── countries.ts                   # بيانات الدول
+│   ├── styles.css                     # CSS
+│   └── main.ts                        # ⭐ نقطة الدخول الرئيسية
 │
-├── 📁 public/                         # Static Files
-│   ├── 📁 static/
-│   │   ├── app.js                    # Frontend JavaScript
-│   │   └── styles.css                # Compiled CSS
-│   ├── privacy-policy.html
-│   └── data-deletion.html
-│
-├── 📁 migrations/                     # Database Migrations
-│   ├── 0001_initial_schema.sql
-│   ├── 0002_add_auth_fields.sql
-│   └── 0003_add_oauth_fields.sql
-│
-├── 📁 dist/                           # Build Output
-│   └── _worker.js                    # Compiled worker
-│
-├── 📄 Configuration Files
-│   ├── package.json                  # npm configuration
-│   ├── tsconfig.json                 # TypeScript config
-│   ├── vite.config.ts                # Vite config
-│   ├── tailwind.config.js            # TailwindCSS config
-│   ├── postcss.config.js             # PostCSS config
-│   ├── wrangler.jsonc                # Cloudflare Wrangler config
-│   └── ecosystem.config.cjs          # PM2 config
-│
-├── 📄 Documentation
-│   ├── README.md                     # Main readme
-│   ├── ROADMAP.md                    # Development roadmap
-│   ├── GIT_WORKFLOW.md               # Git workflow guide
-│   └── JITSI_LOCAL_SETUP.md          # Jitsi setup guide
-│
-└── 📄 Other Files
-    ├── .gitignore
-    ├── LICENSE
-    └── seed.sql                      # Database seed data
+├── vite.config.ts                     # إعدادات Vite + Client bundling
+├── tsconfig.json
+├── package.json
+└── wrangler.jsonc
 ```
 
 ---
 
-## Module Architecture / هيكلة الوحدات
+## الملفات الجديدة (v3.0) | New Files
 
-### Each Module Contains / كل وحدة تحتوي على:
+### src/client/ - Frontend Client Modules (16 files)
+
+| File | Description |
+|------|-------------|
+| `index.ts` | Main entry, window.dueli API |
+| `core/State.ts` | Global state management |
+| `core/ApiClient.ts` | HTTP client with auth |
+| `core/CookieUtils.ts` | Cookie utilities |
+| `services/AuthService.ts` | Login, OAuth, logout |
+| `services/ThemeService.ts` | Dark/light mode |
+| `services/CountryService.ts` | Country/language selection |
+| `ui/Toast.ts` | Toast notifications |
+| `ui/Modal.ts` | Modal dialogs |
+| `ui/Menu.ts` | Dropdown menus |
+| `helpers/DateFormatter.ts` | Date formatting |
+| `helpers/NumberFormatter.ts` | Number formatting |
+| `helpers/YouTubeHelpers.ts` | YouTube utilities |
+| `helpers/Utils.ts` | General utilities |
+
+---
+
+## التبعيات | Dependencies
 
 ```
-module/
-├── *Repository.ts    # Data Access Layer (DAL)
-│   └── Extends BaseRepository<T>
-│   └── Direct D1 database operations
-│
-├── *Service.ts       # Business Logic Layer (BLL)
-│   └── Business rules and validation
-│   └── Orchestrates repository operations
-│
-├── *Controller.ts    # Presentation Layer
-│   └── Extends BaseController
-│   └── HTTP request/response handling
-│
-├── routes.ts         # Route Definitions
-│   └── Hono route bindings
-│   └── Maps URLs to controller methods
-│
-└── index.ts          # Public Exports
-    └── Re-exports all public components
+main.ts (Backend)
+├── config/types.ts
+├── i18n/
+├── modules/api/*
+├── modules/pages/*
+├── shared/components/*
+└── lib/oauth/*
+
+client/index.ts (Frontend - Bundled by Vite)
+├── client/core/*
+├── client/services/*
+├── client/ui/*
+└── client/helpers/*
 ```
 
 ---
 
-## Import Hierarchy / تسلسل الاستيراد
+## Vite Build Outputs
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         app.ts                               │
-│                    (Application Entry)                       │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-         ┌──────────────────┼──────────────────┐
-         ▼                  ▼                  ▼
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   modules/  │    │    core/    │    │    lib/     │
-│   routes    │    │             │    │             │
-└──────┬──────┘    └──────┬──────┘    └──────┬──────┘
-       │                  │                  │
-       ▼                  │                  │
-┌─────────────┐           │                  │
-│ Controllers │◄──────────┤                  │
-└──────┬──────┘           │                  │
-       │                  │                  │
-       ▼                  │                  │
-┌─────────────┐           │                  │
-│  Services   │◄──────────┼──────────────────┤
-└──────┬──────┘           │                  │
-       │                  │                  │
-       ▼                  │                  │
-┌─────────────┐           │                  │
-│Repositories │◄──────────┘                  │
-└──────┬──────┘                              │
-       │                                     │
-       ▼                                     │
-┌─────────────────────────────────────────────────────────────┐
-│                    D1 Database (Cloudflare)                  │
-└─────────────────────────────────────────────────────────────┘
+dist/
+├── index.js           # Backend (Cloudflare Worker)
+└── static/
+    └── client.js      # Frontend bundle
 ```
 
 ---
 
-## Key File Descriptions / وصف الملفات الرئيسية
-
-### Core Files
-
-| File | Purpose | Size |
-|------|---------|------|
-| `core/http/types.ts` | All shared TypeScript types and interfaces | 4.3KB |
-| `core/http/Validator.ts` | Generic validation without external dependencies | 9.8KB |
-| `core/http/BaseController.ts` | Abstract class with HTTP helper methods | 10.4KB |
-| `core/database/BaseRepository.ts` | Generic CRUD operations for D1 | 13.9KB |
-| `core/i18n/I18nService.ts` | Singleton translation service | 13.7KB |
-
-### Module Files
-
-| Module | Files | Total Size |
-|--------|-------|------------|
-| auth/ | 5 files | ~42KB |
-| competitions/ | 5 files | ~37KB |
-| users/ | 5 files | ~31KB |
-| categories/ | 4 files | ~7KB |
-
-### Entry Points
-
-| File | Purpose |
-|------|---------|
-| `app.ts` | New modular entry point |
-| `index.tsx` | Legacy monolithic file (deprecated) |
-
----
-
-## Naming Conventions / اصطلاحات التسمية
-
-| Type | Convention | Example |
-|------|------------|---------|
-| Class | PascalCase | `AuthController` |
-| Interface | PascalCase | `ApiResponse` |
-| Type | PascalCase | `Language` |
-| Function | camelCase | `validateSession` |
-| Variable | camelCase | `currentUser` |
-| Constant | UPPER_SNAKE | `HTTP_STATUS` |
-| File | PascalCase.ts | `AuthService.ts` |
-| Module folder | lowercase | `auth/` |
-
----
-
-## File Size Summary / ملخص أحجام الملفات
-
-```
-Total New Code:     ~120KB
-├── Core:           ~52KB (43%)
-├── Auth Module:    ~42KB (35%)
-├── Competitions:   ~37KB (31%)
-├── Users:          ~31KB (26%)
-└── Categories:     ~7KB  (6%)
-
-Old Monolithic:     ~140KB
-New Distributed:    ~120KB
-Savings:            ~20KB (14%)
-```
-
----
-
-**Legend / المفتاح:**
-- 🔷 = Class
-- 📁 = Directory
-- 📄 = File
-- 🚀 = Entry Point
-- 🔐 = Auth related
-- 🏆 = Competition related
-- 👤 = User related
-- 📂 = Category related
+تاريخ التحديث: 2025-12-09

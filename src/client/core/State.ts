@@ -4,7 +4,7 @@
  * @module client/core/State
  */
 
-export type Language = 'ar' | 'en';
+import type { Language } from '../../config/types';
 
 /**
  * State Management Class

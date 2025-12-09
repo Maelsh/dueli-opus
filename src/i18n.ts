@@ -23,6 +23,8 @@ export const translations = {
     help: 'مساعدة',
     theme: 'الوضع الليلي/النهاري',
     language: 'اللغة',
+    country_language: 'البلد واللغة',
+    search_country: 'ابحث عن بلد...',
 
     // الأقسام
     categories: 'الأقسام',
@@ -182,6 +184,8 @@ export const translations = {
     help: 'Help',
     theme: 'Dark/Light Mode',
     language: 'Language',
+    country_language: 'Country & Language',
+    search_country: 'Search country...',
 
     // Categories
     categories: 'Categories',
@@ -342,7 +346,7 @@ export function getLanguageFromCountry(countryCode: string): Language {
   return langMap[country.primaryLang] || 'en';
 }
 
-export function t(key: string, lang: Language = 'ar'): string {
+export function t(key: string, lang: Language): string {
   const keys = key.split('.');
   let value: any = translations[lang];
 
@@ -366,10 +370,13 @@ export function t(key: string, lang: Language = 'ar'): string {
   return typeof value === 'string' ? value : key;
 }
 
+// RTL languages list
+const RTL_LANGUAGES: Language[] = ['ar'];
+
 export function isRTL(lang: Language): boolean {
-  return lang === 'ar';
+  return RTL_LANGUAGES.includes(lang);
 }
 
 export function getDir(lang: Language): 'rtl' | 'ltr' {
-  return lang === 'ar' ? 'rtl' : 'ltr';
+  return RTL_LANGUAGES.includes(lang) ? 'rtl' : 'ltr';
 }

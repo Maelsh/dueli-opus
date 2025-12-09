@@ -24,9 +24,15 @@ export class NumberFormatter {
 
     /**
      * Format number with locale
+     * @param num - Number to format
+     * @param locale - Locale code (ar, en, etc.)
      */
-    static formatLocale(num: number, locale: string = 'ar'): string {
-        return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US').format(num);
+    static formatLocale(num: number, locale: string): string {
+        const localeMap: Record<string, string> = {
+            'ar': 'ar-SA',
+            'en': 'en-US',
+        };
+        return new Intl.NumberFormat(localeMap[locale] || 'en-US').format(num);
     }
 }
 

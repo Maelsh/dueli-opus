@@ -4,7 +4,13 @@
  */
 
 import type { Language } from '../../config/types';
-import { translations, getDir } from '../../i18n';
+import { translations, getDir, isRTL } from '../../i18n';
+
+// Font mapping per language
+const fontMap: Record<Language, string> = {
+  'ar': "'Cairo'",
+  'en': "'Inter'",
+};
 
 /**
  * Generate base HTML wrapper - توليد غلاف HTML الأساسي
@@ -12,7 +18,8 @@ import { translations, getDir } from '../../i18n';
 export function generateHTML(content: string, lang: Language, title: string = 'Dueli'): string {
   const dir = getDir(lang);
   const tr = translations[lang];
-  
+  const fontFamily = fontMap[lang] || "'Inter'";
+
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
 <head>
@@ -25,7 +32,7 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     
     <style>
-      body { font-family: ${lang === 'ar' ? "'Cairo'" : "'Inter'"}, system-ui, sans-serif; }
+      body { font-family: ${fontFamily}, system-ui, sans-serif; }
     </style>
 </head>
 <body class="bg-white dark:bg-[#0f0f0f] text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">

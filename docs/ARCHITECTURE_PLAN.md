@@ -1,10 +1,10 @@
 # Dueli Platform - Architecture Plan
 # خطة هيكلة منصة ديولي
 
-**Version:** 2.0.0
-**Date:** 2025-12-07
+**Version:** 3.0.0
+**Date:** 2025-12-09
 **Author:** Claude AI Assistant
-**Status:** IMPLEMENTED
+**Status:** IMPLEMENTED + CLIENT MODULES
 
 ---
 
@@ -110,13 +110,20 @@ src/
 │   │
 │   └── index.ts                   # تصدير جميع الوحدات
 │
+├── client/                        # 🆕 Frontend Client Modules
+│   ├── index.ts                   # نقطة الدخول + window.dueli
+│   ├── core/                      # State, ApiClient, CookieUtils
+│   ├── services/                  # AuthService, ThemeService, CountryService
+│   ├── ui/                        # Toast, Modal, Menu
+│   └── helpers/                   # DateFormatter, NumberFormatter, etc.
+│
 ├── lib/                           # مكتبات خارجية
 │   └── oauth/                     # OAuth providers
 │
 ├── routes/                        # مسارات إضافية
 │   └── jitsi.ts
 │
-└── app.ts                         # نقطة الدخول الرئيسية
+└── main.ts                        # نقطة الدخول الرئيسية
 ```
 
 ---

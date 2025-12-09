@@ -4,14 +4,14 @@
  */
 
 import type { Language } from '../../config/types';
-import { translations } from '../../i18n';
+import { translations, isRTL as checkRTL } from '../../i18n';
 
 /**
  * Get Navigation HTML - الحصول على HTML الملاحة
  */
 export function getNavigation(lang: Language): string {
   const tr = translations[lang];
-  const isRTL = lang === 'ar';
+  const isRTL = checkRTL(lang);
 
   return `
     <nav class="sticky top-0 z-50 bg-white dark:bg-[#0f0f0f] backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
@@ -33,7 +33,7 @@ export function getNavigation(lang: Language): string {
           
           <!-- Country/Language Switcher -->
           <div class="relative">
-            <button onclick="toggleCountryMenu()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${lang === 'ar' ? 'البلد واللغة' : 'Country & Language'}">
+            <button onclick="toggleCountryMenu()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.country_language}">
               <i class="fas fa-globe text-xl"></i>
             </button>
             <div id="countryMenu" class="hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
@@ -43,7 +43,7 @@ export function getNavigation(lang: Language): string {
                   <input 
                     type="text" 
                     id="countrySearch" 
-                    placeholder="${lang === 'ar' ? 'ابحث عن بلد...' : 'Search country...'}" 
+                    placeholder="${tr.search_country}" 
                     class="w-full px-3 py-2 ${isRTL ? 'pr-9' : 'pl-9'} text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
                     oninput="filterCountries(this.value)"
                   />
