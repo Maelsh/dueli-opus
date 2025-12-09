@@ -470,44 +470,52 @@ async function loginWith(provider) {
 
     if (event.data.type === 'oauth_success' && event.data.session) {
       try {
+        console.log('🔑 Session received:', event.data.session); // للتشخيص
+
         // Fetch user info
         const response = await fetch('/api/auth/session', {
           headers: {
             'Authorization': 'Bearer ' + event.data.session,
             'Content-Type': 'application/json'
           },
-          credentials: 'include' // مهم جداً للكوكيز
+          credentials: 'include'
         });
 
-        const data = await response.json();
+        console.log('📡 Response status:', response.status); // للتشخيص
 
-        if (data.success && data.user) {
+        const data = await response.json();
+        console.log('📦 Response data:', data); // للتشخيص - هذا المهم!
+
+        // تحقق من صيغة الاستجابة المختلفة
+        const user = data.user || data.data?.user || data;
+        const isSuccess = data.success !== false && user && (user.id || user.user_id || user.email);
+
+        if (isSuccess) {
           // حفظ في localStorage
           localStorage.setItem('sessionId', event.data.session);
-          localStorage.setItem('user', JSON.stringify(data.user));
+          localStorage.setItem('user', JSON.stringify(user));
 
           // حفظ في المتغيرات العامة
-          window.currentUser = data.user;
+          window.currentUser = user;
           window.sessionId = event.data.session;
 
           // تحديث الواجهة
           updateAuthUI();
 
-          // إغلاق النافذة المنبثقة
+          // إغلاق النوافذ
           if (popup && !popup.closed) popup.close();
-
-          // إغلاق نافذة تسجيل الدخول
           hideLoginModal();
 
           // إظهار رسالة النجاح
           showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
 
-          // إعادة تحميل الصفحة بعد ثانية واحدة
+          // إعادة تحميل الصفحة
           setTimeout(() => {
             window.location.reload();
           }, 1000);
         } else {
-          throw new Error('Invalid session data');
+          console.error('❌ Invalid data structure:', data);
+          throw new Error('Invalid session data: ' + JSON.stringify(data));
         }
       } catch (error) {
         console.error('OAuth callback error:', error);
