@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 */
 document.addEventListener('DOMContentLoaded', () => {
+  initCountries();
   // استعادة الجلسة من الكوكيز/localStorage
   checkAuth();
 
