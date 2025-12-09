@@ -1,3 +1,10 @@
+// منع CORS errors من إيقاف التنفيذ
+window.addEventListener('error', (e) => {
+  if (e.message && e.message.includes('cross-origin')) {
+    e.preventDefault();
+    console.log('CORS error ignored');
+  }
+});
 // Dueli Frontend JavaScript - New Design
 // منصة المنافسات والحوارات
 
