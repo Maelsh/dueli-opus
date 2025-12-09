@@ -529,6 +529,7 @@ async function loginWith(provider) {
   }
 
   const handleOAuthCallback = async (event) => {
+
     // السماح فقط للرسائل من نفس الـ origin
     if (event.origin !== window.location.origin) {
       return;
@@ -576,7 +577,7 @@ async function loginWith(provider) {
           // تحديث بعد ثانية
           setTimeout(() => {
             window.location.reload();
-          }, 1000);
+          }, 100);
         } else {
           throw new Error('No user data received');
         }
