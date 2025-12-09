@@ -459,7 +459,6 @@ async function handleLogin(e) {
   }
 }
 
-/*
 // Login with OAuth provider
 async function loginWith(provider) {
   const providerNames = {
@@ -531,105 +530,6 @@ async function loginWith(provider) {
       window.removeEventListener('message', handleOAuthCallback);
     }
   });
-}
-*/
-
-async function loginWith(provider) {
-  const providerNames = {
-    google: 'Google',
-    facebook: 'Facebook',
-    microsoft: 'Microsoft',
-    tiktok: 'TikTok',
-    twitter: 'X (Twitter)',
-    snapchat: 'Snapchat'
-  };
-
-  if (provider === 'twitter' || provider === 'snapchat') {
-    showComingSoonModal(providerNames[provider]);
-    return;
-  }
-
-  const width = 600;
-  const height = 700;
-  const left = (window.screen.width - width) / 2;
-  const top = (window.screen.height - height) / 2;
-
-  const popup = window.open(
-    `/api/auth/oauth/${provider}?lang=${window.lang}`,
-    'oauth_popup',
-    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-  );
-
-  if (!popup) {
-    showToast(window.lang === 'ar' ? 'يرجى السماح بالنوافذ المنبثقة' : 'Please allow popups', 'warning');
-    return;
-  }
-
-  const handleOAuthCallback = async (event) => {
-    // السماح فقط للرسائل من نفس الـ origin
-    if (event.origin !== window.location.origin) {
-      return;
-    }
-
-    if (event.data.type === 'oauth_success' && event.data.session) {
-      window.removeEventListener('message', handleOAuthCallback);
-
-      if (popup && !popup.closed) popup.close();
-
-      try {
-        // ⭐ الخطوة المهمة: حفظ الجلسة في الكوكيز من الـ Frontend
-        document.cookie = `sessionId=${event.data.session}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-        // حفظ في localStorage كـ backup
-        localStorage.setItem('sessionId', event.data.session);
-
-        // جلب معلومات المستخدم
-        const response = await fetch('/api/auth/session', {
-          method: 'GET',
-          headers: {
-            'Authorization': 'Bearer ' + event.data.session,
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include' // مهم جداً
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        const user = data.user || data.data?.user || data;
-
-        if (user && (user.id || user.user_id || user.email)) {
-          localStorage.setItem('user', JSON.stringify(user));
-          window.currentUser = user;
-          window.sessionId = event.data.session;
-
-          updateAuthUI();
-          hideLoginModal();
-
-          showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
-
-          // تحديث بعد ثانية
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
-        } else {
-          throw new Error('No user data received');
-        }
-      } catch (error) {
-        console.error('OAuth callback error:', error);
-        showToast(window.lang === 'ar' ? 'فشل تسجيل الدخول' : 'Login failed', 'error');
-      }
-
-    } else if (event.data.type === 'oauth_error') {
-      window.removeEventListener('message', handleOAuthCallback);
-      showOAuthError(event.data.error);
-      if (popup && !popup.closed) popup.close();
-    }
-  };
-
-  window.addEventListener('message', handleOAuthCallback);
 }
 
 function showComingSoonModal(providerName) {
