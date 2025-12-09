@@ -1,10 +1,3 @@
-// منع CORS errors من إيقاف التنفيذ
-window.addEventListener('error', (e) => {
-  if (e.message && e.message.includes('cross-origin')) {
-    e.preventDefault();
-    console.log('CORS error ignored');
-  }
-});
 // Dueli Frontend JavaScript - New Design
 // منصة المنافسات والحوارات
 
@@ -33,7 +26,6 @@ window.debounce = function (func, wait) {
 // Initialize
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  checkAuth();
   // Get current language from URL
   const urlParams = new URLSearchParams(window.location.search);
   window.lang = urlParams.get('lang') || 'ar';
@@ -78,64 +70,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================
 // Authentication Functions
 // ============================================
-
-async function checkAuth() {
-  // محاولة القراءة من الكوكيز أولاً
-  const cookieSession = getCookie('sessionId');
-  const savedSession = cookieSession || localStorage.getItem('sessionId');
-  const savedUser = localStorage.getItem('user');
-
-  if (savedSession) {
-    try {
-      const res = await fetch('/api/auth/session', {
-        method: 'GET',
-        headers: {
-          'Authorization': 'Bearer ' + savedSession,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      const data = await res.json();
-      const user = data.user || data.data?.user || data;
-
-      if (user && (user.id || user.user_id || user.email)) {
-        window.currentUser = user;
-        window.sessionId = savedSession;
-
-        // تحديث localStorage
-        localStorage.setItem('user', JSON.stringify(user));
-        localStorage.setItem('sessionId', savedSession);
-
-        // تحديث الكوكيز
-        document.cookie = `sessionId=${savedSession}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-        updateAuthUI();
-        return true;
-      } else {
-        // الجلسة غير صالحة
-        clearAuth();
-      }
-    } catch (err) {
-      console.error('Auth check failed:', err);
-      clearAuth();
-    }
-  }
-
-  updateAuthUI();
-  return false;
-}
-
-// دالة مساعدة لحذف بيانات المصادقة
-function clearAuth() {
-  localStorage.removeItem('user');
-  localStorage.removeItem('sessionId');
-  document.cookie = 'sessionId=; path=/; max-age=0';
-  window.currentUser = null;
-  window.sessionId = null;
-}
-
-/*
 async function checkAuth() {
   const savedUser = localStorage.getItem('user');
   const savedSession = localStorage.getItem('sessionId');
@@ -166,8 +100,7 @@ async function checkAuth() {
   updateAuthUI();
   return false;
 }
- */
-/*
+
 // Logout function
 async function logout() {
   const sessionId = localStorage.getItem('sessionId'); // Corrected from 'session' to 'sessionId'
@@ -195,7 +128,7 @@ async function logout() {
   // Redirect to home
   window.location.href = '/';
 }
-*/
+
 function updateAuthUI() {
   const authSection = document.getElementById('authSection');
   const userSection = document.getElementById('userSection');
@@ -497,107 +430,6 @@ async function handleLogin(e) {
   }
 }
 
-async function loginWith(provider) {
-  const providerNames = {
-    google: 'Google',
-    facebook: 'Facebook',
-    microsoft: 'Microsoft',
-    tiktok: 'TikTok',
-    twitter: 'X (Twitter)',
-    snapchat: 'Snapchat'
-  };
-
-  if (provider === 'twitter' || provider === 'snapchat') {
-    showComingSoonModal(providerNames[provider]);
-    return;
-  }
-
-  const width = 600;
-  const height = 700;
-  const left = (window.screen.width - width) / 2;
-  const top = (window.screen.height - height) / 2;
-
-  const popup = window.open(
-    `/api/auth/oauth/${provider}?lang=${window.lang}`,
-    'oauth_popup',
-    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-  );
-
-  if (!popup) {
-    showToast(window.lang === 'ar' ? 'يرجى السماح بالنوافذ المنبثقة' : 'Please allow popups', 'warning');
-    return;
-  }
-
-  const handleOAuthCallback = async (event) => {
-
-    // السماح فقط للرسائل من نفس الـ origin
-    if (event.origin !== window.location.origin) {
-      return;
-    }
-
-    if (event.data.type === 'oauth_success' && event.data.session) {
-      window.removeEventListener('message', handleOAuthCallback);
-
-      if (popup && !popup.closed) popup.close();
-
-      try {
-        // ⭐ الخطوة المهمة: حفظ الجلسة في الكوكيز من الـ Frontend
-        document.cookie = `sessionId=${event.data.session}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
-
-        // حفظ في localStorage كـ backup
-        localStorage.setItem('sessionId', event.data.session);
-
-        // جلب معلومات المستخدم
-        const response = await fetch('/api/auth/session', {
-          method: 'GET',
-          headers: {
-            'Authorization': 'Bearer ' + event.data.session,
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include' // مهم جداً
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        const user = data.user || data.data?.user || data;
-
-        if (user && (user.id || user.user_id || user.email)) {
-          localStorage.setItem('user', JSON.stringify(user));
-          window.currentUser = user;
-          window.sessionId = event.data.session;
-
-          updateAuthUI();
-          hideLoginModal();
-
-          showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
-
-          // تحديث بعد ثانية
-          setTimeout(() => {
-            window.location.reload();
-          }, 100);
-        } else {
-          throw new Error('No user data received');
-        }
-      } catch (error) {
-        console.error('OAuth callback error:', error);
-        showToast(window.lang === 'ar' ? 'فشل تسجيل الدخول' : 'Login failed', 'error');
-      }
-
-    } else if (event.data.type === 'oauth_error') {
-      window.removeEventListener('message', handleOAuthCallback);
-      showOAuthError(event.data.error);
-      if (popup && !popup.closed) popup.close();
-    }
-  };
-
-  window.addEventListener('message', handleOAuthCallback);
-}
-
-
-/*
 // Login with OAuth provider
 async function loginWith(provider) {
   const providerNames = {
@@ -670,7 +502,7 @@ async function loginWith(provider) {
     }
   });
 }
-*/
+
 function showComingSoonModal(providerName) {
   const title = window.lang === 'ar' ? 'قريباً جداً!' : 'Coming Very Soon!';
   const message = window.lang === 'ar'
@@ -718,7 +550,7 @@ function showCustomModal(title, message, btnText, iconName) {
   `;
   document.body.appendChild(modal);
 }
-/*
+
 // Logout
 async function logout() {
   try {
@@ -743,48 +575,7 @@ async function logout() {
   // Redirect to home
   window.location.href = '/?lang=' + window.lang;
 }
-*/
 
-async function logout() {
-  try {
-    // محاولة الحصول على الجلسة من جميع المصادر
-    const session = window.sessionId || getCookie('sessionId') || localStorage.getItem('sessionId');
-
-    if (session) {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + session,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-    }
-  } catch (err) {
-    console.error('Logout error:', err);
-  }
-
-  // حذف من localStorage
-  localStorage.removeItem('user');
-  localStorage.removeItem('sessionId');
-
-  // حذف من الكوكيز
-  document.cookie = 'sessionId=; path=/; max-age=0';
-
-  // حذف من المتغيرات العامة
-  window.currentUser = null;
-  window.sessionId = null;
-
-  // تحديث الواجهة
-  updateAuthUI();
-
-  showToast(window.lang === 'ar' ? 'تم تسجيل الخروج' : 'Logged out successfully', 'info');
-
-  // إعادة التوجيه
-  setTimeout(() => {
-    window.location.href = '/?lang=' + window.lang;
-  }, 500);
-}
 // ============================================
 // Dark Mode Functions
 // ============================================
