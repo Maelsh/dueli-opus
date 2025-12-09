@@ -26,6 +26,7 @@ window.debounce = function (func, wait) {
 // Initialize
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
+  checkAuth();
   // Get current language from URL
   const urlParams = new URLSearchParams(window.location.search);
   window.lang = urlParams.get('lang') || 'ar';
