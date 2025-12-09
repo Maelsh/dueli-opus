@@ -78,6 +78,64 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================
 // Authentication Functions
 // ============================================
+
+async function checkAuth() {
+  // محاولة القراءة من الكوكيز أولاً
+  const cookieSession = getCookie('sessionId');
+  const savedSession = cookieSession || localStorage.getItem('sessionId');
+  const savedUser = localStorage.getItem('user');
+
+  if (savedSession) {
+    try {
+      const res = await fetch('/api/auth/session', {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer ' + savedSession,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      const data = await res.json();
+      const user = data.user || data.data?.user || data;
+
+      if (user && (user.id || user.user_id || user.email)) {
+        window.currentUser = user;
+        window.sessionId = savedSession;
+
+        // تحديث localStorage
+        localStorage.setItem('user', JSON.stringify(user));
+        localStorage.setItem('sessionId', savedSession);
+
+        // تحديث الكوكيز
+        document.cookie = `sessionId=${savedSession}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+
+        updateAuthUI();
+        return true;
+      } else {
+        // الجلسة غير صالحة
+        clearAuth();
+      }
+    } catch (err) {
+      console.error('Auth check failed:', err);
+      clearAuth();
+    }
+  }
+
+  updateAuthUI();
+  return false;
+}
+
+// دالة مساعدة لحذف بيانات المصادقة
+function clearAuth() {
+  localStorage.removeItem('user');
+  localStorage.removeItem('sessionId');
+  document.cookie = 'sessionId=; path=/; max-age=0';
+  window.currentUser = null;
+  window.sessionId = null;
+}
+
+/*
 async function checkAuth() {
   const savedUser = localStorage.getItem('user');
   const savedSession = localStorage.getItem('sessionId');
@@ -108,7 +166,8 @@ async function checkAuth() {
   updateAuthUI();
   return false;
 }
-
+ */
+/*
 // Logout function
 async function logout() {
   const sessionId = localStorage.getItem('sessionId'); // Corrected from 'session' to 'sessionId'
@@ -136,7 +195,7 @@ async function logout() {
   // Redirect to home
   window.location.href = '/';
 }
-
+*/
 function updateAuthUI() {
   const authSection = document.getElementById('authSection');
   const userSection = document.getElementById('userSection');
@@ -438,7 +497,6 @@ async function handleLogin(e) {
   }
 }
 
-
 async function loginWith(provider) {
   const providerNames = {
     google: 'Google',
@@ -454,7 +512,6 @@ async function loginWith(provider) {
     return;
   }
 
-  // Open OAuth in popup window
   const width = 600;
   const height = 700;
   const left = (window.screen.width - width) / 2;
@@ -471,71 +528,61 @@ async function loginWith(provider) {
     return;
   }
 
-  // Listen for OAuth callback
   const handleOAuthCallback = async (event) => {
-    // تحقق أكثر مرونة من الـ origin
-    const allowedOrigins = [
-      window.location.origin,
-      'https://accounts.google.com',
-      'https://www.facebook.com',
-      'https://login.microsoftonline.com'
-    ];
-
-    // تجاهل الرسائل من مصادر غير معروفة بدون إيقاف
-    if (!allowedOrigins.some(origin => event.origin.startsWith(origin)) &&
-      event.origin !== window.location.origin) {
-      console.log('Ignored message from:', event.origin);
+    // السماح فقط للرسائل من نفس الـ origin
+    if (event.origin !== window.location.origin) {
       return;
     }
 
     if (event.data.type === 'oauth_success' && event.data.session) {
-      // إزالة المستمع فوراً لمنع التكرار
       window.removeEventListener('message', handleOAuthCallback);
 
-      try {
-        // إغلاق النافذة المنبثقة فوراً
-        if (popup && !popup.closed) popup.close();
+      if (popup && !popup.closed) popup.close();
 
-        // Fetch user info
+      try {
+        // ⭐ الخطوة المهمة: حفظ الجلسة في الكوكيز من الـ Frontend
+        document.cookie = `sessionId=${event.data.session}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+
+        // حفظ في localStorage كـ backup
+        localStorage.setItem('sessionId', event.data.session);
+
+        // جلب معلومات المستخدم
         const response = await fetch('/api/auth/session', {
+          method: 'GET',
           headers: {
             'Authorization': 'Bearer ' + event.data.session,
             'Content-Type': 'application/json'
           },
-          credentials: 'include'
+          credentials: 'include' // مهم جداً
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
         const data = await response.json();
-
-        // تحقق مرن من البيانات
         const user = data.user || data.data?.user || data;
-        const isSuccess = user && (user.id || user.user_id || user.email);
 
-        if (isSuccess) {
-          // حفظ البيانات
-          localStorage.setItem('sessionId', event.data.session);
+        if (user && (user.id || user.user_id || user.email)) {
           localStorage.setItem('user', JSON.stringify(user));
           window.currentUser = user;
           window.sessionId = event.data.session;
 
-          // تحديث الواجهة
           updateAuthUI();
           hideLoginModal();
 
-          // رسالة النجاح
           showToast(window.lang === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', 'success');
 
-          // إعادة التحميل بعد وقت كافٍ
+          // تحديث بعد ثانية
           setTimeout(() => {
             window.location.reload();
-          }, 800);
+          }, 1000);
         } else {
-          throw new Error('Invalid user data');
+          throw new Error('No user data received');
         }
       } catch (error) {
-        console.error('OAuth error:', error);
-        showToast(window.lang === 'ar' ? 'حدث خطأ في تسجيل الدخول' : 'Login error', 'error');
-        if (popup && !popup.closed) popup.close();
+        console.error('OAuth callback error:', error);
+        showToast(window.lang === 'ar' ? 'فشل تسجيل الدخول' : 'Login failed', 'error');
       }
 
     } else if (event.data.type === 'oauth_error') {
@@ -547,6 +594,7 @@ async function loginWith(provider) {
 
   window.addEventListener('message', handleOAuthCallback);
 }
+
 
 /*
 // Login with OAuth provider
@@ -669,7 +717,7 @@ function showCustomModal(title, message, btnText, iconName) {
   `;
   document.body.appendChild(modal);
 }
-
+/*
 // Logout
 async function logout() {
   try {
@@ -694,7 +742,48 @@ async function logout() {
   // Redirect to home
   window.location.href = '/?lang=' + window.lang;
 }
+*/
 
+async function logout() {
+  try {
+    // محاولة الحصول على الجلسة من جميع المصادر
+    const session = window.sessionId || getCookie('sessionId') || localStorage.getItem('sessionId');
+
+    if (session) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + session,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+    }
+  } catch (err) {
+    console.error('Logout error:', err);
+  }
+
+  // حذف من localStorage
+  localStorage.removeItem('user');
+  localStorage.removeItem('sessionId');
+
+  // حذف من الكوكيز
+  document.cookie = 'sessionId=; path=/; max-age=0';
+
+  // حذف من المتغيرات العامة
+  window.currentUser = null;
+  window.sessionId = null;
+
+  // تحديث الواجهة
+  updateAuthUI();
+
+  showToast(window.lang === 'ar' ? 'تم تسجيل الخروج' : 'Logged out successfully', 'info');
+
+  // إعادة التوجيه
+  setTimeout(() => {
+    window.location.href = '/?lang=' + window.lang;
+  }, 500);
+}
 // ============================================
 // Dark Mode Functions
 // ============================================
