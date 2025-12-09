@@ -449,7 +449,7 @@ async function handleLogin(e) {
       showToast(window.lang === 'ar' ? 'مرحباً بك!' : 'Welcome!', 'success');
 
       // Reload to refresh data
-      setTimeout(() => window.location.reload(), 150);
+      setTimeout(() => window.location.reload(), 1000);
     } else {
       showAuthMessage(data.error || 'Login failed', 'error');
     }
