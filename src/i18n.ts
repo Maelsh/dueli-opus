@@ -1,7 +1,14 @@
 // Dueli Internationalization (i18n) - Updated Design
 // نظام الترجمة والتعريب - التصميم الجديد
 
-export type Language = 'ar' | 'en';
+// Languages with available translations (can be extended)
+export const TRANSLATED_LANGUAGES = ['ar', 'en'] as const;
+export type TranslatedLanguage = typeof TRANSLATED_LANGUAGES[number];
+
+// Language can be ANY language code (all languages supported)
+// If translation not available, English is used as fallback
+export type Language = string;
+export const DEFAULT_LANGUAGE: TranslatedLanguage = 'en'; // English as global fallback
 
 export const translations = {
   ar: {
@@ -163,6 +170,64 @@ export const translations = {
     back: 'رجوع',
     close: 'إغلاق',
     submit: 'إرسال',
+    loading: 'جاري التحميل...',
+    go_home: 'اذهب إلى الرئيسية',
+    go_back: 'العودة',
+
+    // المصادقة - رسائل API
+    auth_all_fields_required: 'جميع الحقول مطلوبة',
+    auth_email_exists: 'البريد الإلكتروني مستخدم بالفعل',
+    auth_register_success: 'تم التسجيل بنجاح! يرجى التحقق من بريدك الإلكتروني.',
+    auth_register_failed: 'حدث خطأ أثناء التسجيل',
+    auth_invalid_link: 'رابط التفعيل غير صالح أو منتهي',
+    auth_account_activated: 'تم تفعيل حسابك بنجاح!',
+    auth_email_password_required: 'البريد الإلكتروني وكلمة المرور مطلوبان',
+    auth_invalid_credentials: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+    auth_verify_email_first: 'يرجى تفعيل حسابك أولاً',
+    auth_email_required: 'البريد الإلكتروني مطلوب',
+    auth_user_not_found: 'المستخدم غير موجود أو تم تفعيله بالفعل',
+    auth_verification_resent: 'تم إرسال رابط التفعيل مجدداً',
+    auth_reset_if_exists: 'إذا كان هذا البريد مسجلاً، ستصلك رسالة إعادة تعيين',
+    auth_reset_code_sent: 'تم إرسال رمز إعادة التعيين إلى بريدك',
+    auth_email_code_required: 'البريد والرمز مطلوبان',
+    auth_invalid_code: 'الرمز غير صحيح أو منتهي',
+    auth_code_verified: 'تم التحقق من الرمز',
+    auth_password_required: 'كلمة المرور الجديدة مطلوبة',
+    auth_password_changed: 'تم تغيير كلمة المرور بنجاح',
+
+    // التحقق
+    verification_failed: 'حدث خطأ أثناء التحقق',
+    verification_invalid_link: 'رابط غير صالح',
+    verification_success_msg: 'يمكنك الآن تسجيل الدخول إلى حسابك',
+    verification_check_link: 'يرجى التحقق من الرابط أو طلب رابط جديد',
+    account_verification: 'تفعيل الحساب',
+
+    // صفحة عن ديولي
+    about_title: 'منصة ديولي للمنافسات',
+    about_description: 'المنصة الأولى من نوعها التي تجمع بين المنافسات الحية، الحوارات البناءة، واكتشاف المواهب في بيئة تفاعلية عادلة.',
+    about_live_streaming: 'بث مباشر وتفاعل حي',
+    about_live_streaming_desc: 'نظام بث متطور يجمع المتنافسين جنباً إلى جنب مع إمكانية تفاعل الجمهور والتصويت المباشر.',
+    about_fair_judging: 'نظام تحكيم عادل',
+    about_fair_judging_desc: 'آليات تحكيم شفافة تعتمد على تصويت الجمهور ولجان التحكيم المختصة لضمان العدالة.',
+    about_global_community: 'مجتمع عالمي',
+    about_global_community_desc: 'تواصل مع مبدعين ومفكرين من مختلف أنحاء العالم وشارك في منافسات عابرة للحدود.',
+    about_platform_preview: 'نظرة على المنصة',
+    about_developed_by: 'تم التطوير بواسطة Maelsh',
+    about_maelsh_desc: 'نحن في Maelsh نؤمن بقوة الحوار والمنافسة الشريفة في بناء المجتمعات. نسعى لتقديم حلول برمجية مبتكرة تجمع بين الجمالية والوظيفة لخدمة المستخدم العربي والعالمي.',
+    about_dueli: 'عن ديولي',
+
+    // صفحة المنافسة
+    competitors: 'المتنافسون',
+    awaiting_opponent: 'بانتظار منافس',
+    login_to_compete: 'سجل دخول للمنافسة',
+    stream_not_available: 'البث غير متاح',
+    no_comments_yet: 'لا توجد تعليقات بعد',
+    error_occurred: 'حدث خطأ',
+    new_follower: 'متابع جديد',
+
+    // البريد الإلكتروني
+    email_activate_subject: 'تفعيل حسابك في ديولي',
+    email_reset_subject: 'إعادة تعيين كلمة المرور',
   },
 
   en: {
@@ -324,6 +389,64 @@ export const translations = {
     back: 'Back',
     close: 'Close',
     submit: 'Submit',
+    loading: 'Loading...',
+    go_home: 'Go to Home',
+    go_back: 'Go Back',
+
+    // Auth - API messages
+    auth_all_fields_required: 'All fields are required',
+    auth_email_exists: 'Email already exists',
+    auth_register_success: 'Registration successful! Please check your email.',
+    auth_register_failed: 'Registration failed',
+    auth_invalid_link: 'Invalid or expired verification link',
+    auth_account_activated: 'Account activated successfully!',
+    auth_email_password_required: 'Email and password are required',
+    auth_invalid_credentials: 'Invalid email or password',
+    auth_verify_email_first: 'Please verify your email first',
+    auth_email_required: 'Email is required',
+    auth_user_not_found: 'User not found or already verified',
+    auth_verification_resent: 'Verification email sent',
+    auth_reset_if_exists: 'If this email is registered, you will receive a reset link',
+    auth_reset_code_sent: 'Reset code sent to your email',
+    auth_email_code_required: 'Email and code are required',
+    auth_invalid_code: 'Invalid or expired code',
+    auth_code_verified: 'Code verified',
+    auth_password_required: 'New password is required',
+    auth_password_changed: 'Password changed successfully',
+
+    // Verification
+    verification_failed: 'Verification failed',
+    verification_invalid_link: 'Invalid link',
+    verification_success_msg: 'You can now log into your account',
+    verification_check_link: 'Please check the link or request a new one',
+    account_verification: 'Account Verification',
+
+    // About page
+    about_title: 'Dueli Competition Platform',
+    about_description: 'The first platform of its kind combining live competitions, constructive dialogues, and talent discovery in a fair interactive environment.',
+    about_live_streaming: 'Live Streaming & Interaction',
+    about_live_streaming_desc: 'Advanced streaming system bringing competitors side-by-side with audience interaction and live voting.',
+    about_fair_judging: 'Fair Judging System',
+    about_fair_judging_desc: 'Transparent judging mechanisms based on audience voting and expert panels to ensure fairness.',
+    about_global_community: 'Global Community',
+    about_global_community_desc: 'Connect with creators and thinkers from around the world and participate in cross-border competitions.',
+    about_platform_preview: 'Platform Preview',
+    about_developed_by: 'Developed by Maelsh',
+    about_maelsh_desc: 'At Maelsh, we believe in the power of dialogue and fair competition in building communities. We strive to provide innovative software solutions that combine aesthetics and functionality to serve the Arab and global user.',
+    about_dueli: 'About Dueli',
+
+    // Competition page
+    competitors: 'Competitors',
+    awaiting_opponent: 'Awaiting Opponent',
+    login_to_compete: 'Login to Compete',
+    stream_not_available: 'Stream not available',
+    no_comments_yet: 'No comments yet',
+    error_occurred: 'Error occurred',
+    new_follower: 'New Follower',
+
+    // Email
+    email_activate_subject: 'Activate your Dueli account',
+    email_reset_subject: 'Reset Your Password',
   }
 };
 
@@ -346,16 +469,28 @@ export function getLanguageFromCountry(countryCode: string): Language {
   return langMap[country.primaryLang] || 'en';
 }
 
+/**
+ * Get the UI language for a given language code
+ * Falls back to English (global fallback) if no translation available
+ */
+export function getUILanguage(lang: Language): TranslatedLanguage {
+  if (TRANSLATED_LANGUAGES.includes(lang as TranslatedLanguage)) {
+    return lang as TranslatedLanguage;
+  }
+  return DEFAULT_LANGUAGE; // English fallback
+}
+
 export function t(key: string, lang: Language): string {
   const keys = key.split('.');
-  let value: any = translations[lang];
+  const uiLang = getUILanguage(lang);
+  let value: any = translations[uiLang];
 
   for (const k of keys) {
     if (value && typeof value === 'object' && k in value) {
       value = value[k];
     } else {
-      // Fallback to Arabic
-      value = translations.ar;
+      // Fallback to English (global default)
+      value = translations[DEFAULT_LANGUAGE];
       for (const k2 of keys) {
         if (value && typeof value === 'object' && k2 in value) {
           value = value[k2];
@@ -370,8 +505,8 @@ export function t(key: string, lang: Language): string {
   return typeof value === 'string' ? value : key;
 }
 
-// RTL languages list
-const RTL_LANGUAGES: Language[] = ['ar'];
+// RTL languages list - includes all RTL languages from countries
+const RTL_LANGUAGES: string[] = ['ar', 'fa', 'he', 'ur'];
 
 export function isRTL(lang: Language): boolean {
   return RTL_LANGUAGES.includes(lang);

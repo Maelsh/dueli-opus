@@ -18,8 +18,8 @@ export type Bindings = {
   TIKTOK_CLIENT_SECRET: string;
 }
 
-// Language Type - نوع اللغة
-export type Language = 'ar' | 'en';
+// Language Type - نوع اللغة (supports all country languages)
+export type Language = string;
 
 // Context Variables - متغيرات السياق
 export type Variables = {

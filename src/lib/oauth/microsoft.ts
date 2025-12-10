@@ -61,7 +61,7 @@ export class MicrosoftOAuth {
             id: userData.id,
             email: userData.mail || userData.userPrincipalName || '',
             name: userData.displayName || 'User',
-            picture: null, // D1 doesn't accept undefined, use null instead
+            picture: undefined, // Microsoft doesn't provide picture directly in basic profile
             provider: 'microsoft',
             raw: userData,
         };

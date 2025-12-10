@@ -24,10 +24,10 @@ export async function verifyPage(c: Context<{ Bindings: Bindings; Variables: Var
       message = data.message || data.error;
       isSuccess = data.success;
     } catch (error) {
-      message = lang === 'ar' ? 'حدث خطأ أثناء التحقق' : 'Verification failed';
+      message = tr.verification_failed;
     }
   } else {
-    message = lang === 'ar' ? 'رابط غير صالح' : 'Invalid link';
+    message = tr.verification_invalid_link;
   }
 
   const content = `
@@ -45,10 +45,10 @@ export async function verifyPage(c: Context<{ Bindings: Bindings; Variables: Var
           </div>
           <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">${message}</h1>
           <p class="text-gray-600 dark:text-gray-400 mb-8">
-            ${lang === 'ar' ? 'يمكنك الآن تسجيل الدخول إلى حسابك' : 'You can now log into your account'}
+            ${tr.verification_success_msg}
           </p>
           <a href="/?lang=${lang}" class="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-semibold hover:opacity-90 transition-all">
-            ${lang === 'ar' ? 'اذهب إلى الرئيسية' : 'Go to Home'}
+            ${tr.go_home}
           </a>
         ` : `
           <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
@@ -56,10 +56,10 @@ export async function verifyPage(c: Context<{ Bindings: Bindings; Variables: Var
           </div>
           <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">${message}</h1>
           <p class="text-gray-600 dark:text-gray-400 mb-8">
-            ${lang === 'ar' ? 'يرجى التحقق من الرابط أو طلب رابط جديد' : 'Please check the link or request a new one'}
+            ${tr.verification_check_link}
           </p>
           <a href="/?lang=${lang}" class="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-semibold hover:opacity-90 transition-all">
-            ${lang === 'ar' ? 'العودة' : 'Go Back'}
+            ${tr.go_back}
           </a>
         `}
       </div>
@@ -68,5 +68,5 @@ export async function verifyPage(c: Context<{ Bindings: Bindings; Variables: Var
     ${getFooter(lang)}
   `;
 
-  return c.html(generateHTML(content, lang, lang === 'ar' ? 'تفعيل الحساب' : 'Account Verification'));
+  return c.html(generateHTML(content, lang, tr.account_verification));
 }

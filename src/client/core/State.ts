@@ -4,7 +4,10 @@
  * @module client/core/State
  */
 
-import type { Language } from '../../config/types';
+import { CookieUtils } from './CookieUtils';
+
+// Default language constant - can be configured
+const DEFAULT_LANGUAGE = 'ar';
 
 /**
  * State Management Class
@@ -13,7 +16,7 @@ import type { Language } from '../../config/types';
 export class State {
     private static _currentUser: any = null;
     private static _sessionId: string | null = null;
-    private static _lang: Language = 'ar';
+    private static _lang: string = DEFAULT_LANGUAGE;
     private static _isDarkMode: boolean = false;
 
     // Current User
@@ -41,11 +44,11 @@ export class State {
     }
 
     // Language
-    static get lang(): Language {
+    static get lang(): string {
         return this._lang;
     }
 
-    static set lang(l: Language) {
+    static set lang(l: string) {
         this._lang = l;
         if (typeof window !== 'undefined') {
             (window as any).lang = l;
@@ -65,12 +68,15 @@ export class State {
     }
 
     /**
-     * Initialize state from URL and localStorage
+     * Initialize state from URL, cookies, and localStorage
      */
     static init(): void {
-        // Get language from URL
+        // Priority: URL param > Cookie > Default
         const urlParams = new URLSearchParams(window.location.search);
-        this._lang = (urlParams.get('lang') as Language) || 'ar';
+        const urlLang = urlParams.get('lang');
+        const cookieLang = CookieUtils.get('lang');
+
+        this._lang = urlLang || cookieLang || DEFAULT_LANGUAGE;
         (window as any).lang = this._lang;
 
         // Get dark mode from localStorage

@@ -26,10 +26,10 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
             <img src="/static/dueli-icon.png" alt="Dueli" class="w-20 h-20 object-contain drop-shadow-xl">
           </div>
           <h1 class="text-4xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 mb-6 leading-tight">
-            ${lang === 'ar' ? 'منصة ديولي للمنافسات' : 'Dueli Competition Platform'}
+            ${tr.about_title}
           </h1>
           <p class="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-            ${lang === 'ar' ? 'المنصة الأولى من نوعها التي تجمع بين المنافسات الحية، الحوارات البناءة، واكتشاف المواهب في بيئة تفاعلية عادلة.' : 'The first platform of its kind combining live competitions, constructive dialogues, and talent discovery in a fair interactive environment.'}
+            ${tr.about_description}
           </p>
         </div>
 
@@ -40,10 +40,10 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
               <i class="fas fa-video"></i>
             </div>
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              ${lang === 'ar' ? 'بث مباشر وتفاعل حي' : 'Live Streaming & Interaction'}
+              ${tr.about_live_streaming}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar' ? 'نظام بث متطور يجمع المتنافسين جنباً إلى جنب مع إمكانية تفاعل الجمهور والتصويت المباشر.' : 'Advanced streaming system bringing competitors side-by-side with audience interaction and live voting.'}
+              ${tr.about_live_streaming_desc}
             </p>
           </div>
 
@@ -52,10 +52,10 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
               <i class="fas fa-trophy"></i>
             </div>
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              ${lang === 'ar' ? 'نظام تحكيم عادل' : 'Fair Judging System'}
+              ${tr.about_fair_judging}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar' ? 'آليات تحكيم شفافة تعتمد على تصويت الجمهور ولجان التحكيم المختصة لضمان العدالة.' : 'Transparent judging mechanisms based on audience voting and expert panels to ensure fairness.'}
+              ${tr.about_fair_judging_desc}
             </p>
           </div>
 
@@ -64,10 +64,10 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
               <i class="fas fa-globe"></i>
             </div>
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">
-              ${lang === 'ar' ? 'مجتمع عالمي' : 'Global Community'}
+              ${tr.about_global_community}
             </h3>
             <p class="text-gray-500 dark:text-gray-400 leading-relaxed">
-              ${lang === 'ar' ? 'تواصل مع مبدعين ومفكرين من مختلف أنحاء العالم وشارك في منافسات عابرة للحدود.' : 'Connect with creators and thinkers from around the world and participate in cross-border competitions.'}
+              ${tr.about_global_community_desc}
             </p>
           </div>
         </div>
@@ -75,7 +75,7 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
         <!-- Gallery Section -->
         <div class="mb-20">
           <h2 class="text-3xl font-bold text-center text-gray-900 dark:text-white mb-10">
-            ${lang === 'ar' ? 'نظرة على المنصة' : 'Platform Preview'}
+            ${tr.about_platform_preview}
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div class="rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all group h-64">
@@ -107,10 +107,10 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
             </div>
             <div class="text-center md:text-${isRTL ? 'right' : 'left'}">
               <h2 class="text-3xl font-bold mb-4">
-                ${lang === 'ar' ? 'تم التطوير بواسطة Maelsh' : 'Developed by Maelsh'}
+                ${tr.about_developed_by}
               </h2>
               <p class="text-gray-300 text-lg leading-relaxed max-w-2xl">
-                ${lang === 'ar' ? 'نحن في Maelsh نؤمن بقوة الحوار والمنافسة الشريفة في بناء المجتمعات. نسعى لتقديم حلول برمجية مبتكرة تجمع بين الجمالية والوظيفة لخدمة المستخدم العربي والعالمي.' : 'At Maelsh, we believe in the power of dialogue and fair competition in building communities. We strive to provide innovative software solutions that combine aesthetics and functionality to serve the Arab and global user.'}
+                ${tr.about_maelsh_desc}
               </p>
               <div class="mt-8 flex gap-4 justify-center md:justify-start">
                 <a href="#" class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
@@ -133,5 +133,5 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
     </div>
   `;
 
-  return c.html(generateHTML(content, lang, lang === 'ar' ? 'عن ديولي' : 'About Dueli'));
+  return c.html(generateHTML(content, lang, tr.about_dueli));
 }

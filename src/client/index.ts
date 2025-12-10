@@ -14,7 +14,10 @@ import { CookieUtils } from './core/CookieUtils';
 // Services
 import { AuthService } from './services/AuthService';
 import { ThemeService } from './services/ThemeService';
-import { CountryService } from './services/CountryService';
+
+// Countries (shared data)
+import { getCountriesList, getCountry } from '../countries';
+import { t, isRTL } from '../i18n';
 
 // UI
 import { Toast } from './ui/Toast';
@@ -28,6 +31,66 @@ import { YouTubeHelpers } from './helpers/YouTubeHelpers';
 import { Utils } from './helpers/Utils';
 
 /**
+ * Country selection functions (moved from CountryService)
+ */
+const CountryFunctions = {
+    getCurrentCode(): string {
+        return CookieUtils.get('country') || 'SA';
+    },
+
+    select(countryCode: string): void {
+        const country = getCountry(countryCode);
+        if (!country) return;
+
+        CookieUtils.set('country', countryCode, 365);
+        CookieUtils.set('lang', country.primaryLang, 365);
+
+        if (State.currentUser && State.sessionId) {
+            ApiClient.put('/api/users/preferences', {
+                country: countryCode,
+                language: country.primaryLang
+            }).catch(err => console.error('Failed to update preferences:', err));
+        }
+
+        window.location.href = `?lang=${country.primaryLang}`;
+    },
+
+    renderList(filter: string = ''): void {
+        const container = document.getElementById('countriesList');
+        if (!container) return;
+
+        const currentCountry = this.getCurrentCode();
+        const countries = getCountriesList();
+        const filtered = filter
+            ? countries.filter(c =>
+                c.nativeName.toLowerCase().includes(filter.toLowerCase()) ||
+                c.code.toLowerCase().includes(filter.toLowerCase())
+            )
+            : countries;
+
+        if (filtered.length === 0) {
+            container.innerHTML = `
+                <div class="p-4 text-center text-gray-400 text-sm">
+                    ${t('search.no_results', State.lang)}
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = filtered.map(country => `
+            <button 
+                onclick="selectCountry('${country.code}')" 
+                class="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${country.code === currentCountry ? 'bg-purple-50 dark:bg-purple-900/30' : ''}"
+            >
+                <img src="https://flagcdn.com/w40/${country.code.toLowerCase()}.png" class="w-6 h-4 object-cover rounded-sm shadow-sm" alt="${country.code}">
+                <span class="flex-1 ${country.rtl ? 'text-right' : 'text-left'} text-sm font-medium text-gray-900 dark:text-white">${country.nativeName}</span>
+                ${country.code === currentCountry ? '<i class="fas fa-check text-purple-600 text-sm"></i>' : ''}
+            </button>
+        `).join('');
+    }
+};
+
+/**
  * Main Application Class
  * التطبيق الرئيسي
  */
@@ -38,9 +101,6 @@ export class App {
     static init(): void {
         // Initialize state from URL params
         State.init();
-
-        // Initialize countries list
-        CountryService.init();
 
         // Initialize theme
         ThemeService.init();
@@ -71,9 +131,8 @@ export class App {
 
         if (error) {
             Modal.showOAuthError(error);
-            // Remove error from URL
             window.history.replaceState({}, document.title,
-                window.location.pathname + window.location.search.replace(/[\?&]error=[^&]+/, '').replace(/^&/, '?')
+                window.location.pathname + window.location.search.replace(/[\?\&]error=[^\&]+/, '').replace(/^\&/, '?')
             );
         }
     }
@@ -107,7 +166,7 @@ declare global {
         toggleUserMenu: typeof Menu.toggleUser;
         toggleCountryMenu: typeof Menu.toggleCountry;
         filterCountries: (query: string) => void;
-        selectCountry: typeof CountryService.select;
+        selectCountry: (code: string) => void;
         showHelp: typeof Modal.showHelp;
         checkAuth: typeof AuthService.checkAuth;
     }
@@ -140,9 +199,9 @@ const dueliAPI = {
     showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => Toast.show(message, type),
 
     // Formatters
-    formatDate: (date: string, lang?: 'ar' | 'en') => DateFormatter.format(date, lang),
-    formatNumber: (num: number) => NumberFormatter.format(num),
-    formatTimeAgo: (date: string, lang?: 'ar' | 'en') => DateFormatter.timeAgo(date, lang),
+    formatDate: (date: string, lang?: string) => DateFormatter.format(date, lang),
+    formatNumber: (num: number, lang?: string) => NumberFormatter.format(num, lang),
+    formatTimeAgo: (date: string, lang?: string) => DateFormatter.timeAgo(date, lang),
 
     // Utils
     debounce: Utils.debounce,
@@ -174,8 +233,8 @@ if (typeof window !== 'undefined') {
     window.toggleDarkMode = () => ThemeService.toggle();
     window.toggleUserMenu = () => Menu.toggleUser();
     window.toggleCountryMenu = () => Menu.toggleCountry();
-    window.filterCountries = (query: string) => CountryService.renderList(query);
-    window.selectCountry = (code: string) => CountryService.select(code);
+    window.filterCountries = (query: string) => CountryFunctions.renderList(query);
+    window.selectCountry = (code: string) => CountryFunctions.select(code);
     window.showHelp = () => Modal.showHelp();
     window.checkAuth = () => AuthService.checkAuth();
 }
@@ -189,6 +248,6 @@ if (typeof document !== 'undefined') {
 
 // Export all modules
 export { State, ApiClient, CookieUtils } from './core';
-export { AuthService, ThemeService, CountryService } from './services';
+export { AuthService, ThemeService } from './services';
 export { Toast, Modal, Menu } from './ui';
 export { DateFormatter, NumberFormatter, YouTubeHelpers, Utils } from './helpers';

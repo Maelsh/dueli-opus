@@ -6,5 +6,3 @@
 
 export { AuthService } from './AuthService';
 export { ThemeService } from './ThemeService';
-export { CountryService } from './CountryService';
-export type { Country } from './CountryService';

@@ -4,12 +4,13 @@
  */
 
 import { Hono } from 'hono';
-import type { Bindings, Variables, ApiResponse } from '../../../config/types';
+import type { Bindings, Variables, ApiResponse, Language } from '../../../config/types';
 import { hashPassword, sendVerificationEmail, sendPasswordResetEmail, generateState, isEmailAllowed } from './helpers';
 import { GoogleOAuth } from '../../../lib/oauth/google';
 import { FacebookOAuth } from '../../../lib/oauth/facebook';
 import { MicrosoftOAuth } from '../../../lib/oauth/microsoft';
 import { TikTokOAuth } from '../../../lib/oauth/tiktok';
+import { translations } from '../../../i18n';
 
 const authRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -19,13 +20,14 @@ const authRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
  */
 authRoutes.post('/register', async (c) => {
   const { DB, RESEND_API_KEY } = c.env;
-  const lang = c.req.query('lang') || 'ar';
+  const lang = (c.req.query('lang') || 'ar') as Language;
+  const tr = translations[lang];
 
   if (!RESEND_API_KEY) {
     console.error('Missing RESEND_API_KEY');
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Server configuration error: Missing Email API Key' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Server configuration error: Missing Email API Key'
     }, 500);
   }
 
@@ -34,18 +36,18 @@ authRoutes.post('/register', async (c) => {
     const { name, email, password, country, language } = body;
 
     if (!name || !email || !password) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'جميع الحقول مطلوبة' : 'All fields are required' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_all_fields_required
       }, 400);
     }
 
     // Check if email already exists
     const existingUser = await DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
     if (existingUser) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'البريد الإلكتروني مستخدم بالفعل' : 'Email already exists' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_email_exists
       }, 400);
     }
 
@@ -77,13 +79,13 @@ authRoutes.post('/register', async (c) => {
 
     return c.json<ApiResponse>({
       success: true,
-      message: lang === 'ar' ? 'تم التسجيل بنجاح! يرجى التحقق من بريدك الإلكتروني.' : 'Registration successful! Please check your email.'
+      message: tr.auth_register_success
     });
   } catch (error) {
     console.error('Registration error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: lang === 'ar' ? 'حدث خطأ أثناء التسجيل' : 'Registration failed' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: tr.auth_register_failed
     }, 500);
   }
 });
@@ -95,12 +97,13 @@ authRoutes.post('/register', async (c) => {
 authRoutes.get('/verify', async (c) => {
   const { DB } = c.env;
   const token = c.req.query('token');
-  const lang = c.req.query('lang') || 'ar';
+  const lang = (c.req.query('lang') || 'ar') as Language;
+  const tr = translations[lang];
 
   if (!token) {
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Invalid token' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Invalid token'
     }, 400);
   }
 
@@ -113,9 +116,9 @@ authRoutes.get('/verify', async (c) => {
     `).bind(token).first();
 
     if (!user) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'رابط التفعيل غير صالح أو منتهي' : 'Invalid or expired verification link' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_invalid_link
       }, 400);
     }
 
@@ -127,13 +130,13 @@ authRoutes.get('/verify', async (c) => {
 
     return c.json<ApiResponse>({
       success: true,
-      message: lang === 'ar' ? 'تم تفعيل حسابك بنجاح!' : 'Account activated successfully!'
+      message: tr.auth_account_activated
     });
   } catch (error) {
     console.error('Verification error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Verification failed' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Verification failed'
     }, 500);
   }
 });
@@ -144,39 +147,40 @@ authRoutes.get('/verify', async (c) => {
  */
 authRoutes.post('/login', async (c) => {
   const { DB } = c.env;
-  const lang = c.req.query('lang') || 'ar';
+  const lang = (c.req.query('lang') || 'ar') as Language;
+  const tr = translations[lang];
 
   try {
     const body = await c.req.json();
     const { email, password } = body;
 
     if (!email || !password) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'البريد الإلكتروني وكلمة المرور مطلوبان' : 'Email and password are required' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_email_password_required
       }, 400);
     }
 
     const user = await DB.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
     if (!user) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_invalid_credentials
       }, 401);
     }
 
     if (!(user as any).email_verified) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'يرجى تفعيل حسابك أولاً' : 'Please verify your email first' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_verify_email_first
       }, 403);
     }
 
     const passwordHash = await hashPassword(password);
     if ((user as any).password_hash !== passwordHash) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_invalid_credentials
       }, 401);
     }
 
@@ -202,9 +206,9 @@ authRoutes.post('/login', async (c) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Login failed' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Login failed'
     }, 500);
   }
 });
@@ -276,24 +280,25 @@ authRoutes.post('/logout', async (c) => {
  */
 authRoutes.post('/resend-verification', async (c) => {
   const { DB, RESEND_API_KEY } = c.env;
-  const lang = c.req.query('lang') || 'ar';
+  const lang = (c.req.query('lang') || 'ar') as Language;
+  const tr = translations[lang];
 
   try {
     const body = await c.req.json();
     const { email } = body;
 
     if (!email) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'البريد الإلكتروني مطلوب' : 'Email is required' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_email_required
       }, 400);
     }
 
     const user = await DB.prepare('SELECT * FROM users WHERE email = ? AND email_verified = 0').bind(email).first();
     if (!user) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'المستخدم غير موجود أو تم تفعيله بالفعل' : 'User not found or already verified' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_user_not_found
       }, 404);
     }
 
@@ -309,15 +314,15 @@ authRoutes.post('/resend-verification', async (c) => {
     const origin = c.req.header('origin') || `http://${c.req.header('host')}`;
     await sendVerificationEmail(email, verificationToken, (user as any).display_name, lang, RESEND_API_KEY, origin);
 
-    return c.json<ApiResponse>({ 
-      success: true, 
-      message: lang === 'ar' ? 'تم إرسال رابط التفعيل مجدداً' : 'Verification email sent' 
+    return c.json<ApiResponse>({
+      success: true,
+      message: tr.auth_verification_resent
     });
   } catch (error) {
     console.error('Resend verification error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to resend verification' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to resend verification'
     }, 500);
   }
 });
@@ -328,16 +333,17 @@ authRoutes.post('/resend-verification', async (c) => {
  */
 authRoutes.post('/forgot-password', async (c) => {
   const { DB, RESEND_API_KEY } = c.env;
-  const lang = c.req.query('lang') || 'ar';
+  const lang = (c.req.query('lang') || 'ar') as Language;
+  const tr = translations[lang];
 
   try {
     const body = await c.req.json();
     const { email } = body;
 
     if (!email) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'البريد الإلكتروني مطلوب' : 'Email is required' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_email_required
       }, 400);
     }
 
@@ -345,7 +351,7 @@ authRoutes.post('/forgot-password', async (c) => {
     if (!user) {
       return c.json<ApiResponse>({
         success: true,
-        message: lang === 'ar' ? 'إذا كان هذا البريد مسجلاً، ستصلك رسالة إعادة تعيين' : 'If this email is registered, you will receive a reset link'
+        message: tr.auth_reset_if_exists
       });
     }
 
@@ -362,13 +368,13 @@ authRoutes.post('/forgot-password', async (c) => {
 
     return c.json<ApiResponse>({
       success: true,
-      message: lang === 'ar' ? 'تم إرسال رمز إعادة التعيين إلى بريدك' : 'Reset code sent to your email'
+      message: tr.auth_reset_code_sent
     });
   } catch (error) {
     console.error('Forgot password error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to process request' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to process request'
     }, 500);
   }
 });
@@ -379,16 +385,17 @@ authRoutes.post('/forgot-password', async (c) => {
  */
 authRoutes.post('/verify-reset-code', async (c) => {
   const { DB } = c.env;
-  const lang = c.req.query('lang') || 'ar';
+  const lang = (c.req.query('lang') || 'ar') as Language;
+  const tr = translations[lang];
 
   try {
     const body = await c.req.json();
     const { email, code } = body;
 
     if (!email || !code) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'البريد والرمز مطلوبان' : 'Email and code are required' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_email_code_required
       }, 400);
     }
 
@@ -400,21 +407,21 @@ authRoutes.post('/verify-reset-code', async (c) => {
     `).bind(email, code).first();
 
     if (!user) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'الرمز غير صحيح أو منتهي' : 'Invalid or expired code' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_invalid_code
       }, 400);
     }
 
-    return c.json<ApiResponse>({ 
-      success: true, 
-      message: lang === 'ar' ? 'الرمز صحيح' : 'Code verified' 
+    return c.json<ApiResponse>({
+      success: true,
+      message: tr.auth_code_verified
     });
   } catch (error) {
     console.error('Verify code error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Verification failed' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Verification failed'
     }, 500);
   }
 });
@@ -425,16 +432,17 @@ authRoutes.post('/verify-reset-code', async (c) => {
  */
 authRoutes.post('/reset-password', async (c) => {
   const { DB } = c.env;
-  const lang = c.req.query('lang') || 'ar';
+  const lang = (c.req.query('lang') || 'ar') as Language;
+  const tr = translations[lang];
 
   try {
     const body = await c.req.json();
     const { email, code, newPassword } = body;
 
     if (!email || !code || !newPassword) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'جميع الحقول مطلوبة' : 'All fields are required' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_all_fields_required
       }, 400);
     }
 
@@ -446,9 +454,9 @@ authRoutes.post('/reset-password', async (c) => {
     `).bind(email, code).first();
 
     if (!user) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: lang === 'ar' ? 'الرمز غير صحيح أو منتهي' : 'Invalid or expired code' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: tr.auth_invalid_code
       }, 400);
     }
 
@@ -462,13 +470,13 @@ authRoutes.post('/reset-password', async (c) => {
 
     return c.json<ApiResponse>({
       success: true,
-      message: lang === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password reset successfully'
+      message: tr.auth_password_changed
     });
   } catch (error) {
     console.error('Reset password error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to reset password' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to reset password'
     }, 500);
   }
 });
@@ -485,9 +493,9 @@ authRoutes.post('/oauth', async (c) => {
     const { provider, email, name, avatar } = body;
 
     if (!provider || !email) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Missing provider or email' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Missing provider or email'
       }, 400);
     }
 
@@ -527,9 +535,9 @@ authRoutes.post('/oauth', async (c) => {
     });
   } catch (error) {
     console.error('OAuth error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to authenticate' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to authenticate'
     }, 500);
   }
 });
