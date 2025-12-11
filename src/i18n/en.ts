@@ -180,6 +180,7 @@ export const en = {
         create_failed: 'Failed to create',
         update_failed: 'Failed to update',
         delete_failed: 'Failed to delete',
+        something_wrong: 'Something went wrong. Please try again.',
     },
 
     // Competition Error Messages
@@ -359,5 +360,25 @@ export const en = {
         content_required: 'Post content is required',
         created: 'Post created',
         deleted: 'Post deleted',
+    },
+
+    // Auth (nested for client-side usage)
+    auth: {
+        login_success: 'Login successful!',
+        logout_success: 'Logged out successfully',
+        connection_failed: 'Connection failed. Please try again.',
+    },
+
+    // Client-side toasts
+    client: {
+        toast: {
+            welcome: 'Welcome back!',
+            allow_popups: 'Please allow popups for OAuth login',
+        },
+    },
+
+    // Search
+    search: {
+        no_results: 'No results found',
     },
 };

@@ -4,9 +4,10 @@
   "description": "منصة المنافسات والحوارات - Dueli Competition & Dialogue Platform",
   "type": "module",
   "scripts": {
-    "dev": "npm run build:css && vite",
-    "dev:sandbox": "npm run build:css && wrangler pages dev dist --d1=dueli-db --local --ip 0.0.0.0 --port 3000",
-    "build": "npm run build:css && vite build",
+    "dev": "npm run build:css && npm run build:client && vite",
+    "dev:sandbox": "npm run build:css && npm run build:client && wrangler pages dev dist --d1=dueli-db --local --ip 0.0.0.0 --port 3000",
+    "build": "npm run build:css && npm run build:client && vite build",
+    "build:client": "npx esbuild src/client/index.ts --bundle --outfile=dist/static/app.js --format=iife --minify --sourcemap",
     "build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./public/static/styles.css",
     "preview": "wrangler pages dev dist",
     "deploy": "npm run build && wrangler pages deploy dist",

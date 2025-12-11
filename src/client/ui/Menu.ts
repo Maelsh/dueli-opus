@@ -29,6 +29,10 @@ export class Menu {
             menu.classList.toggle('hidden');
 
             if (isHidden) {
+                // Populate countries list when opening
+                if (typeof (window as any).filterCountries === 'function') {
+                    (window as any).filterCountries('');
+                }
                 // Focus search input when opening
                 setTimeout(() => {
                     const searchInput = document.getElementById('countrySearch') as HTMLInputElement;

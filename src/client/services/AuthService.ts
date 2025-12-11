@@ -187,8 +187,7 @@ export class AuthService {
 
             const data = await res.json() as ApiResponse;
 
-            // DEBUG: Log the full response
-            console.log('[DEBUG] Login Response:', JSON.stringify(data, null, 2));
+
 
             if (data.success) {
                 // Server wraps response in data.data
@@ -196,9 +195,7 @@ export class AuthService {
                 const user = responseData.user;
                 const sessionId = responseData.sessionId;
 
-                // DEBUG: Log what we're extracting
-                console.log('[DEBUG] Extracted sessionId:', sessionId);
-                console.log('[DEBUG] Extracted user:', user);
+
 
                 State.currentUser = user;
                 State.sessionId = sessionId || null;
@@ -206,20 +203,18 @@ export class AuthService {
                 localStorage.setItem('sessionId', sessionId || '');
                 CookieUtils.set('sessionId', sessionId || '', 7);
 
-                // DEBUG: Verify storage
-                console.log('[DEBUG] localStorage sessionId:', localStorage.getItem('sessionId'));
-                console.log('[DEBUG] Cookie sessionId:', CookieUtils.get('sessionId'));
+
 
                 this.updateAuthUI();
                 Modal.hideLogin();
                 Toast.success(t('client.toast.welcome', State.lang));
             } else {
-                console.log('[DEBUG] Login failed:', data.error);
+
                 Modal.showAuthMessage(data.error || t('auth_invalid_credentials', State.lang), 'error');
             }
         } catch (error) {
             console.error('Login error:', error);
-            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
         }
     }
 
@@ -263,7 +258,7 @@ export class AuthService {
             }
         } catch (error) {
             console.error('Registration error:', error);
-            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
         }
     }
 
@@ -330,7 +325,7 @@ export class AuthService {
             }
         } catch (error) {
             console.error('Verify code error:', error);
-            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
         }
     }
 
@@ -370,7 +365,7 @@ export class AuthService {
             }
         } catch (error) {
             console.error('Reset password error:', error);
-            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
         }
     }
 
