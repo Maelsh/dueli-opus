@@ -1,33 +1,53 @@
+/**
+ * Microsoft OAuth Provider
+ * موفر مصادقة مايكروسوفت
+ */
+
+import { BaseOAuthProvider } from './BaseOAuthProvider';
 import { OAuthUser } from './types';
 
-export class MicrosoftOAuth {
-    private clientId: string;
-    private clientSecret: string;
-    private tenantId: string;
-    private redirectUri: string;
+/**
+ * Extended options for Microsoft OAuth (includes tenantId)
+ */
+interface MicrosoftOAuthOptions {
+    clientId: string;
+    clientSecret: string;
+    tenantId: string;
+    redirectUri: string;
+}
+
+export class MicrosoftOAuth extends BaseOAuthProvider {
+    readonly providerName = 'microsoft';
+    protected readonly authBaseUrl: string;
+    protected readonly tokenUrl: string;
+    protected readonly userInfoUrl = 'https://graph.microsoft.com/v1.0/me';
+    protected readonly scopes = 'openid email profile User.Read';
+
+    private readonly tenantId: string;
 
     constructor(clientId: string, clientSecret: string, tenantId: string, redirectUri: string) {
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
+        super({ clientId, clientSecret, redirectUri });
         this.tenantId = tenantId;
-        this.redirectUri = redirectUri;
+        this.authBaseUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`;
+        this.tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
     }
 
     getAuthUrl(state: string, lang: string): string {
-        const params = new URLSearchParams({
+        return this.buildAuthUrl({
             client_id: this.clientId,
             response_type: 'code',
             redirect_uri: this.redirectUri,
             response_mode: 'query',
-            scope: 'openid email profile User.Read',
+            scope: this.scopes,
             state: JSON.stringify({ state, lang }),
         });
-        return `https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/authorize?${params.toString()}`;
     }
 
     async getUser(code: string): Promise<OAuthUser> {
-        // 1. Get Token
-        const tokenResponse = await fetch(`https://login.microsoftonline.com/${this.tenantId}/oauth2/v2.0/token`, {
+        console.log(`[${this.providerName} OAuth] Starting getUser`);
+
+        // 1. Exchange code for token (custom body with scope)
+        const tokenResponse = await fetch(this.tokenUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -36,34 +56,35 @@ export class MicrosoftOAuth {
                 code,
                 redirect_uri: this.redirectUri,
                 grant_type: 'authorization_code',
-                scope: 'openid email profile User.Read',
+                scope: this.scopes,
             }),
         });
 
         if (!tokenResponse.ok) {
-            throw new Error('Failed to get Microsoft token');
+            const errorText = await tokenResponse.text();
+            console.error(`[${this.providerName} OAuth] Token request failed:`, errorText);
+            throw new Error(`Failed to get ${this.providerName} token`);
         }
 
         const tokenData = await tokenResponse.json() as any;
+        console.log(`[${this.providerName} OAuth] Token received successfully`);
 
-        // 2. Get User Info
-        const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
-            headers: { Authorization: `Bearer ${tokenData.access_token}` },
-        });
+        // 2. Fetch user info
+        const userData = await this.fetchUserInfo(tokenData.access_token);
+        console.log(`[${this.providerName} OAuth] User info received`);
 
-        if (!userResponse.ok) {
-            throw new Error('Failed to get Microsoft user info');
-        }
+        // 3. Normalize to standard format
+        return this.normalizeUser(userData);
+    }
 
-        const userData = await userResponse.json() as any;
-
+    protected normalizeUser(rawData: any): OAuthUser {
         return {
-            id: userData.id,
-            email: userData.mail || userData.userPrincipalName || '',
-            name: userData.displayName || 'User',
-            picture: undefined, // Microsoft doesn't provide picture directly in basic profile
-            provider: 'microsoft',
-            raw: userData,
+            id: rawData.id,
+            email: rawData.mail || rawData.userPrincipalName || '',
+            name: rawData.displayName || 'User',
+            picture: undefined, // Microsoft doesn't provide picture directly
+            provider: this.providerName,
+            raw: rawData,
         };
     }
 }

@@ -1,84 +1,61 @@
+/**
+ * Google OAuth Provider
+ * موفر مصادقة جوجل
+ */
+
+import { BaseOAuthProvider, OAuthProviderOptions } from './BaseOAuthProvider';
 import { OAuthUser } from './types';
 
-export class GoogleOAuth {
-    private clientId: string;
-    private clientSecret: string;
-    private redirectUri: string;
+export class GoogleOAuth extends BaseOAuthProvider {
+    readonly providerName = 'google';
+    protected readonly authBaseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+    protected readonly tokenUrl = 'https://oauth2.googleapis.com/token';
+    protected readonly userInfoUrl = 'https://www.googleapis.com/oauth2/v2/userinfo';
+    protected readonly scopes = 'openid email profile';
 
     constructor(clientId: string, clientSecret: string, redirectUri: string) {
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
-        this.redirectUri = redirectUri;
+        super({ clientId, clientSecret, redirectUri });
     }
 
     getAuthUrl(state: string, lang: string): string {
-        const params = new URLSearchParams({
+        return this.buildAuthUrl({
             client_id: this.clientId,
             redirect_uri: this.redirectUri,
             response_type: 'code',
-            scope: 'openid email profile',
-            state: JSON.stringify({ state, lang }), // Pass lang in state
+            scope: this.scopes,
+            state: JSON.stringify({ state, lang }),
             access_type: 'offline',
             prompt: 'consent'
         });
-        return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     }
 
     async getUser(code: string): Promise<OAuthUser> {
-        console.log('[Google OAuth] Starting getUser with redirect_uri:', this.redirectUri);
+        console.log(`[${this.providerName} OAuth] Starting getUser with redirect_uri:`, this.redirectUri);
 
-        // 1. Get Token
-        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                client_id: this.clientId,
-                client_secret: this.clientSecret,
-                code,
-                grant_type: 'authorization_code',
-                redirect_uri: this.redirectUri,
-            }),
-        });
+        // 1. Exchange code for token
+        const tokenData = await this.exchangeCodeForToken(code);
+        console.log(`[${this.providerName} OAuth] Token received successfully`);
 
-        if (!tokenResponse.ok) {
-            const errorText = await tokenResponse.text();
-            console.error('[Google OAuth] Token request failed:', {
-                status: tokenResponse.status,
-                statusText: tokenResponse.statusText,
-                error: errorText
-            });
-            throw new Error(`Failed to get Google token: ${tokenResponse.status} - ${errorText}`);
-        }
-
-        const tokenData = await tokenResponse.json() as any;
-        console.log('[Google OAuth] Token received successfully');
-
-        // 2. Get User Info
-        const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: { Authorization: `Bearer ${tokenData.access_token}` },
-        });
-
-        if (!userResponse.ok) {
-            const errorText = await userResponse.text();
-            console.error('[Google OAuth] User info request failed:', {
-                status: userResponse.status,
-                statusText: userResponse.statusText,
-                error: errorText
-            });
-            throw new Error(`Failed to get Google user info: ${userResponse.status} - ${errorText}`);
-        }
-
-        const userData = await userResponse.json() as any;
-        console.log('[Google OAuth] User info received:', { id: userData.id, email: userData.email, name: userData.name });
-
-        return {
+        // 2. Fetch user info
+        const userData = await this.fetchUserInfo(tokenData.access_token);
+        console.log(`[${this.providerName} OAuth] User info received:`, {
             id: userData.id,
             email: userData.email,
-            name: userData.name,
-            picture: userData.picture,
-            provider: 'google',
-            raw: userData,
+            name: userData.name
+        });
+
+        // 3. Normalize to standard format
+        return this.normalizeUser(userData);
+    }
+
+    protected normalizeUser(rawData: any): OAuthUser {
+        return {
+            id: rawData.id,
+            email: rawData.email,
+            name: rawData.name,
+            picture: rawData.picture,
+            provider: this.providerName,
+            raw: rawData,
         };
     }
 }
-

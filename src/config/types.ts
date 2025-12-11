@@ -1,9 +1,16 @@
 /**
  * Dueli Platform - Core Types Configuration
  * ملف تعريف الأنواع الأساسية للمنصة
+ * 
+ * This module defines all core TypeScript interfaces and types used across the platform.
+ * Following OOP principles with proper abstraction and interface segregation.
  */
 
-// Environment Bindings - متغيرات البيئة
+// ============================================
+// Environment & Context Types
+// ============================================
+
+/** Environment bindings for Cloudflare Workers */
 export type Bindings = {
   DB: D1Database;
   RESEND_API_KEY: string;
@@ -18,18 +25,71 @@ export type Bindings = {
   TIKTOK_CLIENT_SECRET: string;
 }
 
-// Language Type - نوع اللغة (supports all country languages)
+/** Language code type (supports all country languages) */
 export type Language = string;
 
-// Context Variables - متغيرات السياق
+/** Context variables for Hono middleware */
 export type Variables = {
   lang: Language;
-  user: any;
+  user: User | null;
 }
 
-// User Interface - واجهة المستخدم
-export interface User {
-  id: number;
+// ============================================
+// Base Interfaces (OOP Abstractions)
+// ============================================
+
+/**
+ * Base Entity Interface
+ * All database entities should extend this interface
+ * جميع الكيانات في قاعدة البيانات يجب أن ترث من هذه الواجهة
+ */
+export interface BaseEntity {
+  readonly id: number;
+  readonly created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Timestamped Entity Interface
+ * For entities with both created_at and updated_at
+ */
+export interface TimestampedEntity extends BaseEntity {
+  readonly created_at: string;
+  updated_at?: string;
+}
+
+/**
+ * Localizable Interface
+ * For entities that support multiple languages
+ */
+export interface Localizable {
+  name_key?: string;
+  name_ar?: string;
+  name_en?: string;
+}
+
+// ============================================
+// Domain Enums & Types
+// ============================================
+
+/** Competition status values */
+export type CompetitionStatus = 'pending' | 'accepted' | 'live' | 'completed' | 'cancelled';
+
+/** Competition request status values */
+export type RequestStatus = 'pending' | 'accepted' | 'declined';
+
+/** Notification types */
+export type NotificationType = 'request' | 'follow' | 'comment' | 'rating' | 'system';
+
+// ============================================
+// Domain Interfaces
+// ============================================
+
+/**
+ * User Interface
+ * واجهة المستخدم
+ */
+export interface User extends BaseEntity {
   email: string;
   username: string;
   display_name: string;
@@ -44,12 +104,13 @@ export interface User {
   average_rating?: number;
   total_earnings?: number;
   is_verified?: boolean;
-  created_at?: string;
 }
 
-// Competition Interface - واجهة المنافسة
-export interface Competition {
-  id: number;
+/**
+ * Competition Interface
+ * واجهة المنافسة
+ */
+export interface Competition extends TimestampedEntity {
   title: string;
   description?: string;
   rules: string;
@@ -57,7 +118,7 @@ export interface Competition {
   subcategory_id?: number;
   creator_id: number;
   opponent_id?: number;
-  status: 'pending' | 'accepted' | 'live' | 'completed' | 'cancelled';
+  status: CompetitionStatus;
   language: Language;
   country?: string;
   scheduled_at?: string;
@@ -67,16 +128,13 @@ export interface Competition {
   youtube_video_url?: string;
   total_views: number;
   total_comments: number;
-  created_at: string;
-  updated_at?: string;
 }
 
-// Category Interface - واجهة الفئة
-export interface Category {
-  id: number;
-  name_key?: string;      // i18n translation key (e.g., 'category.sports')
-  name_ar?: string;       // Arabic name fallback
-  name_en?: string;       // English name fallback
+/**
+ * Category Interface
+ * واجهة الفئة
+ */
+export interface Category extends BaseEntity, Localizable {
   icon?: string;
   color?: string;
   slug?: string;
@@ -85,61 +143,71 @@ export interface Category {
   is_active: boolean;
 }
 
-// Comment Interface - واجهة التعليق
-export interface Comment {
-  id: number;
+/**
+ * Comment Interface
+ * واجهة التعليق
+ */
+export interface Comment extends TimestampedEntity {
   competition_id: number;
   user_id: number;
   content: string;
   is_live: boolean;
-  created_at: string;
+  // Joined user data
   display_name?: string;
   avatar_url?: string;
   username?: string;
 }
 
-// Rating Interface - واجهة التقييم
-export interface Rating {
-  id: number;
+/**
+ * Rating Interface
+ * واجهة التقييم
+ */
+export interface Rating extends BaseEntity {
   competition_id: number;
   user_id: number;
   competitor_id: number;
   rating: number;
 }
 
-// Competition Request Interface - واجهة طلب الانضمام
-export interface CompetitionRequest {
-  id: number;
+/**
+ * Competition Request Interface
+ * واجهة طلب الانضمام
+ */
+export interface CompetitionRequest extends TimestampedEntity {
   competition_id: number;
   requester_id: number;
   message?: string;
-  status: 'pending' | 'accepted' | 'declined';
-  created_at: string;
+  status: RequestStatus;
   responded_at?: string;
+  // Joined user data
   display_name?: string;
   avatar_url?: string;
   username?: string;
 }
 
-// Notification Interface - واجهة الإشعار
-export interface Notification {
-  id: number;
+/**
+ * Notification Interface
+ * واجهة الإشعار
+ */
+export interface Notification extends TimestampedEntity {
   user_id: number;
-  type: string;
+  type: NotificationType;
   title: string;
   message: string;
   reference_type?: string;
   reference_id?: number;
   is_read: boolean;
-  created_at: string;
 }
 
-// Session Interface - واجهة الجلسة
+/**
+ * Session Interface
+ * واجهة الجلسة
+ */
 export interface Session {
-  id: string;
+  readonly id: string;
   user_id: number;
   expires_at: string;
-  created_at: string;
+  readonly created_at: string;
 }
 
 // OAuth User Interface - واجهة مستخدم OAuth

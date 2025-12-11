@@ -1,31 +1,43 @@
+/**
+ * TikTok OAuth Provider
+ * موفر مصادقة تيك توك
+ */
+
+import { BaseOAuthProvider } from './BaseOAuthProvider';
 import { OAuthUser } from './types';
 
-export class TikTokOAuth {
-    private clientKey: string;
-    private clientSecret: string;
-    private redirectUri: string;
+export class TikTokOAuth extends BaseOAuthProvider {
+    readonly providerName = 'tiktok';
+    protected readonly authBaseUrl = 'https://www.tiktok.com/v2/auth/authorize/';
+    protected readonly tokenUrl = 'https://open.tiktokapis.com/v2/oauth/token/';
+    protected readonly userInfoUrl = 'https://open.tiktokapis.com/v2/user/info/';
+    protected readonly scopes = 'user.info.basic';
+
+    // TikTok uses 'client_key' instead of 'client_id'
+    private readonly clientKey: string;
 
     constructor(clientKey: string, clientSecret: string, redirectUri: string) {
+        super({ clientId: clientKey, clientSecret, redirectUri });
         this.clientKey = clientKey;
-        this.clientSecret = clientSecret;
-        this.redirectUri = redirectUri;
     }
 
     getAuthUrl(state: string, lang: string): string {
         const params = new URLSearchParams({
             client_key: this.clientKey,
             redirect_uri: this.redirectUri,
-            scope: 'user.info.basic',
+            scope: this.scopes,
             response_type: 'code',
             state: JSON.stringify({ state, lang }),
             sandbox: '1',
         });
-        return `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`;
+        return `${this.authBaseUrl}?${params.toString()}`;
     }
 
     async getUser(code: string): Promise<OAuthUser> {
-        // 1. Get Token
-        const tokenResponse = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+        console.log(`[${this.providerName} OAuth] Starting getUser`);
+
+        // 1. Exchange code for token (TikTok uses client_key)
+        const tokenResponse = await fetch(this.tokenUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({
@@ -38,30 +50,41 @@ export class TikTokOAuth {
         });
 
         if (!tokenResponse.ok) {
-            throw new Error('Failed to get TikTok token');
+            const errorText = await tokenResponse.text();
+            console.error(`[${this.providerName} OAuth] Token request failed:`, errorText);
+            throw new Error(`Failed to get ${this.providerName} token`);
         }
 
         const tokenData = await tokenResponse.json() as any;
+        console.log(`[${this.providerName} OAuth] Token received successfully`);
 
-        // 2. Get User Info
-        const userResponse = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name', {
+        // 2. Fetch user info (with fields parameter)
+        const userUrl = `${this.userInfoUrl}?fields=open_id,union_id,avatar_url,display_name`;
+        const userResponse = await fetch(userUrl, {
             headers: { Authorization: `Bearer ${tokenData.access_token}` },
         });
 
         if (!userResponse.ok) {
-            throw new Error('Failed to get TikTok user info');
+            const errorText = await userResponse.text();
+            console.error(`[${this.providerName} OAuth] User info request failed:`, errorText);
+            throw new Error(`Failed to get ${this.providerName} user info`);
         }
 
         const userData = await userResponse.json() as any;
-        const user = userData.data.user;
+        console.log(`[${this.providerName} OAuth] User info received`);
 
+        // 3. Normalize to standard format
+        return this.normalizeUser(userData.data.user);
+    }
+
+    protected normalizeUser(rawData: any): OAuthUser {
         return {
-            id: user.open_id,
-            email: '', // TikTok doesn't provide email by default in basic scope
-            name: user.display_name,
-            picture: user.avatar_url,
-            provider: 'tiktok',
-            raw: userData,
+            id: rawData.open_id,
+            email: '', // TikTok doesn't provide email in basic scope
+            name: rawData.display_name,
+            picture: rawData.avatar_url,
+            provider: this.providerName,
+            raw: rawData,
         };
     }
 }
