@@ -5,7 +5,8 @@
  */
 
 export { State } from './State';
-export type { Language } from './State';
 export { ApiClient } from './ApiClient';
 export type { ApiOptions } from './ApiClient';
 export { CookieUtils } from './CookieUtils';
+export type { Language } from '../../i18n';
+

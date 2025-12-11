@@ -4,8 +4,9 @@
  * @module client/helpers/DateFormatter
  */
 
-import { State, Language } from '../core/State';
-import { t } from '../../i18n/translations';
+import { State } from '../core/State';
+import type { Language } from '../../config/types';
+import { t, getLocale } from '../../i18n';
 
 /**
  * Date Formatter Class
@@ -13,7 +14,7 @@ import { t } from '../../i18n/translations';
  */
 export class DateFormatter {
     /**
-     * Format date
+     * Format date using locale from country settings
      */
     static format(dateStr: string, lang: Language = State.lang): string {
         if (!dateStr) return '';
@@ -25,7 +26,9 @@ export class DateFormatter {
             hour: '2-digit',
             minute: '2-digit'
         };
-        return date.toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', options);
+        // Use getLocale with country from State, fallback to lang-based locale
+        const locale = getLocale(State.country, lang);
+        return date.toLocaleDateString(locale, options);
     }
 
     /**
@@ -41,20 +44,14 @@ export class DateFormatter {
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
 
-        if (lang === 'ar') {
-            if (minutes < 1) return t('client.time.now', lang);
-            if (minutes < 60) return t('client.time.minutes_ago', lang).replace('{n}', String(minutes));
-            if (hours < 24) return t('client.time.hours_ago', lang).replace('{n}', String(hours));
-            if (days < 7) return t('client.time.days_ago', lang).replace('{n}', String(days));
-            return this.format(dateStr, lang);
-        } else {
-            if (minutes < 1) return t('client.time.now', lang);
-            if (minutes < 60) return t('client.time.minutes_ago', lang).replace('{n}', String(minutes));
-            if (hours < 24) return t('client.time.hours_ago', lang).replace('{n}', String(hours));
-            if (days < 7) return t('client.time.days_ago', lang).replace('{n}', String(days));
-            return this.format(dateStr, lang);
-        }
+        // Use translations - works for any language
+        if (minutes < 1) return t('client.time.now', lang);
+        if (minutes < 60) return t('client.time.minutes_ago', lang).replace('{n}', String(minutes));
+        if (hours < 24) return t('client.time.hours_ago', lang).replace('{n}', String(hours));
+        if (days < 7) return t('client.time.days_ago', lang).replace('{n}', String(days));
+        return this.format(dateStr, lang);
     }
 }
 
 export default DateFormatter;
+

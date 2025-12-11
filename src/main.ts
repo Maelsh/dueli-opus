@@ -9,7 +9,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
-import { translations, getDir } from './i18n';
+import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE, TRANSLATED_LANGUAGES } from './i18n';
 
 // Import API Routes - استيراد مسارات API
 import categoriesRoutes from './modules/api/categories/routes';
@@ -42,11 +42,13 @@ app.use('/api/*', cors());
 app.use('*', async (c, next) => {
   const langParam = c.req.query('lang');
   const cookieLang = c.req.header('Cookie')?.match(/lang=(\w+)/)?.[1];
-  let lang: Language = 'ar';
 
-  if (langParam === 'en' || langParam === 'ar') {
+  // Priority: URL param > Cookie > DEFAULT_LANGUAGE
+  let lang: Language = DEFAULT_LANGUAGE;
+
+  if (langParam) {
     lang = langParam;
-  } else if (cookieLang === 'en' || cookieLang === 'ar') {
+  } else if (cookieLang) {
     lang = cookieLang as Language;
   }
 
@@ -77,8 +79,8 @@ app.route('/', staticPagesRoutes);
 // Home Page - الصفحة الرئيسية
 app.get('/', (c) => {
   const lang = c.get('lang');
-  const tr = translations[lang];
-  const isRTL = lang === 'ar';
+  const tr = translations[getUILanguage(lang)];
+  const rtl = isRTL(lang);
 
   const content = `
     ${getNavigation(lang)}
@@ -95,7 +97,7 @@ app.get('/', (c) => {
               placeholder="${tr.search_placeholder}"
               class="search-input"
             />
-            <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${isRTL ? 'right-4' : 'left-4'}">
+            <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${rtl ? 'right-4' : 'left-4'}">
               <i class="fas fa-search text-lg"></i>
             </div>
           </div>
@@ -144,13 +146,13 @@ app.get('/', (c) => {
       <main class="container mx-auto px-4 pb-24 space-y-10" id="mainContent">
         <div class="flex flex-col items-center justify-center py-16">
           <i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i>
-          <p class="text-gray-500">${lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+          <p class="text-gray-500">${tr.loading}</p>
         </div>
       </main>
     </div>
     
     <!-- Create Competition FAB (hidden for visitors) -->
-    <div id="createCompBtn" class="hidden fixed bottom-6 ${isRTL ? 'left-6' : 'right-6'} z-40">
+    <div id="createCompBtn" class="hidden fixed bottom-6 ${rtl ? 'left-6' : 'right-6'} z-40">
       <a href="/create?lang=${lang}" class="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:scale-105 transition-all font-bold">
         <i class="fas fa-plus"></i>
         <span class="hidden sm:inline">${tr.create_competition}</span>
@@ -161,7 +163,7 @@ app.get('/', (c) => {
     
     <script>
       const lang = '${lang}';
-      const isRTL = ${isRTL};
+      const isRTL = ${rtl};
       const tr = ${JSON.stringify(tr)};
       let currentMainTab = 'live';
       let currentSubTab = 'all';
@@ -200,19 +202,19 @@ app.get('/', (c) => {
           let html = '';
           
           if (currentSubTab === 'all' && data.data.length > 0) {
-            html += renderSection(tr.sections?.suggested || (lang === 'ar' ? 'مقترح لك' : 'Suggested for You'), data.data.slice(0, 8), 'fas fa-fire', 'purple');
+            html += renderSection(tr.sections?.suggested || tr.loading, data.data.slice(0, 8), 'fas fa-fire', 'purple');
           }
           
           if ((currentSubTab === 'all' || currentSubTab === 'dialogue') && dialogueItems.length > 0) {
-            html += renderSection(tr.sections?.dialogue || (lang === 'ar' ? 'ساحة الحوار' : 'Dialogue Space'), dialogueItems, 'fas fa-comments', 'purple');
+            html += renderSection(tr.sections?.dialogue || tr.dialogue, dialogueItems, 'fas fa-comments', 'purple');
           }
           
           if ((currentSubTab === 'all' || currentSubTab === 'science') && scienceItems.length > 0) {
-            html += renderSection(tr.sections?.science || (lang === 'ar' ? 'المختبر العلمي' : 'Science Lab'), scienceItems, 'fas fa-flask', 'cyan');
+            html += renderSection(tr.sections?.science || tr.science, scienceItems, 'fas fa-flask', 'cyan');
           }
           
           if ((currentSubTab === 'all' || currentSubTab === 'talents') && talentsItems.length > 0) {
-            html += renderSection(tr.sections?.talents || (lang === 'ar' ? 'مسرح المواهب' : 'Talent Stage'), talentsItems, 'fas fa-star', 'amber');
+            html += renderSection(tr.sections?.talents || tr.talents, talentsItems, 'fas fa-star', 'amber');
           }
           
           if (!html) {
@@ -222,7 +224,7 @@ app.get('/', (c) => {
           container.innerHTML = html;
         } catch (err) {
           console.error(err);
-          container.innerHTML = '<div class="text-center py-16 text-red-500">' + (lang === 'ar' ? 'حدث خطأ' : 'Error loading') + '</div>';
+          container.innerHTML = '<div class="text-center py-16 text-red-500">' + tr.error_loading + '</div>';
         }
       }
       
@@ -233,7 +235,7 @@ app.get('/', (c) => {
               <i class="fas fa-search text-3xl text-gray-300 dark:text-gray-600"></i>
             </div>
             <p class="text-lg font-medium text-gray-400">\${tr.no_duels}</p>
-            <p class="text-sm text-gray-400 mt-1">\${lang === 'ar' ? 'جرب تصفية أخرى أو أنشئ منافسة جديدة' : 'Try a different filter or create a new competition'}</p>
+            <p class="text-sm text-gray-400 mt-1">\${tr.try_different_filter}</p>
           </div>
         \`;
       }
@@ -302,9 +304,9 @@ app.get('/', (c) => {
               </div>
 
               <div class="absolute top-3 \${isRTL ? 'right-3' : 'left-3'} z-20">
-                \${isLive ? \`<span class="badge-live"><span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>\${tr.status_live || 'مباشر'}</span>\` : 
-                  isPending ? \`<span class="badge-pending">\${tr.status_pending || 'قريباً'}</span>\` : 
-                  \`<span class="badge-recorded"><i class="fas fa-play text-xs"></i>\${tr.recorded || 'مسجل'}</span>\`}
+                \${isLive ? \`<span class="badge-live"><span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>\${tr.status_live}</span>\` : 
+                  isPending ? \`<span class="badge-pending">\${tr.status_pending}</span>\` : 
+                  \`<span class="badge-recorded"><i class="fas fa-play text-xs"></i>\${tr.recorded}</span>\`}
               </div>
 
               <div class="absolute bottom-3 \${isRTL ? 'left-3' : 'right-3'} z-20">
@@ -394,17 +396,17 @@ app.get('/explore', explorePage);
 // ============================================
 
 app.notFound((c) => {
-  const lang = c.get('lang') || 'ar';
-  const tr = translations[lang];
+  const lang = c.get('lang') || DEFAULT_LANGUAGE;
+  const tr = translations[getUILanguage(lang)];
 
   const content = `
     ${getNavigation(lang)}
     <div class="flex-1 flex items-center justify-center py-20">
       <div class="text-center">
         <h1 class="text-6xl font-black text-gray-200 dark:text-gray-800 mb-4">404</h1>
-        <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">${lang === 'ar' ? 'الصفحة غير موجودة' : 'Page Not Found'}</p>
+        <p class="text-xl text-gray-600 dark:text-gray-400 mb-8">${tr.page_not_found}</p>
         <a href="/?lang=${lang}" class="btn-primary inline-block">
-          ${lang === 'ar' ? 'العودة للرئيسية' : 'Back to Home'}
+          ${tr.back_to_home}
         </a>
       </div>
     </div>
@@ -416,7 +418,9 @@ app.notFound((c) => {
 
 app.onError((err, c) => {
   console.error(err);
-  return c.text('Internal Server Error', 500);
+  const lang = c.get('lang') || DEFAULT_LANGUAGE;
+  const tr = translations[getUILanguage(lang)];
+  return c.text(tr.error_occurred || 'Internal Server Error', 500);
 });
 
 export default app;

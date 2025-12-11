@@ -5,14 +5,14 @@
 
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
-import { translations } from '../../i18n';
+import { translations, getUILanguage, isRTL, getLocalizedName } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 
 export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
-  const tr = translations[lang];
-  const isRTL = lang === 'ar';
+  const tr = translations[getUILanguage(lang)];
+  const rtl = isRTL(lang);
 
   const content = `
     ${getNavigation(lang)}
@@ -22,7 +22,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
       <div class="max-w-2xl mx-auto">
         <div class="flex items-center gap-4 mb-6">
           <a href="/?lang=${lang}" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
-            <i class="fas fa-arrow-${isRTL ? 'right' : 'left'} text-xl text-gray-600 dark:text-gray-300"></i>
+            <i class="fas fa-arrow-${rtl ? 'right' : 'left'} text-xl text-gray-600 dark:text-gray-300"></i>
           </a>
           <h1 class="text-2xl font-bold text-gray-900 dark:text-white">${tr.create_competition}</h1>
         </div>
@@ -37,7 +37,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
     
     <script>
       const lang = '${lang}';
-      const isRTL = ${isRTL};
+      const isRTL = ${rtl};
       const tr = ${JSON.stringify(tr)};
       let categories = [];
       
@@ -84,7 +84,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.select_category} *</label>
               <select name="category_id" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" onchange="updateSubcategories(this.value)">
                 <option value="">\${tr.select_category}</option>
-                \${mainCats.map(c => \`<option value="\${c.id}">\${lang === 'ar' ? c.name_ar : c.name_en}</option>\`).join('')}
+                \${mainCats.map(c => \`<option value="\${c.id}">\${getLocalizedName(c, lang)}</option>\`).join('')}
               </select>
             </div>
             
@@ -102,7 +102,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
             
             <div>
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_rules} *</label>
-              <textarea name="rules" rows="5" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" placeholder="\${lang === 'ar' ? '1. مدة الحديث لكل طرف\\n2. قواعد الحوار\\n3. معايير التقييم' : '1. Speaking time per side\\n2. Dialogue rules\\n3. Evaluation criteria'}"></textarea>
+              <textarea name="rules" rows="5" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" placeholder="\${tr.rules_placeholder}"></textarea>
             </div>
             
             <div>
@@ -124,7 +124,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
         const subCats = categories.filter(c => c.parent_id === parseInt(parentId));
         const select = document.getElementById('subcategorySelect');
         select.innerHTML = '<option value="">' + tr.select_subcategory + '</option>' +
-          subCats.map(c => \`<option value="\${c.id}">\${lang === 'ar' ? c.name_ar : c.name_en}</option>\`).join('');
+          subCats.map(c => \`<option value="\${c.id}">\${getLocalizedName(c, lang)}</option>\`).join('');
       }
       
       async function handleCreate(e) {
@@ -156,7 +156,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           }
         } catch (err) {
           console.error(err);
-          showToast(lang === 'ar' ? 'حدث خطأ' : 'Error occurred', 'error');
+          showToast(tr.error_occurred, 'error');
         }
       }
     </script>

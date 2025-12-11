@@ -74,8 +74,9 @@ export interface Competition {
 // Category Interface - واجهة الفئة
 export interface Category {
   id: number;
-  name_ar: string;
-  name_en: string;
+  name_key?: string;      // i18n translation key (e.g., 'category.sports')
+  name_ar?: string;       // Arabic name fallback
+  name_en?: string;       // English name fallback
   icon?: string;
   color?: string;
   slug?: string;

@@ -5,15 +5,15 @@
 
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
-import { translations } from '../../i18n';
+import { translations, getUILanguage, isRTL, getCategoryName } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 
 export async function competitionPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
-  const tr = translations[lang];
+  const tr = translations[getUILanguage(lang)];
   const id = c.req.param('id');
-  const isRTL = lang === 'ar';
+  const rtl = isRTL(lang);
 
   const content = `
     ${getNavigation(lang)}
@@ -22,7 +22,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     <div class="container mx-auto px-4 py-6" id="competitionContainer">
       <div class="flex flex-col items-center justify-center py-16">
         <i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i>
-        <p class="text-gray-500">${lang === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+        <p class="text-gray-500">${tr.loading}</p>
       </div>
     </div>
     
@@ -30,10 +30,31 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     
     <script>
       const lang = '${lang}';
-      const isRTL = ${isRTL};
+      const isRTL = ${rtl};
       const competitionId = '${id}';
       const tr = ${JSON.stringify(tr)};
       let competitionData = null;
+      
+      // Client-side getCategoryName function
+      function getCategoryName(category, language) {
+        // 1. Try category_slug as translation key (convert 'current-affairs' to 'current_affairs')
+        const slug = category.category_slug || category.slug;
+        if (slug) {
+          const slugKey = slug.replace(/-/g, '_');
+          if (tr[slugKey]) return tr[slugKey];
+        }
+        
+        // 2. Fallback to category_name based on language
+        const langKey = language === 'ar' ? 'category_name_ar' : 'category_name_en';
+        if (category[langKey]) return category[langKey];
+        
+        // 3. Fallback to name based on language
+        const nameKey = language === 'ar' ? 'name_ar' : 'name_en';
+        if (category[nameKey]) return category[nameKey];
+        
+        // 4. Fallback to English
+        return category.category_name_en || category.name_en || '';
+      }
       
       document.addEventListener('DOMContentLoaded', async () => {
         await checkAuth();
@@ -49,7 +70,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             document.getElementById('competitionContainer').innerHTML = \`
               <div class="text-center py-16">
                 <i class="fas fa-exclamation-circle text-6xl text-red-400 mb-4"></i>
-                <h2 class="text-2xl font-bold text-gray-600">\${tr.not_found || 'غير موجود'}</h2>
+                <h2 class="text-2xl font-bold text-gray-600">\${tr.not_found}</h2>
               </div>
             \`;
             return;
@@ -95,7 +116,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   </span>
                   <span class="text-sm text-gray-500">
                     <i class="\${comp.category_icon} mr-1"></i>
-                    \${lang === 'ar' ? comp.category_name_ar : comp.category_name_en}
+                    \${getCategoryName(comp, lang)}
                   </span>
                 </div>
                 <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">\${comp.title}</h1>
@@ -112,13 +133,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   \` : \`
                     <div class="text-center text-white">
                       <i class="fas fa-video text-6xl opacity-50 mb-4"></i>
-                      <p>\${isPending ? tr.status_pending : (lang === 'ar' ? 'البث غير متاح' : 'Stream not available')}</p>
+                      <p>\${isPending ? tr.status_pending : tr.stream_not_available}</p>
                     </div>
                   \`}
                 </div>
                 
                 <div class="card p-6">
-                  <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">\${lang === 'ar' ? 'المتنافسون' : 'Competitors'}</h3>
+                  <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">\${tr.competitors}</h3>
                   <div class="grid grid-cols-2 gap-6">
                     <div class="text-center">
                       <img src="\${comp.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.creator_name}" class="w-20 h-20 rounded-full mx-auto mb-3 border-4 border-purple-200 dark:border-purple-800">
@@ -135,7 +156,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         <div class="w-20 h-20 rounded-full mx-auto mb-3 bg-gray-100 dark:bg-gray-700 flex items-center justify-center border-4 border-dashed border-gray-300 dark:border-gray-600">
                           <i class="fas fa-question text-3xl text-gray-400"></i>
                         </div>
-                        <h4 class="font-bold text-gray-400">\${lang === 'ar' ? 'بانتظار منافس' : 'Awaiting Opponent'}</h4>
+                        <h4 class="font-bold text-gray-400">\${tr.awaiting_opponent}</h4>
                         \${window.currentUser && !isCreator && !hasRequested ? \`
                           <button onclick="requestJoin()" class="join-btn mt-3">
                             <i class="fas fa-hand-paper"></i>
@@ -149,7 +170,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         \` : !window.currentUser ? \`
                           <button onclick="showLoginModal()" class="join-btn mt-3">
                             <i class="fas fa-sign-in-alt"></i>
-                            \${lang === 'ar' ? 'سجل دخول للمنافسة' : 'Login to Compete'}
+                            \${tr.login_to_compete}
                           </button>
                         \` : ''}
                       \`}
@@ -190,7 +211,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           <p class="text-sm text-gray-600 dark:text-gray-300">\${cm.content}</p>
                         </div>
                       </div>
-                    \`).join('') : '<p class="text-center text-gray-400">' + (lang === 'ar' ? 'لا توجد تعليقات بعد' : 'No comments yet') + '</p>'}
+                    \`).join('') : '<p class="text-center text-gray-400">' + tr.no_comments_yet + '</p>'}
                   </div>
                   <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                     \${window.currentUser ? \`
@@ -223,7 +244,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           });
           const data = await res.json();
           if (data.success) {
-            showToast(tr.request_sent || (lang === 'ar' ? 'تم إرسال الطلب' : 'Request sent'), 'success');
+            showToast(tr.request_sent, 'success');
             loadCompetition();
           }
         } catch (err) { console.error(err); }

@@ -5,14 +5,14 @@
 
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
-import { translations } from '../../i18n';
+import { translations, getUILanguage, isRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 
 export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
-  const tr = translations[lang];
-  const isRTL = lang === 'ar';
+  const tr = translations[getUILanguage(lang)];
+  const rtl = isRTL(lang);
 
   const content = `
     ${getNavigation(lang)}
@@ -21,7 +21,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     <div class="container mx-auto px-4 py-8">
       <div class="flex items-center gap-4 mb-6">
         <a href="/?lang=${lang}" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
-          <i class="fas fa-arrow-${isRTL ? 'right' : 'left'} text-xl text-gray-600 dark:text-gray-300"></i>
+          <i class="fas fa-arrow-${rtl ? 'right' : 'left'} text-xl text-gray-600 dark:text-gray-300"></i>
         </a>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">${tr.explore}</h1>
       </div>

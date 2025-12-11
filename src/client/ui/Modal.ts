@@ -5,7 +5,7 @@
  */
 
 import { State } from '../core/State';
-import { t } from '../../i18n/translations';
+import { t } from '../../i18n';
 
 /**
  * Modal Management Class

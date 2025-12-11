@@ -4,15 +4,15 @@
  */
 
 import type { Context } from 'hono';
-import type { Bindings, Variables, Language } from '../../config/types';
-import { translations } from '../../i18n';
+import type { Bindings, Variables } from '../../config/types';
+import { translations, getUILanguage, isRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 
 export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
-  const tr = translations[lang];
-  const isRTL = lang === 'ar';
+  const tr = translations[getUILanguage(lang)];
+  const rtl = isRTL(lang);
 
   const content = `
     ${getNavigation(lang)}
@@ -105,7 +105,7 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
             <div class="w-32 h-32 md:w-40 md:h-40 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center border-2 border-white/20 shadow-2xl shrink-0">
               <span class="text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-amber-400">M</span>
             </div>
-            <div class="text-center md:text-${isRTL ? 'right' : 'left'}">
+            <div class="text-center md:text-${rtl ? 'right' : 'left'}">
               <h2 class="text-3xl font-bold mb-4">
                 ${tr.about_developed_by}
               </h2>

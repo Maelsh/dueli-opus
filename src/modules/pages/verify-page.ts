@@ -5,13 +5,13 @@
 
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
-import { translations } from '../../i18n';
+import { translations, getUILanguage } from '../../i18n';
 import { getNavigation, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 
 export async function verifyPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
-  const tr = translations[lang];
+  const tr = translations[getUILanguage(lang)];
   const token = c.req.query('token');
 
   let message = '';

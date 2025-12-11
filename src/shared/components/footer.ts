@@ -4,13 +4,13 @@
  */
 
 import type { Language } from '../../config/types';
-import { translations } from '../../i18n';
+import { translations, getUILanguage } from '../../i18n';
 
 /**
  * Get Footer HTML - الحصول على HTML التذييل
  */
 export function getFooter(lang: Language): string {
-  const tr = translations[lang];
+  const tr = translations[getUILanguage(lang)];
 
   return `
     <footer class="bg-gray-50 dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-gray-800 py-6 mt-auto">

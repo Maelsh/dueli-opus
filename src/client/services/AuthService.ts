@@ -5,11 +5,10 @@
  */
 
 import { State } from '../core/State';
-import { ApiClient } from '../core/ApiClient';
 import { CookieUtils } from '../core/CookieUtils';
 import { Toast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
-import { t } from '../../i18n/translations';
+import { t } from '../../i18n';
 
 /**
  * API Response Types
@@ -221,9 +220,10 @@ export class AuthService {
         const email = emailInput?.value;
         const password = passwordInput?.value;
 
-        // Get country and language from cookies
-        const country = CookieUtils.get('country') || 'SA';
-        const language = State.lang;
+        // Get country and language using centralized State methods
+        // Priority: User DB > Cookie > Browser/Device > Default (US/en)
+        const country = State.getCountry();
+        const language = State.getLanguage();
 
         try {
             const res = await fetch(`/api/auth/register?lang=${State.lang}`, {

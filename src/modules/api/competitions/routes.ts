@@ -5,6 +5,7 @@
 
 import { Hono } from 'hono';
 import type { Bindings, Variables, ApiResponse, Competition } from '../../../config/types';
+import { DEFAULT_LANGUAGE } from '../../../i18n';
 
 const competitionsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -32,6 +33,7 @@ competitionsRoutes.get('/', async (c) => {
              cat.slug as category_slug,
              subcat.name_ar as subcategory_name_ar,
              subcat.name_en as subcategory_name_en,
+             subcat.slug as subcategory_slug,
              subcat.color as subcategory_color,
              u1.display_name as creator_name,
              u1.avatar_url as creator_avatar,
@@ -91,16 +93,16 @@ competitionsRoutes.get('/', async (c) => {
     params.push(limit, offset);
 
     const competitions = await DB.prepare(query).bind(...params).all();
-    
-    return c.json<ApiResponse>({ 
-      success: true, 
-      data: competitions.results 
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: competitions.results
     });
   } catch (error) {
     console.error('Competitions fetch error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to fetch competitions' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch competitions'
     }, 500);
   }
 });
@@ -120,8 +122,10 @@ competitionsRoutes.get('/:id', async (c) => {
              cat.name_en as category_name_en,
              cat.icon as category_icon,
              cat.color as category_color,
+             cat.slug as category_slug,
              subcat.name_ar as subcategory_name_ar,
              subcat.name_en as subcategory_name_en,
+             subcat.slug as subcategory_slug,
              u1.display_name as creator_name,
              u1.avatar_url as creator_avatar,
              u1.username as creator_username,
@@ -139,9 +143,9 @@ competitionsRoutes.get('/:id', async (c) => {
     `).bind(id).first();
 
     if (!competition) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Competition not found' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Competition not found'
       }, 404);
     }
 
@@ -186,9 +190,9 @@ competitionsRoutes.get('/:id', async (c) => {
     });
   } catch (error) {
     console.error('Competition fetch error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to fetch competition' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch competition'
     }, 500);
   }
 });
@@ -205,26 +209,26 @@ competitionsRoutes.post('/', async (c) => {
     const { title, description, rules, category_id, subcategory_id, creator_id, language, country, scheduled_at } = body;
 
     if (!title || !rules || !category_id || !creator_id) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Missing required fields' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Missing required fields'
       }, 400);
     }
 
     const result = await DB.prepare(`
       INSERT INTO competitions (title, description, rules, category_id, subcategory_id, creator_id, language, country, scheduled_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(title, description, rules, category_id, subcategory_id || null, creator_id, language || 'ar', country, scheduled_at || null).run();
+    `).bind(title, description, rules, category_id, subcategory_id || null, creator_id, language || DEFAULT_LANGUAGE, country, scheduled_at || null).run();
 
-    return c.json<ApiResponse>({ 
-      success: true, 
-      data: { id: result.meta.last_row_id } 
+    return c.json<ApiResponse>({
+      success: true,
+      data: { id: result.meta.last_row_id }
     });
   } catch (error) {
     console.error('Competition create error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to create competition' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to create competition'
     }, 500);
   }
 });
@@ -242,9 +246,9 @@ competitionsRoutes.post('/:id/request', async (c) => {
     const { requester_id, message } = body;
 
     if (!requester_id) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Requester ID required' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Requester ID required'
       }, 400);
     }
 
@@ -255,9 +259,9 @@ competitionsRoutes.post('/:id/request', async (c) => {
     `).bind(competitionId, requester_id).first();
 
     if (existing) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Already requested' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Already requested'
       }, 400);
     }
 
@@ -269,21 +273,22 @@ competitionsRoutes.post('/:id/request', async (c) => {
     // Create notification for competition creator
     const comp = await DB.prepare('SELECT creator_id, title FROM competitions WHERE id = ?').bind(competitionId).first() as any;
     if (comp) {
+      // Store translation key - will be translated on frontend
       await DB.prepare(`
         INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id)
-        VALUES (?, 'request', 'طلب انضمام جديد', ?, 'competition', ?)
-      `).bind(comp.creator_id, `طلب انضمام للمنافسة: ${comp.title}`, competitionId).run();
+        VALUES (?, 'request', 'notification.new_join_request', ?, 'competition', ?)
+      `).bind(comp.creator_id, `notification.join_request_for:${comp.title}`, competitionId).run();
     }
 
-    return c.json<ApiResponse>({ 
-      success: true, 
-      data: { id: result.meta.last_row_id } 
+    return c.json<ApiResponse>({
+      success: true,
+      data: { id: result.meta.last_row_id }
     });
   } catch (error) {
     console.error('Request join error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to send request' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to send request'
     }, 500);
   }
 });
@@ -308,9 +313,9 @@ competitionsRoutes.delete('/:id/request', async (c) => {
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('Cancel request error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to cancel request' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to cancel request'
     }, 500);
   }
 });
@@ -345,18 +350,18 @@ competitionsRoutes.post('/:id/accept-request', async (c) => {
       WHERE competition_id = ? AND id != ? AND status = 'pending'
     `).bind(competitionId, request_id).run();
 
-    // Notify accepted user
+    // Notify accepted user - store translation key
     await DB.prepare(`
       INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id)
-      VALUES (?, 'accepted', 'تم قبول طلبك', 'تم قبول طلبك للانضمام للمنافسة', 'competition', ?)
+      VALUES (?, 'accepted', 'notification.request_accepted', 'notification.request_accepted_message', 'competition', ?)
     `).bind(requester_id, competitionId).run();
 
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('Accept request error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to accept request' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to accept request'
     }, 500);
   }
 });
@@ -382,9 +387,9 @@ competitionsRoutes.post('/:id/start', async (c) => {
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('Start competition error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to start competition' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to start competition'
     }, 500);
   }
 });
@@ -410,9 +415,9 @@ competitionsRoutes.post('/:id/end', async (c) => {
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('End competition error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to end competition' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to end competition'
     }, 500);
   }
 });
@@ -430,9 +435,9 @@ competitionsRoutes.post('/:id/comments', async (c) => {
     const { user_id, content, is_live } = body;
 
     if (!user_id || !content) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Missing required fields' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Missing required fields'
       }, 400);
     }
 
@@ -443,15 +448,15 @@ competitionsRoutes.post('/:id/comments', async (c) => {
 
     await DB.prepare('UPDATE competitions SET total_comments = total_comments + 1 WHERE id = ?').bind(competitionId).run();
 
-    return c.json<ApiResponse>({ 
-      success: true, 
-      data: { id: result.meta.last_row_id } 
+    return c.json<ApiResponse>({
+      success: true,
+      data: { id: result.meta.last_row_id }
     });
   } catch (error) {
     console.error('Add comment error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to add comment' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to add comment'
     }, 500);
   }
 });
@@ -469,9 +474,9 @@ competitionsRoutes.post('/:id/rate', async (c) => {
     const { user_id, competitor_id, rating } = body;
 
     if (!user_id || !competitor_id || !rating || rating < 1 || rating > 5) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Invalid rating data' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Invalid rating data'
       }, 400);
     }
 
@@ -483,9 +488,9 @@ competitionsRoutes.post('/:id/rate', async (c) => {
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('Add rating error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to add rating' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to add rating'
     }, 500);
   }
 });

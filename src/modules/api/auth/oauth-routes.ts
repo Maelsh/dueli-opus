@@ -10,6 +10,7 @@ import { GoogleOAuth } from '../../../lib/oauth/google';
 import { FacebookOAuth } from '../../../lib/oauth/facebook';
 import { MicrosoftOAuth } from '../../../lib/oauth/microsoft';
 import { TikTokOAuth } from '../../../lib/oauth/tiktok';
+import { translations, getUILanguage, DEFAULT_LANGUAGE, DEFAULT_COUNTRY } from '../../../i18n';
 
 const oauthRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -39,15 +40,15 @@ function getOAuthProvider(provider: string, env: Bindings, redirectBase: string)
  */
 oauthRoutes.get('/:provider', async (c) => {
   const provider = c.req.param('provider');
-  const lang = c.req.query('lang') || 'ar';
+  const lang = c.req.query('lang') || DEFAULT_LANGUAGE;
   const url = new URL(c.req.url);
   const origin = `${url.protocol}//${url.host}`;
 
   const oauth = getOAuthProvider(provider, c.env, origin);
   if (!oauth) {
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Invalid provider' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Invalid provider'
     }, 400);
   }
 
@@ -70,14 +71,14 @@ oauthRoutes.get('/:provider/callback', async (c) => {
   const origin = `${url.protocol}//${url.host}`;
 
   // Parse state to get lang
-  let lang = 'ar';
+  let lang = DEFAULT_LANGUAGE;
   try {
     if (stateParam) {
       const stateObj = JSON.parse(stateParam);
-      lang = stateObj.lang || 'ar';
+      lang = stateObj.lang || DEFAULT_LANGUAGE;
     }
   } catch (e) {
-    // Ignore parse error, default to ar
+    // Ignore parse error, default to DEFAULT_LANGUAGE
   }
 
   if (!code) {
@@ -121,12 +122,13 @@ oauthRoutes.get('/:provider/callback', async (c) => {
 
       const result = await DB.prepare(`
         INSERT INTO users (username, email, password_hash, display_name, country, language, oauth_provider, oauth_id, avatar_url, is_active, created_at)
-        VALUES (?, ?, ?, ?, 'SA', ?, ?, ?, ?, 1, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))
       `).bind(
         username,
         oauthUser.email || '',
         passwordHash,
         oauthUser.name || username,
+        DEFAULT_COUNTRY,
         lang,
         provider,
         oauthUser.id,
@@ -162,6 +164,7 @@ oauthRoutes.get('/:provider/callback', async (c) => {
  * OAuth Error HTML - صفحة خطأ OAuth
  */
 function getOAuthErrorHTML(lang: string, errorType: string): string {
+  const tr = translations[getUILanguage(lang)];
   return `
     <!DOCTYPE html>
     <html>
@@ -176,7 +179,7 @@ function getOAuthErrorHTML(lang: string, errorType: string): string {
         }
       </script>
       <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
-        ${lang === 'ar' ? 'حدث خطأ! جاري الإغلاق...' : 'Error! Closing...'}
+        ${tr.error_occurred} ${tr.close}...
       </p>
     </body>
     </html>
@@ -187,16 +190,17 @@ function getOAuthErrorHTML(lang: string, errorType: string): string {
  * OAuth Success HTML - صفحة نجاح OAuth
  */
 function getOAuthSuccessHTML(lang: string, sessionId: string): string {
+  const tr = translations[getUILanguage(lang)];
   return `
     <!DOCTYPE html>
     <html>
     <head><title>OAuth Success</title></head>
     <body style="font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f0fdf4;">
       <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto;">
-        <h2 style="color: #22c55e; margin: 0 0 20px 0;">✓ ${lang === 'ar' ? 'تم التسجيل بنجاح!' : 'Login Successful!'}</h2>
-        <p style="color: #666; margin: 0 0 20px 0;">${lang === 'ar' ? 'جاري إغلاق النافذة...' : 'Closing window...'}</p>
+        <h2 style="color: #22c55e; margin: 0 0 20px 0;">✓ ${tr.success}</h2>
+        <p style="color: #666; margin: 0 0 20px 0;">${tr.loading}</p>
         <button onclick="window.close()" style="background: #22c55e; color: white; border: none; padding: 10px 30px; border-radius: 6px; cursor: pointer; font-size: 16px;">
-          ${lang === 'ar' ? 'إغلاق' : 'Close'}
+          ${tr.close}
         </button>
       </div>
       <script>

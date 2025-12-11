@@ -4,20 +4,20 @@
  */
 
 import type { Language } from '../../config/types';
-import { translations } from '../../i18n';
+import { translations, getUILanguage, isRTL } from '../../i18n';
 
 /**
  * Get Login Modal HTML - الحصول على HTML نافذة تسجيل الدخول
  */
 export function getLoginModal(lang: Language): string {
-  const tr = translations[lang];
-  const isRTL = lang === 'ar';
+  const tr = translations[getUILanguage(lang)];
+  const rtl = isRTL(lang);
 
   return `
     <div id="loginModal" class="hidden fixed inset-0 z-[100]">
       <div class="modal-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="hideLoginModal()"></div>
       <div class="modal-content bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <button onclick="hideLoginModal()" class="absolute top-4 ${isRTL ? 'left-4' : 'right-4'} text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+        <button onclick="hideLoginModal()" class="absolute top-4 ${rtl ? 'left-4' : 'right-4'} text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
           <i class="fas fa-times text-xl"></i>
         </button>
         
@@ -30,10 +30,10 @@ export function getLoginModal(lang: Language): string {
         <!-- Tabs -->
         <div class="flex gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
           <button onclick="switchAuthTab('login')" id="loginTab" class="flex-1 py-2 rounded-md text-sm font-semibold transition-all bg-white dark:bg-gray-700 text-purple-600 dark:text-purple-400 shadow-sm">
-            ${lang === 'ar' ? 'تسجيل الدخول' : 'Login'}
+            ${tr.login_button}
           </button>
           <button onclick="switchAuthTab('register')" id="registerTab" class="flex-1 py-2 rounded-md text-sm font-semibold transition-all text-gray-600 dark:text-gray-400">
-            ${lang === 'ar' ? 'إنشاء حساب' : 'Register'}
+            ${tr.register_button}
           </button>
         </div>
 
@@ -44,26 +44,26 @@ export function getLoginModal(lang: Language): string {
         <div id="loginForm">
           <form onsubmit="handleLogin(event)" class="space-y-4 mb-6">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
               <input type="email" id="loginEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
             <div>
               <div class="flex justify-between items-center mb-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${lang === 'ar' ? 'كلمة المرور' : 'Password'}</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${tr.password_label}</label>
                 <button type="button" onclick="showForgotPassword()" class="text-sm text-purple-600 hover:text-purple-500 font-medium">
-                  ${lang === 'ar' ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
+                  ${tr.forgot_password}
                 </button>
               </div>
               <input type="password" id="loginPassword" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
             <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
-              ${lang === 'ar' ? 'تسجيل الدخول' : 'Login'}
+              ${tr.login_button}
             </button>
           </form>
 
           <div class="relative my-6">
             <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-200 dark:border-gray-700"></div></div>
-            <div class="relative flex justify-center text-sm"><span class="px-2 bg-white dark:bg-[#1a1a1a] text-gray-500">${lang === 'ar' ? 'أو' : 'Or'}</span></div>
+            <div class="relative flex justify-center text-sm"><span class="px-2 bg-white dark:bg-[#1a1a1a] text-gray-500">${tr.or_divider}</span></div>
           </div>
         
           <div class="grid grid-cols-2 gap-3">
@@ -100,13 +100,13 @@ export function getLoginModal(lang: Language): string {
         </div>
 
         <!-- Forgot Password Form -->
-        ${getForgotPasswordForm(lang, isRTL)}
+        ${getForgotPasswordForm(lang, rtl, tr)}
 
         <!-- Register Form -->
-        ${getRegisterForm(lang)}
+        ${getRegisterForm(lang, tr)}
         
         <p class="text-xs text-gray-400 text-center mt-6">
-          ${lang === 'ar' ? 'بالمتابعة، أنت توافق على شروط الخدمة وسياسة الخصوصية' : 'By continuing, you agree to our Terms and Privacy Policy'}
+          ${tr.terms_agreement}
         </p>
       </div>
     </div>
@@ -116,48 +116,48 @@ export function getLoginModal(lang: Language): string {
 /**
  * Get Forgot Password Form - نموذج نسيان كلمة المرور
  */
-function getForgotPasswordForm(lang: Language, isRTL: boolean): string {
+function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
   return `
     <div id="forgotPasswordForm" class="hidden">
       <div class="text-center mb-6">
         <button onclick="showLogin()" class="text-sm text-gray-500 hover:text-purple-600 mb-4 flex items-center justify-center gap-2 mx-auto">
-          <i class="fas fa-arrow-${isRTL ? 'right' : 'left'}"></i>
-          ${lang === 'ar' ? 'العودة لتسجيل الدخول' : 'Back to Login'}
+          <i class="fas fa-arrow-${rtl ? 'right' : 'left'}"></i>
+          ${tr.back_to_login}
         </button>
-        <h3 class="text-xl font-bold text-gray-900 dark:text-white">${lang === 'ar' ? 'استعادة كلمة المرور' : 'Reset Password'}</h3>
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white">${tr.reset_password_title}</h3>
       </div>
 
       <!-- Step 1: Email -->
       <form id="resetStep1" onsubmit="handleForgotPassword(event)" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
           <input type="email" id="resetEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
-          ${lang === 'ar' ? 'إرسال رمز التحقق' : 'Send Verification Code'}
+          ${tr.send_code}
         </button>
       </form>
 
       <!-- Step 2: Verify Code -->
       <form id="resetStep2" onsubmit="handleVerifyResetCode(event)" class="space-y-4 hidden">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'رمز التحقق' : 'Verification Code'}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.verification_code_label}</label>
           <input type="text" id="resetCode" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl tracking-widest">
-          <p class="text-xs text-gray-500 mt-2 text-center">${lang === 'ar' ? 'تم إرسال الرمز إلى بريدك الإلكتروني' : 'Code sent to your email'}</p>
+          <p class="text-xs text-gray-500 mt-2 text-center">${tr.code_sent_to_email}</p>
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
-          ${lang === 'ar' ? 'تحقق من الرمز' : 'Verify Code'}
+          ${tr.verify_code}
         </button>
       </form>
 
       <!-- Step 3: New Password -->
       <form id="resetStep3" onsubmit="handleResetPassword(event)" class="space-y-4 hidden">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'كلمة المرور الجديدة' : 'New Password'}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.new_password_label}</label>
           <input type="password" id="newPassword" required minlength="6" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
-          ${lang === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
+          ${tr.change_password}
         </button>
       </form>
     </div>
@@ -167,25 +167,25 @@ function getForgotPasswordForm(lang: Language, isRTL: boolean): string {
 /**
  * Get Register Form - نموذج التسجيل
  */
-function getRegisterForm(lang: Language): string {
+function getRegisterForm(lang: Language, tr: any): string {
   return `
     <div id="registerForm" class="hidden">
       <form onsubmit="handleRegister(event)" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'الاسم' : 'Name'}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.name_label}</label>
           <input type="text" id="registerName" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
           <input type="email" id="registerEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${lang === 'ar' ? 'كلمة المرور' : 'Password'}</label>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.password_label}</label>
           <input type="password" id="registerPassword" required minlength="6" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
-          <p class="text-xs text-gray-500 mt-1">${lang === 'ar' ? 'يجب أن تكون 6 أحرف على الأقل' : 'Must be at least 6 characters'}</p>
+          <p class="text-xs text-gray-500 mt-1">${tr.password_min_length}</p>
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
-          ${lang === 'ar' ? 'إنشاء حساب' : 'Create Account'}
+          ${tr.register_button}
         </button>
       </form>
     </div>

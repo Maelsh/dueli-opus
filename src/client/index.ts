@@ -35,7 +35,7 @@ import { Utils } from './helpers/Utils';
  */
 const CountryFunctions = {
     getCurrentCode(): string {
-        return CookieUtils.get('country') || 'SA';
+        return State.getCountry();
     },
 
     select(countryCode: string): void {

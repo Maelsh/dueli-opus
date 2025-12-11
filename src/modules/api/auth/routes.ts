@@ -6,11 +6,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables, ApiResponse, Language } from '../../../config/types';
 import { hashPassword, sendVerificationEmail, sendPasswordResetEmail, generateState, isEmailAllowed } from './helpers';
-import { GoogleOAuth } from '../../../lib/oauth/google';
-import { FacebookOAuth } from '../../../lib/oauth/facebook';
-import { MicrosoftOAuth } from '../../../lib/oauth/microsoft';
-import { TikTokOAuth } from '../../../lib/oauth/tiktok';
-import { translations } from '../../../i18n';
+import { translations, getUILanguage, DEFAULT_LANGUAGE, DEFAULT_COUNTRY } from '../../../i18n';
 
 const authRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -20,8 +16,8 @@ const authRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
  */
 authRoutes.post('/register', async (c) => {
   const { DB, RESEND_API_KEY } = c.env;
-  const lang = (c.req.query('lang') || 'ar') as Language;
-  const tr = translations[lang];
+  const lang = (c.req.query('lang') || DEFAULT_LANGUAGE) as Language;
+  const tr = translations[getUILanguage(lang)];
 
   if (!RESEND_API_KEY) {
     console.error('Missing RESEND_API_KEY');
@@ -61,9 +57,9 @@ authRoutes.post('/register', async (c) => {
     // Generate username from email
     const username = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // Use provided country/language or defaults
-    const userCountry = country || 'SA';
-    const userLanguage = language || 'ar';
+    // Use provided country/language or defaults from centralized config
+    const userCountry = country || DEFAULT_COUNTRY;
+    const userLanguage = language || DEFAULT_LANGUAGE;
 
     // Create user
     await DB.prepare(`
@@ -97,8 +93,8 @@ authRoutes.post('/register', async (c) => {
 authRoutes.get('/verify', async (c) => {
   const { DB } = c.env;
   const token = c.req.query('token');
-  const lang = (c.req.query('lang') || 'ar') as Language;
-  const tr = translations[lang];
+  const lang = (c.req.query('lang') || DEFAULT_LANGUAGE) as Language;
+  const tr = translations[getUILanguage(lang)];
 
   if (!token) {
     return c.json<ApiResponse>({
@@ -147,8 +143,8 @@ authRoutes.get('/verify', async (c) => {
  */
 authRoutes.post('/login', async (c) => {
   const { DB } = c.env;
-  const lang = (c.req.query('lang') || 'ar') as Language;
-  const tr = translations[lang];
+  const lang = (c.req.query('lang') || DEFAULT_LANGUAGE) as Language;
+  const tr = translations[getUILanguage(lang)];
 
   try {
     const body = await c.req.json();
@@ -280,8 +276,8 @@ authRoutes.post('/logout', async (c) => {
  */
 authRoutes.post('/resend-verification', async (c) => {
   const { DB, RESEND_API_KEY } = c.env;
-  const lang = (c.req.query('lang') || 'ar') as Language;
-  const tr = translations[lang];
+  const lang = (c.req.query('lang') || DEFAULT_LANGUAGE) as Language;
+  const tr = translations[getUILanguage(lang)];
 
   try {
     const body = await c.req.json();
@@ -333,8 +329,8 @@ authRoutes.post('/resend-verification', async (c) => {
  */
 authRoutes.post('/forgot-password', async (c) => {
   const { DB, RESEND_API_KEY } = c.env;
-  const lang = (c.req.query('lang') || 'ar') as Language;
-  const tr = translations[lang];
+  const lang = (c.req.query('lang') || DEFAULT_LANGUAGE) as Language;
+  const tr = translations[getUILanguage(lang)];
 
   try {
     const body = await c.req.json();
@@ -385,8 +381,8 @@ authRoutes.post('/forgot-password', async (c) => {
  */
 authRoutes.post('/verify-reset-code', async (c) => {
   const { DB } = c.env;
-  const lang = (c.req.query('lang') || 'ar') as Language;
-  const tr = translations[lang];
+  const lang = (c.req.query('lang') || DEFAULT_LANGUAGE) as Language;
+  const tr = translations[getUILanguage(lang)];
 
   try {
     const body = await c.req.json();
@@ -432,8 +428,8 @@ authRoutes.post('/verify-reset-code', async (c) => {
  */
 authRoutes.post('/reset-password', async (c) => {
   const { DB } = c.env;
-  const lang = (c.req.query('lang') || 'ar') as Language;
-  const tr = translations[lang];
+  const lang = (c.req.query('lang') || DEFAULT_LANGUAGE) as Language;
+  const tr = translations[getUILanguage(lang)];
 
   try {
     const body = await c.req.json();

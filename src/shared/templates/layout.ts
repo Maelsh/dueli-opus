@@ -4,10 +4,10 @@
  */
 
 import type { Language } from '../../config/types';
-import { translations, getDir, isRTL } from '../../i18n';
+import { translations, getUILanguage, getDir, isRTL } from '../../i18n';
 
 // Font mapping per language
-const fontMap: Record<Language, string> = {
+const fontMap: Record<string, string> = {
   'ar': "'Cairo'",
   'en': "'Inter'",
 };
@@ -17,7 +17,7 @@ const fontMap: Record<Language, string> = {
  */
 export function generateHTML(content: string, lang: Language, title: string = 'Dueli'): string {
   const dir = getDir(lang);
-  const tr = translations[lang];
+  const tr = translations[getUILanguage(lang)];
   const fontFamily = fontMap[lang] || "'Inter'";
 
   return `<!DOCTYPE html>

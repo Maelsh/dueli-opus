@@ -4,13 +4,13 @@
  */
 
 import type { Language } from '../../config/types';
-import { translations, isRTL as checkRTL } from '../../i18n';
+import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 
 /**
  * Get Navigation HTML - الحصول على HTML الملاحة
  */
 export function getNavigation(lang: Language): string {
-  const tr = translations[lang];
+  const tr = translations[getUILanguage(lang)];
   const isRTL = checkRTL(lang);
 
   return `

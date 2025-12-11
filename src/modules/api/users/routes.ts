@@ -25,9 +25,9 @@ usersRoutes.get('/:username', async (c) => {
     `).bind(username).first();
 
     if (!user) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'User not found' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'User not found'
       }, 404);
     }
 
@@ -35,7 +35,12 @@ usersRoutes.get('/:username', async (c) => {
     const following = await DB.prepare('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?').bind((user as any).id).first();
 
     const competitions = await DB.prepare(`
-      SELECT c.*, cat.name_ar, cat.name_en, cat.icon, cat.color
+      SELECT c.*, 
+             cat.name_ar as category_name_ar, 
+             cat.name_en as category_name_en, 
+             cat.icon as category_icon, 
+             cat.color as category_color,
+             cat.slug as category_slug
       FROM competitions c
       JOIN categories cat ON c.category_id = cat.id
       WHERE c.creator_id = ? OR c.opponent_id = ?
@@ -54,9 +59,9 @@ usersRoutes.get('/:username', async (c) => {
     });
   } catch (error) {
     console.error('User fetch error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to fetch user' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch user'
     }, 500);
   }
 });
@@ -70,9 +75,9 @@ usersRoutes.put('/preferences', async (c) => {
   const sessionId = c.req.header('Authorization')?.replace('Bearer ', '');
 
   if (!sessionId) {
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Unauthorized' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Unauthorized'
     }, 401);
   }
 
@@ -81,9 +86,9 @@ usersRoutes.put('/preferences', async (c) => {
     const session = await DB.prepare('SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime("now")').bind(sessionId).first();
 
     if (!session) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Unauthorized' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Unauthorized'
       }, 401);
     }
 
@@ -91,9 +96,9 @@ usersRoutes.put('/preferences', async (c) => {
     const { country, language } = body;
 
     if (!country || !language) {
-      return c.json<ApiResponse>({ 
-        success: false, 
-        error: 'Missing required fields' 
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Missing required fields'
       }, 400);
     }
 
@@ -105,9 +110,9 @@ usersRoutes.put('/preferences', async (c) => {
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('Update preferences error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to update preferences' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to update preferences'
     }, 500);
   }
 });
@@ -129,15 +134,15 @@ usersRoutes.get('/:id/requests', async (c) => {
       ORDER BY cr.created_at DESC
     `).bind(userId).all();
 
-    return c.json<ApiResponse>({ 
-      success: true, 
-      data: requests.results 
+    return c.json<ApiResponse>({
+      success: true,
+      data: requests.results
     });
   } catch (error) {
     console.error('User requests fetch error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to fetch requests' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch requests'
     }, 500);
   }
 });
@@ -159,9 +164,9 @@ usersRoutes.post('/:id/follow', async (c) => {
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('Follow user error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to follow' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to follow'
     }, 500);
   }
 });
@@ -183,9 +188,9 @@ usersRoutes.delete('/:id/follow', async (c) => {
     return c.json<ApiResponse>({ success: true });
   } catch (error) {
     console.error('Unfollow user error:', error);
-    return c.json<ApiResponse>({ 
-      success: false, 
-      error: 'Failed to unfollow' 
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to unfollow'
     }, 500);
   }
 });

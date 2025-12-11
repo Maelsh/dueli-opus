@@ -5,7 +5,7 @@
  */
 
 import { State } from '../core/State';
-import { t } from '../../i18n/translations';
+import { t, isRTL } from '../../i18n';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -25,7 +25,7 @@ export class Toast {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
         toast.textContent = message;
-        toast.style.cssText = State.lang === 'ar' ? 'left: 24px;' : 'right: 24px;';
+        toast.style.cssText = isRTL(State.lang) ? 'left: 24px;' : 'right: 24px;';
 
         document.body.appendChild(toast);
 

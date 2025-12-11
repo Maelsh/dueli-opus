@@ -172,3 +172,20 @@ export const getCountry = (code: string): Country | undefined => {
 export const getCountriesByLanguage = (lang: string): Country[] => {
     return Object.values(countries).filter(c => c.primaryLang === lang)
 }
+
+// Default country - used as global fallback
+export const DEFAULT_COUNTRY = 'US';
+
+/**
+ * Get locale string for Intl APIs (e.g., 'ar-SA', 'en-US', 'fr-FR')
+ * Uses country's primary language and country code
+ */
+export function getLocale(countryCode: string, fallbackLang?: string): string {
+    const country = getCountry(countryCode);
+    if (country) {
+        return `${country.primaryLang}-${country.code}`;
+    }
+    // Fallback: use provided language with US, or default to en-US
+    return fallbackLang ? `${fallbackLang}-US` : 'en-US';
+}
+
