@@ -19,7 +19,16 @@ import notificationsRoutes from './modules/api/notifications/routes';
 import authRoutes from './modules/api/auth/routes';
 import oauthRoutes from './modules/api/auth/oauth-routes';
 import countriesRoutes from './modules/api/countries/routes';
-import jitsiRoutes from './routes/jitsi';
+import jitsiRoutes from './modules/api/jitsi/routes';
+
+// Import New Feature Routes - استيراد مسارات الميزات الجديدة
+import searchRoutes from './modules/api/search/routes';
+import likesRoutes from './modules/api/likes/routes';
+import reportsRoutes from './modules/api/reports/routes';
+import messagesRoutes from './modules/api/messages/routes';
+import adminRoutes from './modules/api/admin/routes';
+import settingsRoutes from './modules/api/settings/routes';
+import scheduleRoutes from './modules/api/schedule/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -68,6 +77,15 @@ app.route('/api/auth', authRoutes);
 app.route('/api/auth/oauth', oauthRoutes);
 app.route('/api/countries', countriesRoutes);
 app.route('/api/jitsi', jitsiRoutes);
+
+// Mount New Feature Routes - تركيب مسارات الميزات الجديدة
+app.route('/api/search', searchRoutes);
+app.route('/api', likesRoutes);
+app.route('/api/reports', reportsRoutes);
+app.route('/api', messagesRoutes);
+app.route('/api/admin', adminRoutes);
+app.route('/api/settings', settingsRoutes);
+app.route('/api', scheduleRoutes);
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);

@@ -79,31 +79,33 @@ INSERT OR IGNORE INTO countries (code, name_ar, name_en, flag_emoji) VALUES
 
 -- ============================================
 -- Test Users (مستخدمون تجريبيون)
+-- Password for all test users: password123
+-- SHA-256 hash: ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f
 -- ============================================
-INSERT OR IGNORE INTO users (id, email, username, password_hash, display_name, avatar_url, bio, country, language, total_competitions, total_wins, total_views, average_rating) VALUES
+INSERT OR IGNORE INTO users (id, email, username, password_hash, display_name, avatar_url, bio, country, language, total_competitions, total_wins, total_views, average_rating, is_verified) VALUES
 -- Arabic Users
-(1, 'dr.sami@dueli.com', 'dr_sami', 'hash123', 'د. سامي الخالدي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=sami&backgroundColor=8B5CF6', 'أستاذ الاقتصاد الدولي - جامعة الملك سعود', 'SA', 'ar', 15, 12, 45000, 4.8),
-(2, 'eng.alaa@dueli.com', 'eng_alaa', 'hash123', 'م. علاء محمود', 'https://api.dicebear.com/7.x/avataaars/svg?seed=alaa&backgroundColor=06B6D4', 'مهندس اقتصادي ومحلل أسواق', 'EG', 'ar', 10, 6, 32000, 4.5),
-(3, 'sheikh.ahmed@dueli.com', 'sheikh_ahmed', 'hash123', 'الشيخ أحمد المصري', 'https://api.dicebear.com/7.x/avataaars/svg?seed=sheikh&backgroundColor=F59E0B', 'عالم دين وباحث في الحوار بين الأديان', 'EG', 'ar', 20, 18, 89000, 4.9),
-(4, 'father.yohanna@dueli.com', 'father_yohanna', 'hash123', 'الأب يوحنا بولس', 'https://api.dicebear.com/7.x/avataaars/svg?seed=father&backgroundColor=8B5CF6', 'كاهن ومتخصص في اللاهوت المقارن', 'LB', 'ar', 18, 14, 75000, 4.8),
-(5, 'prof.nadia@dueli.com', 'prof_nadia', 'hash123', 'أ.د. نادية حسين', 'https://api.dicebear.com/7.x/avataaars/svg?seed=nadia&backgroundColor=EC4899', 'أستاذة الذكاء الاصطناعي - جامعة القاهرة', 'EG', 'ar', 12, 10, 56000, 4.7),
-(6, 'dr.omar@dueli.com', 'dr_omar', 'hash123', 'د. عمر السعيد', 'https://api.dicebear.com/7.x/avataaars/svg?seed=omar&backgroundColor=06B6D4', 'باحث في تعلم الآلة والشبكات العصبية', 'SA', 'ar', 8, 5, 28000, 4.4),
-(7, 'poet.khalid@dueli.com', 'poet_khalid', 'hash123', 'خالد الشاعر', 'https://api.dicebear.com/7.x/avataaars/svg?seed=khalid&backgroundColor=F59E0B', 'شاعر وأديب حائز على جوائز عربية', 'KW', 'ar', 25, 22, 120000, 4.9),
-(8, 'writer.maya@dueli.com', 'writer_maya', 'hash123', 'مايا الأديبة', 'https://api.dicebear.com/7.x/avataaars/svg?seed=maya&backgroundColor=EC4899', 'كاتبة وشاعرة من الجيل الجديد', 'JO', 'ar', 20, 15, 95000, 4.7),
-(9, 'prof.physics@dueli.com', 'prof_physics', 'hash123', 'د. أحمد الفيزيائي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=physics&backgroundColor=06B6D4', 'أستاذ الفيزياء النظرية', 'EG', 'ar', 10, 8, 42000, 4.6),
-(10, 'student.ali@dueli.com', 'student_ali', 'hash123', 'علي الطالب', 'https://api.dicebear.com/7.x/avataaars/svg?seed=ali&backgroundColor=22C55E', 'طالب دكتوراه في فيزياء الكم', 'SA', 'ar', 5, 2, 15000, 4.2),
+(1, 'dr.sami@dueli.com', 'dr_sami', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'د. سامي الخالدي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=sami&backgroundColor=8B5CF6', 'أستاذ الاقتصاد الدولي - جامعة الملك سعود', 'SA', 'ar', 15, 12, 45000, 4.8, 1),
+(2, 'eng.alaa@dueli.com', 'eng_alaa', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'م. علاء محمود', 'https://api.dicebear.com/7.x/avataaars/svg?seed=alaa&backgroundColor=06B6D4', 'مهندس اقتصادي ومحلل أسواق', 'EG', 'ar', 10, 6, 32000, 4.5, 1),
+(3, 'sheikh.ahmed@dueli.com', 'sheikh_ahmed', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'الشيخ أحمد المصري', 'https://api.dicebear.com/7.x/avataaars/svg?seed=sheikh&backgroundColor=F59E0B', 'عالم دين وباحث في الحوار بين الأديان', 'EG', 'ar', 20, 18, 89000, 4.9, 1),
+(4, 'father.yohanna@dueli.com', 'father_yohanna', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'الأب يوحنا بولس', 'https://api.dicebear.com/7.x/avataaars/svg?seed=father&backgroundColor=8B5CF6', 'كاهن ومتخصص في اللاهوت المقارن', 'LB', 'ar', 18, 14, 75000, 4.8, 1),
+(5, 'prof.nadia@dueli.com', 'prof_nadia', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'أ.د. نادية حسين', 'https://api.dicebear.com/7.x/avataaars/svg?seed=nadia&backgroundColor=EC4899', 'أستاذة الذكاء الاصطناعي - جامعة القاهرة', 'EG', 'ar', 12, 10, 56000, 4.7, 1),
+(6, 'dr.omar@dueli.com', 'dr_omar', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'د. عمر السعيد', 'https://api.dicebear.com/7.x/avataaars/svg?seed=omar&backgroundColor=06B6D4', 'باحث في تعلم الآلة والشبكات العصبية', 'SA', 'ar', 8, 5, 28000, 4.4, 1),
+(7, 'poet.khalid@dueli.com', 'poet_khalid', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'خالد الشاعر', 'https://api.dicebear.com/7.x/avataaars/svg?seed=khalid&backgroundColor=F59E0B', 'شاعر وأديب حائز على جوائز عربية', 'KW', 'ar', 25, 22, 120000, 4.9, 1),
+(8, 'writer.maya@dueli.com', 'writer_maya', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'مايا الأديبة', 'https://api.dicebear.com/7.x/avataaars/svg?seed=maya&backgroundColor=EC4899', 'كاتبة وشاعرة من الجيل الجديد', 'JO', 'ar', 20, 15, 95000, 4.7, 1),
+(9, 'prof.physics@dueli.com', 'prof_physics', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'د. أحمد الفيزيائي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=physics&backgroundColor=06B6D4', 'أستاذ الفيزياء النظرية', 'EG', 'ar', 10, 8, 42000, 4.6, 1),
+(10, 'student.ali@dueli.com', 'student_ali', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'علي الطالب', 'https://api.dicebear.com/7.x/avataaars/svg?seed=ali&backgroundColor=22C55E', 'طالب دكتوراه في فيزياء الكم', 'SA', 'ar', 5, 2, 15000, 4.2, 1),
 -- More Arabic Users
-(11, 'chef.fatima@dueli.com', 'chef_fatima', 'hash123', 'الشيف فاطمة', 'https://api.dicebear.com/7.x/avataaars/svg?seed=fatima&backgroundColor=EF4444', 'شيف محترفة ومقدمة برامج طبخ', 'AE', 'ar', 15, 12, 68000, 4.8),
-(12, 'gamer.hassan@dueli.com', 'gamer_hassan', 'hash123', 'حسن الجيمر', 'https://api.dicebear.com/7.x/avataaars/svg?seed=hassan&backgroundColor=6366F1', 'لاعب محترف وصانع محتوى', 'SA', 'ar', 30, 25, 150000, 4.9),
-(13, 'comedian.ahmad@dueli.com', 'comedian_ahmad', 'hash123', 'أحمد الكوميدي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=ahmad&backgroundColor=FBBF24', 'كوميدي ومقدم ستاند أب كوميدي', 'EG', 'ar', 18, 15, 85000, 4.7),
-(14, 'singer.layla@dueli.com', 'singer_layla', 'hash123', 'ليلى المغنية', 'https://api.dicebear.com/7.x/avataaars/svg?seed=layla&backgroundColor=EC4899', 'مغنية ومؤلفة أغاني', 'LB', 'ar', 12, 10, 72000, 4.8),
-(15, 'dr.politics@dueli.com', 'dr_politics', 'hash123', 'د. محمد السياسي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=politics&backgroundColor=EF4444', 'محلل سياسي وباحث في العلاقات الدولية', 'JO', 'ar', 22, 18, 95000, 4.6),
+(11, 'chef.fatima@dueli.com', 'chef_fatima', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'الشيف فاطمة', 'https://api.dicebear.com/7.x/avataaars/svg?seed=fatima&backgroundColor=EF4444', 'شيف محترفة ومقدمة برامج طبخ', 'AE', 'ar', 15, 12, 68000, 4.8, 1),
+(12, 'gamer.hassan@dueli.com', 'gamer_hassan', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'حسن الجيمر', 'https://api.dicebear.com/7.x/avataaars/svg?seed=hassan&backgroundColor=6366F1', 'لاعب محترف وصانع محتوى', 'SA', 'ar', 30, 25, 150000, 4.9, 1),
+(13, 'comedian.ahmad@dueli.com', 'comedian_ahmad', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'أحمد الكوميدي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=ahmad&backgroundColor=FBBF24', 'كوميدي ومقدم ستاند أب كوميدي', 'EG', 'ar', 18, 15, 85000, 4.7, 1),
+(14, 'singer.layla@dueli.com', 'singer_layla', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'ليلى المغنية', 'https://api.dicebear.com/7.x/avataaars/svg?seed=layla&backgroundColor=EC4899', 'مغنية ومؤلفة أغاني', 'LB', 'ar', 12, 10, 72000, 4.8, 1),
+(15, 'dr.politics@dueli.com', 'dr_politics', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'د. محمد السياسي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=politics&backgroundColor=EF4444', 'محلل سياسي وباحث في العلاقات الدولية', 'JO', 'ar', 22, 18, 95000, 4.6, 1),
 -- International Users
-(16, 'john.smith@dueli.com', 'john_smith', 'hash123', 'John Smith', 'https://api.dicebear.com/7.x/avataaars/svg?seed=john&backgroundColor=3B82F6', 'Political Analyst & Economist', 'US', 'en', 8, 5, 22000, 4.3),
-(17, 'emma.watson@dueli.com', 'emma_watson', 'hash123', 'Emma Watson', 'https://api.dicebear.com/7.x/avataaars/svg?seed=emma&backgroundColor=EC4899', 'Science Communicator', 'GB', 'en', 6, 4, 18000, 4.4),
-(18, 'dr.chen@dueli.com', 'dr_chen', 'hash123', 'Dr. Wei Chen', 'https://api.dicebear.com/7.x/avataaars/svg?seed=chen&backgroundColor=06B6D4', 'AI Researcher at MIT', 'US', 'en', 10, 8, 35000, 4.7),
-(19, 'maria.garcia@dueli.com', 'maria_garcia', 'hash123', 'Maria Garcia', 'https://api.dicebear.com/7.x/avataaars/svg?seed=maria&backgroundColor=F59E0B', 'Flamenco Dancer & Artist', 'US', 'en', 14, 12, 48000, 4.8),
-(20, 'alex.tech@dueli.com', 'alex_tech', 'hash123', 'Alex Tech', 'https://api.dicebear.com/7.x/avataaars/svg?seed=alextech&backgroundColor=8B5CF6', 'Tech YouTuber & Developer', 'DE', 'en', 20, 16, 110000, 4.6);
+(16, 'john.smith@dueli.com', 'john_smith', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'John Smith', 'https://api.dicebear.com/7.x/avataaars/svg?seed=john&backgroundColor=3B82F6', 'Political Analyst & Economist', 'US', 'en', 8, 5, 22000, 4.3, 1),
+(17, 'emma.watson@dueli.com', 'emma_watson', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'Emma Watson', 'https://api.dicebear.com/7.x/avataaars/svg?seed=emma&backgroundColor=EC4899', 'Science Communicator', 'GB', 'en', 6, 4, 18000, 4.4, 1),
+(18, 'dr.chen@dueli.com', 'dr_chen', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'Dr. Wei Chen', 'https://api.dicebear.com/7.x/avataaars/svg?seed=chen&backgroundColor=06B6D4', 'AI Researcher at MIT', 'US', 'en', 10, 8, 35000, 4.7, 1),
+(19, 'maria.garcia@dueli.com', 'maria_garcia', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'Maria Garcia', 'https://api.dicebear.com/7.x/avataaars/svg?seed=maria&backgroundColor=F59E0B', 'Flamenco Dancer & Artist', 'US', 'en', 14, 12, 48000, 4.8, 1),
+(20, 'alex.tech@dueli.com', 'alex_tech', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'Alex Tech', 'https://api.dicebear.com/7.x/avataaars/svg?seed=alextech&backgroundColor=8B5CF6', 'Tech YouTuber & Developer', 'DE', 'en', 20, 16, 110000, 4.6, 1);
 
 -- ============================================
 -- LIVE Competitions (منافسات مباشرة)

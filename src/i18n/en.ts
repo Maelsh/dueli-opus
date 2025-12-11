@@ -136,7 +136,7 @@ export const en = {
     verify_code: 'Verify Code',
     new_password_label: 'New Password',
     change_password: 'Change Password',
-    password_min_length: 'Must be at least 6 characters',
+    password_min_length: 'Password must be at least 8 characters',
     or_continue_with: 'Or continue with',
 
     // User
@@ -160,6 +160,9 @@ export const en = {
     // Errors
     error: 'Error',
     not_found: 'Not Found',
+    unauthorized: 'Unauthorized',
+    forbidden: 'Forbidden',
+    server_error: 'Server error. Please try again.',
     login_required: 'Login required',
     no_duels: 'Sorry, no duels available here currently.',
     try_different_filter: 'Try a different filter or create a new competition',
@@ -167,6 +170,37 @@ export const en = {
     page_not_found: 'Page Not Found',
     back_to_home: 'Back to Home',
 
+    // API Errors (used by controllers)
+    errors: {
+        missing_fields: 'Missing required fields',
+        content_required: 'Content is required',
+        invalid_rating: 'Rating must be between 1 and 5',
+        invalid_request: 'Invalid request',
+        fetch_failed: 'Failed to fetch data',
+        create_failed: 'Failed to create',
+        update_failed: 'Failed to update',
+        delete_failed: 'Failed to delete',
+    },
+
+    // Competition Error Messages
+    competition_errors: {
+        not_found: 'Competition not found',
+        cannot_join_own: 'Cannot join your own competition',
+        already_requested: 'You have already requested to join',
+        not_completed: 'Competition is not completed',
+        already_rated: 'You have already rated this competitor',
+    },
+
+    // User Error Messages
+    user_errors: {
+        not_found: 'User not found',
+        cannot_follow_self: 'Cannot follow yourself',
+    },
+
+    // Category Messages
+    category: {
+        not_found: 'Category not found',
+    },
     success: 'Success',
 
     // Footer
@@ -206,6 +240,10 @@ export const en = {
     auth_code_verified: 'Code verified',
     auth_password_required: 'New password is required',
     auth_password_changed: 'Password changed successfully',
+    auth_email_not_verified: 'Please verify your email before logging in',
+    auth_invalid_token: 'Invalid or expired token',
+    auth_email_verified: 'Email verified successfully! You can now log in.',
+    auth_connection_failed: 'Connection failed. Please try again.',
 
     // Verification
     verification_failed: 'Verification failed',
@@ -246,5 +284,80 @@ export const en = {
         join_request_for: 'Join request for competition',
         request_accepted: 'Request Accepted',
         request_accepted_message: 'Your request to join the competition has been accepted',
+        new_message: 'New Message',
+    },
+
+    // Messages
+    messages: {
+        title: 'Messages',
+        select_conversation: 'Select a conversation',
+        no_conversations: 'No conversations yet',
+        no_messages: 'No messages yet',
+        type_message: 'Type a message...',
+        enter_message: 'Enter your message',
+    },
+
+    // Settings Page
+    settings_page: {
+        title: 'Settings',
+        language: 'Default Language',
+        country: 'Default Country',
+        privacy: 'Profile Privacy',
+        privacy_public: 'Public',
+        privacy_followers: 'Followers Only',
+        privacy_private: 'Private',
+        notifications: 'Enable Notifications',
+        email_notifications: 'Email Notifications',
+        save: 'Save Settings',
+        saved: 'Settings saved successfully',
+    },
+
+    // Reports
+    report: {
+        title: 'Report',
+        reason: 'Reason',
+        select_reason: 'Select a reason',
+        description: 'Additional Details',
+        description_placeholder: 'Provide more details about the issue...',
+        submit: 'Submit Report',
+        submitted: 'Report submitted successfully',
+        already_reported: 'You have already reported this',
+        reason_spam: 'Spam',
+        reason_harassment: 'Harassment',
+        reason_fake_account: 'Fake Account',
+        reason_inappropriate_content: 'Inappropriate Content',
+        reason_misleading: 'Misleading',
+        reason_copyright: 'Copyright Violation',
+        reason_hate_speech: 'Hate Speech',
+        reason_other: 'Other',
+    },
+
+    // Schedule
+    schedule: {
+        title: 'My Schedule',
+        reminders: 'Reminders',
+        upcoming: 'Upcoming Competitions',
+        empty: 'No scheduled competitions',
+        creator: 'Creator',
+        add_reminder: 'Set Reminder',
+        remove_reminder: 'Remove Reminder',
+        reminder_set: 'Reminder set!',
+        reminder_removed: 'Reminder removed',
+        not_scheduled: 'Competition is not scheduled',
+        already_set: 'Reminder already set',
+        not_found: 'Reminder not found',
+    },
+
+    // Likes
+    like: {
+        already_liked: 'Already liked',
+        not_found: 'Like not found',
+    },
+
+    // Posts
+    post: {
+        content_required: 'Post content is required',
+        created: 'Post created',
+        deleted: 'Post deleted',
     },
 };

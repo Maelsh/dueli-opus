@@ -63,6 +63,19 @@ export class CategoryModel extends BaseModel<Category> {
     }
 
     /**
+     * Find all categories with parent info (flat list)
+     */
+    async findAllWithParent(): Promise<Category[]> {
+        return this.query<Category>(`
+            SELECT c.*, p.name_ar as parent_name_ar, p.name_en as parent_name_en
+            FROM categories c
+            LEFT JOIN categories p ON c.parent_id = p.id
+            WHERE c.is_active = 1
+            ORDER BY c.parent_id NULLS FIRST, c.sort_order
+        `);
+    }
+
+    /**
      * Create category
      */
     async create(data: Partial<Category>): Promise<Category> {

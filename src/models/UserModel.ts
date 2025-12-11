@@ -20,6 +20,7 @@ export interface CreateUserData {
     country?: string;
     language?: string;
     verification_token?: string;
+    verification_token_expires?: string;
     oauth_provider?: string;
     oauth_id?: string;
 }
@@ -112,9 +113,9 @@ export class UserModel extends BaseModel<User> {
         const result = await this.db.prepare(`
             INSERT INTO users (
                 email, username, display_name, password_hash, avatar_url,
-                country, language, verification_token, oauth_provider, oauth_id,
-                is_verified, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                country, language, verification_token, verification_token_expires,
+                oauth_provider, oauth_id, is_verified, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
         `).bind(
             data.email.toLowerCase(),
             data.username.toLowerCase(),
@@ -124,6 +125,7 @@ export class UserModel extends BaseModel<User> {
             data.country || 'US',
             data.language || 'en',
             data.verification_token || null,
+            data.verification_token_expires || null,
             data.oauth_provider || null,
             data.oauth_id || null,
             data.oauth_provider ? 1 : 0 // OAuth users are auto-verified
@@ -183,6 +185,16 @@ export class UserModel extends BaseModel<User> {
         const result = await this.db.prepare(
             'UPDATE users SET is_verified = 1, verification_token = NULL WHERE id = ?'
         ).bind(id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Set verification token (for resend)
+     */
+    async setVerificationToken(id: number, token: string, expiresAt: string): Promise<boolean> {
+        const result = await this.db.prepare(
+            'UPDATE users SET verification_token = ?, verification_token_expires = ? WHERE id = ?'
+        ).bind(token, expiresAt, id).run();
         return result.meta.changes > 0;
     }
 

@@ -9,7 +9,7 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: {
-        client: 'src/client/index.ts',
+        app: 'src/client/index.ts',
       },
       output: {
         entryFileNames: 'static/[name].js',

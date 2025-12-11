@@ -28,8 +28,13 @@ interface TunnelInfo {
  * Get the current Jitsi server URL from Cloudflare Tunnel
  * This allows using Quick Tunnel with dynamic URLs
  */
-export async function getJitsiServerUrl(env: { CLOUDFLARE_API_TOKEN: string }): Promise<string> {
+export async function getJitsiServerUrl(env: { CLOUDFLARE_API_TOKEN?: string }): Promise<string> {
     try {
+        if (!env.CLOUDFLARE_API_TOKEN) {
+            // No token, return localhost for development
+            return 'http://localhost';
+        }
+
         // Query Cloudflare API for tunnel info
         const response = await fetch(
             `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${TUNNEL_ID}`,
@@ -68,7 +73,7 @@ export async function getJitsiServerUrl(env: { CLOUDFLARE_API_TOKEN: string }): 
 /**
  * Get Jitsi configuration for the frontend
  */
-export async function getJitsiConfig(env: { CLOUDFLARE_API_TOKEN: string }) {
+export async function getJitsiConfig(env: { CLOUDFLARE_API_TOKEN?: string }) {
     const serverUrl = await getJitsiServerUrl(env);
 
     return {

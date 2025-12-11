@@ -285,5 +285,5 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     </script>
   `;
 
-  return c.html(generateHTML(content, lang, tr.competition));
+  return c.html(generateHTML(content, lang, tr.competitors));
 }

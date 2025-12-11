@@ -137,7 +137,7 @@ export const ar = {
     verify_code: 'تحقق من الرمز',
     new_password_label: 'كلمة المرور الجديدة',
     change_password: 'تغيير كلمة المرور',
-    password_min_length: 'يجب أن تكون 6 أحرف على الأقل',
+    password_min_length: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل',
     or_continue_with: 'أو تابع باستخدام',
 
     // المستخدم
@@ -161,12 +161,47 @@ export const ar = {
     // الأخطاء
     error: 'خطأ',
     not_found: 'غير موجود',
+    unauthorized: 'غير مصرح',
+    forbidden: 'محظور',
+    server_error: 'حدث خطأ في الخادم. يرجى المحاولة مرة أخرى.',
     login_required: 'يجب تسجيل الدخول',
     no_duels: 'عذراً، لا توجد منافسات هنا حالياً.',
     try_different_filter: 'جرب تصفية أخرى أو أنشئ منافسة جديدة',
     error_loading: 'حدث خطأ',
     page_not_found: 'الصفحة غير موجودة',
     back_to_home: 'العودة للرئيسية',
+
+    // أخطاء API
+    errors: {
+        missing_fields: 'الحقول المطلوبة مفقودة',
+        content_required: 'المحتوى مطلوب',
+        invalid_rating: 'التقييم يجب أن يكون بين 1 و 5',
+        invalid_request: 'طلب غير صالح',
+        fetch_failed: 'فشل في جلب البيانات',
+        create_failed: 'فشل في الإنشاء',
+        update_failed: 'فشل في التحديث',
+        delete_failed: 'فشل في الحذف',
+    },
+
+    // رسائل أخطاء المنافسة
+    competition_errors: {
+        not_found: 'المنافسة غير موجودة',
+        cannot_join_own: 'لا يمكنك الانضمام لمنافستك',
+        already_requested: 'لقد طلبت الانضمام مسبقاً',
+        not_completed: 'المنافسة لم تنتهي بعد',
+        already_rated: 'لقد قيمت هذا المتنافس مسبقاً',
+    },
+
+    // رسائل أخطاء المستخدم
+    user_errors: {
+        not_found: 'المستخدم غير موجود',
+        cannot_follow_self: 'لا يمكنك متابعة نفسك',
+    },
+
+    // رسائل الفئة
+    category: {
+        not_found: 'الفئة غير موجودة',
+    },
 
     // النجاح
     success: 'تم بنجاح',
@@ -208,6 +243,10 @@ export const ar = {
     auth_code_verified: 'تم التحقق من الرمز',
     auth_password_required: 'كلمة المرور الجديدة مطلوبة',
     auth_password_changed: 'تم تغيير كلمة المرور بنجاح',
+    auth_email_not_verified: 'يرجى تفعيل بريدك الإلكتروني قبل تسجيل الدخول',
+    auth_invalid_token: 'رمز غير صالح أو منتهي الصلاحية',
+    auth_email_verified: 'تم تفعيل بريدك الإلكتروني بنجاح! يمكنك الآن تسجيل الدخول.',
+    auth_connection_failed: 'فشل الاتصال. يرجى المحاولة مرة أخرى.',
 
     // التحقق
     verification_failed: 'حدث خطأ أثناء التحقق',
@@ -248,5 +287,80 @@ export const ar = {
         join_request_for: 'طلب انضمام للمنافسة',
         request_accepted: 'تم قبول طلبك',
         request_accepted_message: 'تم قبول طلبك للانضمام للمنافسة',
+        new_message: 'رسالة جديدة',
+    },
+
+    // الرسائل
+    messages: {
+        title: 'الرسائل',
+        select_conversation: 'اختر محادثة',
+        no_conversations: 'لا توجد محادثات',
+        no_messages: 'لا توجد رسائل',
+        type_message: 'اكتب رسالة...',
+        enter_message: 'أدخل رسالتك',
+    },
+
+    // الإعدادات
+    settings_page: {
+        title: 'الإعدادات',
+        language: 'اللغة الافتراضية',
+        country: 'البلد الافتراضي',
+        privacy: 'خصوصية الملف',
+        privacy_public: 'عام',
+        privacy_followers: 'المتابعين فقط',
+        privacy_private: 'خاص',
+        notifications: 'تفعيل الإشعارات',
+        email_notifications: 'إشعارات البريد',
+        save: 'حفظ الإعدادات',
+        saved: 'تم حفظ الإعدادات',
+    },
+
+    // البلاغات
+    report: {
+        title: 'إبلاغ',
+        reason: 'السبب',
+        select_reason: 'اختر سبباً',
+        description: 'تفاصيل إضافية',
+        description_placeholder: 'قدم مزيداً من التفاصيل...',
+        submit: 'إرسال البلاغ',
+        submitted: 'تم إرسال البلاغ',
+        already_reported: 'قمت بالإبلاغ مسبقاً',
+        reason_spam: 'بريد مزعج',
+        reason_harassment: 'مضايقة',
+        reason_fake_account: 'حساب مزيف',
+        reason_inappropriate_content: 'محتوى غير لائق',
+        reason_misleading: 'مضلل',
+        reason_copyright: 'انتهاك حقوق النشر',
+        reason_hate_speech: 'خطاب كراهية',
+        reason_other: 'أخرى',
+    },
+
+    // الجدولة
+    schedule: {
+        title: 'جدولي',
+        reminders: 'التذكيرات',
+        upcoming: 'المنافسات القادمة',
+        empty: 'لا توجد منافسات مجدولة',
+        creator: 'منشئ',
+        add_reminder: 'تعيين تذكير',
+        remove_reminder: 'إزالة التذكير',
+        reminder_set: 'تم تعيين التذكير!',
+        reminder_removed: 'تم إزالة التذكير',
+        not_scheduled: 'المنافسة غير مجدولة',
+        already_set: 'التذكير موجود مسبقاً',
+        not_found: 'التذكير غير موجود',
+    },
+
+    // الإعجابات
+    like: {
+        already_liked: 'أعجبت بها مسبقاً',
+        not_found: 'الإعجاب غير موجود',
+    },
+
+    // المنشورات
+    post: {
+        content_required: 'محتوى المنشور مطلوب',
+        created: 'تم إنشاء المنشور',
+        deleted: 'تم حذف المنشور',
     },
 };

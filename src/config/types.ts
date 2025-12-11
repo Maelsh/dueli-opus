@@ -23,6 +23,7 @@ export type Bindings = {
   MICROSOFT_TENANT_ID: string;
   TIKTOK_CLIENT_KEY: string;
   TIKTOK_CLIENT_SECRET: string;
+  CLOUDFLARE_API_TOKEN?: string;
 }
 
 /** Language code type (supports all country languages) */

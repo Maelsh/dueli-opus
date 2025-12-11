@@ -106,11 +106,15 @@ export class CompetitionModel extends BaseModel<Competition> {
                    subcat.slug as subcategory_slug,
                    creator.display_name as creator_name,
                    creator.avatar_url as creator_avatar,
-                   creator.username as creator_username
+                   creator.username as creator_username,
+                   opponent.display_name as opponent_name,
+                   opponent.avatar_url as opponent_avatar,
+                   opponent.username as opponent_username
             FROM competitions c
             JOIN categories cat ON c.category_id = cat.id
             LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
             JOIN users creator ON c.creator_id = creator.id
+            LEFT JOIN users opponent ON c.opponent_id = opponent.id
             WHERE 1=1
         `;
         const params: any[] = [];

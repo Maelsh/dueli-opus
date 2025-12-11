@@ -65,8 +65,8 @@ export class ApiClient {
     /**
      * DELETE request
      */
-    static async delete<T = any>(endpoint: string): Promise<T> {
-        return this.request<T>(endpoint, { method: 'DELETE' });
+    static async delete<T = any>(endpoint: string, body?: any): Promise<T> {
+        return this.request<T>(endpoint, { method: 'DELETE', body });
     }
 }
 

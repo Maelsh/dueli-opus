@@ -10,7 +10,7 @@ import { GoogleOAuth } from '../../../lib/oauth/google';
 import { FacebookOAuth } from '../../../lib/oauth/facebook';
 import { MicrosoftOAuth } from '../../../lib/oauth/microsoft';
 import { TikTokOAuth } from '../../../lib/oauth/tiktok';
-import { translations, getUILanguage, DEFAULT_LANGUAGE, DEFAULT_COUNTRY } from '../../../i18n';
+import { translations, getUILanguage, DEFAULT_LANGUAGE, DEFAULT_COUNTRY, t } from '../../../i18n';
 
 const oauthRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -48,7 +48,7 @@ oauthRoutes.get('/:provider', async (c) => {
   if (!oauth) {
     return c.json<ApiResponse>({
       success: false,
-      error: 'Invalid provider'
+      error: t('errors.invalid_request', lang)
     }, 400);
   }
 
@@ -121,8 +121,8 @@ oauthRoutes.get('/:provider/callback', async (c) => {
       const username = `${baseUsername}_${Date.now().toString(36)}`;
 
       const result = await DB.prepare(`
-        INSERT INTO users (username, email, password_hash, display_name, country, language, oauth_provider, oauth_id, avatar_url, is_active, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))
+        INSERT INTO users (username, email, password_hash, display_name, country, language, oauth_provider, oauth_id, avatar_url, is_active, is_verified, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'))
       `).bind(
         username,
         oauthUser.email || '',

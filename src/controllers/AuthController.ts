@@ -2,29 +2,20 @@
  * Auth Controller
  * متحكم المصادقة
  * 
- * Handles all authentication operations.
+ * MVC-compliant controller for all authentication operations.
+ * Gets dependencies from Hono context.
  */
 
 import { BaseController, AppContext } from './base/BaseController';
 import { UserModel, SessionModel } from '../models';
 import { EmailService } from '../lib/services/EmailService';
 import { CryptoUtils } from '../lib/services/CryptoUtils';
-import type { Bindings } from '../config/types';
 
 /**
  * Auth Controller Class
+ * متحكم المصادقة
  */
 export class AuthController extends BaseController {
-    private userModel: UserModel;
-    private sessionModel: SessionModel;
-    private emailService: EmailService;
-
-    constructor(db: D1Database, resendApiKey: string) {
-        super();
-        this.userModel = new UserModel(db);
-        this.sessionModel = new SessionModel(db);
-        this.emailService = new EmailService(resendApiKey);
-    }
 
     /**
      * Register new user
@@ -32,69 +23,80 @@ export class AuthController extends BaseController {
      */
     async register(c: AppContext) {
         try {
+            const { DB, RESEND_API_KEY } = c.env;
+
+            if (!RESEND_API_KEY) {
+                console.error('Missing RESEND_API_KEY');
+                return this.error(c, 'Server configuration error', 500);
+            }
+
             const body = await this.getBody<{
+                name: string;
                 email: string;
-                username: string;
-                displayName: string;
                 password: string;
                 country?: string;
                 language?: string;
             }>(c);
 
-            if (!body) {
-                return this.validationError(c, this.t('error_invalid_request', c));
+            // Debug logging
+            console.log('[Register] Received body:', JSON.stringify(body));
+
+            if (!body?.name || !body?.email || !body?.password) {
+                console.log('[Register] Validation failed - missing fields');
+                return this.validationError(c, this.t('auth_all_fields_required', c));
             }
 
-            const { email, username, displayName, password, country, language } = body;
-
-            // Validation
-            if (!email || !username || !displayName || !password) {
-                return this.validationError(c, this.t('error_required_fields', c));
-            }
-
-            if (password.length < 8) {
+            if (body.password.length < 8) {
                 return this.validationError(c, this.t('password_min_length', c));
             }
 
+            const userModel = new UserModel(DB);
+
             // Check existing
-            if (await this.userModel.emailExists(email)) {
-                return this.error(c, this.t('error_email_exists', c));
+            if (await userModel.emailExists(body.email)) {
+                return this.error(c, this.t('auth_email_exists', c));
             }
 
-            if (await this.userModel.usernameExists(username)) {
-                return this.error(c, this.t('error_username_exists', c));
+            // Generate username from name
+            const baseUsername = body.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            let username = baseUsername;
+            let counter = 1;
+            while (await userModel.usernameExists(username)) {
+                username = `${baseUsername}${counter++}`;
             }
 
             // Create user
-            const passwordHash = await CryptoUtils.hashPassword(password);
+            const passwordHash = await CryptoUtils.hashPassword(body.password);
             const verificationToken = CryptoUtils.generateToken();
+            const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-            const user = await this.userModel.create({
-                email,
+            const user = await userModel.create({
+                email: body.email,
                 username,
-                display_name: displayName,
+                display_name: body.name,
                 password_hash: passwordHash,
-                country: country || 'US',
-                language: language || this.getLanguage(c),
-                verification_token: verificationToken
+                country: body.country || 'SA',
+                language: body.language || this.getLanguage(c),
+                verification_token: verificationToken,
+                verification_token_expires: tokenExpiry
             });
 
             // Send verification email
-            const origin = c.req.header('origin') || c.req.url;
-            await this.emailService.sendVerificationEmail(
-                email,
+            const origin = c.req.header('origin') || `https://${c.req.header('host')}`;
+            const emailService = new EmailService(RESEND_API_KEY);
+            await emailService.sendVerificationEmail(
+                body.email,
                 verificationToken,
-                displayName,
+                body.name,
                 this.getLanguage(c),
                 origin
             );
 
             return this.success(c, {
-                message: this.t('auth_register_success', c),
-                userId: user.id
+                message: this.t('auth_register_success', c)
             }, 201);
-
         } catch (error) {
+            console.error('[Register] Error:', error);
             return this.serverError(c, error as Error);
         }
     }
@@ -105,24 +107,71 @@ export class AuthController extends BaseController {
      */
     async verifyEmail(c: AppContext) {
         try {
+            const { DB } = c.env;
             const token = this.getQuery(c, 'token');
 
             if (!token) {
-                return this.validationError(c, this.t('error_invalid_token', c));
+                return this.validationError(c, this.t('auth_invalid_token', c));
             }
 
-            const user = await this.userModel.findByVerificationToken(token);
+            const userModel = new UserModel(DB);
+            const user = await userModel.findByVerificationToken(token);
 
             if (!user) {
-                return this.error(c, this.t('error_invalid_token', c));
+                return this.error(c, this.t('auth_invalid_token', c));
             }
 
-            await this.userModel.verifyEmail(user.id);
+            await userModel.verifyEmail(user.id);
 
             return this.success(c, {
                 message: this.t('auth_email_verified', c)
             });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
 
+    /**
+     * Resend verification email
+     * POST /api/auth/resend-verification
+     */
+    async resendVerification(c: AppContext) {
+        try {
+            const { DB, RESEND_API_KEY } = c.env;
+
+            if (!RESEND_API_KEY) {
+                return this.error(c, 'Server configuration error', 500);
+            }
+
+            const body = await this.getBody<{ email: string }>(c);
+            if (!body?.email) {
+                return this.validationError(c, this.t('auth_email_required', c));
+            }
+
+            const userModel = new UserModel(DB);
+            const user = await userModel.findByEmail(body.email);
+
+            if (!user || (user as any).is_verified) {
+                // Don't reveal if user exists
+                return this.success(c, { message: this.t('auth_verification_resent', c) });
+            }
+
+            const verificationToken = CryptoUtils.generateToken();
+            const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+            await userModel.setVerificationToken(user.id, verificationToken, tokenExpiry);
+
+            const origin = c.req.header('origin') || `https://${c.req.header('host')}`;
+            const emailService = new EmailService(RESEND_API_KEY);
+            await emailService.sendVerificationEmail(
+                body.email,
+                verificationToken,
+                user.display_name || user.username,
+                this.getLanguage(c),
+                origin
+            );
+
+            return this.success(c, { message: this.t('auth_verification_resent', c) });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
@@ -134,52 +183,86 @@ export class AuthController extends BaseController {
      */
     async login(c: AppContext) {
         try {
+            const { DB } = c.env;
+
             const body = await this.getBody<{
                 email: string;
                 password: string;
             }>(c);
 
-            if (!body || !body.email || !body.password) {
-                return this.validationError(c, this.t('error_email_password_required', c));
+            if (!body?.email || !body?.password) {
+                return this.validationError(c, this.t('auth_email_password_required', c));
             }
 
-            const user = await this.userModel.findByEmail(body.email);
+            const userModel = new UserModel(DB);
+            const user = await userModel.findByEmail(body.email);
 
             if (!user) {
-                return this.error(c, this.t('error_invalid_credentials', c), 401);
+                return this.error(c, this.t('auth_invalid_credentials', c), 401);
             }
 
             // Check password
             const passwordHash = await CryptoUtils.hashPassword(body.password);
-            const storedHash = (user as any).password_hash;
-
-            if (passwordHash !== storedHash) {
-                return this.error(c, this.t('error_invalid_credentials', c), 401);
+            if (passwordHash !== (user as any).password_hash) {
+                return this.error(c, this.t('auth_invalid_credentials', c), 401);
             }
 
             // Check verified
             if (!(user as any).is_verified) {
-                return this.error(c, this.t('error_email_not_verified', c));
+                return this.error(c, this.t('auth_email_not_verified', c));
             }
 
             // Create session
-            const session = await this.sessionModel.create({ user_id: user.id });
+            const sessionModel = new SessionModel(DB);
+            const session = await sessionModel.create({ user_id: user.id });
+
+            return this.success(c, {
+                sessionId: session.id,
+                user: {
+                    id: user.id,
+                    name: user.display_name,
+                    email: user.email,
+                    avatar: user.avatar_url,
+                    is_admin: (user as any).is_admin
+                }
+            });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Check session / Get current user
+     * GET /api/auth/session
+     */
+    async getSession(c: AppContext) {
+        try {
+            const { DB } = c.env;
+            const sessionId = c.req.header('Authorization')?.replace('Bearer ', '');
+
+            if (!sessionId) {
+                return this.success(c, { user: null });
+            }
+
+            const sessionModel = new SessionModel(DB);
+            const result = await sessionModel.findValidSession(sessionId);
+
+            if (!result) {
+                return this.success(c, { user: null });
+            }
 
             return this.success(c, {
                 user: {
-                    id: user.id,
-                    email: user.email,
-                    username: user.username,
-                    display_name: user.display_name,
-                    avatar_url: user.avatar_url,
-                    country: user.country,
-                    language: user.language
-                },
-                sessionId: session.id
+                    id: result.user.id,
+                    name: result.user.display_name,
+                    email: result.user.email,
+                    avatar: result.user.avatar_url,
+                    username: result.user.username,
+                    is_admin: (result.user as any).is_admin
+                }
             });
-
         } catch (error) {
-            return this.serverError(c, error as Error);
+            return this.success(c, { user: null });
         }
     }
 
@@ -189,65 +272,107 @@ export class AuthController extends BaseController {
      */
     async logout(c: AppContext) {
         try {
-            const authHeader = c.req.header('Authorization');
-            const sessionId = authHeader?.replace('Bearer ', '');
+            const { DB } = c.env;
+            const sessionId = c.req.header('Authorization')?.replace('Bearer ', '');
 
             if (sessionId) {
-                await this.sessionModel.deleteBySessionId(sessionId);
+                const sessionModel = new SessionModel(DB);
+                await sessionModel.deleteBySessionId(sessionId);
             }
 
-            return this.success(c, { message: 'Logged out' });
-
+            return this.success(c, { success: true });
         } catch (error) {
-            return this.serverError(c, error as Error);
+            return this.success(c, { success: true });
         }
     }
 
     /**
-     * Forgot password - Step 1: Send code
+     * Forgot password - Send reset code
      * POST /api/auth/forgot-password
      */
     async forgotPassword(c: AppContext) {
         try {
+            const { DB, RESEND_API_KEY } = c.env;
+
+            if (!RESEND_API_KEY) {
+                return this.error(c, 'Server configuration error', 500);
+            }
+
             const body = await this.getBody<{ email: string }>(c);
-
             if (!body?.email) {
-                return this.validationError(c, this.t('error_email_required', c));
+                return this.validationError(c, this.t('auth_email_required', c));
             }
 
-            const user = await this.userModel.findByEmail(body.email);
+            const userModel = new UserModel(DB);
+            const user = await userModel.findByEmail(body.email);
 
+            // Always return success to not reveal if email exists
             if (!user) {
-                // Don't reveal if email exists
-                return this.success(c, { message: this.t('reset_code_sent', c) });
+                return this.success(c, { message: this.t('auth_reset_code_sent', c) });
             }
 
-            // Generate reset code
             const resetCode = CryptoUtils.generateNumericCode(6);
-            const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+            const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-            await this.userModel.setResetToken(user.id, resetCode, expiresAt);
+            await userModel.setResetToken(user.id, resetCode, expiresAt);
 
-            // Send email
-            await this.emailService.sendPasswordResetEmail(
+            const emailService = new EmailService(RESEND_API_KEY);
+            await emailService.sendPasswordResetEmail(
                 body.email,
                 resetCode,
                 this.getLanguage(c)
             );
 
-            return this.success(c, { message: this.t('reset_code_sent', c) });
-
+            return this.success(c, { message: this.t('auth_reset_code_sent', c) });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
     }
 
     /**
-     * Reset password - Step 2: Verify code and set new password
+     * Verify reset code
+     * POST /api/auth/verify-reset-code
+     */
+    async verifyResetCode(c: AppContext) {
+        try {
+            const { DB } = c.env;
+
+            const body = await this.getBody<{ email: string; code: string }>(c);
+            if (!body?.email || !body?.code) {
+                return this.validationError(c, this.t('auth_email_code_required', c));
+            }
+
+            const userModel = new UserModel(DB);
+            const user = await userModel.findByEmail(body.email);
+
+            if (!user) {
+                return this.error(c, this.t('auth_invalid_code', c));
+            }
+
+            const storedCode = (user as any).reset_token;
+            const expiresAt = (user as any).reset_token_expires;
+
+            if (storedCode !== body.code || new Date(expiresAt) < new Date()) {
+                return this.error(c, this.t('auth_invalid_code', c));
+            }
+
+            return this.success(c, {
+                valid: true,
+                message: this.t('auth_code_verified', c)
+            });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Reset password
      * POST /api/auth/reset-password
      */
     async resetPassword(c: AppContext) {
         try {
+            const { DB } = c.env;
+
             const body = await this.getBody<{
                 email: string;
                 code: string;
@@ -255,59 +380,31 @@ export class AuthController extends BaseController {
             }>(c);
 
             if (!body?.email || !body?.code || !body?.newPassword) {
-                return this.validationError(c, this.t('error_required_fields', c));
+                return this.validationError(c, this.t('auth_password_required', c));
             }
 
             if (body.newPassword.length < 8) {
                 return this.validationError(c, this.t('password_min_length', c));
             }
 
-            const user = await this.userModel.findByEmail(body.email);
+            const userModel = new UserModel(DB);
+            const user = await userModel.findByEmail(body.email);
 
             if (!user) {
-                return this.error(c, this.t('error_invalid_code', c));
+                return this.error(c, this.t('auth_invalid_code', c));
             }
 
-            // Verify code (stored in reset_token)
             const storedCode = (user as any).reset_token;
             const expiresAt = (user as any).reset_token_expires;
 
             if (storedCode !== body.code || new Date(expiresAt) < new Date()) {
-                return this.error(c, this.t('error_invalid_code', c));
+                return this.error(c, this.t('auth_invalid_code', c));
             }
 
-            // Update password
             const passwordHash = await CryptoUtils.hashPassword(body.newPassword);
-            await this.userModel.updatePassword(user.id, passwordHash);
+            await userModel.updatePassword(user.id, passwordHash);
 
-            return this.success(c, { message: this.t('password_reset_success', c) });
-
-        } catch (error) {
-            return this.serverError(c, error as Error);
-        }
-    }
-
-    /**
-     * Check auth status
-     * GET /api/auth/me
-     */
-    async me(c: AppContext) {
-        try {
-            const authHeader = c.req.header('Authorization');
-            const sessionId = authHeader?.replace('Bearer ', '');
-
-            if (!sessionId) {
-                return this.unauthorized(c);
-            }
-
-            const result = await this.sessionModel.findValidSession(sessionId);
-
-            if (!result) {
-                return this.unauthorized(c);
-            }
-
-            return this.success(c, { user: result.user });
-
+            return this.success(c, { message: this.t('auth_password_changed', c) });
         } catch (error) {
             return this.serverError(c, error as Error);
         }

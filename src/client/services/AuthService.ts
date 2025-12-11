@@ -18,7 +18,7 @@ interface ApiResponse {
     error?: string;
     message?: string;
     user?: any;
-    data?: { user?: any };
+    data?: { user?: any; message?: string; sessionId?: string };
     sessionId?: string;
 }
 
@@ -187,21 +187,39 @@ export class AuthService {
 
             const data = await res.json() as ApiResponse;
 
+            // DEBUG: Log the full response
+            console.log('[DEBUG] Login Response:', JSON.stringify(data, null, 2));
+
             if (data.success) {
-                State.currentUser = data.user;
-                State.sessionId = data.sessionId || null;
-                localStorage.setItem('user', JSON.stringify(data.user));
-                localStorage.setItem('sessionId', data.sessionId || '');
+                // Server wraps response in data.data
+                const responseData = data.data || data;
+                const user = responseData.user;
+                const sessionId = responseData.sessionId;
+
+                // DEBUG: Log what we're extracting
+                console.log('[DEBUG] Extracted sessionId:', sessionId);
+                console.log('[DEBUG] Extracted user:', user);
+
+                State.currentUser = user;
+                State.sessionId = sessionId || null;
+                localStorage.setItem('user', JSON.stringify(user));
+                localStorage.setItem('sessionId', sessionId || '');
+                CookieUtils.set('sessionId', sessionId || '', 7);
+
+                // DEBUG: Verify storage
+                console.log('[DEBUG] localStorage sessionId:', localStorage.getItem('sessionId'));
+                console.log('[DEBUG] Cookie sessionId:', CookieUtils.get('sessionId'));
 
                 this.updateAuthUI();
                 Modal.hideLogin();
                 Toast.success(t('client.toast.welcome', State.lang));
             } else {
-                Modal.showAuthMessage(data.error || t('auth.invalid_credentials', State.lang), 'error');
+                console.log('[DEBUG] Login failed:', data.error);
+                Modal.showAuthMessage(data.error || t('auth_invalid_credentials', State.lang), 'error');
             }
         } catch (error) {
             console.error('Login error:', error);
-            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
         }
     }
 
@@ -235,17 +253,17 @@ export class AuthService {
             const data = await res.json() as ApiResponse;
 
             if (data.success) {
-                Modal.showAuthMessage(data.message || t('auth.register_success', State.lang), 'success');
+                Modal.showAuthMessage(data.data?.message || t('auth_register_success', State.lang), 'success');
                 const form = document.getElementById('registerForm')?.querySelector('form');
                 if (form) form.reset();
                 // Switch to login tab after 2 seconds
                 setTimeout(() => Modal.switchAuthTab('login'), 2000);
             } else {
-                Modal.showAuthMessage(data.error || t('auth.email_exists', State.lang), 'error');
+                Modal.showAuthMessage(data.error || t('auth_email_exists', State.lang), 'error');
             }
         } catch (error) {
             console.error('Registration error:', error);
-            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
         }
     }
 
@@ -269,7 +287,7 @@ export class AuthService {
             const data = await res.json() as ApiResponse;
 
             if (data.success) {
-                Modal.showAuthMessage(data.message || t('auth.code_sent', State.lang), 'success');
+                Modal.showAuthMessage(data.data?.message || t('auth_reset_code_sent', State.lang), 'success');
                 document.getElementById('resetStep1')?.classList.add('hidden');
                 document.getElementById('resetStep2')?.classList.remove('hidden');
             } else {
@@ -304,15 +322,15 @@ export class AuthService {
             const data = await res.json() as ApiResponse;
 
             if (data.success) {
-                Modal.showAuthMessage(data.message || t('auth.code_verified', State.lang), 'success');
+                Modal.showAuthMessage(data.data?.message || t('auth_code_verified', State.lang), 'success');
                 document.getElementById('resetStep2')?.classList.add('hidden');
                 document.getElementById('resetStep3')?.classList.remove('hidden');
             } else {
-                Modal.showAuthMessage(data.error || t('auth.invalid_code', State.lang), 'error');
+                Modal.showAuthMessage(data.error || t('auth_invalid_code', State.lang), 'error');
             }
         } catch (error) {
             console.error('Verify code error:', error);
-            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
         }
     }
 
@@ -341,7 +359,7 @@ export class AuthService {
             const data = await res.json() as ApiResponse;
 
             if (data.success) {
-                Modal.showAuthMessage(data.message || t('auth.password_reset_success', State.lang), 'success');
+                Modal.showAuthMessage(data.data?.message || t('auth_password_changed', State.lang), 'success');
                 setTimeout(() => {
                     Modal.showLoginForm();
                     const form = document.getElementById('forgotPasswordForm')?.querySelector('form');
@@ -352,7 +370,7 @@ export class AuthService {
             }
         } catch (error) {
             console.error('Reset password error:', error);
-            Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
+            Modal.showAuthMessage(t('auth_connection_failed', State.lang), 'error');
         }
     }
 
