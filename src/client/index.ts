@@ -23,6 +23,8 @@ import { t, isRTL } from '../i18n';
 import { Toast } from './ui/Toast';
 import { Modal } from './ui/Modal';
 import { Menu } from './ui/Menu';
+import { NotificationsUI } from './ui/NotificationsUI';
+import { MessagesUI } from './ui/MessagesUI';
 
 // Helpers
 import { DateFormatter } from './helpers/DateFormatter';
@@ -169,6 +171,8 @@ declare global {
         selectCountry: (code: string) => void;
         showHelp: typeof Modal.showHelp;
         checkAuth: typeof AuthService.checkAuth;
+        toggleNotifications: typeof NotificationsUI.toggle;
+        markAllNotificationsRead: typeof NotificationsUI.markAllAsRead;
     }
 }
 
@@ -237,6 +241,8 @@ if (typeof window !== 'undefined') {
     window.selectCountry = (code: string) => CountryFunctions.select(code);
     window.showHelp = () => Modal.showHelp();
     window.checkAuth = () => AuthService.checkAuth();
+    window.toggleNotifications = () => NotificationsUI.toggle();
+    window.markAllNotificationsRead = () => NotificationsUI.markAllAsRead();
 }
 
 // Auto-initialize when DOM is ready

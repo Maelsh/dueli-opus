@@ -41,15 +41,15 @@ export class ThemeService {
             document.body.classList.add('dark');
 
             // Show sun icon in dark mode, hide moon
-            if (moonIcon) moonIcon.classList.add('hidden');
-            if (sunIcon) sunIcon.classList.remove('hidden');
+            if (moonIcon) moonIcon.classList.add('theme-icon-hidden');
+            if (sunIcon) sunIcon.classList.remove('theme-icon-hidden');
         } else {
             document.documentElement.classList.remove('dark');
             document.body.classList.remove('dark');
 
             // Show moon icon in light mode, hide sun
-            if (moonIcon) moonIcon.classList.remove('hidden');
-            if (sunIcon) sunIcon.classList.add('hidden');
+            if (moonIcon) moonIcon.classList.remove('theme-icon-hidden');
+            if (sunIcon) sunIcon.classList.add('theme-icon-hidden');
         }
     }
 

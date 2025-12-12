@@ -381,4 +381,38 @@ export const en = {
     search: {
         no_results: 'No results found',
     },
+
+    // Profile page (new)
+    wins: 'Wins',
+    posts: 'Posts',
+    no_competitions: 'No competitions yet',
+    no_posts: 'No posts yet',
+    edit_profile: 'Edit Profile',
+    send_message: 'Message',
+
+    // Competition status (new)
+    completed: 'Completed',
+    view: 'View',
+    confirm_delete: 'Are you sure you want to delete?',
+
+    // Requests (new)
+    received_requests: 'Received',
+    sent_requests: 'Sent',
+    no_requests: 'No requests yet',
+    wants_to_join: 'Wants to join your competition',
+    you_requested: 'You requested to join',
+
+    // Interaction buttons (new)
+    remind_me: 'Remind Me',
+    reminder_added: 'Reminder added!',
+    report_inappropriate: 'Inappropriate content',
+    report_spam: 'Spam or misleading',
+    report_harassment: 'Harassment or bullying',
+    report_submitted: 'Report submitted. Thank you!',
+    select_reason: 'Please select a reason',
+
+    // Jitsi / Live (new)
+    jitsi_not_configured: 'Live streaming is not configured yet.',
+    confirm_end_call: 'Are you sure you want to end the call?',
 };
+

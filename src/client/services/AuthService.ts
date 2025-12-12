@@ -8,6 +8,8 @@ import { State } from '../core/State';
 import { CookieUtils } from '../core/CookieUtils';
 import { Toast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
+import { NotificationsUI } from '../ui/NotificationsUI';
+import { MessagesUI } from '../ui/MessagesUI';
 import { t } from '../../i18n';
 
 /**
@@ -106,6 +108,10 @@ export class AuthService {
                 if (userEmail) userEmail.textContent = State.currentUser.email;
             }
             if (createCompBtn) createCompBtn.classList.remove('hidden');
+
+            // Initialize notifications and messages
+            NotificationsUI.init();
+            MessagesUI.init();
         } else {
             // User is not logged in
             if (authSection) authSection.classList.remove('hidden');

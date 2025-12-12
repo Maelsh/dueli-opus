@@ -15,7 +15,8 @@ export class Menu {
     static toggleUser(): void {
         const menu = document.getElementById('userMenu');
         if (menu) {
-            menu.classList.toggle('hidden');
+            // Use 'show' class to match CSS transitions (opacity/visibility)
+            menu.classList.toggle('show');
         }
     }
 
@@ -48,9 +49,14 @@ export class Menu {
     static closeAll(): void {
         const userMenu = document.getElementById('userMenu');
         const countryMenu = document.getElementById('countryMenu');
+        const notificationsDropdown = document.getElementById('notificationsDropdown');
 
-        if (userMenu) userMenu.classList.add('hidden');
+        // User menu uses 'show' class
+        if (userMenu) userMenu.classList.remove('show');
+        // Country menu uses 'hidden' class
         if (countryMenu) countryMenu.classList.add('hidden');
+        // Notifications dropdown uses 'hidden' class
+        if (notificationsDropdown) notificationsDropdown.classList.add('hidden');
     }
 
     /**
@@ -67,14 +73,22 @@ export class Menu {
                 countryMenu.classList.add('hidden');
             }
 
-            // User menu
+            // User menu - use 'show' class
             const userBtn = target.closest('[onclick*="toggleUserMenu"]');
             const userMenu = document.getElementById('userMenu');
             if (!userBtn && userMenu && !userMenu.contains(target)) {
-                userMenu.classList.add('hidden');
+                userMenu.classList.remove('show');
+            }
+
+            // Notifications dropdown
+            const notifBtn = target.closest('[onclick*="toggleNotifications"]');
+            const notifDropdown = document.getElementById('notificationsDropdown');
+            if (!notifBtn && notifDropdown && !notifDropdown.contains(target)) {
+                notifDropdown.classList.add('hidden');
             }
         });
     }
 }
 
 export default Menu;
+

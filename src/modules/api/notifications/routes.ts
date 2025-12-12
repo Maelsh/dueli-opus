@@ -8,9 +8,13 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { UserController } from '../../../controllers';
+import { authMiddleware } from '../../../middleware/auth';
 
 const notificationsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new UserController();
+
+// Apply auth middleware to all notifications routes
+notificationsRoutes.use('*', authMiddleware({ required: true }));
 
 /**
  * Get notifications
@@ -31,3 +35,4 @@ notificationsRoutes.post('/:id/read', (c) => controller.markNotificationRead(c))
 notificationsRoutes.post('/read-all', (c) => controller.markAllNotificationsRead(c));
 
 export default notificationsRoutes;
+

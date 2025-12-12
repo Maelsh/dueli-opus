@@ -7,9 +7,13 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { MessageController } from '../../../controllers/MessageController';
+import { authMiddleware } from '../../../middleware/auth';
 
 const messagesRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new MessageController();
+
+// Apply auth middleware to all messages routes
+messagesRoutes.use('*', authMiddleware({ required: true }));
 
 /**
  * GET /api/conversations

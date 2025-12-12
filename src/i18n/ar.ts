@@ -384,4 +384,38 @@ export const ar = {
     search: {
         no_results: 'لا توجد نتائج',
     },
+
+    // صفحة الملف الشخصي (جديد)
+    wins: 'انتصارات',
+    posts: 'منشورات',
+    no_competitions: 'لا توجد منافسات بعد',
+    no_posts: 'لا توجد منشورات بعد',
+    edit_profile: 'تعديل الملف الشخصي',
+    send_message: 'رسالة',
+
+    // حالة المنافسة (جديد)
+    completed: 'مكتملة',
+    view: 'عرض',
+    confirm_delete: 'هل أنت متأكد من الحذف؟',
+
+    // الطلبات (جديد)
+    received_requests: 'المستلمة',
+    sent_requests: 'المرسلة',
+    no_requests: 'لا توجد طلبات بعد',
+    wants_to_join: 'يريد الانضمام لمنافستك',
+    you_requested: 'طلبت الانضمام إلى',
+
+    // أزرار التفاعل (جديد)
+    remind_me: 'ذكرني',
+    reminder_added: 'تم إضافة التذكير!',
+    report_inappropriate: 'محتوى غير لائق',
+    report_spam: 'بريد مزعج أو مضلل',
+    report_harassment: 'تحرش أو تنمر',
+    report_submitted: 'تم إرسال البلاغ. شكراً لك!',
+    select_reason: 'الرجاء اختيار سبب',
+
+    // البث المباشر / Jitsi (جديد)
+    jitsi_not_configured: 'لم يتم إعداد خدمة البث المباشر بعد.',
+    confirm_end_call: 'هل أنت متأكد من إنهاء المكالمة؟',
 };
+

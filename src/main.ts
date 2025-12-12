@@ -400,7 +400,7 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, verifyPage, competitionPage, createPage, explorePage } from './modules/pages';
+import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
@@ -408,6 +408,13 @@ app.get('/verify', verifyPage);
 app.get('/competition/:id', competitionPage);
 app.get('/create', createPage);
 app.get('/explore', explorePage);
+app.get('/profile', profilePage); // Own profile
+app.get('/profile/:username', profilePage);
+app.get('/messages', messagesPage);
+app.get('/settings', settingsPage);
+app.get('/my-competitions', myCompetitionsPage);
+app.get('/my-requests', myRequestsPage);
+app.get('/live/:id', liveRoomPage);
 
 // ============================================
 // Error Handling - معالجة الأخطاء

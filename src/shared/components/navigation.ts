@@ -60,7 +60,7 @@ export function getNavigation(lang: Language): string {
           <!-- Dark Mode Toggle -->
           <button onclick="toggleDarkMode()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors" title="${tr.theme}">
             <i id="moonIcon" class="fas fa-moon text-2xl"></i>
-            <i id="sunIcon" class="fas fa-sun text-2xl text-amber-400 hidden"></i>
+            <i id="sunIcon" class="fas fa-sun text-2xl text-amber-400 theme-icon-hidden"></i>
           </button>
 
           <!-- Separator -->
@@ -74,12 +74,40 @@ export function getNavigation(lang: Language): string {
           </div>
           
           <!-- User Section (hidden when not logged in) -->
-          <div id="userSection" class="hidden">
+          <div id="userSection" class="flex items-center gap-2 hidden">
+            <!-- Notifications Button -->
+            <div class="relative">
+              <button onclick="toggleNotifications()" class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.notification?.new_join_request || 'Notifications'}">
+                <i class="fas fa-bell text-xl"></i>
+                <span id="notificationBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
+              </button>
+              <!-- Notifications Dropdown -->
+              <div id="notificationsDropdown" class="hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden">
+                <div class="p-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                  <span class="font-bold text-gray-900 dark:text-white">${tr.notification?.new_join_request || 'Notifications'}</span>
+                  <button onclick="markAllNotificationsRead()" class="text-xs text-purple-600 hover:underline">${tr.view_all || 'Mark all read'}</button>
+                </div>
+                <div id="notificationsList" class="overflow-y-auto max-h-72">
+                  <div class="p-4 text-center text-gray-400 text-sm">
+                    <i class="fas fa-bell-slash text-2xl mb-2"></i>
+                    <p>${tr.loading || 'Loading...'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Messages Button -->
+            <a href="/messages?lang=${lang}" class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.messages?.title || 'Messages'}">
+              <i class="fas fa-envelope text-xl"></i>
+              <span id="messagesBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
+            </a>
+
+            <!-- User Avatar & Menu -->
             <div class="relative">
               <button onclick="toggleUserMenu()" class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
                 <img id="userAvatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="" class="w-9 h-9 rounded-full border-2 border-purple-400">
               </button>
-              <div id="userMenu" class="hidden user-menu ${isRTL ? 'left-0' : 'right-0'}">
+              <div id="userMenu" class="user-menu ${isRTL ? 'left-0' : 'right-0'}">
                 <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                   <p id="userName" class="font-bold text-gray-900 dark:text-white">User</p>
                   <p id="userEmail" class="text-sm text-gray-500">email@example.com</p>
@@ -96,6 +124,11 @@ export function getNavigation(lang: Language): string {
                   <i class="fas fa-inbox text-gray-500"></i>
                   <span>${tr.my_requests}</span>
                 </a>
+                <a href="/settings?lang=${lang}" class="user-menu-item">
+                  <i class="fas fa-cog text-gray-500"></i>
+                  <span>${tr.settings}</span>
+                </a>
+                <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
                 <button onclick="logout()" class="user-menu-item text-red-600 w-full">
                   <i class="fas fa-sign-out-alt"></i>
                   <span>${tr.logout}</span>

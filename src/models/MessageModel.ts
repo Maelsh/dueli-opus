@@ -134,10 +134,8 @@ export class MessageModel extends BaseModel<Message> {
         const result = await this.db.prepare(`
             SELECT COUNT(*) as count 
             FROM ${this.tableName} m
-            JOIN conversations c ON m.conversation_id = c.id
-            WHERE (c.user1_id = ? OR c.user2_id = ?) 
-            AND m.sender_id != ? AND m.read_at IS NULL
-        `).bind(userId, userId, userId).first<{ count: number }>();
+            WHERE m.receiver_id = ? AND m.is_read = 0
+        `).bind(userId).first<{ count: number }>();
         return result?.count || 0;
     }
 }

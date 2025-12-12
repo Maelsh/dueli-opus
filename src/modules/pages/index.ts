@@ -8,4 +8,11 @@ export { verifyPage } from './verify-page';
 export { competitionPage } from './competition-page';
 export { createPage } from './create-page';
 export { explorePage } from './explore-page';
+export { profilePage } from './profile-page';
+export { messagesPage } from './messages-page';
+export { settingsPage } from './settings-page';
+export { myCompetitionsPage } from './my-competitions-page';
+export { myRequestsPage } from './my-requests-page';
+export { liveRoomPage } from './live-room-page';
 export { default as staticPagesRoutes } from './static-pages';
+

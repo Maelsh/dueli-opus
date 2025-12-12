@@ -196,6 +196,23 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <p class="text-sm text-gray-500">\${tr.comments}</p>
                     </div>
                   </div>
+                  
+                  <!-- Interaction Buttons -->
+                  <div class="flex gap-2 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <button onclick="toggleLike()" id="likeBtn" 
+                      class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 \${comp.user_liked ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500'}">
+                      <i class="fas fa-heart"></i>
+                      <span id="likeCount">\${comp.likes_count || 0}</span>
+                    </button>
+                    <button onclick="toggleReminder()" id="reminderBtn" 
+                      class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 \${comp.user_reminded ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-amber-50 hover:text-amber-500'}">
+                      <i class="fas fa-bell"></i>
+                      \${comp.user_reminded ? tr.reminder_set || 'Reminder On' : tr.remind_me || 'Remind Me'}
+                    </button>
+                    <button onclick="showReportModal()" class="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                      <i class="fas fa-flag"></i>
+                    </button>
+                  </div>
                 </div>
                 
                 <div class="card overflow-hidden">
@@ -280,6 +297,143 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           });
           input.value = '';
           loadCompetition();
+        } catch (err) { console.error(err); }
+      }
+      
+      async function toggleLike() {
+        if (!window.currentUser) { showLoginModal(); return; }
+        const btn = document.getElementById('likeBtn');
+        const countEl = document.getElementById('likeCount');
+        const isLiked = btn.classList.contains('bg-red-100');
+        
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/like', {
+            method: isLiked ? 'DELETE' : 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (res.ok) {
+            const currentCount = parseInt(countEl.textContent) || 0;
+            if (isLiked) {
+              btn.classList.remove('bg-red-100', 'dark:bg-red-900/30', 'text-red-600');
+              btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
+              countEl.textContent = Math.max(0, currentCount - 1);
+            } else {
+              btn.classList.add('bg-red-100', 'dark:bg-red-900/30', 'text-red-600');
+              btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
+              countEl.textContent = currentCount + 1;
+            }
+          }
+        } catch (err) { console.error(err); }
+      }
+      
+      async function toggleReminder() {
+        if (!window.currentUser) { showLoginModal(); return; }
+        const btn = document.getElementById('reminderBtn');
+        const isReminded = btn.classList.contains('bg-amber-100');
+        
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/remind', {
+            method: isReminded ? 'DELETE' : 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (res.ok) {
+            if (isReminded) {
+              btn.classList.remove('bg-amber-100', 'dark:bg-amber-900/30', 'text-amber-600');
+              btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
+              btn.innerHTML = '<i class="fas fa-bell"></i> ' + (tr.remind_me || 'Remind Me');
+            } else {
+              btn.classList.add('bg-amber-100', 'dark:bg-amber-900/30', 'text-amber-600');
+              btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
+              btn.innerHTML = '<i class="fas fa-bell"></i> ' + (tr.reminder_set || 'Reminder On');
+              showToast(tr.reminder_added || 'Reminder added!', 'success');
+            }
+          }
+        } catch (err) { console.error(err); }
+      }
+      
+      function showReportModal() {
+        if (!window.currentUser) { showLoginModal(); return; }
+        
+        // Create report modal
+        const modal = document.createElement('div');
+        modal.id = 'reportModal';
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = \`
+          <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 transform animate-scale-up">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              <i class="fas fa-flag text-red-500 \${isRTL ? 'ml-2' : 'mr-2'}"></i>
+              \${tr.report || 'Report'}
+            </h3>
+            <div class="space-y-3 mb-6">
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                <input type="radio" name="reason" value="inappropriate" class="text-red-600">
+                <span>\${tr.report_inappropriate || 'Inappropriate content'}</span>
+              </label>
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                <input type="radio" name="reason" value="spam" class="text-red-600">
+                <span>\${tr.report_spam || 'Spam or misleading'}</span>
+              </label>
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                <input type="radio" name="reason" value="harassment" class="text-red-600">
+                <span>\${tr.report_harassment || 'Harassment or bullying'}</span>
+              </label>
+              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+                <input type="radio" name="reason" value="other" class="text-red-600">
+                <span>\${tr.other || 'Other'}</span>
+              </label>
+            </div>
+            <div class="flex gap-3">
+              <button onclick="closeReportModal()" class="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
+                \${tr.cancel || 'Cancel'}
+              </button>
+              <button onclick="submitReport()" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors">
+                \${tr.submit || 'Submit'}
+              </button>
+            </div>
+          </div>
+        \`;
+        
+        document.body.appendChild(modal);
+        modal.onclick = (e) => { if (e.target === modal) closeReportModal(); };
+      }
+      
+      function closeReportModal() {
+        document.getElementById('reportModal')?.remove();
+      }
+      
+      async function submitReport() {
+        const reason = document.querySelector('input[name="reason"]:checked')?.value;
+        if (!reason) {
+          showToast(tr.select_reason || 'Please select a reason', 'error');
+          return;
+        }
+        
+        try {
+          const res = await fetch('/api/reports', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              target_type: 'competition',
+              target_id: competitionId,
+              reason: reason
+            })
+          });
+          
+          if (res.ok) {
+            showToast(tr.report_submitted || 'Report submitted. Thank you!', 'success');
+            closeReportModal();
+          }
         } catch (err) { console.error(err); }
       }
     </script>

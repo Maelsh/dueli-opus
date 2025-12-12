@@ -6,8 +6,8 @@
 /* stylelint-disable-next-line at-rule-no-unknown */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Override Font Awesome's display property to fix icon visibility */
-.hidden {
+/* Theme icon visibility - specific class for moon/sun toggle */
+.theme-icon-hidden {
     display: none !important;
 }
 

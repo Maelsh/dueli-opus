@@ -27,8 +27,10 @@ export class ApiClient {
             ...options.headers,
         };
 
-        if (State.sessionId) {
-            headers['Authorization'] = 'Bearer ' + State.sessionId;
+        // Get session from State or localStorage fallback
+        const session = State.sessionId || localStorage.getItem('sessionId');
+        if (session) {
+            headers['Authorization'] = 'Bearer ' + session;
         }
 
         const response = await fetch(endpoint, {
