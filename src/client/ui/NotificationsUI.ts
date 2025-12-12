@@ -78,7 +78,7 @@ export class NotificationsUI {
             const isHidden = dropdown.classList.contains('hidden');
 
             // Close other dropdowns
-            document.getElementById('userMenu')?.classList.add('hidden');
+            document.getElementById('userMenu')?.classList.remove('show'); // userMenu uses 'show' class
             document.getElementById('countryMenu')?.classList.add('hidden');
 
             dropdown.classList.toggle('hidden');
