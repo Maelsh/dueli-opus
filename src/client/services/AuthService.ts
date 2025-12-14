@@ -54,6 +54,16 @@ export class AuthService {
                     State.currentUser = user;
                     State.sessionId = savedSession;
 
+                    // Apply user's language/country preferences from database
+                    if (user.language) {
+                        State.lang = user.language;
+                        CookieUtils.set('lang', user.language, 365);
+                    }
+                    if (user.country) {
+                        State.country = user.country;
+                        CookieUtils.set('country', user.country, 365);
+                    }
+
                     // Update storage
                     localStorage.setItem('user', JSON.stringify(user));
                     localStorage.setItem('sessionId', savedSession);
@@ -92,6 +102,8 @@ export class AuthService {
         const authSection = document.getElementById('authSection');
         const userSection = document.getElementById('userSection');
         const createCompBtn = document.getElementById('createCompBtn');
+        const upcomingTab = document.getElementById('tab-upcoming');
+        const helpIcon = document.getElementById('helpIcon');
 
         if (State.currentUser) {
             // User is logged in
@@ -109,6 +121,12 @@ export class AuthService {
             }
             if (createCompBtn) createCompBtn.classList.remove('hidden');
 
+            // Show upcoming tab for logged-in users
+            if (upcomingTab) upcomingTab.classList.remove('hidden');
+
+            // Hide help icon for logged-in users (use auth-hidden to override nav-icon)
+            if (helpIcon) helpIcon.classList.add('auth-hidden');
+
             // Initialize notifications and messages
             NotificationsUI.init();
             MessagesUI.init();
@@ -117,6 +135,12 @@ export class AuthService {
             if (authSection) authSection.classList.remove('hidden');
             if (userSection) userSection.classList.add('hidden');
             if (createCompBtn) createCompBtn.classList.add('hidden');
+
+            // Hide upcoming tab for non-logged-in users
+            if (upcomingTab) upcomingTab.classList.add('hidden');
+
+            // Show help icon for non-logged-in users
+            if (helpIcon) helpIcon.classList.remove('auth-hidden');
         }
     }
 

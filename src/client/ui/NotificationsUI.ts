@@ -78,8 +78,9 @@ export class NotificationsUI {
             const isHidden = dropdown.classList.contains('hidden');
 
             // Close other dropdowns
-            document.getElementById('userMenu')?.classList.remove('show'); // userMenu uses 'show' class
+            document.getElementById('userMenu')?.classList.remove('show');
             document.getElementById('countryMenu')?.classList.add('hidden');
+            document.getElementById('messagesDropdown')?.classList.add('hidden');
 
             dropdown.classList.toggle('hidden');
 
@@ -110,14 +111,21 @@ export class NotificationsUI {
             <div class="p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${!notification.is_read ? 'bg-purple-50 dark:bg-purple-900/20' : ''}"
                  onclick="NotificationsUI.markAsRead(${notification.id})">
                 <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600">
+                    <div class="w-10 h-10 rounded-full ${this.getNotificationColor(notification.type)} flex items-center justify-center">
                         <i class="fas ${this.getNotificationIcon(notification.type)}"></i>
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-sm text-gray-900 dark:text-white ${!notification.is_read ? 'font-semibold' : ''}">${notification.message}</p>
                         <p class="text-xs text-gray-400 mt-1">${this.formatTime(notification.created_at)}</p>
                     </div>
-                    ${!notification.is_read ? '<span class="w-2 h-2 rounded-full bg-purple-600"></span>' : ''}
+                    <div class="flex items-center gap-1">
+                        <button onclick="event.stopPropagation(); NotificationsUI.toggleStar(${notification.id})" 
+                                class="p-1 hover:text-amber-500 ${notification.data?.starred ? 'text-amber-500' : 'text-gray-400'}" 
+                                title="Star">
+                            <i class="fas fa-star text-xs"></i>
+                        </button>
+                        ${!notification.is_read ? '<span class="w-2 h-2 rounded-full bg-purple-600"></span>' : ''}
+                    </div>
                 </div>
             </div>
         `).join('');
@@ -135,9 +143,32 @@ export class NotificationsUI {
             'new_message': 'fa-envelope',
             'competition_started': 'fa-play-circle',
             'competition_ended': 'fa-flag-checkered',
+            'competition_reminder': 'fa-clock',
+            'warning': 'fa-exclamation-triangle',
+            'earnings': 'fa-coins',
+            'report': 'fa-flag',
+            'system': 'fa-info-circle',
             'default': 'fa-bell'
         };
         return icons[type] || icons['default'];
+    }
+
+    /**
+     * Get notification color based on type
+     */
+    private static getNotificationColor(type: string): string {
+        const colors: Record<string, string> = {
+            'join_request': 'bg-blue-100 dark:bg-blue-900/40 text-blue-600',
+            'request_accepted': 'bg-green-100 dark:bg-green-900/40 text-green-600',
+            'request_declined': 'bg-red-100 dark:bg-red-900/40 text-red-600',
+            'new_follower': 'bg-pink-100 dark:bg-pink-900/40 text-pink-600',
+            'warning': 'bg-amber-100 dark:bg-amber-900/40 text-amber-600',
+            'earnings': 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600',
+            'report': 'bg-orange-100 dark:bg-orange-900/40 text-orange-600',
+            'competition_reminder': 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600',
+            'default': 'bg-purple-100 dark:bg-purple-900/40 text-purple-600'
+        };
+        return colors[type] || colors['default'];
     }
 
     /**
@@ -187,6 +218,23 @@ export class NotificationsUI {
             this.renderList();
         } catch (error) {
             console.error('Failed to mark all notifications as read:', error);
+        }
+    }
+
+    /**
+     * Toggle star/favorite on notification
+     */
+    static async toggleStar(id: number): Promise<void> {
+        try {
+            const notification = this.notifications.find(n => n.id === id);
+            if (notification) {
+                const isStarred = !notification.data?.starred;
+                await ApiClient.post(`/api/notifications/${id}/star`, { starred: isStarred });
+                notification.data = { ...notification.data, starred: isStarred };
+                this.renderList();
+            }
+        } catch (error) {
+            console.error('Failed to toggle star:', error);
         }
     }
 }

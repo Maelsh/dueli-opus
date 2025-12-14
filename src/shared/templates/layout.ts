@@ -35,7 +35,7 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
       body { font-family: ${fontFamily}, system-ui, sans-serif; }
     </style>
 </head>
-<body class="bg-white dark:bg-[#0f0f0f] text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-300">
+<body class="bg-white dark:bg-[#0f0f0f] text-gray-900 dark:text-gray-100 min-h-screen flex flex-col transition-colors duration-300">
     ${content}
     <script src="/static/app.js"></script>
 </body>

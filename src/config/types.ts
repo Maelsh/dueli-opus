@@ -129,6 +129,22 @@ export interface Competition extends TimestampedEntity {
   youtube_video_url?: string;
   total_views: number;
   total_comments: number;
+  likes_count?: number;
+  dislikes_count?: number;
+  // Joined Category Data
+  category_name_key?: string;
+  category_slug?: string;
+  category_icon?: string;
+  category_color?: string;
+  subcategory_name_key?: string;
+  subcategory_slug?: string;
+  // Joined User Data
+  creator_name?: string;
+  creator_username?: string;
+  creator_avatar?: string;
+  opponent_name?: string;
+  opponent_username?: string;
+  opponent_avatar?: string;
 }
 
 /**

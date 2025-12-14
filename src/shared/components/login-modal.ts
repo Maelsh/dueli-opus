@@ -45,7 +45,7 @@ export function getLoginModal(lang: Language): string {
           <form onsubmit="handleLogin(event)" class="space-y-4 mb-6">
             <div>
               <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
-              <input type="email" id="loginEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+              <input type="email" id="loginEmail" required title="${tr.email_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
             <div>
               <div class="flex justify-between items-center mb-2">
@@ -54,7 +54,7 @@ export function getLoginModal(lang: Language): string {
                   ${tr.forgot_password}
                 </button>
               </div>
-              <input type="password" id="loginPassword" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+              <input type="password" id="loginPassword" required title="${tr.password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
             <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
               ${tr.login_button}
@@ -131,7 +131,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
       <form id="resetStep1" onsubmit="handleForgotPassword(event)" class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
-          <input type="email" id="resetEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="email" id="resetEmail" required title="${tr.email_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
           ${tr.send_code}
@@ -142,7 +142,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
       <form id="resetStep2" onsubmit="handleVerifyResetCode(event)" class="space-y-4 hidden">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.verification_code_label}</label>
-          <input type="text" id="resetCode" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl tracking-widest">
+          <input type="text" id="resetCode" required title="${tr.verification_code_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl tracking-widest">
           <p class="text-xs text-gray-500 mt-2 text-center">${tr.code_sent_to_email}</p>
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
@@ -154,7 +154,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
       <form id="resetStep3" onsubmit="handleResetPassword(event)" class="space-y-4 hidden">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.new_password_label}</label>
-          <input type="password" id="newPassword" required minlength="6" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="password" id="newPassword" required minlength="6" title="${tr.new_password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
           ${tr.change_password}
@@ -173,15 +173,15 @@ function getRegisterForm(lang: Language, tr: any): string {
       <form onsubmit="handleRegister(event)" class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.name_label}</label>
-          <input type="text" id="registerName" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="text" id="registerName" required title="${tr.name_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
-          <input type="email" id="registerEmail" required class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="email" id="registerEmail" required title="${tr.email_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.password_label}</label>
-          <input type="password" id="registerPassword" required minlength="6" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="password" id="registerPassword" required minlength="6" title="${tr.password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
           <p class="text-xs text-gray-500 mt-1">${tr.password_min_length}</p>
         </div>
         <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">

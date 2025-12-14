@@ -4,12 +4,13 @@
  * 
  * هذا الملف هو نقطة الدخول الرئيسية للتطبيق
  * تم تفكيك الكود إلى وحدات منفصلة لتحسين الصيانة والقراءة
+ * This file is now strictly a Server-Side Entry Point (Hono App)
  */
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
-import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE, TRANSLATED_LANGUAGES } from './i18n';
+import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
 
 // Import API Routes - استيراد مسارات API
 import categoriesRoutes from './modules/api/categories/routes';
@@ -113,26 +114,43 @@ app.get('/', (c) => {
               type="text" 
               id="searchInput"
               placeholder="${tr.search_placeholder}"
-              class="search-input"
+              class="search-input ${rtl ? 'pl-12 pr-12' : 'pr-12 pl-12'}"
+              title="${tr.search_placeholder}"
             />
             <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${rtl ? 'right-4' : 'left-4'}">
               <i class="fas fa-search text-lg"></i>
+            </div>
+            <button id="searchBtn" onclick="performSearch()" class="absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-2' : 'right-2'} p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors" title="${tr.search || 'Search'}">
+              <i class="fas fa-arrow-${rtl ? 'left' : 'right'}"></i>
+            </button>
+            <!-- Search Results Dropdown -->
+            <div id="searchDropdown" class="hidden absolute top-full mt-2 w-full bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden max-h-96 overflow-y-auto">
+              <div id="searchResults" class="p-2">
+                <div class="p-4 text-center text-gray-400 text-sm">
+                  <i class="fas fa-search text-2xl mb-2"></i>
+                  <p>${tr.search?.no_results || 'Start typing to search...'}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Main Tabs (Live / Recorded) -->
+      <!-- Main Tabs (Live / Upcoming / Recorded) -->
       <div class="container mx-auto px-4 mb-6">
         <div class="flex justify-center">
           <div class="bg-gray-100 dark:bg-gray-800 p-1 rounded-full inline-flex gap-1">
-            <button onclick="setMainTab('live')" id="tab-live" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active">
+            <button onclick="setMainTab('live')" id="tab-live" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active" title="${tr.live}">
               <span class="w-2 h-2 rounded-full bg-red-500 live-pulse"></span>
               ${tr.live}
             </button>
-            <button onclick="setMainTab('recorded')" id="tab-recorded" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive">
+            <button onclick="setMainTab('recorded')" id="tab-recorded" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive" title="${tr.recorded}">
               <i class="fas fa-play-circle"></i>
               ${tr.recorded}
+            </button>
+            <button onclick="setMainTab('upcoming')" id="tab-upcoming" data-auth-required="true" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive hidden" title="${tr.upcoming}">
+              <i class="fas fa-clock"></i>
+              ${tr.upcoming}
             </button>
           </div>
         </div>
@@ -147,15 +165,15 @@ app.get('/', (c) => {
           </button>
           <button onclick="setSubTab('dialogue')" id="subtab-dialogue" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
             <i class="fas fa-comments text-xs"></i>
-            ${tr.dialogue}
+            ${tr.categories.dialogue}
           </button>
           <button onclick="setSubTab('science')" id="subtab-science" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
             <i class="fas fa-flask text-xs"></i>
-            ${tr.science}
+            ${tr.categories.science}
           </button>
           <button onclick="setSubTab('talents')" id="subtab-talents" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
             <i class="fas fa-star text-xs"></i>
-            ${tr.talents}
+            ${tr.categories.talents}
           </button>
         </div>
       </div>
@@ -180,219 +198,10 @@ app.get('/', (c) => {
     ${getFooter(lang)}
     
     <script>
-      const lang = '${lang}';
-      const isRTL = ${rtl};
-      const tr = ${JSON.stringify(tr)};
-      let currentMainTab = 'live';
-      let currentSubTab = 'all';
-      
-      document.addEventListener('DOMContentLoaded', () => {
-        checkAuth();
-        loadCompetitions();
-      });
-      
-      async function loadCompetitions() {
-        const container = document.getElementById('mainContent');
-        container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i></div>';
-        
-        try {
-          let url = '/api/competitions?limit=24';
-          if (currentMainTab === 'live') url += '&status=live';
-          else if (currentMainTab === 'recorded') url += '&status=recorded';
-          
-          if (currentSubTab !== 'all') {
-            const categoryMap = { dialogue: '1', science: '2', talents: '3' };
-            url += '&category=' + (categoryMap[currentSubTab] || currentSubTab);
-          }
-          
-          const res = await fetch(url);
-          const data = await res.json();
-          
-          if (!data.success || !data.data?.length) {
-            container.innerHTML = renderEmptyState();
-            return;
-          }
-          
-          const dialogueItems = data.data.filter(c => c.category_id === 1 || c.category_slug === 'dialogue');
-          const scienceItems = data.data.filter(c => c.category_id === 2 || c.category_slug === 'science');
-          const talentsItems = data.data.filter(c => c.category_id === 3 || c.category_slug === 'talents');
-          
-          let html = '';
-          
-          if (currentSubTab === 'all' && data.data.length > 0) {
-            html += renderSection(tr.sections?.suggested || tr.loading, data.data.slice(0, 8), 'fas fa-fire', 'purple');
-          }
-          
-          if ((currentSubTab === 'all' || currentSubTab === 'dialogue') && dialogueItems.length > 0) {
-            html += renderSection(tr.sections?.dialogue || tr.dialogue, dialogueItems, 'fas fa-comments', 'purple');
-          }
-          
-          if ((currentSubTab === 'all' || currentSubTab === 'science') && scienceItems.length > 0) {
-            html += renderSection(tr.sections?.science || tr.science, scienceItems, 'fas fa-flask', 'cyan');
-          }
-          
-          if ((currentSubTab === 'all' || currentSubTab === 'talents') && talentsItems.length > 0) {
-            html += renderSection(tr.sections?.talents || tr.talents, talentsItems, 'fas fa-star', 'amber');
-          }
-          
-          if (!html) {
-            html = renderEmptyState();
-          }
-          
-          container.innerHTML = html;
-        } catch (err) {
-          console.error(err);
-          container.innerHTML = '<div class="text-center py-16 text-red-500">' + tr.error_loading + '</div>';
-        }
-      }
-      
-      function renderEmptyState() {
-        return \`
-          <div class="flex flex-col items-center justify-center py-16 text-center">
-            <div class="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
-              <i class="fas fa-search text-3xl text-gray-300 dark:text-gray-600"></i>
-            </div>
-            <p class="text-lg font-medium text-gray-400">\${tr.no_duels}</p>
-            <p class="text-sm text-gray-400 mt-1">\${tr.try_different_filter}</p>
-          </div>
-        \`;
-      }
-      
-      function renderSection(title, items, icon, color = 'purple') {
-        const colorClasses = {
-          purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400',
-          cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/40 dark:text-cyan-400',
-          amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400'
-        };
-        
-        return \`
-          <section class="animate-fade-in">
-            <div class="section-header">
-              <div class="section-icon \${colorClasses[color] || colorClasses.purple}">
-                <i class="\${icon}"></i>
-              </div>
-              <h2 class="text-lg font-bold text-gray-900 dark:text-white">\${title}</h2>
-            </div>
-            
-            <div class="flex overflow-x-auto pb-4 -mx-4 px-4 gap-4 scrollbar-hide snap-x snap-mandatory">
-              \${items.map(item => renderDuelCard(item)).join('')}
-            </div>
-          </section>
-        \`;
-      }
-      
-      function renderDuelCard(item) {
-        const bgColors = {
-          1: 'duel-bg-dialogue',
-          2: 'duel-bg-science',
-          3: 'duel-bg-talents'
-        };
-        const bgColor = bgColors[item.category_id] || 'duel-bg-dialogue';
-        const isLive = item.status === 'live';
-        const isPending = item.status === 'pending';
-        
-        return \`
-          <a href="/competition/\${item.id}?lang=\${lang}" class="duel-card snap-start">
-            <div class="duel-thumbnail \${bgColor} shadow-lg">
-              <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20"></div>
-              
-              <div class="absolute \${isRTL ? 'right-4' : 'left-4'} bottom-4 opacity-20">
-                <i class="\${item.category_icon || 'fas fa-trophy'} text-5xl text-white"></i>
-              </div>
-
-              <div class="absolute inset-0 flex items-center justify-center gap-3 z-10 p-4">
-                <div class="flex flex-col items-center">
-                  <div class="competitor-avatar p-0.5">
-                    <img src="\${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + item.creator_name}" alt="" class="w-full h-full rounded-full bg-white object-cover">
-                  </div>
-                </div>
-
-                <div class="w-12 h-12 bg-white rounded-full shadow-lg z-20 flex items-center justify-center">
-                  <img src="/static/dueli-icon.png" alt="VS" class="w-full h-full object-contain">
-                </div>
-
-                <div class="flex flex-col items-center">
-                  <div class="competitor-avatar p-0.5">
-                    \${item.opponent_avatar ? 
-                      \`<img src="\${item.opponent_avatar}" alt="" class="w-full h-full rounded-full bg-white object-cover">\` :
-                      \`<div class="w-full h-full rounded-full bg-white/80 flex items-center justify-center text-gray-400 text-2xl font-bold">?</div>\`
-                    }
-                  </div>
-                </div>
-              </div>
-
-              <div class="absolute top-3 \${isRTL ? 'right-3' : 'left-3'} z-20">
-                \${isLive ? \`<span class="badge-live"><span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>\${tr.status_live}</span>\` : 
-                  isPending ? \`<span class="badge-pending">\${tr.status_pending}</span>\` : 
-                  \`<span class="badge-recorded"><i class="fas fa-play text-xs"></i>\${tr.recorded}</span>\`}
-              </div>
-
-              <div class="absolute bottom-3 \${isRTL ? 'left-3' : 'right-3'} z-20">
-                <span class="px-2 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-white text-xs font-medium flex items-center gap-1">
-                  <i class="fas fa-eye"></i>
-                  \${(item.total_views || 0).toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            <div class="mt-3 px-1">
-              <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight">\${item.title}</h3>
-              <div class="flex items-center gap-1 mt-1.5 text-xs text-gray-500">
-                <span>\${item.creator_name}</span>
-                <span class="mx-1">vs</span>
-                <span>\${item.opponent_name || '?'}</span>
-              </div>
-            </div>
-          </a>
-        \`;
-      }
-      
-      function setMainTab(tab) {
-        currentMainTab = tab;
-        const liveTab = document.getElementById('tab-live');
-        const recordedTab = document.getElementById('tab-recorded');
-        
-        if (tab === 'live') {
-          liveTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active';
-          recordedTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive';
-          liveTab.innerHTML = '<span class="w-2 h-2 rounded-full bg-red-500 live-pulse"></span> ${tr.live}';
-        } else {
-          liveTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive';
-          recordedTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active';
-          liveTab.innerHTML = '<span class="w-2 h-2 rounded-full bg-gray-400"></span> ${tr.live}';
-        }
-        
-        loadCompetitions();
-      }
-      
-      function setSubTab(tab) {
-        currentSubTab = tab;
-        const tabs = ['all', 'dialogue', 'science', 'talents'];
-        tabs.forEach(t => {
-          const el = document.getElementById('subtab-' + t);
-          if (el) {
-            el.className = t === tab
-              ? 'px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-active'
-              : 'px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive';
-          }
-        });
-        
-        loadCompetitions();
-      }
-      
-      const searchInput = document.getElementById('searchInput');
-      if (searchInput) {
-        let searchTimeout;
-        searchInput.addEventListener('input', (e) => {
-          clearTimeout(searchTimeout);
-          searchTimeout = setTimeout(() => {
-            const query = e.target.value.trim();
-            if (query.length >= 2) {
-              window.location.href = '/explore?search=' + encodeURIComponent(query) + '&lang=' + lang;
-            }
-          }, 500);
-        });
-      }
+      // Global initialization variables for client-side hydration
+      window.lang = '${lang}';
+      window.isRTL = ${rtl};
+      // Logic has been moved to src/client/pages/HomePage.ts
     </script>
   `;
 
@@ -400,7 +209,7 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage } from './modules/pages';
+import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
@@ -415,6 +224,9 @@ app.get('/settings', settingsPage);
 app.get('/my-competitions', myCompetitionsPage);
 app.get('/my-requests', myRequestsPage);
 app.get('/live/:id', liveRoomPage);
+app.get('/earnings', earningsPage);
+app.get('/reports', reportsPage);
+app.get('/donate', donatePage);
 
 // ============================================
 // Error Handling - معالجة الأخطاء

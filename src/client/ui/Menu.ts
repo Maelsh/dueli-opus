@@ -86,6 +86,13 @@ export class Menu {
             if (!notifBtn && notifDropdown && !notifDropdown.contains(target)) {
                 notifDropdown.classList.add('hidden');
             }
+
+            // Messages dropdown
+            const msgBtn = target.closest('[onclick*="toggleMessages"]');
+            const msgDropdown = document.getElementById('messagesDropdown');
+            if (!msgBtn && msgDropdown && !msgDropdown.contains(target)) {
+                msgDropdown.classList.add('hidden');
+            }
         });
     }
 }

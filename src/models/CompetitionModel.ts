@@ -14,6 +14,7 @@ import type { Competition, CompetitionStatus } from '../config/types';
 export interface CompetitionFilters {
     status?: CompetitionStatus | 'recorded';
     category?: string | number;
+    subcategory?: string;
     country?: string;
     language?: string;
     creatorId?: number;
@@ -73,7 +74,7 @@ export class CompetitionModel extends BaseModel<Competition> {
                    cat.name_en as category_name_en,
                    cat.slug as category_slug,
                    cat.icon as category_icon,
-                   cat.color as category_color,
+                   COALESCE(subcat.color, cat.color) as category_color,
                    subcat.name_ar as subcategory_name_ar,
                    subcat.name_en as subcategory_name_en,
                    subcat.slug as subcategory_slug,
@@ -102,7 +103,7 @@ export class CompetitionModel extends BaseModel<Competition> {
                    cat.name_en as category_name_en,
                    cat.slug as category_slug,
                    cat.icon as category_icon,
-                   cat.color as category_color,
+                   COALESCE(subcat.color, cat.color) as category_color,
                    subcat.slug as subcategory_slug,
                    creator.display_name as creator_name,
                    creator.avatar_url as creator_avatar,
@@ -139,6 +140,12 @@ export class CompetitionModel extends BaseModel<Competition> {
             params.push(filters.category, filters.category, filters.category);
         }
 
+        // Subcategory filter (filter by subcategory slug)
+        if (filters.subcategory) {
+            query += ' AND subcat.slug = ?';
+            params.push(filters.subcategory);
+        }
+
         // Country filter
         if (filters.country) {
             query += ' AND c.country = ?';
@@ -164,7 +171,7 @@ export class CompetitionModel extends BaseModel<Competition> {
         }
 
         // Order and pagination
-        query += ' ORDER BY c.created_at DESC LIMIT ? OFFSET ?';
+        query += ' ORDER BY RANDOM() LIMIT ? OFFSET ?';
         params.push(filters.limit || 20, filters.offset || 0);
 
         return this.query<CompetitionWithDetails>(query, ...params);

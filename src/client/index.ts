@@ -26,6 +26,9 @@ import { Menu } from './ui/Menu';
 import { NotificationsUI } from './ui/NotificationsUI';
 import { MessagesUI } from './ui/MessagesUI';
 
+// Pages
+import { HomePage } from './pages/HomePage';
+
 // Helpers
 import { DateFormatter } from './helpers/DateFormatter';
 import { NumberFormatter } from './helpers/NumberFormatter';
@@ -100,21 +103,24 @@ export class App {
     /**
      * Initialize the application
      */
-    static init(): void {
+    static async init(): Promise<void> {
         // Initialize state from URL params
         State.init();
 
         // Initialize theme
         ThemeService.init();
 
-        // Check authentication
-        AuthService.checkAuth();
+        // Check authentication (await to ensure State.currentUser is set before HomePage.init)
+        await AuthService.checkAuth();
 
         // Setup menu click outside handlers
         Menu.setupClickOutside();
 
         // Handle OAuth callback from URL
         this.handleOAuthCallback();
+
+        // Initialize Pages (safe to call as they check for DOM presence)
+        HomePage.init();
 
         console.log('🔥 Dueli Client loaded successfully!');
     }
@@ -173,6 +179,13 @@ declare global {
         checkAuth: typeof AuthService.checkAuth;
         toggleNotifications: typeof NotificationsUI.toggle;
         markAllNotificationsRead: typeof NotificationsUI.markAllAsRead;
+        toggleMessages: typeof MessagesUI.toggle;
+        markAllMessagesRead: typeof MessagesUI.markAllRead;
+
+        // Home Page Methods
+        setMainTab: typeof HomePage.setMainTab;
+        setSubTab: typeof HomePage.setSubTab;
+        loadMoreCompetitions: typeof HomePage.loadMoreCompetitions;
     }
 }
 
@@ -243,6 +256,13 @@ if (typeof window !== 'undefined') {
     window.checkAuth = () => AuthService.checkAuth();
     window.toggleNotifications = () => NotificationsUI.toggle();
     window.markAllNotificationsRead = () => NotificationsUI.markAllAsRead();
+    window.toggleMessages = () => MessagesUI.toggle();
+    window.markAllMessagesRead = () => MessagesUI.markAllRead();
+
+    // Bind Home Page Methods
+    window.setMainTab = (tab: any) => HomePage.setMainTab(tab);
+    window.setSubTab = (tab: string) => HomePage.setSubTab(tab);
+    window.loadMoreCompetitions = () => HomePage.loadMoreCompetitions();
 }
 
 // Auto-initialize when DOM is ready
@@ -257,3 +277,5 @@ export { State, ApiClient, CookieUtils } from './core';
 export { AuthService, ThemeService } from './services';
 export { Toast, Modal, Menu } from './ui';
 export { DateFormatter, NumberFormatter, YouTubeHelpers, Utils } from './helpers';
+export { HomePage } from './pages/HomePage';
+

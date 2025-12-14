@@ -11,6 +11,11 @@
     display: none !important;
 }
 
+/* Auth-based icon visibility - hides elements for logged-in users */
+.auth-hidden {
+    display: none !important;
+}
+
 /* Base styles */
 body {
     font-family: 'Cairo', system-ui, sans-serif;

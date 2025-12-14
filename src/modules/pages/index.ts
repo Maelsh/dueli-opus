@@ -14,5 +14,8 @@ export { settingsPage } from './settings-page';
 export { myCompetitionsPage } from './my-competitions-page';
 export { myRequestsPage } from './my-requests-page';
 export { liveRoomPage } from './live-room-page';
+export { earningsPage } from './earnings-page';
+export { reportsPage } from './reports-page';
+export { donatePage } from './donate-page';
 export { default as staticPagesRoutes } from './static-pages';
 

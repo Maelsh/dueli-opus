@@ -10,6 +10,7 @@ export const ar = {
     explore: 'استكشف',
     live: 'بث مباشر',
     recorded: 'مسجل',
+    upcoming: 'اللاحقة',
     profile: 'الملف الشخصي',
     settings: 'الإعدادات',
     logout: 'تسجيل الخروج',
@@ -23,12 +24,47 @@ export const ar = {
     language: 'اللغة',
     country_language: 'البلد واللغة',
     search_country: 'ابحث عن بلد...',
+    users: 'المستخدمون',
 
-    // الأقسام
-    categories: 'الأقسام',
-    dialogue: 'الحوار',
-    science: 'العلوم',
-    talents: 'المواهب',
+    // الأقسام الرئيسية
+    categories: {
+        dialogue: 'الحوار',
+        science: 'العلوم',
+        talents: 'المواهب',
+
+        // أقسام الحوار الفرعية
+        religions: 'حوار الأديان',
+        sects: 'حوار المذاهب الدينية',
+        politics: 'حوار السياسة',
+        economics: 'حوار الاقتصاد',
+        ethnic_conflicts: 'حوار النزاعات العرقية',
+        local_events: 'أهم الأحداث المحلية',
+        global_events: 'أهم الأحداث العالمية',
+        disputes: 'نزاعات أخرى',
+        other_disputes: 'نزاعات أخرى',
+
+        // أقسام العلوم الفرعية
+        physics: 'علوم الفيزياء',
+        chemistry: 'علوم الكيمياء',
+        math: 'علوم الرياضيات',
+        astronomy: 'علوم الفلك',
+        biology: 'علوم الأحياء',
+        technology: 'علوم التكنولوجيا',
+        energy: 'علوم الطاقة',
+        economics_science: 'علوم الاقتصاد',
+        mixed: 'علوم مختلطة',
+        other_science: 'علوم أخرى',
+
+        // أقسام المواهب الفرعية
+        physical: 'مواهب بدنية',
+        mental: 'مواهب عقلية',
+        vocal: 'مواهب صوتية',
+        poetry: 'مواهب شعرية',
+        psychological: 'مواهب نفسية',
+        creative: 'مواهب إبداعية',
+        crafts: 'مواهب حرفية',
+        other_talents: 'مواهب أخرى'
+    },
 
     // أقسام العرض
     sections: {
@@ -37,33 +73,6 @@ export const ar = {
         science: 'المختبر العلمي',
         talents: 'مسرح المواهب'
     },
-
-    // أقسام الحوار الفرعية
-    religions: 'الأديان',
-    sects: 'المذاهب',
-    politics: 'السياسة',
-    economics: 'الاقتصاد',
-    current_affairs: 'قضايا الساعة',
-    disputes: 'النزاعات الأخرى',
-
-    // أقسام العلوم الفرعية
-    physics: 'الفيزياء',
-    biology: 'الأحياء',
-    chemistry: 'الكيمياء',
-    math: 'الرياضيات',
-    technology: 'التقنية',
-    medicine: 'الطب',
-    philosophy: 'الفلسفة',
-
-    // أقسام المواهب الفرعية
-    singing: 'الغناء',
-    poetry: 'الشعر',
-    art: 'الفن',
-    sports: 'الرياضة',
-    comedy: 'الكوميديا',
-    cooking: 'الطبخ',
-    gaming: 'الألعاب',
-    magic: 'الخدع',
 
     // المنافسات
     competition: 'منافسة',
@@ -221,6 +230,7 @@ export const ar = {
     close: 'إغلاق',
     submit: 'إرسال',
     loading: 'جاري التحميل...',
+    no_more: 'لا توجد نتائج أخرى',
     go_home: 'اذهب إلى الرئيسية',
     go_back: 'العودة',
 
@@ -417,5 +427,49 @@ export const ar = {
     // البث المباشر / Jitsi (جديد)
     jitsi_not_configured: 'لم يتم إعداد خدمة البث المباشر بعد.',
     confirm_end_call: 'هل أنت متأكد من إنهاء المكالمة؟',
+
+    // التنقل (جديد)
+    notifications: 'الإشعارات',
+    mark_all_read: 'تعليم الكل كمقروء',
+    no_messages: 'لا توجد رسائل',
+    earnings: 'الأرباح',
+    donate: 'دعم المنصة',
+    contact_admin: 'مراسلة الإدارة',
+    submit_report: 'تقديم شكوى',
+    no_notifications: 'لا توجد إشعارات',
+
+    // صفحة الأرباح
+    available: 'متاح',
+    pending: 'قيد المعالجة',
+    on_hold: 'معلق',
+    ad_revenue: 'عائدات الإعلانات',
+    total_earnings: 'إجمالي الأرباح',
+    from_competitions: 'من المنافسات',
+    withdrawn: 'تم سحبه',
+    to_bank: 'إلى الحساب البنكي',
+    withdraw: 'سحب',
+    min_withdrawal: 'الحد الأدنى للسحب: 50 دولار',
+    request_withdrawal: 'طلب سحب',
+
+    // صفحة الشكاوى
+    report_type: 'نوع البلاغ',
+    report_inappropriate_desc: 'محتوى مسيء أو ضار',
+    report_spam_desc: 'محتوى مزيف أو مضلل',
+    report_harassment_desc: 'استهداف أو مهاجمة الآخرين',
+    other: 'أخرى',
+    other_desc: 'شيء آخر',
+    subject: 'الموضوع',
+    enter_subject: 'أدخل الموضوع',
+    describe_issue: 'يرجى وصف المشكلة بالتفصيل',
+
+    // صفحة الدعم
+    support_dueli: 'ادعم ديولي',
+    support_message: 'ساعدنا في بناء منصة أفضل للحوارات والتواصل الهادف.',
+    coffee: 'اشترِ لنا قهوة',
+    supporter: 'داعم',
+    champion: 'بطل',
+    custom_amount: 'أو أدخل مبلغاً مخصصاً',
+    donate_now: 'تبرع الآن',
+    top_supporters: 'أبرز الداعمين',
 };
 

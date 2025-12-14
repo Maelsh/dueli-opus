@@ -9,6 +9,7 @@ export const en = {
     explore: 'Explore',
     live: 'Live Stream',
     recorded: 'Recorded',
+    upcoming: 'Upcoming',
     profile: 'Profile',
     settings: 'Settings',
     logout: 'Logout',
@@ -22,12 +23,47 @@ export const en = {
     language: 'Language',
     country_language: 'Country & Language',
     search_country: 'Search country...',
+    users: 'Users',
 
     // Categories
-    categories: 'Categories',
-    dialogue: 'Dialogue',
-    science: 'Science',
-    talents: 'Talents',
+    categories: {
+        dialogue: 'Dialogue',
+        science: 'Science',
+        talents: 'Talents',
+
+        // Dialogue subcategories
+        religions: 'Religious Dialogue',
+        sects: 'Sectarian Dialogue',
+        politics: 'Political Dialogue',
+        economics: 'Economic Dialogue',
+        ethnic_conflicts: 'Ethnic Conflicts',
+        local_events: 'Local Events',
+        global_events: 'Global Events',
+        disputes: 'Other Disputes',
+        other_disputes: 'Other Disputes',
+
+        // Science subcategories
+        physics: 'Physics',
+        chemistry: 'Chemistry',
+        math: 'Mathematics',
+        astronomy: 'Astronomy',
+        biology: 'Biology',
+        technology: 'Technology',
+        energy: 'Energy',
+        economics_science: 'Economics',
+        mixed: 'Mixed Sciences',
+        other_science: 'Other Sciences',
+
+        // Talents subcategories
+        physical: 'Physical Talents',
+        mental: 'Mental Talents',
+        vocal: 'Vocal Talents',
+        poetry: 'Poetic Talents',
+        psychological: 'Psychological',
+        creative: 'Creative Talents',
+        crafts: 'Crafts',
+        other_talents: 'Other Talents'
+    },
 
     // Sections
     sections: {
@@ -218,6 +254,7 @@ export const en = {
     close: 'Close',
     submit: 'Submit',
     loading: 'Loading...',
+    no_more: 'No more results',
     go_home: 'Go to Home',
     go_back: 'Go Back',
 
@@ -414,5 +451,49 @@ export const en = {
     // Jitsi / Live (new)
     jitsi_not_configured: 'Live streaming is not configured yet.',
     confirm_end_call: 'Are you sure you want to end the call?',
+
+    // Navigation (new)
+    notifications: 'Notifications',
+    mark_all_read: 'Mark all read',
+    no_messages: 'No messages',
+    earnings: 'Earnings',
+    donate: 'Support',
+    contact_admin: 'Contact Admin',
+    submit_report: 'Submit Report',
+    no_notifications: 'No notifications',
+
+    // Earnings Page
+    available: 'Available',
+    pending: 'Pending',
+    on_hold: 'On Hold',
+    ad_revenue: 'Ad Revenue',
+    total_earnings: 'Total Earnings',
+    from_competitions: 'From competitions',
+    withdrawn: 'Withdrawn',
+    to_bank: 'To bank account',
+    withdraw: 'Withdraw',
+    min_withdrawal: 'Minimum withdrawal: $50.00',
+    request_withdrawal: 'Request Withdrawal',
+
+    // Reports Page
+    report_type: 'Report Type',
+    report_inappropriate_desc: 'Offensive or harmful content',
+    report_spam_desc: 'Fake or deceptive content',
+    report_harassment_desc: 'Targeting or attacking others',
+    other: 'Other',
+    other_desc: 'Something else',
+    subject: 'Subject',
+    enter_subject: 'Enter subject',
+    describe_issue: 'Please describe the issue in detail',
+
+    // Donate Page
+    support_dueli: 'Support Dueli',
+    support_message: 'Help us build a better platform for meaningful conversations and connections.',
+    coffee: 'Buy us a coffee',
+    supporter: 'Supporter',
+    champion: 'Champion',
+    custom_amount: 'Or enter a custom amount',
+    donate_now: 'Donate Now',
+    top_supporters: 'Top Supporters',
 };
 

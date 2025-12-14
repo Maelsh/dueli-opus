@@ -63,6 +63,40 @@ class CompetitionRequestModel {
         `).bind(competitionId).all();
         return result.results;
     }
+
+    /**
+     * Decline all pending requests for a competition except one
+     * رفض جميع الطلبات المعلقة للمنافسة باستثناء طلب واحد
+     */
+    async declineAllOther(competitionId: number, exceptRequestId: number): Promise<number> {
+        const result = await this.db.prepare(`
+            UPDATE competition_requests 
+            SET status = 'auto_declined' 
+            WHERE competition_id = ? AND id != ? AND status = 'pending'
+        `).bind(competitionId, exceptRequestId).run();
+        return result.meta.changes;
+    }
+
+    /**
+     * Delete pending requests from user on time-conflicting competitions
+     * حذف الطلبات المعلقة من المستخدم على منافسات متعارضة بالوقت
+     */
+    async deleteConflictingRequests(requesterId: number, scheduledAt: string | null): Promise<number> {
+        if (!scheduledAt) return 0;
+
+        // Delete pending requests from this user on competitions scheduled within 2 hours
+        const result = await this.db.prepare(`
+            DELETE FROM competition_requests 
+            WHERE requester_id = ? 
+            AND status = 'pending'
+            AND competition_id IN (
+                SELECT id FROM competitions 
+                WHERE scheduled_at IS NOT NULL 
+                AND abs(strftime('%s', scheduled_at) - strftime('%s', ?)) < 7200
+            )
+        `).bind(requesterId, scheduledAt).run();
+        return result.meta.changes;
+    }
 }
 
 /**
@@ -114,6 +148,7 @@ export class CompetitionController extends BaseController {
             const filters: CompetitionFilters = {
                 status: this.getQuery(c, 'status') as any || undefined,
                 category: this.getQuery(c, 'category') || undefined,
+                subcategory: this.getQuery(c, 'subcategory') || undefined,
                 country: this.getQuery(c, 'country') || undefined,
                 language: this.getQuery(c, 'language') || undefined,
                 search: this.getQuery(c, 'search') || undefined,
@@ -367,6 +402,15 @@ export class CompetitionController extends BaseController {
             await requestModel.updateStatus(body.request_id, 'accepted');
             await model.setOpponent(competitionId, request.requester_id);
 
+            // Auto-decline all other pending requests on this competition
+            const declinedCount = await requestModel.declineAllOther(competitionId, body.request_id);
+
+            // Delete time-conflicting pending requests from the accepted user
+            const conflictingDeleted = await requestModel.deleteConflictingRequests(
+                request.requester_id,
+                competition.scheduled_at || null
+            );
+
             await notificationModel.create({
                 user_id: request.requester_id,
                 type: 'request',
@@ -376,7 +420,11 @@ export class CompetitionController extends BaseController {
                 reference_id: competitionId
             });
 
-            return this.success(c, { accepted: true });
+            return this.success(c, {
+                accepted: true,
+                otherDeclined: declinedCount,
+                conflictingDeleted: conflictingDeleted
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
