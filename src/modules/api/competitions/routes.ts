@@ -8,9 +8,14 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { CompetitionController } from '../../../controllers';
+import { authMiddleware } from '../../../middleware/auth';
 
 const competitionsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new CompetitionController();
+
+// Apply optional auth middleware to all routes to set user context when authenticated
+// Controllers will check requireAuth() for protected endpoints
+competitionsRoutes.use('*', authMiddleware({ required: false }));
 
 // ============================================
 // Read Operations
