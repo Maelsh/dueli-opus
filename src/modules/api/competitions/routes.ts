@@ -75,6 +75,12 @@ competitionsRoutes.post('/:id/start', (c) => controller.start(c));
 competitionsRoutes.post('/:id/end', (c) => controller.end(c));
 
 /**
+ * Update VOD URL after finalization
+ * POST /api/competitions/:id/update-vod
+ */
+competitionsRoutes.post('/:id/update-vod', (c) => controller.updateVod(c));
+
+/**
  * Add comment
  * POST /api/competitions/:id/comments
  */

@@ -459,14 +459,30 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     return;
                 }
                 
-                // Stop recording if host
-                if (userRole === 'host' && compositor) {
-                    await compositor.destroy();
-                }
+                const vodUrl = streamServerUrl + '/storage/vod/match_' + competitionId + '.mp4';
                 
-                // Disconnect P2P
-                if (p2p) {
-                    await p2p.disconnect();
+                try {
+                    // Stop recording if host (this triggers finalization on server)
+                    if (userRole === 'host' && compositor) {
+                        await compositor.destroy();
+                        
+                        // Call end API with VOD URL
+                        await fetch('/api/competitions/' + competitionId + '/end', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ vod_url: vodUrl })
+                        });
+                    }
+                    
+                    // Disconnect P2P
+                    if (p2p) {
+                        await p2p.disconnect();
+                    }
+                } catch (err) {
+                    console.error('[LiveRoom] End stream error:', err);
                 }
                 
                 window.location.href = '/competition/' + competitionId + '?lang=' + lang;

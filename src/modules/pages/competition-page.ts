@@ -126,10 +126,35 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div class="lg:col-span-2 space-y-6">
                 <div class="bg-gradient-to-br \${bgColor} rounded-2xl overflow-hidden shadow-xl aspect-video flex items-center justify-center relative">
-                  \${comp.youtube_live_id && isLive ? \`
+                  \${isLive && comp.live_url ? \`
+                    <!-- P2P Live Stream - redirect to live room -->
+                    <div class="text-center text-white">
+                      <i class="fas fa-broadcast-tower text-6xl opacity-80 mb-4 animate-pulse"></i>
+                      <p class="text-lg font-bold mb-4">\${tr.status_live}</p>
+                      <a href="/live/\${comp.id}?lang=\${lang}" class="px-6 py-3 bg-red-600 rounded-full font-bold hover:bg-red-700 transition-all inline-flex items-center gap-2">
+                        <i class="fas fa-play"></i>
+                        \${tr.watch_competition}
+                      </a>
+                    </div>
+                  \` : comp.youtube_live_id && isLive ? \`
                     <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_live_id}?autoplay=1" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
+                  \` : comp.vod_url ? \`
+                    <!-- P2P VOD Player -->
+                    <video id="vodPlayer" controls class="absolute inset-0 w-full h-full" poster="">
+                      <source src="\${comp.vod_url}" type="video/mp4">
+                    </video>
                   \` : comp.youtube_video_url ? \`
                     <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_video_url.split('v=')[1] || comp.youtube_video_url}" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
+                  \` : (isCreator || isOpponent) && comp.opponent_id && (isPending || comp.status === 'accepted') ? \`
+                    <!-- Ready to Go Live -->
+                    <div class="text-center text-white">
+                      <i class="fas fa-video text-6xl opacity-80 mb-4"></i>
+                      <p class="mb-4">\${tr.competitors} \${tr.status_accepted}</p>
+                      <button onclick="goLive()" class="px-6 py-3 bg-green-600 rounded-full font-bold hover:bg-green-700 transition-all inline-flex items-center gap-2">
+                        <i class="fas fa-broadcast-tower"></i>
+                        \${tr.status_live || 'Go Live'}
+                      </button>
+                    </div>
                   \` : \`
                     <div class="text-center text-white">
                       <i class="fas fa-video text-6xl opacity-50 mb-4"></i>
@@ -249,6 +274,36 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             </div>
           </div>
         \`;
+      }
+      
+      // Go Live - start P2P streaming
+      async function goLive() {
+        if (!window.currentUser) { showLoginModal(); return; }
+        
+        const streamServerUrl = 'https://maelsh.pro/ffmpeg';
+        const liveUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
+        
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/start', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ live_url: liveUrl })
+          });
+          
+          const data = await res.json();
+          if (data.success) {
+            // Redirect to live room
+            window.location.href = '/live/' + competitionId + '?lang=' + lang;
+          } else {
+            showToast(data.error || 'Failed to start', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast(tr.error_occurred || 'Error', 'error');
+        }
       }
       
       async function requestJoin() {

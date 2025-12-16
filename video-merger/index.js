@@ -8,8 +8,8 @@
 const http = require('http');
 const { startWatcher } = require('./watcher');
 
-// Configuration
-const PORT = process.env.PORT || 3000;
+// Configuration - Port is assigned by the server
+const PORT = process.env.PORT;
 
 // Create simple HTTP server for health check
 const server = http.createServer((req, res) => {

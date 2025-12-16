@@ -461,7 +461,7 @@ export class CompetitionController extends BaseController {
     }
 
     /**
-     * Start competition (go live)
+     * Start competition (go live) - supports YouTube and P2P
      * POST /api/competitions/:id/start
      */
     async start(c: AppContext) {
@@ -477,21 +477,34 @@ export class CompetitionController extends BaseController {
                 return this.notFound(c);
             }
 
-            if (competition.creator_id !== user.id) {
+            // Allow both creator and opponent to start
+            if (competition.creator_id !== user.id && competition.opponent_id !== user.id) {
                 return this.forbidden(c);
             }
 
-            const body = await this.getBody<{ youtube_live_id?: string }>(c);
-            await model.startLive(id, body?.youtube_live_id);
+            // Must have opponent to start
+            if (!competition.opponent_id) {
+                return this.error(c, 'Cannot start without opponent');
+            }
 
-            return this.success(c, { started: true });
+            const body = await this.getBody<{
+                youtube_live_id?: string;
+                live_url?: string;
+            }>(c);
+
+            await model.startLive(id, {
+                youtubeLiveId: body?.youtube_live_id,
+                liveUrl: body?.live_url
+            });
+
+            return this.success(c, { started: true, status: 'live' });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
     }
 
     /**
-     * End competition
+     * End competition - supports YouTube and P2P
      * POST /api/competitions/:id/end
      */
     async end(c: AppContext) {
@@ -511,10 +524,51 @@ export class CompetitionController extends BaseController {
                 return this.forbidden(c);
             }
 
-            const body = await this.getBody<{ youtube_video_url?: string }>(c);
-            await model.complete(id, body?.youtube_video_url);
+            const body = await this.getBody<{
+                youtube_video_url?: string;
+                vod_url?: string;
+            }>(c);
 
-            return this.success(c, { ended: true });
+            await model.complete(id, {
+                youtubeVideoUrl: body?.youtube_video_url,
+                vodUrl: body?.vod_url
+            });
+
+            return this.success(c, { ended: true, status: 'completed' });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Update VOD URL after finalization
+     * POST /api/competitions/:id/update-vod
+     */
+    async updateVod(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const id = this.getParamInt(c, 'id');
+
+            const model = new CompetitionModel(c.env.DB);
+            const competition = await model.findById(id);
+
+            if (!competition) {
+                return this.notFound(c);
+            }
+
+            if (competition.creator_id !== user.id) {
+                return this.forbidden(c);
+            }
+
+            const body = await this.getBody<{ vod_url: string }>(c);
+            if (!body?.vod_url) {
+                return this.validationError(c, 'vod_url is required');
+            }
+
+            await model.setVodUrl(id, body.vod_url);
+
+            return this.success(c, { updated: true, vod_url: body.vod_url });
         } catch (error) {
             return this.serverError(c, error as Error);
         }

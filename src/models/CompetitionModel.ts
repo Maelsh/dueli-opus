@@ -259,22 +259,70 @@ export class CompetitionModel extends BaseModel<Competition> {
     }
 
     /**
-     * Start competition (go live)
+     * Start competition (go live) - supports both YouTube and P2P
      */
-    async startLive(id: number, youtubeLiveId?: string): Promise<boolean> {
-        const result = await this.db.prepare(
-            'UPDATE competitions SET status = "live", started_at = datetime("now"), youtube_live_id = ? WHERE id = ?'
-        ).bind(youtubeLiveId || null, id).run();
+    async startLive(id: number, options?: {
+        youtubeLiveId?: string;
+        liveUrl?: string;
+    }): Promise<boolean> {
+        const liveUrl = options?.liveUrl || null;
+        const youtubeLiveId = options?.youtubeLiveId || null;
+
+        const result = await this.db.prepare(`
+            UPDATE competitions 
+            SET status = 'live', 
+                started_at = datetime('now'), 
+                youtube_live_id = ?,
+                live_url = ?,
+                stream_status = 'live',
+                stream_started_at = datetime('now')
+            WHERE id = ?
+        `).bind(youtubeLiveId, liveUrl, id).run();
         return result.meta.changes > 0;
     }
 
     /**
-     * End competition
+     * End competition - supports both YouTube and P2P VOD
      */
-    async complete(id: number, youtubeVideoUrl?: string): Promise<boolean> {
+    async complete(id: number, options?: {
+        youtubeVideoUrl?: string;
+        vodUrl?: string;
+    }): Promise<boolean> {
+        const vodUrl = options?.vodUrl || null;
+        const youtubeVideoUrl = options?.youtubeVideoUrl || null;
+
+        const result = await this.db.prepare(`
+            UPDATE competitions 
+            SET status = 'completed', 
+                ended_at = datetime('now'), 
+                youtube_video_url = ?,
+                vod_url = ?,
+                stream_status = 'ready',
+                stream_ended_at = datetime('now')
+            WHERE id = ?
+        `).bind(youtubeVideoUrl, vodUrl, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Update stream status during processing
+     */
+    async updateStreamStatus(id: number, status: string): Promise<boolean> {
         const result = await this.db.prepare(
-            'UPDATE competitions SET status = "completed", ended_at = datetime("now"), youtube_video_url = ? WHERE id = ?'
-        ).bind(youtubeVideoUrl || null, id).run();
+            'UPDATE competitions SET stream_status = ? WHERE id = ?'
+        ).bind(status, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Set VOD URL after finalization
+     */
+    async setVodUrl(id: number, vodUrl: string): Promise<boolean> {
+        const result = await this.db.prepare(`
+            UPDATE competitions 
+            SET vod_url = ?, stream_status = 'ready' 
+            WHERE id = ?
+        `).bind(vodUrl, id).run();
         return result.meta.changes > 0;
     }
 

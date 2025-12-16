@@ -1,9 +1,9 @@
 /**
- * HLS Playlist Watcher
- * مراقب قائمة تشغيل HLS
+ * HLS Playlist Watcher (Shared Hosting Compatible)
+ * مراقب قائمة تشغيل HLS (متوافق مع الاستضافة المشتركة)
  * 
  * Watches for new chunks and updates HLS playlist
- * يراقب القطع الجديدة ويحدث قائمة تشغيل HLS
+ * Designed to run as a background process on shared hosting
  */
 
 const fs = require('fs');
@@ -12,10 +12,12 @@ const path = require('path');
 // Configuration
 const STORAGE_DIR = path.join(__dirname, 'storage', 'live');
 const CHUNK_DURATION = 10; // seconds per chunk
+const SCAN_INTERVAL = 5000; // 5 seconds
 
 // Ensure storage directory exists
 if (!fs.existsSync(STORAGE_DIR)) {
     fs.mkdirSync(STORAGE_DIR, { recursive: true });
+    console.log('[Watcher] Created storage directory:', STORAGE_DIR);
 }
 
 /**
@@ -25,49 +27,58 @@ if (!fs.existsSync(STORAGE_DIR)) {
 function updatePlaylist(matchDir) {
     const matchId = path.basename(matchDir);
 
-    // Read metadata to get extension
-    const metaFile = path.join(matchDir, 'metadata.json');
-    let extension = 'webm';
+    // Find all chunks (both webm and mp4)
+    let chunks = [];
+    try {
+        const files = fs.readdirSync(matchDir);
+        chunks = files
+            .filter(f => f.startsWith('chunk_') && (f.endsWith('.webm') || f.endsWith('.mp4')))
+            .sort();
+    } catch (e) {
+        console.error(`[Watcher] Error reading ${matchId}:`, e.message);
+        return;
+    }
 
+    if (chunks.length === 0) {
+        return; // No chunks yet
+    }
+
+    // Read metadata to check if stream ended
+    const metaFile = path.join(matchDir, 'metadata.json');
+    let isFinalized = false;
     if (fs.existsSync(metaFile)) {
         try {
             const metadata = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
-            extension = metadata.extension || 'webm';
-        } catch (e) {
-            console.error(`[Watcher] Error reading metadata for ${matchId}:`, e.message);
-        }
-    }
-
-    // Find all chunks
-    const files = fs.readdirSync(matchDir);
-    const chunks = files
-        .filter(f => f.startsWith('chunk_') && (f.endsWith('.webm') || f.endsWith('.mp4')))
-        .sort();
-
-    if (chunks.length === 0) {
-        console.log(`[Watcher] No chunks found in ${matchId}`);
-        return;
+            isFinalized = metadata.finalized === true || metadata.finalize_started;
+        } catch (e) { }
     }
 
     // Generate HLS playlist
     let playlist = '#EXTM3U\n';
     playlist += '#EXT-X-VERSION:3\n';
     playlist += `#EXT-X-TARGETDURATION:${CHUNK_DURATION}\n`;
-    playlist += '#EXT-X-MEDIA-SEQUENCE:0\n\n';
+    playlist += '#EXT-X-MEDIA-SEQUENCE:0\n';
+    playlist += '#EXT-X-PLAYLIST-TYPE:EVENT\n\n';
 
     for (const chunk of chunks) {
         playlist += `#EXTINF:${CHUNK_DURATION}.0,\n`;
         playlist += `${chunk}\n`;
     }
 
-    // Don't add ENDLIST while streaming (stream is still live)
-    // ENDLIST will be added by finalize.js when stream ends
+    // Add ENDLIST if stream is finalized
+    if (isFinalized) {
+        playlist += '#EXT-X-ENDLIST\n';
+    }
 
     // Write playlist
     const playlistPath = path.join(matchDir, 'playlist.m3u8');
-    fs.writeFileSync(playlistPath, playlist);
+    const existingPlaylist = fs.existsSync(playlistPath) ? fs.readFileSync(playlistPath, 'utf8') : '';
 
-    console.log(`[Watcher] Updated playlist for ${matchId}: ${chunks.length} chunks`);
+    // Only write if changed
+    if (playlist !== existingPlaylist) {
+        fs.writeFileSync(playlistPath, playlist);
+        console.log(`[Watcher] Updated ${matchId}: ${chunks.length} chunks${isFinalized ? ' (ENDED)' : ''}`);
+    }
 }
 
 /**
@@ -78,13 +89,23 @@ function scanAndUpdate() {
         return;
     }
 
-    const matches = fs.readdirSync(STORAGE_DIR)
-        .filter(f => f.startsWith('match_'))
-        .map(f => path.join(STORAGE_DIR, f))
-        .filter(f => fs.statSync(f).isDirectory());
+    try {
+        const matches = fs.readdirSync(STORAGE_DIR)
+            .filter(f => f.startsWith('match_'))
+            .map(f => path.join(STORAGE_DIR, f))
+            .filter(f => {
+                try {
+                    return fs.statSync(f).isDirectory();
+                } catch (e) {
+                    return false;
+                }
+            });
 
-    for (const matchDir of matches) {
-        updatePlaylist(matchDir);
+        for (const matchDir of matches) {
+            updatePlaylist(matchDir);
+        }
+    } catch (e) {
+        console.error('[Watcher] Scan error:', e.message);
     }
 }
 
@@ -93,30 +114,17 @@ function scanAndUpdate() {
  */
 function startWatcher() {
     console.log('[Watcher] Starting HLS playlist watcher...');
-    console.log(`[Watcher] Watching directory: ${STORAGE_DIR}`);
+    console.log(`[Watcher] Storage directory: ${STORAGE_DIR}`);
+    console.log(`[Watcher] Scan interval: ${SCAN_INTERVAL / 1000}s`);
 
     // Initial scan
     scanAndUpdate();
 
-    // Watch for changes every 5 seconds
-    setInterval(scanAndUpdate, 5000);
-
-    // Also use fs.watch for immediate updates
-    if (fs.existsSync(STORAGE_DIR)) {
-        fs.watch(STORAGE_DIR, { recursive: true }, (eventType, filename) => {
-            if (filename && (filename.endsWith('.webm') || filename.endsWith('.mp4'))) {
-                // Debounce - wait a moment for file to be fully written
-                setTimeout(() => {
-                    const matchDir = path.join(STORAGE_DIR, path.dirname(filename));
-                    if (fs.existsSync(matchDir)) {
-                        updatePlaylist(matchDir);
-                    }
-                }, 500);
-            }
-        });
-    }
+    // Periodic scan (more reliable than fs.watch on shared hosting)
+    setInterval(scanAndUpdate, SCAN_INTERVAL);
 
     console.log('[Watcher] Watcher started successfully');
+    console.log('[Watcher] Press Ctrl+C to stop');
 }
 
 // Export for use as module
@@ -132,7 +140,12 @@ if (require.main === module) {
 
     // Keep process running
     process.on('SIGINT', () => {
-        console.log('[Watcher] Shutting down...');
+        console.log('\n[Watcher] Shutting down...');
+        process.exit(0);
+    });
+
+    process.on('SIGTERM', () => {
+        console.log('\n[Watcher] Terminated');
         process.exit(0);
     });
 }
