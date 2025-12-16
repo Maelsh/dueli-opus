@@ -131,10 +131,19 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
         e.preventDefault();
         const form = e.target;
         
+        if (!window.currentUser) {
+          alert(tr.login_required || 'Please login first');
+          showLoginModal();
+          return;
+        }
+        
         try {
           const res = await fetch('/api/competitions', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+            },
             body: JSON.stringify({
               title: form.title.value,
               description: form.description.value,
@@ -152,11 +161,11 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           if (data.success) {
             window.location.href = '/competition/' + data.data.id + '?lang=' + lang;
           } else {
-            showToast(data.error || 'Error creating competition', 'error');
+            alert(data.error || tr.error_occurred || 'Error creating competition');
           }
         } catch (err) {
           console.error(err);
-          showToast(tr.error_occurred, 'error');
+          alert(tr.error_occurred || 'An error occurred');
         }
       }
     </script>
