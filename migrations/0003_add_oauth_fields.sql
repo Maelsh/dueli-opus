@@ -1,9 +1,10 @@
--- Add OAuth columns to users table (only columns not in initial schema)
--- Note: avatar_url already exists in 0001_initial_schema.sql
+-- Add OAuth columns to users table
+-- Note: These columns have been moved to 0001_initial_schema.sql
+-- This migration is now empty and kept for historical record
 
-ALTER TABLE users ADD COLUMN oauth_provider TEXT;
-ALTER TABLE users ADD COLUMN oauth_id TEXT;
-ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1;
+-- OAuth columns are now in the initial schema
+-- Index creation is also in 0001_initial_schema.sql
+
 
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_users_oauth ON users(oauth_provider, oauth_id);

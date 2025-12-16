@@ -21,6 +21,7 @@ import authRoutes from './modules/api/auth/routes';
 import oauthRoutes from './modules/api/auth/oauth-routes';
 import countriesRoutes from './modules/api/countries/routes';
 import jitsiRoutes from './modules/api/jitsi/routes';
+import signalingRoutes from './modules/api/signaling/routes';
 
 // Import New Feature Routes - استيراد مسارات الميزات الجديدة
 import searchRoutes from './modules/api/search/routes';
@@ -78,6 +79,7 @@ app.route('/api/auth', authRoutes);
 app.route('/api/auth/oauth', oauthRoutes);
 app.route('/api/countries', countriesRoutes);
 app.route('/api/jitsi', jitsiRoutes);
+app.route('/api/signaling', signalingRoutes);
 
 // Mount New Feature Routes - تركيب مسارات الميزات الجديدة
 app.route('/api/search', searchRoutes);

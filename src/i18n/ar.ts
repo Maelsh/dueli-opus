@@ -428,6 +428,18 @@ export const ar = {
     jitsi_not_configured: 'لم يتم إعداد خدمة البث المباشر بعد.',
     confirm_end_call: 'هل أنت متأكد من إنهاء المكالمة؟',
 
+    // البث المباشر (P2P)
+    recording: 'جاري التسجيل',
+    toggle_mic: 'تبديل الميكروفون',
+    toggle_camera: 'تبديل الكاميرا',
+    end_stream: 'إنهاء البث',
+    you: 'أنت',
+    opponent: 'الخصم',
+    waiting_opponent: 'في انتظار الخصم...',
+    chunks_uploaded: 'قطعة تم رفعها',
+    camera_error: 'فشل في الوصول للكاميرا أو الميكروفون',
+    hls_not_supported: 'متصفحك لا يدعم تشغيل HLS',
+
     // التنقل (جديد)
     notifications: 'الإشعارات',
     mark_all_read: 'تعليم الكل كمقروء',

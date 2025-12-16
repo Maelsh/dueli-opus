@@ -1,0 +1,18 @@
+{
+    "name": "dueli-video-merger",
+    "version": "2.0.0",
+    "description": "Video merger and HLS streaming server for Dueli platform",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js",
+        "watcher": "node watcher.js",
+        "finalize": "node finalize.js"
+    },
+    "dependencies": {
+        "ffmpeg-static": "^5.2.0",
+        "dotenv": "^16.3.1"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

@@ -452,6 +452,18 @@ export const en = {
     jitsi_not_configured: 'Live streaming is not configured yet.',
     confirm_end_call: 'Are you sure you want to end the call?',
 
+    // Live Streaming (P2P)
+    recording: 'Recording',
+    toggle_mic: 'Toggle Microphone',
+    toggle_camera: 'Toggle Camera',
+    end_stream: 'End Stream',
+    you: 'You',
+    opponent: 'Opponent',
+    waiting_opponent: 'Waiting for opponent...',
+    chunks_uploaded: 'chunks uploaded',
+    camera_error: 'Failed to access camera/microphone',
+    hls_not_supported: 'Your browser does not support HLS playback',
+
     // Navigation (new)
     notifications: 'Notifications',
     mark_all_read: 'Mark all read',

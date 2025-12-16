@@ -11,3 +11,9 @@ export { SearchService } from './SearchService';
 export { InteractionService } from './InteractionService';
 export { MessagingService } from './MessagingService';
 export { SettingsService } from './SettingsService';
+
+// Streaming Services - خدمات البث
+export { P2PConnection } from './P2PConnection';
+export { VideoCompositor } from './VideoCompositor';
+export { ChunkUploader } from './ChunkUploader';
+

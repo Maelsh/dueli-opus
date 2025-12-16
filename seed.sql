@@ -22,6 +22,11 @@ DELETE FROM competitions;
 DELETE FROM users;
 DELETE FROM categories;
 DELETE FROM countries;
+-- Reset autoincrement counters
+DELETE FROM sqlite_sequence WHERE name='categories';
+DELETE FROM sqlite_sequence WHERE name='countries';
+DELETE FROM sqlite_sequence WHERE name='users';
+DELETE FROM sqlite_sequence WHERE name='competitions';
 PRAGMA foreign_keys = ON;
 
 -- ============================================
@@ -72,7 +77,7 @@ INSERT INTO categories (id, slug, name_ar, name_en, icon, color, parent_id, sort
 -- ============================================
 -- Countries
 -- ============================================
-INSERT INTO countries (code, name_ar, name_en, flag_emoji) VALUES
+INSERT OR IGNORE INTO countries (code, name_ar, name_en, flag_emoji) VALUES
 ('SA', 'السعودية', 'Saudi Arabia', '🇸🇦'),
 ('EG', 'مصر', 'Egypt', '🇪🇬'),
 ('AE', 'الإمارات', 'UAE', '🇦🇪'),
@@ -103,7 +108,7 @@ INSERT INTO countries (code, name_ar, name_en, flag_emoji) VALUES
 -- ============================================
 -- Test Users
 -- ============================================
-INSERT INTO users (id, email, username, password_hash, display_name, avatar_url, bio, country, language, total_competitions, total_wins, total_views, average_rating, is_verified) VALUES
+INSERT OR REPLACE INTO users (id, email, username, password_hash, display_name, avatar_url, bio, country, language, total_competitions, total_wins, total_views, average_rating, is_verified) VALUES
 (1, 'dr.sami@dueli.com', 'dr_sami', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'د. سامي الخالدي', 'https://api.dicebear.com/7.x/avataaars/svg?seed=sami&backgroundColor=8B5CF6', 'أستاذ الاقتصاد الدولي - جامعة الملك سعود', 'SA', 'ar', 15, 12, 45000, 4.8, 1),
 (2, 'eng.alaa@dueli.com', 'eng_alaa', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'م. علاء محمود', 'https://api.dicebear.com/7.x/avataaars/svg?seed=alaa&backgroundColor=06B6D4', 'مهندس اقتصادي ومحلل أسواق', 'EG', 'ar', 10, 6, 32000, 4.5, 1),
 (3, 'sheikh.ahmed@dueli.com', 'sheikh_ahmed', 'ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f', 'الشيخ أحمد المصري', 'https://api.dicebear.com/7.x/avataaars/svg?seed=sheikh&backgroundColor=F59E0B', 'عالم دين وباحث في الحوار بين الأديان', 'EG', 'ar', 20, 18, 89000, 4.9, 1),
@@ -128,7 +133,7 @@ INSERT INTO users (id, email, username, password_hash, display_name, avatar_url,
 -- ============================================
 -- LIVE Competitions (Renumbered for new Categories)
 -- ============================================
-INSERT INTO competitions (id, title, description, rules, category_id, subcategory_id, creator_id, opponent_id, status, language, country, total_views, total_comments, youtube_live_id, started_at) VALUES
+INSERT OR REPLACE INTO competitions (id, title, description, rules, category_id, subcategory_id, creator_id, opponent_id, status, language, country, total_views, total_comments, youtube_live_id, started_at) VALUES
 -- Dialogue Live
 (1, 'مستقبل الاقتصاد العالمي: هل نحن أمام نظام جديد؟', 
    'نقاش معمق حول التحولات الاقتصادية العالمية وتأثير العملات الرقمية والتكتلات الجديدة',
@@ -165,7 +170,7 @@ INSERT INTO competitions (id, title, description, rules, category_id, subcategor
 -- ============================================
 -- RECORDED Competitions
 -- ============================================
-INSERT INTO competitions (id, title, description, rules, category_id, subcategory_id, creator_id, opponent_id, status, language, country, total_views, total_comments, youtube_video_url, started_at, ended_at) VALUES
+INSERT OR REPLACE INTO competitions (id, title, description, rules, category_id, subcategory_id, creator_id, opponent_id, status, language, country, total_views, total_comments, youtube_video_url, started_at, ended_at) VALUES
 (7, 'تبسيط ميكانيكا الكم لغير المتخصصين',
    'شرح مبسط لأساسيات ميكانيكا الكم بين أستاذ وطالب دكتوراه',
    '1. استخدام أمثلة بسيطة\n2. تجنب المعادلات المعقدة\n3. التفاعل مع أسئلة المشاهدين',

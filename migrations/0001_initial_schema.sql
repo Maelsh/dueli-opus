@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     youtube_channel_id TEXT,
     youtube_access_token TEXT,
     youtube_refresh_token TEXT,
+    oauth_provider TEXT,
+    oauth_id TEXT,
     total_competitions INTEGER DEFAULT 0,
     total_wins INTEGER DEFAULT 0,
     total_views INTEGER DEFAULT 0,
@@ -22,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
     total_earnings REAL DEFAULT 0,
     is_verified INTEGER DEFAULT 0,
     is_admin INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -228,6 +231,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_country ON users(country);
 CREATE INDEX IF NOT EXISTS idx_users_language ON users(language);
+CREATE INDEX IF NOT EXISTS idx_users_oauth ON users(oauth_provider, oauth_id);
 
 CREATE INDEX IF NOT EXISTS idx_competitions_status ON competitions(status);
 CREATE INDEX IF NOT EXISTS idx_competitions_category ON competitions(category_id);
