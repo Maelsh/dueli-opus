@@ -113,6 +113,12 @@ export class App {
         // Check authentication (await to ensure State.currentUser is set before HomePage.init)
         await AuthService.checkAuth();
 
+        // Expose session data to window for SSR inline scripts
+        window.currentUser = State.currentUser;
+        window.sessionId = State.sessionId;
+        window.lang = State.lang;
+        window.isDarkMode = State.isDarkMode;
+
         // Setup menu click outside handlers
         Menu.setupClickOutside();
 
