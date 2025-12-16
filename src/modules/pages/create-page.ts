@@ -5,7 +5,7 @@
 
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
-import { translations, getUILanguage, isRTL, getLocalizedName } from '../../i18n';
+import { translations, getUILanguage, isRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 
@@ -84,7 +84,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.select_category} *</label>
               <select name="category_id" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" onchange="updateSubcategories(this.value)">
                 <option value="">\${tr.select_category}</option>
-                \${mainCats.map(c => \`<option value="\${c.id}">\${getLocalizedName(c, lang)}</option>\`).join('')}
+                \${mainCats.map(c => \`<option value="\${c.id}">\${lang === 'ar' ? (c.name_ar || c.name_en) : (c.name_en || c.name_ar)}</option>\`).join('')}
               </select>
             </div>
             
@@ -124,7 +124,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
         const subCats = categories.filter(c => c.parent_id === parseInt(parentId));
         const select = document.getElementById('subcategorySelect');
         select.innerHTML = '<option value="">' + tr.select_subcategory + '</option>' +
-          subCats.map(c => \`<option value="\${c.id}">\${getLocalizedName(c, lang)}</option>\`).join('');
+          subCats.map(c => \`<option value="\${c.id}">\${lang === 'ar' ? (c.name_ar || c.name_en) : (c.name_en || c.name_ar)}</option>\`).join('');
       }
       
       async function handleCreate(e) {
