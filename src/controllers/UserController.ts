@@ -147,21 +147,71 @@ export class UserController extends BaseController {
     }
 
     /**
-     * Get user's pending requests
-     * GET /api/users/:id/requests
+     * Get user's requests (3 types)
+     * GET /api/users/:id/requests?type=sent|received|invitations
      */
     async getRequests(c: AppContext) {
         try {
             const { DB } = c.env;
             const userId = this.getParamInt(c, 'id');
+            const type = this.getQuery(c, 'type') || 'received';
 
-            const result = await DB.prepare(`
-                SELECT cr.*, c.title as competition_title, c.status as competition_status
-                FROM competition_requests cr
-                JOIN competitions c ON cr.competition_id = c.id
-                WHERE cr.requester_id = ?
-                ORDER BY cr.created_at DESC
-            `).bind(userId).all();
+            let result;
+
+            if (type === 'sent') {
+                // طلبات أرسلتها للانضمام لمنافسات الآخرين
+                result = await DB.prepare(`
+                    SELECT cr.*, 
+                           c.title as competition_title, 
+                           c.status as competition_status,
+                           c.scheduled_at,
+                           u.display_name as creator_name,
+                           u.avatar_url as creator_avatar,
+                           u.username as creator_username
+                    FROM competition_requests cr
+                    JOIN competitions c ON cr.competition_id = c.id
+                    JOIN users u ON c.creator_id = u.id
+                    WHERE cr.requester_id = ?
+                    ORDER BY cr.created_at DESC
+                `).bind(userId).all();
+
+            } else if (type === 'received') {
+                // طلبات استلمتها على منافساتي
+                result = await DB.prepare(`
+                    SELECT cr.*, 
+                           c.title as competition_title, 
+                           c.status as competition_status,
+                           c.scheduled_at,
+                           u.display_name as requester_name,
+                           u.avatar_url as requester_avatar,
+                           u.username as requester_username
+                    FROM competition_requests cr
+                    JOIN competitions c ON cr.competition_id = c.id
+                    JOIN users u ON cr.requester_id = u.id
+                    WHERE c.creator_id = ? AND cr.status = 'pending'
+                    ORDER BY cr.created_at DESC
+                `).bind(userId).all();
+
+            } else if (type === 'invitations') {
+                // دعوات استلمتها من منشئين آخرين
+                result = await DB.prepare(`
+                    SELECT ci.*, 
+                           c.title as competition_title, 
+                           c.status as competition_status,
+                           c.scheduled_at,
+                           u.display_name as inviter_name,
+                           u.avatar_url as inviter_avatar,
+                           u.username as inviter_username
+                    FROM competition_invitations ci
+                    JOIN competitions c ON ci.competition_id = c.id
+                    JOIN users u ON ci.inviter_id = u.id
+                    WHERE ci.invitee_id = ? AND ci.status = 'pending'
+                    ORDER BY ci.created_at DESC
+                `).bind(userId).all();
+
+            } else {
+                return this.validationError(c, 'Invalid type. Use: sent, received, or invitations');
+            }
 
             return this.success(c, result.results);
         } catch (error) {

@@ -29,7 +29,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 </h1>
                 
                 <!-- Tabs -->
-                <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg mb-6 p-2 inline-flex gap-2">
+                <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg mb-6 p-2 inline-flex gap-2 flex-wrap">
                     <button onclick="setTab('received')" id="tab-received" class="px-5 py-2 rounded-lg font-semibold transition-colors bg-purple-600 text-white">
                         <i class="fas fa-inbox ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.received_requests || 'Received'}
@@ -37,6 +37,10 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     <button onclick="setTab('sent')" id="tab-sent" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
                         <i class="fas fa-paper-plane ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.sent_requests || 'Sent'}
+                    </button>
+                    <button onclick="setTab('invitations')" id="tab-invitations" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <i class="fas fa-envelope-open-text ${rtl ? 'ml-1' : 'mr-1'}"></i>
+                        ${tr.invitations || 'Invitations'}
                     </button>
                 </div>
                 
@@ -123,11 +127,26 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
             
             function renderRequestCard(req) {
                 const isReceived = currentTab === 'received';
-                const user = isReceived ? req.requester : req.competition?.creator;
+                const isInvitation = currentTab === 'invitations';
+                
+                // Determine which user to show based on tab
+                let user, message;
+                if (isReceived) {
+                    user = { display_name: req.requester_name, avatar_url: req.requester_avatar, username: req.requester_username };
+                    message = tr.wants_to_join || 'Wants to join your competition';
+                } else if (isInvitation) {
+                    user = { display_name: req.inviter_name, avatar_url: req.inviter_avatar, username: req.inviter_username };
+                    message = tr.invites_you || 'Invites you to compete';
+                } else {
+                    user = { display_name: req.creator_name, avatar_url: req.creator_avatar, username: req.creator_username };
+                    message = tr.you_requested || 'You requested to join';
+                }
+                
                 const statusColors = {
                     pending: 'text-amber-600 bg-amber-100',
                     accepted: 'text-green-600 bg-green-100',
-                    declined: 'text-red-600 bg-red-100'
+                    declined: 'text-red-600 bg-red-100',
+                    expired: 'text-gray-600 bg-gray-100'
                 };
                 
                 return \`
@@ -142,13 +161,9 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                                         \${tr['status_' + req.status] || req.status}
                                     </span>
                                 </div>
-                                <p class="text-gray-600 dark:text-gray-400">
-                                    \${isReceived 
-                                        ? (tr.wants_to_join || 'Wants to join your competition') 
-                                        : (tr.you_requested || 'You requested to join')}:
-                                </p>
+                                <p class="text-gray-600 dark:text-gray-400">\${message}:</p>
                                 <a href="/competition/\${req.competition_id}?lang=\${lang}" 
-                                   class="text-purple-600 hover:underline font-semibold">\${req.competition?.title || 'Competition'}</a>
+                                   class="text-purple-600 hover:underline font-semibold">\${req.competition_title || 'Competition'}</a>
                                 <p class="text-sm text-gray-400 mt-2">\${new Date(req.created_at).toLocaleString()}</p>
                             </div>
                             \${isReceived && req.status === 'pending' ? \`
@@ -165,7 +180,21 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                                     </button>
                                 </div>
                             \` : ''}
-                            \${!isReceived && req.status === 'pending' ? \`
+                            \${isInvitation && req.status === 'pending' ? \`
+                                <div class="flex gap-2">
+                                    <button onclick="handleInvitation(\${req.competition_id}, 'accept')" 
+                                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                                        <i class="fas fa-check \${isRTL ? 'ml-1' : 'mr-1'}"></i>
+                                        \${tr.accept || 'Accept'}
+                                    </button>
+                                    <button onclick="handleInvitation(\${req.competition_id}, 'decline')" 
+                                        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                                        <i class="fas fa-times \${isRTL ? 'ml-1' : 'mr-1'}"></i>
+                                        \${tr.decline || 'Decline'}
+                                    </button>
+                                </div>
+                            \` : ''}
+                            \${currentTab === 'sent' && req.status === 'pending' ? \`
                                 <button onclick="cancelRequest(\${req.competition_id})" 
                                     class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 transition-colors">
                                     <i class="fas fa-times \${isRTL ? 'ml-1' : 'mr-1'}"></i>
@@ -193,6 +222,30 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     }
                 } catch (err) {
                     console.error('Failed to ' + action + ' request:', err);
+                }
+            }
+            
+            async function handleInvitation(compId, action) {
+                try {
+                    const res = await fetch(\`/api/competitions/\${compId}/\${action}-invite\`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success && action === 'accept') {
+                            // Redirect to competition page after accepting
+                            window.location.href = '/competition/' + compId + '?lang=' + lang;
+                        } else {
+                            loadRequests();
+                        }
+                    }
+                } catch (err) {
+                    console.error('Failed to ' + action + ' invitation:', err);
                 }
             }
             

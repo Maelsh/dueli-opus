@@ -80,7 +80,7 @@ export type CompetitionStatus = 'pending' | 'accepted' | 'live' | 'completed' | 
 export type RequestStatus = 'pending' | 'accepted' | 'declined';
 
 /** Notification types */
-export type NotificationType = 'request' | 'follow' | 'comment' | 'rating' | 'system';
+export type NotificationType = 'request' | 'follow' | 'comment' | 'rating' | 'system' | 'invitation';
 
 // ============================================
 // Domain Interfaces

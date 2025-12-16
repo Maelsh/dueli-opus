@@ -92,6 +92,24 @@ competitionsRoutes.post('/:id/comments', (c) => controller.addComment(c));
  */
 competitionsRoutes.post('/:id/rate', (c) => controller.rate(c));
 
+/**
+ * Invite user to competition
+ * POST /api/competitions/:id/invite
+ */
+competitionsRoutes.post('/:id/invite', (c) => controller.invite(c));
+
+/**
+ * Accept invitation
+ * POST /api/competitions/:id/accept-invite
+ */
+competitionsRoutes.post('/:id/accept-invite', (c) => controller.acceptInvite(c));
+
+/**
+ * Decline invitation
+ * POST /api/competitions/:id/decline-invite
+ */
+competitionsRoutes.post('/:id/decline-invite', (c) => controller.declineInvite(c));
+
 // ============================================
 // Update Operations
 // ============================================

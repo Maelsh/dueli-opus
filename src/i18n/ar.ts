@@ -414,6 +414,8 @@ export const ar = {
     no_requests: 'لا توجد طلبات بعد',
     wants_to_join: 'يريد الانضمام لمنافستك',
     you_requested: 'طلبت الانضمام إلى',
+    invitations: 'الدعوات',
+    invites_you: 'يدعوك للمنافسة',
 
     // أزرار التفاعل (جديد)
     remind_me: 'ذكرني',

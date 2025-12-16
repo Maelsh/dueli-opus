@@ -405,11 +405,14 @@ export class CompetitionController extends BaseController {
             // Auto-decline all other pending requests on this competition
             const declinedCount = await requestModel.declineAllOther(competitionId, body.request_id);
 
-            // Delete time-conflicting pending requests from the accepted user
-            const conflictingDeleted = await requestModel.deleteConflictingRequests(
-                request.requester_id,
-                competition.scheduled_at || null
-            );
+            // Decline all pending invitations for this competition
+            await c.env.DB.prepare(`
+                UPDATE competition_invitations SET status = 'declined' 
+                WHERE competition_id = ? AND status = 'pending'
+            `).bind(competitionId).run();
+
+            // AUTO-DELETE LOGIC: Delete accepted user's conflicting competitions and requests
+            const autoDeletedCount = await this.handleAutoDeleteOnJoin(c, request.requester_id, competition);
 
             await notificationModel.create({
                 user_id: request.requester_id,
@@ -423,7 +426,7 @@ export class CompetitionController extends BaseController {
             return this.success(c, {
                 accepted: true,
                 otherDeclined: declinedCount,
-                conflictingDeleted: conflictingDeleted
+                autoDeleted: autoDeletedCount
             });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -704,6 +707,236 @@ export class CompetitionController extends BaseController {
         } catch (error) {
             return this.serverError(c, error as Error);
         }
+    }
+
+    /**
+     * Invite user to competition
+     * POST /api/competitions/:id/invite
+     */
+    async invite(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const competitionId = this.getParamInt(c, 'id');
+
+            const model = new CompetitionModel(c.env.DB);
+            const notificationModel = new NotificationModel(c.env.DB);
+            const competition = await model.findById(competitionId);
+
+            if (!competition) return this.notFound(c);
+            if (competition.creator_id !== user.id) return this.forbidden(c);
+            if (competition.opponent_id) return this.error(c, 'Competition already has opponent');
+
+            const body = await this.getBody<{ invitee_id: number; message?: string }>(c);
+            if (!body?.invitee_id) return this.validationError(c, 'invitee_id required');
+            if (body.invitee_id === user.id) return this.error(c, 'Cannot invite yourself');
+
+            // Check if already invited
+            const existing = await c.env.DB.prepare(`
+                SELECT id FROM competition_invitations 
+                WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
+            `).bind(competitionId, body.invitee_id).first();
+
+            if (existing) return this.error(c, 'User already invited');
+
+            // Create invitation
+            const result = await c.env.DB.prepare(`
+                INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, message, status, created_at)
+                VALUES (?, ?, ?, ?, 'pending', datetime('now'))
+            `).bind(competitionId, user.id, body.invitee_id, body.message || null).run();
+
+            // Notify invitee
+            await notificationModel.create({
+                user_id: body.invitee_id,
+                type: 'invitation',
+                title: this.t('notification.competition_invite', c),
+                message: `${user.display_name || user.username}: ${competition.title}`,
+                reference_type: 'competition',
+                reference_id: competitionId
+            });
+
+            return this.success(c, { id: result.meta.last_row_id, invited: true });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Accept invitation
+     * POST /api/competitions/:id/accept-invite
+     */
+    async acceptInvite(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const competitionId = this.getParamInt(c, 'id');
+
+            const model = new CompetitionModel(c.env.DB);
+            const requestModel = new CompetitionRequestModel(c.env.DB);
+            const notificationModel = new NotificationModel(c.env.DB);
+            const competition = await model.findById(competitionId);
+
+            if (!competition) return this.notFound(c);
+            if (competition.opponent_id) return this.error(c, 'Competition already has opponent');
+
+            // Verify invitation exists
+            const invitation = await c.env.DB.prepare(`
+                SELECT * FROM competition_invitations 
+                WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
+            `).bind(competitionId, user.id).first();
+
+            if (!invitation) return this.error(c, 'No pending invitation found');
+
+            // Set user as opponent
+            await model.setOpponent(competitionId, user.id);
+
+            // Update invitation status
+            await c.env.DB.prepare(`
+                UPDATE competition_invitations SET status = 'accepted', responded_at = datetime('now') 
+                WHERE id = ?
+            `).bind(invitation.id).run();
+
+            // Decline all other invitations for this competition
+            await c.env.DB.prepare(`
+                UPDATE competition_invitations SET status = 'declined' 
+                WHERE competition_id = ? AND id != ? AND status = 'pending'
+            `).bind(competitionId, invitation.id).run();
+
+            // Decline all pending requests for this competition
+            await c.env.DB.prepare(`
+                UPDATE competition_requests SET status = 'auto_declined' 
+                WHERE competition_id = ? AND status = 'pending'
+            `).bind(competitionId).run();
+
+            // AUTO-DELETE LOGIC: Delete user's conflicting competitions and requests
+            const deletedCount = await this.handleAutoDeleteOnJoin(c, user.id, competition);
+
+            // Notify competition creator
+            await notificationModel.create({
+                user_id: competition.creator_id,
+                type: 'request',
+                title: this.t('notification.invitation_accepted', c),
+                message: `${user.display_name || user.username}: ${competition.title}`,
+                reference_type: 'competition',
+                reference_id: competitionId
+            });
+
+            return this.success(c, { accepted: true, autoDeleted: deletedCount });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Decline invitation
+     * POST /api/competitions/:id/decline-invite
+     */
+    async declineInvite(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const competitionId = this.getParamInt(c, 'id');
+
+            const result = await c.env.DB.prepare(`
+                UPDATE competition_invitations 
+                SET status = 'declined', responded_at = datetime('now')
+                WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
+            `).bind(competitionId, user.id).run();
+
+            if (result.meta.changes === 0) {
+                return this.error(c, 'No pending invitation found');
+            }
+
+            return this.success(c, { declined: true });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Handle auto-delete logic when user joins a competition
+     * Deletes conflicting competitions and requests
+     */
+    private async handleAutoDeleteOnJoin(c: AppContext, userId: number, joinedCompetition: any): Promise<number> {
+        const notificationModel = new NotificationModel(c.env.DB);
+        let deletedCount = 0;
+
+        const isImmediate = !joinedCompetition.scheduled_at;
+        const scheduledAt = joinedCompetition.scheduled_at;
+
+        if (isImmediate) {
+            // Immediate competition: delete all immediate competitions user created that don't have opponent
+            const userImmediateComps = await c.env.DB.prepare(`
+                SELECT id, title FROM competitions 
+                WHERE creator_id = ? AND id != ? AND scheduled_at IS NULL AND opponent_id IS NULL AND status = 'pending'
+            `).bind(userId, joinedCompetition.id).all();
+
+            for (const comp of userImmediateComps.results as any[]) {
+                await c.env.DB.prepare('DELETE FROM competitions WHERE id = ?').bind(comp.id).run();
+                deletedCount++;
+
+                await notificationModel.create({
+                    user_id: userId,
+                    type: 'system',
+                    title: 'Competition Auto-Deleted',
+                    message: `"${comp.title}" was deleted because you joined another competition`,
+                    reference_type: 'competition',
+                    reference_id: comp.id
+                });
+            }
+
+            // Delete pending requests user made on other immediate competitions
+            await c.env.DB.prepare(`
+                DELETE FROM competition_requests 
+                WHERE requester_id = ? 
+                AND competition_id IN (SELECT id FROM competitions WHERE scheduled_at IS NULL)
+            `).bind(userId).run();
+
+            // Delete pending invitations user received for other immediate competitions
+            await c.env.DB.prepare(`
+                UPDATE competition_invitations SET status = 'expired'
+                WHERE invitee_id = ? AND status = 'pending'
+                AND competition_id IN (SELECT id FROM competitions WHERE scheduled_at IS NULL)
+            `).bind(userId).run();
+
+        } else {
+            // Scheduled competition: delete conflicts within 2 hours
+            const twoHours = 2 * 60 * 60; // seconds
+
+            // Delete user's scheduled competitions that conflict
+            const conflictingComps = await c.env.DB.prepare(`
+                SELECT id, title FROM competitions 
+                WHERE creator_id = ? AND id != ? AND scheduled_at IS NOT NULL AND opponent_id IS NULL
+                AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < ?
+            `).bind(userId, joinedCompetition.id, scheduledAt, twoHours).all();
+
+            for (const comp of conflictingComps.results as any[]) {
+                await c.env.DB.prepare('DELETE FROM competitions WHERE id = ?').bind(comp.id).run();
+                deletedCount++;
+
+                await notificationModel.create({
+                    user_id: userId,
+                    type: 'system',
+                    title: 'Competition Auto-Deleted',
+                    message: `"${comp.title}" was deleted due to time conflict`,
+                    reference_type: 'competition',
+                    reference_id: comp.id
+                });
+            }
+
+            // Delete conflicting requests
+            await c.env.DB.prepare(`
+                DELETE FROM competition_requests 
+                WHERE requester_id = ?
+                AND competition_id IN (
+                    SELECT id FROM competitions 
+                    WHERE scheduled_at IS NOT NULL 
+                    AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < ?
+                )
+            `).bind(userId, scheduledAt, twoHours).run();
+        }
+
+        return deletedCount;
     }
 }
 

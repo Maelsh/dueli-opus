@@ -438,6 +438,8 @@ export const en = {
     no_requests: 'No requests yet',
     wants_to_join: 'Wants to join your competition',
     you_requested: 'You requested to join',
+    invitations: 'Invitations',
+    invites_you: 'Invites you to compete',
 
     // Interaction buttons (new)
     remind_me: 'Remind Me',
