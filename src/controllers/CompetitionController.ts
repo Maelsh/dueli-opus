@@ -152,6 +152,7 @@ export class CompetitionController extends BaseController {
                 country: this.getQuery(c, 'country') || undefined,
                 language: this.getQuery(c, 'language') || undefined,
                 search: this.getQuery(c, 'search') || undefined,
+                creatorId: this.getQueryInt(c, 'creator') || undefined,
                 limit: this.getQueryInt(c, 'limit', 20),
                 offset: this.getQueryInt(c, 'offset', 0)
             };

@@ -491,6 +491,52 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         } catch (err) { console.error(err); }
       }
+      
+      // Request to join competition
+      async function requestJoin() {
+        if (!window.currentUser) { showLoginModal(); return; }
+        
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/request', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          const data = await res.json();
+          if (data.success) {
+            alert(tr.request_sent || 'Join request sent successfully!');
+            loadCompetition(); // Reload to show updated state
+          } else {
+            alert(data.error || tr.error_occurred || 'Failed to send request');
+          }
+        } catch (err) { 
+          console.error(err); 
+          alert(tr.error_occurred || 'An error occurred');
+        }
+      }
+      
+      // Cancel join request
+      async function cancelRequest() {
+        if (!window.currentUser) return;
+        
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/request', {
+            method: 'DELETE',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (res.ok) {
+            alert(tr.request_cancelled || 'Request cancelled');
+            loadCompetition(); // Reload to show updated state
+          }
+        } catch (err) { console.error(err); }
+      }
     </script>
   `;
 
