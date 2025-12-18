@@ -217,23 +217,74 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             const displayItems = users.slice(0, maxItems);
             const hasMore = users.length > maxItems;
             
-            // Build user cards HTML inline (same pattern as HomePage dropdown)
+            // Helper function to format rating as stars
+            function formatRating(rating) {
+              const stars = Math.round((rating || 0) / 20); // 0-100 to 0-5 stars
+              return '★'.repeat(stars) + '☆'.repeat(5 - stars);
+            }
+            
+            // Build user cards HTML with full profile info
             const usersHtml = displayItems.map(user => \`
               <a href="/profile/\${user.username}?lang=\${lang}" 
-                 class="user-card group block bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600">
+                 class="user-card group block bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 relative">
+                
+                \${user.is_busy ? \`
+                  <div class="absolute top-2 \${rtl ? 'left-2' : 'right-2'} flex items-center gap-1 px-2 py-1 bg-red-500 text-white text-xs rounded-full animate-pulse">
+                    <span class="w-2 h-2 bg-white rounded-full"></span>
+                    \${tr.live || 'LIVE'}
+                  </div>
+                \` : ''}
+                
                 <div class="flex items-center gap-4">
-                  <img 
-                    src="\${user.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username}" 
-                    alt="\${user.display_name || user.username}" 
-                    class="w-16 h-16 rounded-full object-cover border-2 border-purple-100 dark:border-purple-900"
-                    loading="lazy"
-                  >
+                  <!-- Avatar with verified badge -->
+                  <div class="relative flex-shrink-0">
+                    <img 
+                      src="\${user.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username}" 
+                      alt="\${user.display_name || user.username}" 
+                      class="w-16 h-16 rounded-full object-cover border-2 \${user.is_busy ? 'border-red-500' : 'border-purple-100 dark:border-purple-900'}"
+                      loading="lazy"
+                    >
+                    \${user.is_verified ? \`
+                      <div class="absolute -bottom-1 \${rtl ? '-left-1' : '-right-1'} bg-blue-500 rounded-full p-1" title="\${tr.verified || 'Verified'}">
+                        <i class="fas fa-check text-white text-xs" aria-hidden="true"></i>
+                      </div>
+                    \` : ''}
+                  </div>
+                  
+                  <!-- User Info -->
                   <div class="flex-1 min-w-0">
                     <h3 class="font-bold text-gray-900 dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                       \${user.display_name || user.username}
                     </h3>
-                    <p class="text-sm text-gray-500 truncate">@\${user.username}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 truncate">@\${user.username}</p>
+                    
+                    <!-- Rating -->
+                    <div class="text-yellow-500 text-sm mt-1" title="\${tr.average_rating || 'Rating'}: \${user.average_rating || 0}%">
+                      \${formatRating(user.average_rating)}
+                    </div>
                   </div>
+                </div>
+                
+                <!-- Stats Row -->
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                  <span class="flex items-center gap-1" title="\${tr.followers || 'Followers'}">
+                    <i class="fas fa-users" aria-hidden="true"></i>
+                    \${user.followers_count || 0}
+                  </span>
+                  <span class="flex items-center gap-1" title="\${tr.competitions || 'Competitions'}">
+                    <i class="fas fa-trophy" aria-hidden="true"></i>
+                    \${user.total_competitions || 0}
+                  </span>
+                  <span class="flex items-center gap-1" title="\${tr.wins || 'Wins'}">
+                    <i class="fas fa-medal" aria-hidden="true"></i>
+                    \${user.total_wins || 0}
+                  </span>
+                  \${user.country ? \`
+                    <span class="flex items-center gap-1" title="\${tr.country || 'Country'}">
+                      <i class="fas fa-globe" aria-hidden="true"></i>
+                      \${user.country}
+                    </span>
+                  \` : ''}
                 </div>
               </a>
             \`).join('');

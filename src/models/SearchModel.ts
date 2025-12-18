@@ -131,20 +131,31 @@ export class SearchModel {
         // Count total
         const countQuery = `
             SELECT COUNT(*) as total FROM users 
-            WHERE username LIKE ? OR display_name LIKE ?
+            WHERE (username LIKE ? OR display_name LIKE ?) AND is_active = 1
         `;
         const countResult = await this.db.prepare(countQuery)
             .bind(searchTerm, searchTerm)
             .first<{ total: number }>();
         const total = countResult?.total || 0;
 
-        // Get items
+        // Get items with followers count
         const itemsQuery = `
-            SELECT id, username, display_name, avatar_url, bio, country, language,
-                   total_competitions, total_wins, average_rating, created_at
-            FROM users 
-            WHERE username LIKE ? OR display_name LIKE ?
-            ORDER BY total_competitions DESC, average_rating DESC
+            SELECT 
+                u.id, u.username, u.display_name, u.avatar_url, u.bio, 
+                u.country, u.language, u.is_verified,
+                u.total_competitions, u.total_wins, u.average_rating, u.created_at,
+                (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
+                (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+                CASE 
+                    WHEN EXISTS (
+                        SELECT 1 FROM competitions c 
+                        WHERE (c.creator_id = u.id OR c.opponent_id = u.id) 
+                        AND c.status = 'live'
+                    ) THEN 1 ELSE 0 
+                END as is_busy
+            FROM users u
+            WHERE (u.username LIKE ? OR u.display_name LIKE ?) AND u.is_active = 1
+            ORDER BY u.total_competitions DESC, u.average_rating DESC
             LIMIT ? OFFSET ?
         `;
 
