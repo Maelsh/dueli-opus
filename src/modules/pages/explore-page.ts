@@ -125,11 +125,11 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             
             if (!data.success || !data.data?.length) {
               container.innerHTML = \`
-                <div class="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
-                  <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-trophy text-2xl text-gray-300 dark:text-gray-500"></i>
+                <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                  <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-trophy text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
                   </div>
-                  <p class="text-gray-500">\${tr.no_competitions || 'No competitions found'}</p>
+                  <p class="text-gray-500 dark:text-gray-400">\${tr.no_competitions || 'No competitions found'}</p>
                 </div>
               \`;
               countEl.textContent = '(0)';
