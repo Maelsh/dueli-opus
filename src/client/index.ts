@@ -28,6 +28,7 @@ import { MessagesUI } from './ui/MessagesUI';
 
 // Shared Components (View layer - single source of truth)
 import { getCompetitionCard, type CompetitionCardProps } from '../shared/components/competition-card';
+import { getUserCard, getUserCards, type UserCardProps } from '../shared/components/user-card';
 
 // Pages
 import { HomePage } from './pages/HomePage';
@@ -199,6 +200,10 @@ declare global {
         // Competition Card Renderer (View from shared components)
         renderCompetitionCard: (item: CompetitionCardProps, lang?: string) => string;
         renderCompetitionCards: (items: CompetitionCardProps[], lang?: string) => string;
+
+        // User Card Renderer (View from shared components)
+        renderUserCard: (user: UserCardProps, lang?: string) => string;
+        renderUserCards: (users: UserCardProps[], lang?: string) => string;
     }
 }
 
@@ -280,6 +285,10 @@ if (typeof window !== 'undefined') {
     // Bind Competition Card Renderer (uses shared View component)
     window.renderCompetitionCard = (item: CompetitionCardProps, lang: string = State.lang) => getCompetitionCard(item, lang as any);
     window.renderCompetitionCards = (items: CompetitionCardProps[], lang: string = State.lang) => items.map(item => getCompetitionCard(item, lang as any)).join('');
+
+    // Bind User Card Renderer (uses shared View component)
+    window.renderUserCard = (user: UserCardProps, lang: string = State.lang) => getUserCard(user, lang as any);
+    window.renderUserCards = (users: UserCardProps[], lang: string = State.lang) => getUserCards(users, lang as any);
 }
 
 // Auto-initialize when DOM is ready

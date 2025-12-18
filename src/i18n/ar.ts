@@ -25,6 +25,11 @@ export const ar = {
     country_language: 'البلد واللغة',
     search_country: 'ابحث عن بلد...',
     users: 'المستخدمون',
+    verified: 'موثق',
+    busy_in_stream: 'مشغول في بث',
+    search_results_for: 'نتائج البحث عن',
+    no_users: 'لا يوجد مستخدمون',
+    search_users_prompt: 'أدخل كلمة للبحث عن المستخدمين',
 
     // الأقسام الرئيسية
     categories: {

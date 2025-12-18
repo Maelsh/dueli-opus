@@ -24,6 +24,11 @@ export const en = {
     country_language: 'Country & Language',
     search_country: 'Search country...',
     users: 'Users',
+    verified: 'Verified',
+    busy_in_stream: 'Busy in stream',
+    search_results_for: 'Search results for',
+    no_users: 'No users found',
+    search_users_prompt: 'Enter a search term to find users',
 
     // Categories
     categories: {

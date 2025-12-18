@@ -37,13 +37,15 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     
+    <!-- Load client bundle in head with defer so it's ready when DOMContentLoaded fires -->
+    <script src="/static/app.js" defer></script>
+    
     <style>
       body { font-family: ${fontFamily}, system-ui, sans-serif; }
     </style>
 </head>
 <body class="bg-white dark:bg-[#0f0f0f] text-gray-900 dark:text-gray-100 min-h-screen flex flex-col transition-colors duration-300">
     ${content}
-    <script src="/static/app.js"></script>
     <script>
       // Register Service Worker
       if ('serviceWorker' in navigator) {

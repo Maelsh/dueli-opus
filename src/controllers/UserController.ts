@@ -62,6 +62,39 @@ class FollowModel {
 export class UserController extends BaseController {
 
     /**
+     * List users
+     * GET /api/users
+     */
+    async index(c: AppContext) {
+        try {
+            const { DB } = c.env;
+            const limit = this.getQueryInt(c, 'limit') || 20;
+            const offset = this.getQueryInt(c, 'offset') || 0;
+
+            const userModel = new UserModel(DB);
+
+            // Get users with basic stats
+            const result = await DB.prepare(`
+                SELECT 
+                    u.id, u.username, u.display_name, u.avatar_url, u.bio, u.country,
+                    u.is_verified,
+                    (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
+                    (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
+                    (SELECT COUNT(*) FROM competitions WHERE creator_id = u.id OR opponent_id = u.id) as competitions_count
+                FROM users u
+                WHERE u.is_active = 1
+                ORDER BY u.created_at DESC
+                LIMIT ? OFFSET ?
+            `).bind(limit, offset).all();
+
+            return this.success(c, result.results || []);
+        } catch (error) {
+            console.error('List users error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
      * Get user profile by username
      * GET /api/users/:username
      */

@@ -17,6 +17,12 @@ const controller = new UserController();
 // ============================================
 
 /**
+ * List users
+ * GET /api/users
+ */
+usersRoutes.get('/', (c) => controller.index(c));
+
+/**
  * Get user profile
  * GET /api/users/:username
  */
