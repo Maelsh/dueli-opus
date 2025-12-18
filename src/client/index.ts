@@ -26,6 +26,9 @@ import { Menu } from './ui/Menu';
 import { NotificationsUI } from './ui/NotificationsUI';
 import { MessagesUI } from './ui/MessagesUI';
 
+// Shared Components (View layer - single source of truth)
+import { getCompetitionCard, type CompetitionCardProps } from '../shared/components/competition-card';
+
 // Pages
 import { HomePage } from './pages/HomePage';
 
@@ -192,6 +195,10 @@ declare global {
         setMainTab: typeof HomePage.setMainTab;
         setSubTab: typeof HomePage.setSubTab;
         loadMoreCompetitions: typeof HomePage.loadMoreCompetitions;
+
+        // Competition Card Renderer (View from shared components)
+        renderCompetitionCard: (item: CompetitionCardProps, lang?: string) => string;
+        renderCompetitionCards: (items: CompetitionCardProps[], lang?: string) => string;
     }
 }
 
@@ -269,6 +276,10 @@ if (typeof window !== 'undefined') {
     window.setMainTab = (tab: any) => HomePage.setMainTab(tab);
     window.setSubTab = (tab: string) => HomePage.setSubTab(tab);
     window.loadMoreCompetitions = () => HomePage.loadMoreCompetitions();
+
+    // Bind Competition Card Renderer (uses shared View component)
+    window.renderCompetitionCard = (item: CompetitionCardProps, lang: string = State.lang) => getCompetitionCard(item, lang as any);
+    window.renderCompetitionCards = (items: CompetitionCardProps[], lang: string = State.lang) => items.map(item => getCompetitionCard(item, lang as any)).join('');
 }
 
 // Auto-initialize when DOM is ready

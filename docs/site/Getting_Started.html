@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Started - Dueli Opus Wiki</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .prose {
+            max-width: 65ch;
+            margin: 0 auto;
+        }
+
+        .prose h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: #f3f4f6;
+        }
+
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 0.5rem;
+        }
+
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #d1d5db;
+        }
+
+        .prose p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+            color: #9ca3af;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: #9ca3af;
+        }
+
+        .prose li {
+            margin-bottom: 0.5rem;
+        }
+
+        .prose a {
+            color: #818cf8;
+            text-decoration: none;
+            border-bottom: 1px dotted #818cf8;
+            transition: all 0.2s;
+        }
+
+        .prose a:hover {
+            color: #a5b4fc;
+            border-bottom-style: solid;
+        }
+
+        .prose code {
+            background-color: #1f2937;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.875em;
+            color: #e5e7eb;
+        }
+
+        .prose pre {
+            background-color: #111827;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid #374151;
+        }
+
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #e5e7eb;
+        }
+
+        .mermaid {
+            background: #1f2937;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .prose strong {
+            color: #f3f4f6;
+            font-weight: 600;
+        }
+
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .prose th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #4b5563;
+            color: #f3f4f6;
+        }
+
+        .prose td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #374151;
+            color: #9ca3af;
+        }
+
+        /* Alert/Callout Styles */
+        .prose blockquote {
+            border-left: 4px solid #4b5563;
+            padding-left: 1rem;
+            font-style: italic;
+            color: #9ca3af;
+            background: #1f293750;
+            padding: 1rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        /* Nav Active State */
+        .nav-link.active {
+            background-color: #374151;
+            color: #f3f4f6;
+            border-right: 3px solid #818cf8;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 fixed h-full overflow-y-auto">
+        <div class="p-6 border-b border-gray-700">
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+                Dueli Opus Wiki
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">Deep Technical Reference</p>
+        </div>
+        <nav class="p-4">
+            <ul class="space-y-1 text-sm">
+                <li><a href="About.html" class="nav-link" data-page="About">About</a></li>
+<li><a href="Analysis_Report.html" class="nav-link" data-page="Analysis_Report">Analysis Report</a></li>
+<li><a href="API_Reference.html" class="nav-link" data-page="API_Reference">API Reference</a></li>
+<li><a href="Architecture.html" class="nav-link" data-page="Architecture">Architecture</a></li>
+<li><a href="Code_Violations_Report.html" class="nav-link" data-page="Code_Violations_Report">Code Violations Report</a></li>
+<li><a href="Database.html" class="nav-link" data-page="Database">Database</a></li>
+<li><a href="Developer_Guide.html" class="nav-link" data-page="Developer_Guide">Developer Guide</a></li>
+<li><a href="FAQ.html" class="nav-link" data-page="FAQ">FAQ</a></li>
+<li><a href="Frontend_Architecture.html" class="nav-link" data-page="Frontend_Architecture">Frontend Architecture</a></li>
+<li><a href="Getting_Started.html" class="nav-link" data-page="Getting_Started">Getting Started</a></li>
+<li><a href="Home.html" class="nav-link" data-page="Home">Home</a></li>
+<li><a href="User_Guide.html" class="nav-link" data-page="User_Guide">User Guide</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 flex-1 p-8">
+        <div class="prose">
+            <h1>Getting Started - البدء</h1>
+<p>This guide will help you set up Dueli for development and deployment.</p>
+<h2>Prerequisites / المتطلبات</h2>
+<ul>
+<li><strong>Node.js</strong> 18+ - <a href="https://nodejs.org/">Download</a></li>
+<li><strong>npm</strong> or <strong>yarn</strong></li>
+<li><strong>Git</strong></li>
+<li><strong>Cloudflare Account</strong> - Required for D1 database and Workers.</li>
+</ul>
+<h2>Installation / التثبيت</h2>
+<h3>1. Clone &amp; Install</h3>
+<pre><code class="language-bash">git clone https://github.com/Maelsh/dueli-opus.git
+cd dueli-opus/webapp
+npm install
+</code></pre>
+<h3>2. Environment Setup</h3>
+<p>Copy the template and configure your secrets.</p>
+<pre><code class="language-bash">cp .dev.vars.example .dev.vars
+</code></pre>
+<blockquote>
+<p><strong>Note</strong>: <code>.dev.vars</code> is for local development secrets. For production, use <code>wrangler secret put</code>.</p>
+</blockquote>
+<h2>Development / التطوير</h2>
+<h3>Quick Start</h3>
+<p>To start the full stack environment (Client Builder + CSS + Server + Database):</p>
+<pre><code class="language-bash">npm run dev:sandbox
+</code></pre>
+<p>Runs at <code>http://0.0.0.0:3000</code>.</p>
+<h3>NPM Scripts Reference</h3>
+<p>We have organized scripts for every part of the stack:</p>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>dev</code></td>
+<td>Basic Vite dev server (frontend focus).</td>
+</tr>
+<tr>
+<td><code>dev:sandbox</code></td>
+<td><strong>Main Dev Mode</strong>: Runs Wrangler Pages with local D1 database.</td>
+</tr>
+<tr>
+<td><code>build</code></td>
+<td>Full build (CSS + Client + Server).</td>
+</tr>
+<tr>
+<td><code>build:client</code></td>
+<td>Compiles TypeScript frontend to <code>dist/static/app.js</code> using esbuild.</td>
+</tr>
+<tr>
+<td><code>build:css</code></td>
+<td>Compiles TailwindCSS to <code>public/static/styles.css</code>.</td>
+</tr>
+<tr>
+<td><code>db:migrate:local</code></td>
+<td>Applies D1 migrations to local sandbox db.</td>
+</tr>
+<tr>
+<td><code>db:seed</code></td>
+<td>Seeds the local database with <code>seed.sql</code>.</td>
+</tr>
+<tr>
+<td><code>db:reset</code></td>
+<td>Nukes local DB state and re-runs migrations + seed.</td>
+</tr>
+<tr>
+<td><code>deploy</code></td>
+<td>Deploys the <code>dist</code> folder to Cloudflare Pages.</td>
+</tr>
+</tbody></table>
+<h2>Database Management</h2>
+<h3>Local</h3>
+<p>The local database handles persistence in <code>.wrangler/state</code>.</p>
+<ul>
+<li><strong>Resetting Data</strong>: If you mess up data, just run:<pre><code class="language-bash">npm run db:reset
+</code></pre>
+This is a powerful script that cleans <code>v3/d1</code> state and re-seeds ~150KB of test data.</li>
+</ul>
+<h3>Production</h3>
+<ol>
+<li><strong>Create DB</strong>: <code>wrangler d1 create dueli-db</code></li>
+<li><strong>Apply Migrations</strong>: <code>wrangler d1 migrations apply dueli-db --remote</code></li>
+<li><strong>Bind</strong>: Ensure <code>wrangler.jsonc</code> has the correct <code>database_id</code>.</li>
+</ol>
+<h2>Deployment / النشر</h2>
+<p>Dueli is designed for <strong>Cloudflare Pages</strong>.</p>
+<ol>
+<li><strong>Build</strong>:<pre><code class="language-bash">npm run build
+</code></pre>
+</li>
+<li><strong>Deploy</strong>:<pre><code class="language-bash">npm run deploy
+</code></pre>
+<em>Uses <code>wrangler pages deploy dist</code>.</em></li>
+</ol>
+<h3>Secrets Management</h3>
+<p>Production secrets must be set manually on Cloudflare:</p>
+<pre><code class="language-bash">wrangler pages secret put GOOGLE_CLIENT_ID
+wrangler pages secret put GOOGLE_CLIENT_SECRET
+# ... etc
+</code></pre>
+<h2>Troubleshooting</h2>
+<ul>
+<li><strong>&quot;Table not found&quot;</strong>: You likely forgot to run <code>npm run db:migrate:local</code>.</li>
+<li><strong>Styles missing</strong>: Run <code>npm run build:css</code>.</li>
+<li><strong>Login fails</strong>: Check <code>.dev.vars</code> for correct OAuth credentials.</li>
+</ul>
+
+        </div>
+
+        <footer class="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
+            <p>Generated by Deep Analysis Agent &bull; Dueli Opus Project</p>
+        </footer>
+    </main>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose'
+        });
+
+        // Highlight Active Link
+        const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (link.getAttribute('href').includes(currentPage)) {
+                link.classList.add('active', 'bg-gray-700', 'text-white');
+            }
+        });
+    </script>
+</body>
+
+</html>

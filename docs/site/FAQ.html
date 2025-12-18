@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ - Dueli Opus Wiki</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .prose {
+            max-width: 65ch;
+            margin: 0 auto;
+        }
+
+        .prose h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: #f3f4f6;
+        }
+
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 0.5rem;
+        }
+
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #d1d5db;
+        }
+
+        .prose p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+            color: #9ca3af;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: #9ca3af;
+        }
+
+        .prose li {
+            margin-bottom: 0.5rem;
+        }
+
+        .prose a {
+            color: #818cf8;
+            text-decoration: none;
+            border-bottom: 1px dotted #818cf8;
+            transition: all 0.2s;
+        }
+
+        .prose a:hover {
+            color: #a5b4fc;
+            border-bottom-style: solid;
+        }
+
+        .prose code {
+            background-color: #1f2937;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.875em;
+            color: #e5e7eb;
+        }
+
+        .prose pre {
+            background-color: #111827;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid #374151;
+        }
+
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #e5e7eb;
+        }
+
+        .mermaid {
+            background: #1f2937;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .prose strong {
+            color: #f3f4f6;
+            font-weight: 600;
+        }
+
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .prose th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #4b5563;
+            color: #f3f4f6;
+        }
+
+        .prose td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #374151;
+            color: #9ca3af;
+        }
+
+        /* Alert/Callout Styles */
+        .prose blockquote {
+            border-left: 4px solid #4b5563;
+            padding-left: 1rem;
+            font-style: italic;
+            color: #9ca3af;
+            background: #1f293750;
+            padding: 1rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        /* Nav Active State */
+        .nav-link.active {
+            background-color: #374151;
+            color: #f3f4f6;
+            border-right: 3px solid #818cf8;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 fixed h-full overflow-y-auto">
+        <div class="p-6 border-b border-gray-700">
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+                Dueli Opus Wiki
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">Deep Technical Reference</p>
+        </div>
+        <nav class="p-4">
+            <ul class="space-y-1 text-sm">
+                <li><a href="About.html" class="nav-link" data-page="About">About</a></li>
+<li><a href="Analysis_Report.html" class="nav-link" data-page="Analysis_Report">Analysis Report</a></li>
+<li><a href="API_Reference.html" class="nav-link" data-page="API_Reference">API Reference</a></li>
+<li><a href="Architecture.html" class="nav-link" data-page="Architecture">Architecture</a></li>
+<li><a href="Code_Violations_Report.html" class="nav-link" data-page="Code_Violations_Report">Code Violations Report</a></li>
+<li><a href="Database.html" class="nav-link" data-page="Database">Database</a></li>
+<li><a href="Developer_Guide.html" class="nav-link" data-page="Developer_Guide">Developer Guide</a></li>
+<li><a href="FAQ.html" class="nav-link" data-page="FAQ">FAQ</a></li>
+<li><a href="Frontend_Architecture.html" class="nav-link" data-page="Frontend_Architecture">Frontend Architecture</a></li>
+<li><a href="Getting_Started.html" class="nav-link" data-page="Getting_Started">Getting Started</a></li>
+<li><a href="Home.html" class="nav-link" data-page="Home">Home</a></li>
+<li><a href="User_Guide.html" class="nav-link" data-page="User_Guide">User Guide</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 flex-1 p-8">
+        <div class="prose">
+            <h1>Frequently Asked Questions - الأسئلة الشائعة</h1>
+<p>Find answers to common questions about Dueli platform.</p>
+<h2>General Questions / الأسئلة العامة</h2>
+<h3>What is Dueli? / ما هو ديولي؟</h3>
+<p>Dueli is a bilingual (Arabic/English) platform for live debates and discussions. It allows users to create, join, and participate in structured debates on various topics, with live video streaming and real-time audience interaction.</p>
+<p>ديولي هو منصة ثنائية اللغة (عربي/إنجليزي) للمناظرات والمناقشات الحية. يتيح للمستخدمين إنشاء والانضمام والمشاركة في مناظرات منظمة حول مواضيع مختلفة، مع بث فيديو مباشر وتفاعل الجمهور في الوقت الفعلي.</p>
+<h3>Is Dueli free to use? / هل ديولي مجاني الاستخدام؟</h3>
+<p>Yes, Dueli is completely free for all users. There are no premium features or paid subscriptions.</p>
+<p>نعم، ديولي مجاني تماماً لجميع المستخدمين. لا توجد ميزات مدفوعة أو اشتراكات.</p>
+<h3>What languages does Dueli support? / ما هي اللغات التي يدعمها ديولي؟</h3>
+<p>Dueli supports both Arabic and English with full right-to-left (RTL) support for Arabic content.</p>
+<p>يدعم ديولي كلاً من العربية والإنجليزية مع دعم كامل للكتابة من اليمين إلى اليسار (RTL) للمحتوى العربي.</p>
+<h2>Account and Registration / الحساب والتسجيل</h2>
+<h3>How do I create an account? / كيف أنشئ حساباً؟</h3>
+<p>You can register using:</p>
+<ul>
+<li>Email and password</li>
+<li>Google OAuth</li>
+<li>Facebook OAuth</li>
+<li>Microsoft OAuth</li>
+<li>TikTok OAuth</li>
+</ul>
+<p>يمكنك التسجيل باستخدام:</p>
+<ul>
+<li>البريد الإلكتروني وكلمة المرور</li>
+<li>تسجيل دخول Google</li>
+<li>تسجيل دخول Facebook</li>
+<li>تسجيل دخول Microsoft</li>
+<li>تسجيل دخول TikTok</li>
+</ul>
+<h3>I didn&#39;t receive the verification email. What should I do? / لم أتلق رسالة التحقق. ماذا أفعل؟</h3>
+<ul>
+<li><p>Check your spam/junk folder</p>
+</li>
+<li><p>Wait a few minutes (emails may be delayed)</p>
+</li>
+<li><p>Click &quot;Resend verification&quot; on the verification page</p>
+</li>
+<li><p>Contact support if the issue persists</p>
+</li>
+<li><p>تحقق من مجلد البريد المزعج</p>
+</li>
+<li><p>انتظر بضع دقائق (قد تتأخر الرسائل)</p>
+</li>
+<li><p>اضغط &quot;إعادة إرسال التحقق&quot; في صفحة التحقق</p>
+</li>
+<li><p>اتصل بالدعم إذا استمر المشكلة</p>
+</li>
+</ul>
+<h3>Can I change my username? / هل يمكنني تغيير اسم المستخدم؟</h3>
+<p>Currently, usernames cannot be changed after registration. Choose your username carefully during signup.</p>
+<p>حالياً، لا يمكن تغيير أسماء المستخدمين بعد التسجيل. اختر اسم المستخدم بعناية أثناء التسجيل.</p>
+<h2>Using the Platform / استخدام المنصة</h2>
+<h3>How do I create a competition? / كيف أنشئ مناظرة؟</h3>
+<ol>
+<li><p>Click &quot;Create&quot; in the navigation</p>
+</li>
+<li><p>Fill in the competition details (title, description, rules, category)</p>
+</li>
+<li><p>Set the language and schedule (optional)</p>
+</li>
+<li><p>Choose privacy settings</p>
+</li>
+<li><p>Submit to make it live</p>
+</li>
+<li><p>اضغط &quot;إنشاء&quot; في شريط التنقل</p>
+</li>
+<li><p>املأ تفاصيل المناظرة (العنوان، الوصف، القواعد، الفئة)</p>
+</li>
+<li><p>حدد اللغة والجدولة (اختياري)</p>
+</li>
+<li><p>اختر إعدادات الخصوصية</p>
+</li>
+<li><p>أرسل لجعلها حية</p>
+</li>
+</ol>
+<h3>How do I join a competition? / كيف أنضم لمناظرة؟</h3>
+<ol>
+<li><p>Browse competitions on the homepage or Explore page</p>
+</li>
+<li><p>Click on an interesting competition</p>
+</li>
+<li><p>Click &quot;Request to Join&quot;</p>
+</li>
+<li><p>Wait for the creator to accept your request</p>
+</li>
+<li><p>Once accepted, you&#39;ll be notified to join the live debate</p>
+</li>
+<li><p>تصفح المناظرات في الصفحة الرئيسية أو صفحة الاستكشاف</p>
+</li>
+<li><p>اضغط على مناظرة مثيرة للاهتمام</p>
+</li>
+<li><p>اضغط &quot;طلب الانضمام&quot;</p>
+</li>
+<li><p>انتظر حتى يقبل المنشئ طلبك</p>
+</li>
+<li><p>بمجرد القبول، ستتلقى إشعاراً للانضمام للمناظرة الحية</p>
+</li>
+</ol>
+<h3>What are the competition categories? / ما هي فئات المناظرات؟</h3>
+<p>Available categories include:</p>
+<ul>
+<li>Politics (السياسة)</li>
+<li>Sports (الرياضة)</li>
+<li>Technology (التكنولوجيا)</li>
+<li>Science (العلوم)</li>
+<li>Economics (الاقتصاد)</li>
+<li>Social Issues (القضايا الاجتماعية)</li>
+<li>Education (التعليم)</li>
+<li>Entertainment (الترفيه)</li>
+<li>Religion (الدين)</li>
+<li>Other (أخرى)</li>
+</ul>
+<h3>How does the rating system work? / كيف يعمل نظام التقييم؟</h3>
+<ul>
+<li><p>Participants rate each other on a 1-5 star scale</p>
+</li>
+<li><p>Viewers can also rate both participants</p>
+</li>
+<li><p>Ratings are anonymous</p>
+</li>
+<li><p>Average ratings affect user reputation and visibility</p>
+</li>
+<li><p>Focus on constructive, merit-based ratings</p>
+</li>
+<li><p>يقيم المشاركون بعضهم البعض على مقياس 1-5 نجوم</p>
+</li>
+<li><p>يمكن للمشاهدين أيضاً تقييم كلا المشاركين</p>
+</li>
+<li><p>التقييمات مجهولة</p>
+</li>
+<li><p>التقييمات المتوسطة تؤثر على سمعة المستخدم والظهور</p>
+</li>
+<li><p>ركز على التقييمات البناءة المبنية على الجدارة</p>
+</li>
+</ul>
+<h2>Technical Questions / الأسئلة التقنية</h2>
+<h3>What devices does Dueli support? / ما هي الأجهزة التي يدعمها ديولي؟</h3>
+<p>Dueli works on:</p>
+<ul>
+<li>Desktop computers (Windows, macOS, Linux)</li>
+<li>Laptops and tablets</li>
+<li>Mobile phones (iOS and Android)</li>
+<li>Modern web browsers (Chrome, Firefox, Safari, Edge)</li>
+</ul>
+<p>يعمل ديولي على:</p>
+<ul>
+<li>أجهزة الكمبيوتر المكتبية (Windows، macOS، Linux)</li>
+<li>اللابتوب والتابلت</li>
+<li>الهواتف المحمولة (iOS و Android)</li>
+<li>المتصفحات الحديثة (Chrome، Firefox، Safari، Edge)</li>
+</ul>
+<h3>Do I need special equipment for video debates? / هل أحتاج معدات خاصة للمناظرات المرئية؟</h3>
+<p>Basic requirements:</p>
+<ul>
+<li>Webcam (built-in or external)</li>
+<li>Microphone (built-in or external)</li>
+<li>Stable internet connection</li>
+<li>Modern web browser</li>
+</ul>
+<p>No special software installation required - everything works through your browser.</p>
+<p>المتطلبات الأساسية:</p>
+<ul>
+<li>كاميرا ويب (مدمجة أو خارجية)</li>
+<li>ميكروفون (مدمج أو خارجي)</li>
+<li>اتصال إنترنت مستقر</li>
+<li>متصفح ويب حديث</li>
+</ul>
+<p>لا يتطلب تثبيت برامج خاصة - كل شيء يعمل من خلال المتصفح.</p>
+<h3>What are the video quality requirements? / ما هي متطلبات جودة الفيديو؟</h3>
+<ul>
+<li><p>Minimum: 480p (SD)</p>
+</li>
+<li><p>Recommended: 720p (HD)</p>
+</li>
+<li><p>Maximum: 1080p (Full HD)</p>
+</li>
+<li><p>Stable internet connection (5+ Mbps upload)</p>
+</li>
+<li><p>الحد الأدنى: 480p (SD)</p>
+</li>
+<li><p>الموصى به: 720p (HD)</p>
+</li>
+<li><p>الحد الأقصى: 1080p (Full HD)</p>
+</li>
+<li><p>اتصال إنترنت مستقر (5+ ميجابت/ثانية رفع)</p>
+</li>
+</ul>
+<h3>Can I participate without video? / هل يمكنني المشاركة بدون فيديو؟</h3>
+<p>Yes, you can participate in text-based discussions and comments without video. However, for live debates, video participation is encouraged for better engagement.</p>
+<p>نعم، يمكنك المشاركة في المناقشات النصية والتعليقات بدون فيديو. ومع ذلك، للمناظرات الحية، يُشجع على المشاركة المرئية لتفاعل أفضل.</p>
+<h2>Privacy and Safety / الخصوصية والأمان</h2>
+<h3>Is my personal information safe? / هل معلوماتي الشخصية آمنة؟</h3>
+<p>Yes, we take privacy seriously:</p>
+<ul>
+<li>Data encrypted in transit and at rest</li>
+<li>Secure authentication systems</li>
+<li>No sharing of personal data with third parties</li>
+<li>GDPR compliant data handling</li>
+</ul>
+<p>See our <a href="../PRIVACY.html">Privacy Policy</a> for details.</p>
+<p>نعم، نحن نحترم الخصوصية:</p>
+<ul>
+<li>البيانات مشفرة أثناء النقل والتخزين</li>
+<li>أنظمة مصادقة آمنة</li>
+<li>عدم مشاركة البيانات الشخصية مع أطراف ثالثة</li>
+<li>معالجة البيانات متوافقة مع GDPR</li>
+</ul>
+<p>راجع <a href="../PRIVACY.html">سياسة الخصوصية</a> للتفاصيل.</p>
+<h3>What content is allowed on Dueli? / ما هي المحتويات المسموح بها في ديولي؟</h3>
+<p>Allowed:</p>
+<ul>
+<li>Respectful debates and discussions</li>
+<li>Educational and informative content</li>
+<li>Diverse opinions and viewpoints</li>
+<li>Constructive criticism</li>
+</ul>
+<p>Not allowed:</p>
+<ul>
+<li>Harassment or bullying</li>
+<li>Hate speech or discrimination</li>
+<li>Spam or promotional content</li>
+<li>Illegal or harmful content</li>
+<li>Personal attacks</li>
+</ul>
+<p>مسموح:</p>
+<ul>
+<li>مناظرات ومناقشات محترمة</li>
+<li>محتوى تعليمي وغني بالمعلومات</li>
+<li>آراء ووجهات نظر متنوعة</li>
+<li>نقد بناء</li>
+</ul>
+<p>غير مسموح:</p>
+<ul>
+<li>التحرش أو التنمر</li>
+<li>خطاب الكراهية أو التمييز</li>
+<li>البريد المزعج أو المحتوى الترويجي</li>
+<li>محتوى غير قانوني أو ضار</li>
+<li>الهجمات الشخصية</li>
+</ul>
+<h3>How do I report inappropriate content? / كيف أبلغ عن محتوى غير مناسب؟</h3>
+<ul>
+<li><p>Use the &quot;Report&quot; button on competitions, comments, or profiles</p>
+</li>
+<li><p>Provide specific details about the violation</p>
+</li>
+<li><p>Our moderation team reviews reports within 24 hours</p>
+</li>
+<li><p>Serious violations may result in account suspension</p>
+</li>
+<li><p>استخدم زر &quot;الإبلاغ&quot; في المناظرات أو التعليقات أو الملفات الشخصية</p>
+</li>
+<li><p>قدم تفاصيل محددة عن الانتهاك</p>
+</li>
+<li><p>فريق الإشراف لدينا يراجع التقارير خلال 24 ساعة</p>
+</li>
+<li><p>الانتهاكات الخطيرة قد تؤدي إلى تعليق الحساب</p>
+</li>
+</ul>
+<h2>Troubleshooting / حل المشاكل</h2>
+<h3>I can&#39;t access the live debate. What should I do? / لا أستطيع الوصول للمناظرة الحية. ماذا أفعل؟</h3>
+<ul>
+<li><p>Check your internet connection</p>
+</li>
+<li><p>Try refreshing the page</p>
+</li>
+<li><p>Clear browser cache and cookies</p>
+</li>
+<li><p>Try a different browser</p>
+</li>
+<li><p>Disable browser extensions temporarily</p>
+</li>
+<li><p>Check camera/microphone permissions</p>
+</li>
+<li><p>تحقق من اتصال الإنترنت</p>
+</li>
+<li><p>جرب تحديث الصفحة</p>
+</li>
+<li><p>امسح ذاكرة التخزين المؤقت والكوكيز</p>
+</li>
+<li><p>جرب متصفحاً مختلفاً</p>
+</li>
+<li><p>عطل إضافات المتصفح مؤقتاً</p>
+</li>
+<li><p>تحقق من صلاحيات الكاميرا والميكروفون</p>
+</li>
+</ul>
+<h3>Videos are lagging or buffering. How can I fix this? / الفيديوهات متأخرة أو تعطل. كيف أصلح ذلك؟</h3>
+<ul>
+<li><p>Check your internet speed (need 5+ Mbps)</p>
+</li>
+<li><p>Close other applications using bandwidth</p>
+</li>
+<li><p>Try lowering video quality settings</p>
+</li>
+<li><p>Use a wired connection instead of WiFi</p>
+</li>
+<li><p>Restart your router/modem</p>
+</li>
+<li><p>Try during off-peak hours</p>
+</li>
+<li><p>تحقق من سرعة الإنترنت (تحتاج 5+ ميجابت/ثانية)</p>
+</li>
+<li><p>أغلق التطبيقات الأخرى التي تستخدم النطاق الترددي</p>
+</li>
+<li><p>جرب خفض إعدادات جودة الفيديو</p>
+</li>
+<li><p>استخدم اتصال سلكي بدلاً من WiFi</p>
+</li>
+<li><p>أعد تشغيل الراوتر/المودم</p>
+</li>
+<li><p>جرب في أوقات الذروة</p>
+</li>
+</ul>
+<h3>I&#39;m not receiving notifications. What can I do? / لا أتلقى الإشعارات. ماذا أفعل؟</h3>
+<ul>
+<li><p>Check your browser notification settings</p>
+</li>
+<li><p>Verify email notification preferences in profile</p>
+</li>
+<li><p>Clear browser cache</p>
+</li>
+<li><p>Try logging out and back in</p>
+</li>
+<li><p>Check spam/junk folder for emails</p>
+</li>
+<li><p>Ensure Dueli is allowed in popup blockers</p>
+</li>
+<li><p>تحقق من إعدادات إشعارات المتصفح</p>
+</li>
+<li><p>تأكد من تفضيلات إشعارات البريد في الملف الشخصي</p>
+</li>
+<li><p>امسح ذاكرة التخزين المؤقت للمتصفح</p>
+</li>
+<li><p>جرب تسجيل الخروج وإعادة تسجيل الدخول</p>
+</li>
+<li><p>تحقق من مجلد البريد المزعج للرسائل</p>
+</li>
+<li><p>تأكد من السماح لديولي في مانعي النوافذ المنبثقة</p>
+</li>
+</ul>
+<h3>The website looks wrong or broken. How do I fix it? / الموقع يبدو خاطئاً أو معطلاً. كيف أصلحه؟</h3>
+<ul>
+<li><p>Clear browser cache and cookies</p>
+</li>
+<li><p>Try a different browser</p>
+</li>
+<li><p>Update your browser to the latest version</p>
+</li>
+<li><p>Disable browser extensions</p>
+</li>
+<li><p>Try incognito/private browsing mode</p>
+</li>
+<li><p>Check if your device is supported</p>
+</li>
+<li><p>امسح ذاكرة التخزين المؤقت والكوكيز</p>
+</li>
+<li><p>جرب متصفحاً مختلفاً</p>
+</li>
+<li><p>حدث المتصفح لأحدث إصدار</p>
+</li>
+<li><p>عطل إضافات المتصفح</p>
+</li>
+<li><p>جرب وضع التصفح الخفي/الخاص</p>
+</li>
+<li><p>تحقق من دعم جهازك</p>
+</li>
+</ul>
+<h2>For Developers / للمطورين</h2>
+<h3>How can I contribute to Dueli? / كيف يمكنني المساهمة في ديولي؟</h3>
+<ul>
+<li><p>Check our <a href="Developer_Guide.html">Developer Guide</a></p>
+</li>
+<li><p>Fork the repository on GitHub</p>
+</li>
+<li><p>Create feature branches for your changes</p>
+</li>
+<li><p>Submit pull requests with detailed descriptions</p>
+</li>
+<li><p>Follow our coding standards and guidelines</p>
+</li>
+<li><p>راجع <a href="Developer_Guide.html">دليل المطور</a></p>
+</li>
+<li><p>انسخ المستودع على GitHub</p>
+</li>
+<li><p>أنشئ فروع ميزات لتغييراتك</p>
+</li>
+<li><p>أرسل طلبات سحب مع وصف مفصل</p>
+</li>
+<li><p>اتبع معايير وإرشادات البرمجة لدينا</p>
+</li>
+</ul>
+<h3>Where can I find the API documentation? / أين يمكنني العثور على توثيق الواجهات؟</h3>
+<ul>
+<li><p><a href="API_Reference.html">API Reference</a> - Complete API documentation</p>
+</li>
+<li><p><a href="Architecture.html">Architecture</a> - System design and patterns</p>
+</li>
+<li><p><a href="Getting_Started.html">Getting Started</a> - Development setup</p>
+</li>
+<li><p><a href="API_Reference.html">مرجع الدوال</a> - توثيق كامل للواجهات</p>
+</li>
+<li><p><a href="Architecture.html">الهيكلة</a> - تصميم النظام والأنماط</p>
+</li>
+<li><p><a href="Getting_Started.html">البدء</a> - إعداد التطوير</p>
+</li>
+</ul>
+<h2>Contact and Support / التواصل والدعم</h2>
+<h3>How do I contact support? / كيف أتواصل مع الدعم؟</h3>
+<ul>
+<li><p>Email: <a href="mailto:support@dueli.com">support@dueli.com</a></p>
+</li>
+<li><p>In-app support form</p>
+</li>
+<li><p>GitHub Issues for technical issues</p>
+</li>
+<li><p>Community discussions for general questions</p>
+</li>
+<li><p>البريد: <a href="mailto:support@dueli.com">support@dueli.com</a></p>
+</li>
+<li><p>نموذج الدعم داخل التطبيق</p>
+</li>
+<li><p>GitHub Issues للمشاكل التقنية</p>
+</li>
+<li><p>مناقشات المجتمع للأسئلة العامة</p>
+</li>
+</ul>
+<h3>Where can I find more information? / أين يمكنني العثور على مزيد من المعلومات؟</h3>
+<ul>
+<li><p><a href="User_Guide.html">User Guide</a> - Complete user manual</p>
+</li>
+<li><p><a href="../PRIVACY.html">Privacy Policy</a> - Data handling policies</p>
+</li>
+<li><p><a href="../terms.html">Terms of Service</a> - Platform rules</p>
+</li>
+<li><p><a href="About.html">About</a> - Project information</p>
+</li>
+<li><p><a href="User_Guide.html">دليل المستخدم</a> - دليل المستخدم الكامل</p>
+</li>
+<li><p><a href="../PRIVACY.html">سياسة الخصوصية</a> - سياسات معالجة البيانات</p>
+</li>
+<li><p><a href="../terms.html">شروط الخدمة</a> - قواعد المنصة</p>
+</li>
+<li><p><a href="About.html">حول</a> - معلومات المشروع</p>
+</li>
+</ul>
+<hr>
+<p>Can&#39;t find what you&#39;re looking for? Contact our support team.</p>
+<p><em>لا تجد ما تبحث عنه؟ اتصل بفريق الدعم لدينا.</em></p>
+
+        </div>
+
+        <footer class="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
+            <p>Generated by Deep Analysis Agent &bull; Dueli Opus Project</p>
+        </footer>
+    </main>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose'
+        });
+
+        // Highlight Active Link
+        const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (link.getAttribute('href').includes(currentPage)) {
+                link.classList.add('active', 'bg-gray-700', 'text-white');
+            }
+        });
+    </script>
+</body>
+
+</html>

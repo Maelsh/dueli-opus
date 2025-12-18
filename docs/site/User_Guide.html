@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Guide - Dueli Opus Wiki</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .prose {
+            max-width: 65ch;
+            margin: 0 auto;
+        }
+
+        .prose h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: #f3f4f6;
+        }
+
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 0.5rem;
+        }
+
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #d1d5db;
+        }
+
+        .prose p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+            color: #9ca3af;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: #9ca3af;
+        }
+
+        .prose li {
+            margin-bottom: 0.5rem;
+        }
+
+        .prose a {
+            color: #818cf8;
+            text-decoration: none;
+            border-bottom: 1px dotted #818cf8;
+            transition: all 0.2s;
+        }
+
+        .prose a:hover {
+            color: #a5b4fc;
+            border-bottom-style: solid;
+        }
+
+        .prose code {
+            background-color: #1f2937;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.875em;
+            color: #e5e7eb;
+        }
+
+        .prose pre {
+            background-color: #111827;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid #374151;
+        }
+
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #e5e7eb;
+        }
+
+        .mermaid {
+            background: #1f2937;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .prose strong {
+            color: #f3f4f6;
+            font-weight: 600;
+        }
+
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .prose th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #4b5563;
+            color: #f3f4f6;
+        }
+
+        .prose td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #374151;
+            color: #9ca3af;
+        }
+
+        /* Alert/Callout Styles */
+        .prose blockquote {
+            border-left: 4px solid #4b5563;
+            padding-left: 1rem;
+            font-style: italic;
+            color: #9ca3af;
+            background: #1f293750;
+            padding: 1rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        /* Nav Active State */
+        .nav-link.active {
+            background-color: #374151;
+            color: #f3f4f6;
+            border-right: 3px solid #818cf8;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 fixed h-full overflow-y-auto">
+        <div class="p-6 border-b border-gray-700">
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+                Dueli Opus Wiki
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">Deep Technical Reference</p>
+        </div>
+        <nav class="p-4">
+            <ul class="space-y-1 text-sm">
+                <li><a href="About.html" class="nav-link" data-page="About">About</a></li>
+<li><a href="Analysis_Report.html" class="nav-link" data-page="Analysis_Report">Analysis Report</a></li>
+<li><a href="API_Reference.html" class="nav-link" data-page="API_Reference">API Reference</a></li>
+<li><a href="Architecture.html" class="nav-link" data-page="Architecture">Architecture</a></li>
+<li><a href="Code_Violations_Report.html" class="nav-link" data-page="Code_Violations_Report">Code Violations Report</a></li>
+<li><a href="Database.html" class="nav-link" data-page="Database">Database</a></li>
+<li><a href="Developer_Guide.html" class="nav-link" data-page="Developer_Guide">Developer Guide</a></li>
+<li><a href="FAQ.html" class="nav-link" data-page="FAQ">FAQ</a></li>
+<li><a href="Frontend_Architecture.html" class="nav-link" data-page="Frontend_Architecture">Frontend Architecture</a></li>
+<li><a href="Getting_Started.html" class="nav-link" data-page="Getting_Started">Getting Started</a></li>
+<li><a href="Home.html" class="nav-link" data-page="Home">Home</a></li>
+<li><a href="User_Guide.html" class="nav-link" data-page="User_Guide">User Guide</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 flex-1 p-8">
+        <div class="prose">
+            <h1>User Guide - دليل المستخدم</h1>
+<p>Welcome to Dueli! This guide will help you get started with using the platform for live debates and discussions.</p>
+<h2>Getting Started / البدء</h2>
+<h3>Creating an Account / إنشاء حساب</h3>
+<ol>
+<li><strong>Visit the Homepage</strong>: Go to <a href="https://dueli.pages.dev">dueli.pages.dev</a></li>
+<li><strong>Click &quot;Sign Up&quot;</strong>: Choose your preferred registration method</li>
+<li><strong>Choose Authentication Method</strong>:<ul>
+<li><strong>Email Registration</strong>: Provide email, password, and username</li>
+<li><strong>OAuth Login</strong>: Use Google, Facebook, Microsoft, or TikTok</li>
+</ul>
+</li>
+<li><strong>Verify Email</strong>: Check your email for verification link (if using email registration)</li>
+<li><strong>Complete Profile</strong>: Add display name, bio, and preferences</li>
+</ol>
+<h3>Setting Up Your Profile / إعداد الملف الشخصي</h3>
+<p>After registration:</p>
+<ol>
+<li><strong>Go to Profile</strong>: Click your avatar or username in the top navigation</li>
+<li><strong>Edit Information</strong>:<ul>
+<li>Display name</li>
+<li>Bio/description</li>
+<li>Country and language preferences</li>
+<li>Profile picture (optional)</li>
+</ul>
+</li>
+<li><strong>Privacy Settings</strong>: Choose profile visibility and notification preferences</li>
+</ol>
+<h2>Navigating the Platform / تصفح المنصة</h2>
+<h3>Homepage / الصفحة الرئيسية</h3>
+<p>The homepage shows:</p>
+<ul>
+<li><strong>Featured Competitions</strong>: Popular and live debates</li>
+<li><strong>Recent Activity</strong>: Latest competitions and comments</li>
+<li><strong>Categories</strong>: Browse by topic (Politics, Sports, Technology, etc.)</li>
+<li><strong>Live Now</strong>: Currently active debates</li>
+</ul>
+<h3>Main Navigation / القائمة الرئيسية</h3>
+<ul>
+<li><strong>Home</strong>: Main feed and featured content</li>
+<li><strong>Explore</strong>: Browse all competitions by filters</li>
+<li><strong>Create</strong>: Start a new debate competition</li>
+<li><strong>Profile</strong>: Your account and settings</li>
+<li><strong>Notifications</strong>: Messages and updates</li>
+</ul>
+<h2>Creating Competitions / إنشاء منافسات</h2>
+<h3>Starting a Debate / بدء مناظرة</h3>
+<ol>
+<li><strong>Click &quot;Create&quot;</strong>: From the main navigation</li>
+<li><strong>Fill Competition Details</strong>:<ul>
+<li><strong>Title</strong>: Clear, descriptive title</li>
+<li><strong>Description</strong>: Detailed explanation of the debate topic</li>
+<li><strong>Rules</strong>: Guidelines for participants and viewers</li>
+<li><strong>Category</strong>: Choose relevant category and subcategory</li>
+<li><strong>Language</strong>: Arabic or English</li>
+<li><strong>Schedule</strong>: Set date and time (optional)</li>
+</ul>
+</li>
+<li><strong>Privacy Settings</strong>: Choose if competition is public or private</li>
+<li><strong>Submit</strong>: Your competition is now live for others to join</li>
+</ol>
+<h3>Competition Types / أنواع المنافسات</h3>
+<ul>
+<li><strong>Public Competitions</strong>: Anyone can view and join</li>
+<li><strong>Private Competitions</strong>: Invitation-only</li>
+<li><strong>Scheduled</strong>: Pre-planned debates</li>
+<li><strong>Live</strong>: Immediate start debates</li>
+</ul>
+<h2>Participating in Competitions / المشاركة في المنافسات</h2>
+<h3>Joining a Competition / الانضمام لمناظرة</h3>
+<ol>
+<li><strong>Browse Competitions</strong>: Use Explore page or homepage</li>
+<li><strong>Find Interesting Debate</strong>: Read title, description, and rules</li>
+<li><strong>Request to Join</strong>: Click &quot;Join&quot; button</li>
+<li><strong>Wait for Approval</strong>: Creator will accept or decline your request</li>
+<li><strong>Prepare</strong>: Review rules and prepare your arguments</li>
+</ol>
+<h3>During Live Debate / أثناء المناظرة الحية</h3>
+<ol>
+<li><strong>Join Live Room</strong>: Click &quot;Join Live&quot; when debate starts</li>
+<li><strong>Video Participation</strong>: Share your video and screen if needed</li>
+<li><strong>Real-time Chat</strong>: Comment and discuss with viewers</li>
+<li><strong>Rating System</strong>: Rate participants during and after debate</li>
+<li><strong>Follow Guidelines</strong>: Respect debate rules and platform policies</li>
+</ol>
+<h3>Viewing Competitions / مشاهدة المنافسات</h3>
+<ul>
+<li><strong>Watch Live</strong>: Join active debates as spectator</li>
+<li><strong>View Recorded</strong>: Watch completed debates on YouTube</li>
+<li><strong>Comment</strong>: Share thoughts and feedback</li>
+<li><strong>Rate</strong>: Rate participants&#39; performance</li>
+<li><strong>Share</strong>: Share debates with others</li>
+</ul>
+<h2>Communication Features / ميزات التواصل</h2>
+<h3>Live Comments / التعليقات الحية</h3>
+<ul>
+<li><strong>Real-time</strong>: Comments appear instantly during live debates</li>
+<li><strong>Threaded</strong>: Reply to specific comments</li>
+<li><strong>Moderation</strong>: Inappropriate comments may be removed</li>
+<li><strong>Language</strong>: Comments in debate language</li>
+</ul>
+<h3>Notifications / الإشعارات</h3>
+<p>Receive notifications for:</p>
+<ul>
+<li><strong>Join Requests</strong>: When someone wants to join your debate</li>
+<li><strong>Competition Updates</strong>: Status changes, new participants</li>
+<li><strong>Comments</strong>: Replies to your comments</li>
+<li><strong>Ratings</strong>: New ratings on your performances</li>
+<li><strong>System Messages</strong>: Platform updates and announcements</li>
+</ul>
+<h3>Messaging System / نظام الرسائل</h3>
+<ul>
+<li><strong>Direct Messages</strong>: Private conversations with other users</li>
+<li><strong>Competition Chat</strong>: Group chat for debate participants</li>
+<li><strong>Moderation</strong>: Keep discussions respectful and on-topic</li>
+</ul>
+<h2>Rating and Feedback / التقييم والتعليقات</h2>
+<h3>Rating System / نظام التقييم</h3>
+<ul>
+<li><strong>Scale</strong>: 1-5 stars</li>
+<li><strong>Participants</strong>: Rate debate opponents</li>
+<li><strong>Viewers</strong>: Rate both participants</li>
+<li><strong>Anonymous</strong>: Ratings are anonymous</li>
+<li><strong>Impact</strong>: Ratings affect user reputation and visibility</li>
+</ul>
+<h3>Providing Feedback / تقديم التعليقات</h3>
+<ul>
+<li><strong>Constructive</strong>: Focus on arguments and presentation</li>
+<li><strong>Respectful</strong>: Maintain professional tone</li>
+<li><strong>Specific</strong>: Explain reasoning behind ratings</li>
+<li><strong>Helpful</strong>: Help improve future debates</li>
+</ul>
+<h2>Categories and Topics / الفئات والمواضيع</h2>
+<h3>Available Categories / الفئات المتاحة</h3>
+<ul>
+<li><strong>Politics</strong> / السياسة</li>
+<li><strong>Sports</strong> / الرياضة</li>
+<li><strong>Technology</strong> / التكنولوجيا</li>
+<li><strong>Science</strong> / العلوم</li>
+<li><strong>Economics</strong> / الاقتصاد</li>
+<li><strong>Social Issues</strong> / القضايا الاجتماعية</li>
+<li><strong>Education</strong> / التعليم</li>
+<li><strong>Entertainment</strong> / الترفيه</li>
+<li><strong>Religion</strong> / الدين</li>
+<li><strong>Other</strong> / أخرى</li>
+</ul>
+<h3>Subcategories / الفئات الفرعية</h3>
+<p>Each main category has subcategories for more specific topics.</p>
+<h2>User Profiles and Social Features / الملفات الشخصية والميزات الاجتماعية</h2>
+<h3>Profile Information / معلومات الملف الشخصي</h3>
+<ul>
+<li><strong>Statistics</strong>: Total competitions, wins, ratings</li>
+<li><strong>Bio</strong>: Personal description</li>
+<li><strong>Achievements</strong>: Badges and milestones</li>
+<li><strong>History</strong>: Past competitions and performances</li>
+</ul>
+<h3>Following Users / متابعة المستخدمين</h3>
+<ul>
+<li><strong>Follow</strong>: Track favorite debaters</li>
+<li><strong>Notifications</strong>: Get updates on followed users&#39; activities</li>
+<li><strong>Network</strong>: Build your debate community</li>
+</ul>
+<h3>Privacy Settings / إعدادات الخصوصية</h3>
+<ul>
+<li><strong>Profile Visibility</strong>: Public or private profile</li>
+<li><strong>Activity Status</strong>: Show online status</li>
+<li><strong>Notification Preferences</strong>: Choose what to be notified about</li>
+<li><strong>Data Sharing</strong>: Control personal data usage</li>
+</ul>
+<h2>Language and Localization / اللغة والتعريب</h2>
+<h3>Bilingual Support / الدعم ثنائي اللغة</h3>
+<ul>
+<li><strong>Arabic (العربية)</strong>: Full RTL support</li>
+<li><strong>English</strong>: Complete English interface</li>
+<li><strong>Automatic Detection</strong>: Based on browser/user preferences</li>
+<li><strong>Manual Switching</strong>: Change language anytime</li>
+</ul>
+<h3>Content Language / لغة المحتوى</h3>
+<ul>
+<li><strong>Competition Language</strong>: Arabic or English debates</li>
+<li><strong>Comments</strong>: Match competition language</li>
+<li><strong>Interface</strong>: Independent of content language</li>
+</ul>
+<h2>Mobile Experience / التجربة على الهاتف</h2>
+<h3>Responsive Design / التصميم المتجاوب</h3>
+<ul>
+<li><strong>Mobile Optimized</strong>: Full functionality on phones</li>
+<li><strong>Touch Friendly</strong>: Easy navigation and interaction</li>
+<li><strong>Video Support</strong>: Mobile video participation</li>
+<li><strong>Push Notifications</strong>: Stay updated on mobile</li>
+</ul>
+<h3>Mobile Features / ميزات الهاتف</h3>
+<ul>
+<li><strong>Quick Access</strong>: Fast competition browsing</li>
+<li><strong>Camera Integration</strong>: Easy video participation</li>
+<li><strong>Offline Viewing</strong>: Download debates for offline</li>
+<li><strong>Gesture Controls</strong>: Swipe and tap interactions</li>
+</ul>
+<h2>Best Practices / أفضل الممارسات</h2>
+<h3>For Debate Creators / لمنشئي المناظرات</h3>
+<ul>
+<li><strong>Clear Topics</strong>: Choose specific, debatable subjects</li>
+<li><strong>Detailed Rules</strong>: Set clear guidelines and expectations</li>
+<li><strong>Appropriate Timing</strong>: Schedule at convenient times</li>
+<li><strong>Engage Audience</strong>: Encourage viewer participation</li>
+</ul>
+<h3>For Participants / للمشاركين</h3>
+<ul>
+<li><strong>Preparation</strong>: Research topics thoroughly</li>
+<li><strong>Respect</strong>: Treat opponents and viewers respectfully</li>
+<li><strong>Clarity</strong>: Speak clearly and structure arguments well</li>
+<li><strong>Engagement</strong>: Interact with audience and opponents</li>
+</ul>
+<h3>For Viewers / للمشاهدين</h3>
+<ul>
+<li><strong>Active Participation</strong>: Comment and rate appropriately</li>
+<li><strong>Constructive Feedback</strong>: Provide helpful criticism</li>
+<li><strong>Respect</strong>: Maintain respectful discussion environment</li>
+<li><strong>Learning</strong>: Learn from different perspectives</li>
+</ul>
+<h2>Safety and Community Guidelines / السلامة وإرشادات المجتمع</h2>
+<h3>Platform Rules / قواعد المنصة</h3>
+<ul>
+<li><strong>Respect</strong>: Treat all users with respect</li>
+<li><strong>No Harassment</strong>: No bullying or harassment</li>
+<li><strong>Appropriate Content</strong>: Keep content suitable for all ages</li>
+<li><strong>No Spam</strong>: Avoid promotional or repetitive content</li>
+<li><strong>Honest Ratings</strong>: Rate based on merit, not personal bias</li>
+</ul>
+<h3>Reporting Issues / الإبلاغ عن المشاكل</h3>
+<ul>
+<li><strong>Report Button</strong>: Use report feature for violations</li>
+<li><strong>Contact Support</strong>: Reach out for serious issues</li>
+<li><strong>Moderation</strong>: Platform monitors and moderates content</li>
+<li><strong>Consequences</strong>: Violations may result in warnings or bans</li>
+</ul>
+<h2>Troubleshooting / حل المشاكل</h2>
+<h3>Common Issues / المشاكل الشائعة</h3>
+<p><strong>Can&#39;t join live debate</strong></p>
+<ul>
+<li>Check internet connection</li>
+<li>Ensure camera/microphone permissions</li>
+<li>Try refreshing the page</li>
+</ul>
+<p><strong>Notifications not working</strong></p>
+<ul>
+<li>Check browser notification settings</li>
+<li>Verify email preferences</li>
+<li>Clear browser cache</li>
+</ul>
+<p><strong>Video quality issues</strong></p>
+<ul>
+<li>Check internet speed</li>
+<li>Close other applications</li>
+<li>Use wired connection if possible</li>
+</ul>
+<p><strong>Language display problems</strong></p>
+<ul>
+<li>Clear browser cache</li>
+<li>Check language settings</li>
+<li>Try different browser</li>
+</ul>
+<h2>Getting Help / الحصول على المساعدة</h2>
+<h3>Support Resources / موارد الدعم</h3>
+<ul>
+<li><strong>FAQ</strong>: Check <a href="FAQ.html">Frequently Asked Questions</a></li>
+<li><strong>Community Forum</strong>: Discuss with other users</li>
+<li><strong>Contact Support</strong>: Use contact form for issues</li>
+<li><strong>Documentation</strong>: Refer to this user guide</li>
+</ul>
+<h3>Contact Information / معلومات التواصل</h3>
+<ul>
+<li><strong>Email</strong>: <a href="mailto:support@dueli.com">support@dueli.com</a></li>
+<li><strong>Website</strong>: <a href="https://dueli.pages.dev">dueli.pages.dev</a></li>
+<li><strong>Social Media</strong>: Follow for updates</li>
+</ul>
+<hr>
+<p>Thank you for using Dueli! We hope you enjoy participating in meaningful debates and discussions.</p>
+<p><em>شكراً لاستخدامك ديولي! نتمنى أن تستمتع بالمشاركة في مناظرات ومناقشات ذات معنى.</em></p>
+
+        </div>
+
+        <footer class="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
+            <p>Generated by Deep Analysis Agent &bull; Dueli Opus Project</p>
+        </footer>
+    </main>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose'
+        });
+
+        // Highlight Active Link
+        const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (link.getAttribute('href').includes(currentPage)) {
+                link.classList.add('active', 'bg-gray-700', 'text-white');
+            }
+        });
+    </script>
+</body>
+
+</html>

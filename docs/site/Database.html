@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database - Dueli Opus Wiki</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .prose {
+            max-width: 65ch;
+            margin: 0 auto;
+        }
+
+        .prose h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: #f3f4f6;
+        }
+
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 0.5rem;
+        }
+
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #d1d5db;
+        }
+
+        .prose p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+            color: #9ca3af;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: #9ca3af;
+        }
+
+        .prose li {
+            margin-bottom: 0.5rem;
+        }
+
+        .prose a {
+            color: #818cf8;
+            text-decoration: none;
+            border-bottom: 1px dotted #818cf8;
+            transition: all 0.2s;
+        }
+
+        .prose a:hover {
+            color: #a5b4fc;
+            border-bottom-style: solid;
+        }
+
+        .prose code {
+            background-color: #1f2937;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.875em;
+            color: #e5e7eb;
+        }
+
+        .prose pre {
+            background-color: #111827;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid #374151;
+        }
+
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #e5e7eb;
+        }
+
+        .mermaid {
+            background: #1f2937;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .prose strong {
+            color: #f3f4f6;
+            font-weight: 600;
+        }
+
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .prose th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #4b5563;
+            color: #f3f4f6;
+        }
+
+        .prose td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #374151;
+            color: #9ca3af;
+        }
+
+        /* Alert/Callout Styles */
+        .prose blockquote {
+            border-left: 4px solid #4b5563;
+            padding-left: 1rem;
+            font-style: italic;
+            color: #9ca3af;
+            background: #1f293750;
+            padding: 1rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        /* Nav Active State */
+        .nav-link.active {
+            background-color: #374151;
+            color: #f3f4f6;
+            border-right: 3px solid #818cf8;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 fixed h-full overflow-y-auto">
+        <div class="p-6 border-b border-gray-700">
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+                Dueli Opus Wiki
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">Deep Technical Reference</p>
+        </div>
+        <nav class="p-4">
+            <ul class="space-y-1 text-sm">
+                <li><a href="About.html" class="nav-link" data-page="About">About</a></li>
+<li><a href="Analysis_Report.html" class="nav-link" data-page="Analysis_Report">Analysis Report</a></li>
+<li><a href="API_Reference.html" class="nav-link" data-page="API_Reference">API Reference</a></li>
+<li><a href="Architecture.html" class="nav-link" data-page="Architecture">Architecture</a></li>
+<li><a href="Code_Violations_Report.html" class="nav-link" data-page="Code_Violations_Report">Code Violations Report</a></li>
+<li><a href="Database.html" class="nav-link" data-page="Database">Database</a></li>
+<li><a href="Developer_Guide.html" class="nav-link" data-page="Developer_Guide">Developer Guide</a></li>
+<li><a href="FAQ.html" class="nav-link" data-page="FAQ">FAQ</a></li>
+<li><a href="Frontend_Architecture.html" class="nav-link" data-page="Frontend_Architecture">Frontend Architecture</a></li>
+<li><a href="Getting_Started.html" class="nav-link" data-page="Getting_Started">Getting Started</a></li>
+<li><a href="Home.html" class="nav-link" data-page="Home">Home</a></li>
+<li><a href="User_Guide.html" class="nav-link" data-page="User_Guide">User Guide</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 flex-1 p-8">
+        <div class="prose">
+            <h1>Database Documentation &amp; Schema</h1>
+<h2>Overview</h2>
+<p>Dueli uses <strong>Cloudflare D1</strong>, a serverless SQLite database, chosen for its global distribution and low latency. The database interaction is managed through a lightweight custom ORM layer (<code>BaseModel</code>) rather than a heavy third-party ORM, ensuring maximum performance and control.</p>
+<h2>Entity Relationship Diagram (ERD)</h2>
+<div class="mermaid">erDiagram
+    Users ||--o{ Competitions : &quot;created&quot;
+    Users ||--o{ Competitions : &quot;opponent_in&quot;
+    Users ||--o{ Comments : &quot;wrote&quot;
+    Users ||--o{ Ratings : &quot;rated&quot;
+    Users ||--o{ Notifications : &quot;receives&quot;
+    Users ||--o{ Sessions : &quot;has&quot;
+    Users ||--o{ UserFollows : &quot;follower&quot;
+    Users ||--o{ UserFollows : &quot;following&quot;
+    
+    Categories ||--o{ Competitions : &quot;categorized_in&quot;
+    Categories ||--o{ Categories : &quot;parent_of&quot;
+
+    Competitions ||--o{ Comments : &quot;contains&quot;
+    Competitions ||--o{ Ratings : &quot;rated_in&quot;
+    Competitions ||--o{ CompetitionRequests : &quot;requests_for&quot;
+
+    Users {
+        int id
+        string email
+        string username
+        string country
+        string language
+        boolean is_verified
+    }
+
+    Competitions {
+        int id
+        string title
+        string status
+        int category_id
+        int creator_id
+        int opponent_id
+    }
+
+    Categories {
+        int id
+        string name_en
+        string name_ar
+        int parent_id
+    }
+</div>
+<h2>Schema Details</h2>
+<h3>1. Users Table</h3>
+<p>Stores user profile, authentication, and stats.</p>
+<ul>
+<li><strong>Key Fields</strong>: <code>email</code> (Unique), <code>username</code> (Unique), <code>oauth_provider</code> (for Social Login).</li>
+<li><strong>Stats</strong>: <code>total_wins</code>, <code>total_competitions</code>, <code>average_rating</code> are denormalized for performance.</li>
+</ul>
+<h3>2. Competitions Table</h3>
+<p>The core entity representing a debate or competition.</p>
+<ul>
+<li><strong>Relationships</strong>: <ul>
+<li><code>creator_id</code>: The user who started it.</li>
+<li><code>opponent_id</code>: The challenger (nullable until accepted).</li>
+<li><code>category_id</code>: The topic category.</li>
+</ul>
+</li>
+<li><strong>States</strong>: <code>pending</code> → <code>accepted</code> → <code>live</code> → <code>completed</code> (or <code>cancelled</code>).</li>
+<li><strong>Live Data</strong>: <code>youtube_live_id</code> stores the connection to the live stream.</li>
+</ul>
+<h3>3. Categories Table</h3>
+<p>Support for nested categories (e.g., Science -&gt; Physics).</p>
+<ul>
+<li><strong>Hierarchy</strong>: Uses <code>parent_id</code> self-reference.</li>
+<li><strong>I18n</strong>: Stores <code>name_ar</code> and <code>name_en</code> directly in the database for instant localization without joining translation tables.</li>
+</ul>
+<h3>4. Interactions</h3>
+<ul>
+<li><strong>Comments</strong>: Linked to <code>competition_id</code>. Supports live chat during streams.</li>
+<li><strong>Ratings</strong>: Users rate each other after a competition.</li>
+<li><strong>CompetitionRequests</strong>: Manages the &quot;Lobby&quot; logic where users request to join a pending competition.</li>
+</ul>
+<h2>Data Management Strategy</h2>
+<h3>Custom ORM (<code>BaseModel</code>)</h3>
+<p>Located in <code>src/models/base/BaseModel.ts</code>.</p>
+<ul>
+<li><strong>Wraps D1</strong>: Provides typed <code>findById</code>, <code>findAll</code>, <code>create</code>, <code>update</code> over raw SQL.</li>
+<li><strong>No N+1</strong>: Encourages explicit joins or parallel fetching rather than lazy loading.</li>
+</ul>
+<h3>Seeding Strategy (<code>seed.sql</code>)</h3>
+<p>The project maintains a massive seed file (<code>seed.sql</code>) ~150KB.</p>
+<ul>
+<li><strong>Test Users</strong>: ~20 users with diverse profiles (different countries, languages, verified/unverified).</li>
+<li><strong>Rich Content</strong>: Hundreds of competitions across all states (Live, Recorded, Pending) to test UI filters.</li>
+<li><strong>Reality Simulation</strong>: Comments, ratings, and follows are pre-populated to simulate a mature platform, essential for testing the &quot;vibes&quot; and layout logic.</li>
+</ul>
+
+        </div>
+
+        <footer class="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
+            <p>Generated by Deep Analysis Agent &bull; Dueli Opus Project</p>
+        </footer>
+    </main>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose'
+        });
+
+        // Highlight Active Link
+        const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (link.getAttribute('href').includes(currentPage)) {
+                link.classList.add('active', 'bg-gray-700', 'text-white');
+            }
+        });
+    </script>
+</body>
+
+</html>

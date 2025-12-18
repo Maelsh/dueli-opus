@@ -62,35 +62,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         
         document.getElementById('exploreContent').innerHTML = \`
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            \${data.data.map(item => {
-              const bgColors = {
-                1: 'from-purple-600 to-purple-800',
-                2: 'from-cyan-500 to-cyan-700',
-                3: 'from-amber-500 to-orange-600'
-              };
-              const bgColor = bgColors[item.category_id] || 'from-gray-600 to-gray-800';
-              
-              return \`
-                <a href="/competition/\${item.id}?lang=\${lang}" class="card card-hover overflow-hidden">
-                  <div class="aspect-video bg-gradient-to-br \${bgColor} relative flex items-center justify-center">
-                    <span class="text-white font-black text-3xl vs-text">VS</span>
-                    \${item.status === 'live' ? '<div class="absolute top-2 left-2 badge-live"><span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span> LIVE</div>' : ''}
-                  </div>
-                  <div class="p-4">
-                    <h3 class="font-bold text-gray-900 dark:text-white line-clamp-2">\${item.title}</h3>
-                    <div class="flex items-center gap-2 mt-2 text-sm text-gray-500">
-                      <span>\${item.creator_name}</span>
-                      <span>vs</span>
-                      <span>\${item.opponent_name || '?'}</span>
-                    </div>
-                    <div class="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                      <i class="fas fa-eye"></i>
-                      <span>\${item.total_views || 0}</span>
-                    </div>
-                  </div>
-                </a>
-              \`;
-            }).join('')}
+            \${window.renderCompetitionCards(data.data, lang)}
           </div>
         \`;
       });

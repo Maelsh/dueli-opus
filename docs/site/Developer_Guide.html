@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Guide - Dueli Opus Wiki</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .prose {
+            max-width: 65ch;
+            margin: 0 auto;
+        }
+
+        .prose h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: #f3f4f6;
+        }
+
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 0.5rem;
+        }
+
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #d1d5db;
+        }
+
+        .prose p {
+            margin-bottom: 1rem;
+            line-height: 1.75;
+            color: #9ca3af;
+        }
+
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: #9ca3af;
+        }
+
+        .prose li {
+            margin-bottom: 0.5rem;
+        }
+
+        .prose a {
+            color: #818cf8;
+            text-decoration: none;
+            border-bottom: 1px dotted #818cf8;
+            transition: all 0.2s;
+        }
+
+        .prose a:hover {
+            color: #a5b4fc;
+            border-bottom-style: solid;
+        }
+
+        .prose code {
+            background-color: #1f2937;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.875em;
+            color: #e5e7eb;
+        }
+
+        .prose pre {
+            background-color: #111827;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border: 1px solid #374151;
+        }
+
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #e5e7eb;
+        }
+
+        .mermaid {
+            background: #1f2937;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .prose strong {
+            color: #f3f4f6;
+            font-weight: 600;
+        }
+
+        .prose table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+        }
+
+        .prose th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #4b5563;
+            color: #f3f4f6;
+        }
+
+        .prose td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #374151;
+            color: #9ca3af;
+        }
+
+        /* Alert/Callout Styles */
+        .prose blockquote {
+            border-left: 4px solid #4b5563;
+            padding-left: 1rem;
+            font-style: italic;
+            color: #9ca3af;
+            background: #1f293750;
+            padding: 1rem;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        /* Nav Active State */
+        .nav-link.active {
+            background-color: #374151;
+            color: #f3f4f6;
+            border-right: 3px solid #818cf8;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-800 border-r border-gray-700 fixed h-full overflow-y-auto">
+        <div class="p-6 border-b border-gray-700">
+            <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600">
+                Dueli Opus Wiki
+            </h1>
+            <p class="text-xs text-gray-500 mt-1">Deep Technical Reference</p>
+        </div>
+        <nav class="p-4">
+            <ul class="space-y-1 text-sm">
+                <li><a href="About.html" class="nav-link" data-page="About">About</a></li>
+<li><a href="Analysis_Report.html" class="nav-link" data-page="Analysis_Report">Analysis Report</a></li>
+<li><a href="API_Reference.html" class="nav-link" data-page="API_Reference">API Reference</a></li>
+<li><a href="Architecture.html" class="nav-link" data-page="Architecture">Architecture</a></li>
+<li><a href="Code_Violations_Report.html" class="nav-link" data-page="Code_Violations_Report">Code Violations Report</a></li>
+<li><a href="Database.html" class="nav-link" data-page="Database">Database</a></li>
+<li><a href="Developer_Guide.html" class="nav-link" data-page="Developer_Guide">Developer Guide</a></li>
+<li><a href="FAQ.html" class="nav-link" data-page="FAQ">FAQ</a></li>
+<li><a href="Frontend_Architecture.html" class="nav-link" data-page="Frontend_Architecture">Frontend Architecture</a></li>
+<li><a href="Getting_Started.html" class="nav-link" data-page="Getting_Started">Getting Started</a></li>
+<li><a href="Home.html" class="nav-link" data-page="Home">Home</a></li>
+<li><a href="User_Guide.html" class="nav-link" data-page="User_Guide">User Guide</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 flex-1 p-8">
+        <div class="prose">
+            <h1>Developer Guide - دليل المطور</h1>
+<p>This guide provides information for developers contributing to the Dueli platform.</p>
+<h2>Development Environment / بيئة التطوير</h2>
+<h3>Prerequisites / المتطلبات</h3>
+<ul>
+<li><strong>Node.js</strong>: Version 18 or higher</li>
+<li><strong>npm</strong>: Latest version (comes with Node.js)</li>
+<li><strong>Git</strong>: Version control system</li>
+<li><strong>VS Code</strong>: Recommended editor with TypeScript support</li>
+<li><strong>Cloudflare Account</strong>: For deployment and D1 database</li>
+</ul>
+<h3>Recommended Extensions / الإضافات الموصى بها</h3>
+<ul>
+<li><strong>TypeScript Importer</strong></li>
+<li><strong>Prettier</strong></li>
+<li><strong>ESLint</strong></li>
+<li><strong>GitLens</strong></li>
+<li><strong>Cloudflare Workers</strong> extension</li>
+</ul>
+<h2>Project Structure / هيكل المشروع</h2>
+<pre><code>src/
+├── core/                          # Shared infrastructure
+│   ├── http/                      # HTTP abstractions
+│   ├── database/                  # Database layer
+│   └── i18n/                      # Internationalization
+├── modules/                       # Business logic modules
+│   ├── auth/                      # Authentication
+│   ├── competitions/              # Competition management
+│   ├── users/                     # User management
+│   └── categories/                # Category management
+├── client/                        # Frontend code
+│   ├── core/                      # Client infrastructure
+│   ├── services/                  # Client services
+│   ├── ui/                        # UI components
+│   └── helpers/                   # Utility functions
+├── lib/                           # External integrations
+└── config/                        # Configuration files
+</code></pre>
+<h2>Coding Standards / معايير البرمجة</h2>
+<h3>TypeScript Guidelines / إرشادات TypeScript</h3>
+<ul>
+<li><strong>Strict Mode</strong>: All TypeScript strict checks enabled</li>
+<li><strong>Type Safety</strong>: Avoid <code>any</code> type, use proper interfaces</li>
+<li><strong>Interfaces</strong>: Define clear interfaces for all data structures</li>
+<li><strong>Generics</strong>: Use generics for reusable components</li>
+</ul>
+<pre><code class="language-typescript">// ✅ Good
+interface User {
+  id: number;
+  email: string;
+  username: string;
+}
+
+class UserRepository extends BaseRepository&lt;User&gt; {
+  // Implementation
+}
+
+// ❌ Bad
+function processUser(user: any) {
+  // Avoid any
+}
+</code></pre>
+<h3>Naming Conventions / اصطلاحات التسمية</h3>
+<ul>
+<li><strong>Classes</strong>: PascalCase (<code>UserController</code>, <code>AuthService</code>)</li>
+<li><strong>Methods</strong>: camelCase (<code>getUser()</code>, <code>createCompetition()</code>)</li>
+<li><strong>Variables</strong>: camelCase (<code>userId</code>, <code>competitionData</code>)</li>
+<li><strong>Constants</strong>: UPPER_SNAKE_CASE (<code>DEFAULT_LIMIT</code>, <code>MAX_FILE_SIZE</code>)</li>
+<li><strong>Files</strong>: PascalCase for classes, camelCase for utilities</li>
+</ul>
+<h3>Code Organization / تنظيم الكود</h3>
+<ul>
+<li><strong>Single Responsibility</strong>: Each class/method has one purpose</li>
+<li><strong>DRY Principle</strong>: Don&#39;t repeat yourself</li>
+<li><strong>SOLID Principles</strong>: Follow object-oriented design principles</li>
+<li><strong>Dependency Injection</strong>: Constructor injection preferred</li>
+</ul>
+<h2>Architecture Patterns / أنماط الهيكلة</h2>
+<h3>Vertical Slice Architecture / الهيكلة العمودية الشرائحية</h3>
+<p>Each feature is self-contained:</p>
+<pre><code>modules/
+└── competitions/
+    ├── CompetitionRepository.ts    # Data access
+    ├── CompetitionService.ts       # Business logic
+    ├── CompetitionController.ts    # HTTP handlers
+    ├── routes.ts                   # Route definitions
+    └── index.ts                    # Module exports
+</code></pre>
+<h3>Repository Pattern / نمط المستودع</h3>
+<ul>
+<li><strong>Abstraction</strong>: Database-agnostic interface</li>
+<li><strong>Consistency</strong>: Standardized CRUD operations</li>
+<li><strong>Testability</strong>: Easy to mock for testing</li>
+</ul>
+<pre><code class="language-typescript">class CompetitionRepository extends BaseRepository&lt;Competition&gt; {
+  async findByUserId(userId: number): Promise&lt;Competition[]&gt; {
+    return this.findBy({ creator_id: userId });
+  }
+}
+</code></pre>
+<h3>Service Layer / طبقة الخدمات</h3>
+<ul>
+<li><strong>Business Logic</strong>: Complex operations and validations</li>
+<li><strong>Transaction Management</strong>: Handle database transactions</li>
+<li><strong>External Integrations</strong>: API calls, email sending</li>
+</ul>
+<pre><code class="language-typescript">class CompetitionService {
+  async createCompetition(data: CreateCompetitionData): Promise&lt;Result&gt; {
+    // Validation
+    // Business logic
+    // Database operations
+    // Return result
+  }
+}
+</code></pre>
+<h2>Database Development / تطوير قاعدة البيانات</h2>
+<h3>Migrations / الترحيلات</h3>
+<ul>
+<li><strong>Versioned</strong>: Each change has a migration file</li>
+<li><strong>Reversible</strong>: Migrations can be rolled back</li>
+<li><strong>Tested</strong>: Test migrations before applying</li>
+</ul>
+<pre><code class="language-sql">-- migrations/001_initial_schema.sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  -- ... other fields
+);
+</code></pre>
+<h3>Schema Design / تصميم المخطط</h3>
+<ul>
+<li><strong>Normalization</strong>: Appropriate normalization level</li>
+<li><strong>Indexing</strong>: Strategic indexes for performance</li>
+<li><strong>Constraints</strong>: Foreign keys and check constraints</li>
+<li><strong>Data Types</strong>: Appropriate SQLite data types</li>
+</ul>
+<h3>Query Optimization / تحسين الاستعلامات</h3>
+<ul>
+<li><strong>Prepared Statements</strong>: Prevent SQL injection</li>
+<li><strong>Efficient Queries</strong>: Minimize data transfer</li>
+<li><strong>Pagination</strong>: Implement proper pagination</li>
+<li><strong>Indexing</strong>: Use indexes for frequent queries</li>
+</ul>
+<h2>API Development / تطوير الواجهات</h2>
+<h3>RESTful Design / التصميم RESTful</h3>
+<ul>
+<li><strong>Resource-based</strong>: <code>/api/competitions</code>, <code>/api/users</code></li>
+<li><strong>HTTP Methods</strong>: GET, POST, PUT, DELETE appropriately</li>
+<li><strong>Status Codes</strong>: Proper HTTP status codes</li>
+<li><strong>Consistent Responses</strong>: Standardized response format</li>
+</ul>
+<h3>Validation / التحقق</h3>
+<ul>
+<li><strong>Input Validation</strong>: Server-side validation required</li>
+<li><strong>Custom Validator</strong>: Use built-in validator class</li>
+<li><strong>Error Messages</strong>: Clear, localized error messages</li>
+</ul>
+<pre><code class="language-typescript">const schema = {
+  title: [&#39;required&#39;, &#39;string&#39;, { minLength: 5, maxLength: 200 }],
+  description: [&#39;string&#39;, { maxLength: 1000 }],
+  category_id: [&#39;required&#39;, &#39;number&#39;]
+};
+
+const result = Validator.validate(data, schema);
+</code></pre>
+<h3>Error Handling / معالجة الأخطاء</h3>
+<ul>
+<li><strong>Try-Catch</strong>: Wrap all operations</li>
+<li><strong>Custom Errors</strong>: Meaningful error classes</li>
+<li><strong>Logging</strong>: Log errors appropriately</li>
+<li><strong>User-Friendly</strong>: Don&#39;t expose internal errors</li>
+</ul>
+<h2>Frontend Development / تطوير الواجهة الأمامية</h2>
+<h3>State Management / إدارة الحالة</h3>
+<ul>
+<li><strong>Global State</strong>: User session, preferences</li>
+<li><strong>Reactive Updates</strong>: Automatic UI updates</li>
+<li><strong>Persistence</strong>: Local storage for preferences</li>
+</ul>
+<h3>Component Structure / هيكل المكونات</h3>
+<ul>
+<li><strong>Modular</strong>: Reusable components</li>
+<li><strong>Props Interface</strong>: Typed component props</li>
+<li><strong>Event Handling</strong>: Proper event delegation</li>
+</ul>
+<h3>Performance / الأداء</h3>
+<ul>
+<li><strong>Code Splitting</strong>: Lazy load components</li>
+<li><strong>Asset Optimization</strong>: Compress images and code</li>
+<li><strong>Caching</strong>: Browser caching strategies</li>
+</ul>
+<h2>Testing / الاختبار</h2>
+<h3>Unit Tests / اختبارات الوحدة</h3>
+<ul>
+<li><strong>Isolate Units</strong>: Test classes and functions independently</li>
+<li><strong>Mock Dependencies</strong>: Mock external dependencies</li>
+<li><strong>Edge Cases</strong>: Test error conditions</li>
+</ul>
+<h3>Integration Tests / اختبارات التكامل</h3>
+<ul>
+<li><strong>API Endpoints</strong>: Test complete request/response cycles</li>
+<li><strong>Database Operations</strong>: Test with test database</li>
+<li><strong>External Services</strong>: Mock external API calls</li>
+</ul>
+<h3>Test Structure / هيكل الاختبار</h3>
+<pre><code>__tests__/
+├── unit/
+│   ├── UserService.test.ts
+│   └── Validator.test.ts
+└── integration/
+    ├── auth.test.ts
+    └── competitions.test.ts
+</code></pre>
+<h2>Security / الأمان</h2>
+<h3>Authentication / المصادقة</h3>
+<ul>
+<li><strong>Secure Sessions</strong>: HTTP-only cookies</li>
+<li><strong>Password Hashing</strong>: Strong hashing algorithms</li>
+<li><strong>OAuth Security</strong>: State parameter validation</li>
+</ul>
+<h3>Authorization / الترخيص</h3>
+<ul>
+<li><strong>Role-Based</strong>: Different permission levels</li>
+<li><strong>Resource Ownership</strong>: Users can only modify their resources</li>
+<li><strong>API Keys</strong>: Secure API key management</li>
+</ul>
+<h3>Data Protection / حماية البيانات</h3>
+<ul>
+<li><strong>Input Sanitization</strong>: Sanitize all user inputs</li>
+<li><strong>SQL Injection</strong>: Prepared statements</li>
+<li><strong>XSS Protection</strong>: Content security policy</li>
+<li><strong>CSRF Protection</strong>: Token-based protection</li>
+</ul>
+<h2>Internationalization / التعريب</h2>
+<h3>Translation System / نظام الترجمة</h3>
+<ul>
+<li><strong>Singleton Service</strong>: Centralized translation management</li>
+<li><strong>Key-Based</strong>: Use translation keys, not hardcoded strings</li>
+<li><strong>Pluralization</strong>: Support for plural forms</li>
+<li><strong>RTL Support</strong>: Right-to-left layout support</li>
+</ul>
+<pre><code class="language-typescript">// ✅ Good
+const message = t(&#39;competition.created&#39;, lang, { title: competition.title });
+
+// ❌ Bad
+const message = &#39;Competition created successfully&#39;;
+</code></pre>
+<h3>Language Files / ملفات اللغة</h3>
+<ul>
+<li><strong>Structured</strong>: Organize by feature or section</li>
+<li><strong>Complete</strong>: All languages have same keys</li>
+<li><strong>Context</strong>: Include context for translators</li>
+</ul>
+<h2>Deployment / النشر</h2>
+<h3>Cloudflare Workers / عمال Cloudflare</h3>
+<ul>
+<li><strong>Edge Computing</strong>: Global distribution</li>
+<li><strong>Environment Variables</strong>: Secure secret management</li>
+<li><strong>D1 Database</strong>: Serverless database</li>
+</ul>
+<h3>CI/CD Pipeline / خط أنابيب CI/CD</h3>
+<ul>
+<li><strong>Automated Testing</strong>: Run tests on every push</li>
+<li><strong>Build Optimization</strong>: Minify and optimize assets</li>
+<li><strong>Deployment</strong>: Automated deployment to production</li>
+</ul>
+<h2>Contributing Guidelines / إرشادات المساهمة</h2>
+<h3>Git Workflow / سير عمل Git</h3>
+<ol>
+<li><strong>Fork</strong>: Fork the repository</li>
+<li><strong>Branch</strong>: Create feature branch (<code>feature/new-feature</code>)</li>
+<li><strong>Commit</strong>: Make small, focused commits</li>
+<li><strong>Push</strong>: Push to your fork</li>
+<li><strong>Pull Request</strong>: Create pull request with description</li>
+</ol>
+<h3>Commit Messages / رسائل الالتزام</h3>
+<ul>
+<li><strong>Format</strong>: <code>type(scope): description</code></li>
+<li><strong>Types</strong>: <code>feat</code>, <code>fix</code>, <code>docs</code>, <code>style</code>, <code>refactor</code>, <code>test</code></li>
+<li><strong>Description</strong>: Clear, concise description</li>
+</ul>
+<pre><code class="language-bash"># ✅ Good
+git commit -m &quot;feat(auth): add OAuth Google login&quot;
+
+# ❌ Bad
+git commit -m &quot;fixed stuff&quot;
+</code></pre>
+<h3>Pull Request Process / عملية طلب السحب</h3>
+<ul>
+<li><strong>Description</strong>: Detailed description of changes</li>
+<li><strong>Tests</strong>: Include tests for new features</li>
+<li><strong>Documentation</strong>: Update documentation if needed</li>
+<li><strong>Review</strong>: Address reviewer feedback</li>
+</ul>
+<h2>Code Review Checklist / قائمة مراجعة الكود</h2>
+<h3>General / عام</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Code follows style guidelines</li>
+<li><input disabled="" type="checkbox"> No console.log statements</li>
+<li><input disabled="" type="checkbox"> Proper error handling</li>
+<li><input disabled="" type="checkbox"> Tests included</li>
+</ul>
+<h3>TypeScript / TypeScript</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Type safety maintained</li>
+<li><input disabled="" type="checkbox"> No <code>any</code> types used</li>
+<li><input disabled="" type="checkbox"> Interfaces defined for data structures</li>
+</ul>
+<h3>Security / الأمان</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Input validation implemented</li>
+<li><input disabled="" type="checkbox"> SQL injection prevented</li>
+<li><input disabled="" type="checkbox"> Authentication/authorization checked</li>
+</ul>
+<h3>Performance / الأداء</h3>
+<ul>
+<li><input disabled="" type="checkbox"> No N+1 queries</li>
+<li><input disabled="" type="checkbox"> Efficient database queries</li>
+<li><input disabled="" type="checkbox"> Proper pagination</li>
+</ul>
+<h2>Debugging / التصحيح</h2>
+<h3>Local Development / التطوير المحلي</h3>
+<ul>
+<li><strong>Wrangler Dev</strong>: <code>npm run dev:sandbox</code></li>
+<li><strong>Logging</strong>: Use console methods appropriately</li>
+<li><strong>Breakpoints</strong>: VS Code debugger support</li>
+</ul>
+<h3>Production Debugging / تصحيح الإنتاج</h3>
+<ul>
+<li><strong>Cloudflare Logs</strong>: Access via dashboard</li>
+<li><strong>Error Monitoring</strong>: Implement error tracking</li>
+<li><strong>Performance Monitoring</strong>: Monitor response times</li>
+</ul>
+<h2>Resources / الموارد</h2>
+<h3>Documentation / التوثيق</h3>
+<ul>
+<li><a href="Architecture.html">Architecture</a> - System design</li>
+<li><a href="API_Reference.html">API Reference</a> - Complete API docs</li>
+<li><a href="Getting_Started.html">Getting Started</a> - Setup guide</li>
+</ul>
+<h3>Tools / الأدوات</h3>
+<ul>
+<li><strong>Wrangler</strong>: Cloudflare CLI tool</li>
+<li><strong>D1 Console</strong>: Database management</li>
+<li><strong>Cloudflare Dashboard</strong>: Deployment and monitoring</li>
+</ul>
+<h3>Community / المجتمع</h3>
+<ul>
+<li><strong>GitHub Issues</strong>: Bug reports and feature requests</li>
+<li><strong>Discussions</strong>: General discussions</li>
+<li><strong>Contributing Guide</strong>: Detailed contribution guidelines</li>
+</ul>
+<hr>
+<p>Happy coding! We welcome contributions from developers of all skill levels.</p>
+<p><em>برمجة سعيدة! نحن نرحب بالمساهمات من المطورين من جميع المستويات.</em></p>
+
+        </div>
+
+        <footer class="mt-16 pt-8 border-t border-gray-800 text-center text-gray-500 text-sm">
+            <p>Generated by Deep Analysis Agent &bull; Dueli Opus Project</p>
+        </footer>
+    </main>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose'
+        });
+
+        // Highlight Active Link
+        const currentPage = window.location.pathname.split('/').pop().replace('.html', '');
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (link.getAttribute('href').includes(currentPage)) {
+                link.classList.add('active', 'bg-gray-700', 'text-white');
+            }
+        });
+    </script>
+</body>
+
+</html>

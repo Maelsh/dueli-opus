@@ -138,48 +138,8 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
             }
             
             function renderCompetitionCard(comp) {
-                const statusColors = {
-                    pending: 'bg-amber-500',
-                    live: 'bg-red-500',
-                    completed: 'bg-green-500'
-                };
-                const statusBadge = statusColors[comp.status] || 'bg-gray-500';
-                
-                return \`
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-                        <div class="relative aspect-video bg-gradient-to-br from-purple-600 to-indigo-600">
-                            <div class="absolute inset-0 flex items-center justify-center opacity-30">
-                                <i class="\${comp.category_icon || 'fas fa-trophy'} text-white text-6xl"></i>
-                            </div>
-                            <div class="absolute top-3 \${isRTL ? 'right-3' : 'left-3'}">
-                                <span class="px-3 py-1 rounded-full text-xs font-bold text-white \${statusBadge}">
-                                    \${comp.status === 'live' ? '🔴 ' : ''}\${tr['status_' + comp.status] || comp.status}
-                                </span>
-                            </div>
-                            <div class="absolute bottom-3 \${isRTL ? 'left-3' : 'right-3'}">
-                                <span class="px-2 py-1 rounded bg-black/50 text-white text-xs">
-                                    <i class="fas fa-eye \${isRTL ? 'ml-1' : 'mr-1'}"></i>
-                                    \${comp.total_views || 0}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="p-4">
-                            <h3 class="font-bold text-gray-900 dark:text-white line-clamp-2 mb-2">\${comp.title}</h3>
-                            <p class="text-sm text-gray-500">\${new Date(comp.created_at).toLocaleDateString()}</p>
-                            <div class="flex gap-2 mt-4">
-                                <a href="/competition/\${comp.id}?lang=\${lang}" class="flex-1 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg text-center font-semibold text-sm hover:bg-purple-200 transition-colors">
-                                    <i class="fas fa-eye \${isRTL ? 'ml-1' : 'mr-1'}"></i>
-                                    \${tr.view || 'View'}
-                                </a>
-                                \${comp.status === 'pending' ? \`
-                                    <button onclick="deleteCompetition(\${comp.id})" class="px-4 py-2 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-lg text-center font-semibold text-sm hover:bg-red-200 transition-colors">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                \` : ''}
-                            </div>
-                        </div>
-                    </div>
-                \`;
+                // Use the shared OOP component from client bundle
+                return window.renderCompetitionCard(comp, lang, { showDeleteButton: true });
             }
             
             async function deleteCompetition(id) {

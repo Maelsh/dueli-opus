@@ -81,18 +81,18 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <div class="absolute inset-0 flex items-center justify-center gap-3 z-10 p-4">
               <div class="flex flex-col items-center">
                 <div class="competitor-avatar p-0.5 transform hover:scale-105 transition-transform duration-300">
-                  <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" alt="" class="w-full h-full rounded-full">
+                  <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" alt="" class="w-full h-full rounded-full" loading="lazy" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">
                 </div>
               </div>
 
               <div class="w-12 h-12 bg-white rounded-full shadow-lg z-20 flex items-center justify-center transform hover:rotate-180 transition-transform duration-500">
-                <img src="/static/dueli-icon.png" alt="VS" class="w-full h-full object-contain">
+                <img src="/static/dueli-icon.png" alt="VS" class="w-full h-full object-contain" loading="lazy">
               </div>
 
               <div class="flex flex-col items-center">
                 <div class="competitor-avatar p-0.5 transform hover:scale-105 transition-transform duration-300">
                   ${item.opponent_avatar ?
-      `<img src="${item.opponent_avatar}" alt="" class="w-full h-full rounded-full">` :
+      `<img src="${item.opponent_avatar}" alt="" class="w-full h-full rounded-full" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-bold border-2 border-white/20\\'>?</div>'">` :
       `<div class="w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-bold border-2 border-white/20 animate-pulse">?</div>`
     }
                 </div>

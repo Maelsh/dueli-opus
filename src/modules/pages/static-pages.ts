@@ -5,8 +5,30 @@
 
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
+import { pwaManifest, serviceWorkerScript } from '../../config/pwa';
 
 const staticPagesRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// ============================================
+// PWA Files - ملفات تطبيق الويب التقدمي
+// ============================================
+
+// Manifest.json for PWA (config from config/pwa.ts)
+staticPagesRoutes.get('/manifest.json', (c) => {
+  return c.json(pwaManifest);
+});
+
+// Service Worker (config from config/pwa.ts)
+staticPagesRoutes.get('/sw.js', (c) => {
+  return new Response(serviceWorkerScript, {
+    headers: {
+      'Content-Type': 'application/javascript',
+      'Cache-Control': 'no-cache'
+    }
+  });
+});
+
+// ============================================
 
 /**
  * Privacy Policy HTML - صفحة سياسة الخصوصية

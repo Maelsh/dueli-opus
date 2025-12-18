@@ -12,3 +12,5 @@ export { MessagingUI } from './MessagingUI';
 export { SettingsUI } from './SettingsUI';
 export { InteractionsUI } from './InteractionsUI';
 export { ScheduleUI } from './ScheduleUI';
+
+// Note: Competition card rendering uses shared/components/competition-card.ts (MVC View layer)
