@@ -65,6 +65,9 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         </div>
                         
                         <div class="flex items-center gap-2">
+                            <button onclick="shareScreen()" id="screenBtn" class="p-3 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors" title="${tr.share_screen || 'Share Screen'}">
+                                <i class="fas fa-desktop"></i>
+                            </button>
                             <button onclick="toggleAudio()" id="audioBtn" class="p-3 rounded-full bg-gray-800 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_mic || 'Toggle Microphone'}">
                                 <i class="fas fa-microphone"></i>
                             </button>
@@ -73,6 +76,9 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             </button>
                             <button onclick="endStream()" id="endBtn" class="p-3 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors" title="${tr.end_stream || 'End Stream'}">
                                 <i class="fas fa-phone-slash"></i>
+                            </button>
+                            <button onclick="toggleDebug()" id="debugBtn" class="p-3 rounded-full bg-gray-800 text-yellow-400 hover:bg-gray-700 transition-colors" title="Debug Panel">
+                                <i class="fas fa-bug"></i>
                             </button>
                         </div>
                     </div>
@@ -127,6 +133,17 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <span id="streamDuration">00:00</span>
                         </div>
                     </div>
+                    
+                    <!-- Debug Panel -->
+                    <div id="debugPanel" class="hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 border-t border-gray-700 p-4 max-h-64 overflow-y-auto z-50 font-mono text-xs">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-yellow-400 font-bold">🔧 DEBUG PANEL</span>
+                            <button onclick="toggleDebug()" class="text-gray-400 hover:text-white">&times;</button>
+                        </div>
+                        <div id="debugLog" class="space-y-1 text-gray-300">
+                            <div class="text-gray-500">Initializing...</div>
+                        </div>
+                    </div>
                 </div>
             ` : `
                 <div class="min-h-screen flex items-center justify-center text-white text-center">
@@ -163,6 +180,38 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             let audioMuted = false;
             let videoMuted = false;
             let streamStartTime = null;
+            let isScreenSharing = false;
+            let debugVisible = false;
+            
+            // Debug log function
+            function debugLog(msg, type = 'info') {
+                const debugLogEl = document.getElementById('debugLog');
+                const time = new Date().toLocaleTimeString();
+                const colors = {
+                    info: 'text-blue-400',
+                    success: 'text-green-400',
+                    error: 'text-red-400',
+                    warn: 'text-yellow-400'
+                };
+                const icons = {
+                    info: '📡',
+                    success: '✅',
+                    error: '❌',
+                    warn: '⚠️'
+                };
+                const div = document.createElement('div');
+                div.className = colors[type];
+                div.innerHTML = '<span class="text-gray-500">[' + time + ']</span> ' + icons[type] + ' ' + msg;
+                debugLogEl.appendChild(div);
+                debugLogEl.scrollTop = debugLogEl.scrollHeight;
+                console.log('[' + type.toUpperCase() + ']', msg);
+            }
+            
+            // Toggle debug panel
+            window.toggleDebug = function() {
+                debugVisible = !debugVisible;
+                document.getElementById('debugPanel').classList.toggle('hidden', !debugVisible);
+            };
             
             // DOM elements
             const localVideo = document.getElementById('localVideo');
@@ -275,10 +324,12 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // Initialize competitor mode (P2P)
             async function initCompetitorMode() {
                 const roomId = 'comp_' + competitionId;
+                debugLog('Starting competitor mode. Room: ' + roomId + ', Role: ' + userRole, 'info');
                 
                 // Create room if host
                 if (userRole === 'host') {
-                    await fetch('/api/signaling/room/create', {
+                    debugLog('Creating signaling room...', 'info');
+                    const createRes = await fetch('/api/signaling/room/create', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -286,64 +337,80 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             user_id: window.currentUser.id
                         })
                     });
+                    const createData = await createRes.json();
+                    debugLog('Room create response: ' + JSON.stringify(createData), createRes.ok ? 'success' : 'error');
                 }
                 
                 // Initialize P2P connection
+                debugLog('Initializing P2P connection...', 'info');
                 p2p = new window.P2PConnection({
                     roomId: roomId,
                     role: userRole,
                     userId: window.currentUser.id,
                     onRemoteStream: (stream) => {
-                        console.log('[LiveRoom] Remote stream received');
+                        debugLog('🎬 REMOTE STREAM RECEIVED! Tracks: ' + stream.getTracks().length, 'success');
                         remoteVideo.srcObject = stream;
                         waitingOverlay.classList.add('hidden');
                         
                         // If host, start recording after we have both streams
                         if (userRole === 'host' && compositor) {
+                            debugLog('Starting recording in 1 second...', 'info');
                             setTimeout(() => {
                                 startRecording();
                             }, 1000);
                         }
                     },
                     onConnectionStateChange: (state) => {
-                        console.log('[LiveRoom] Connection state:', state);
+                        debugLog('Connection state: ' + state, state === 'connected' ? 'success' : 'info');
                         updateConnectionStatus(state);
                     },
                     onError: (error) => {
-                        console.error('[LiveRoom] P2P Error:', error);
+                        debugLog('P2P Error: ' + error.message, 'error');
                         showMessage(error.message, 'error');
                     }
                 });
                 
+                debugLog('Calling p2p.initialize()...', 'info');
                 await p2p.initialize();
+                debugLog('P2P initialized. Joining room...', 'info');
                 await p2p.joinRoom();
+                debugLog('Joined room successfully', 'success');
                 
                 // Get local media
                 try {
+                    debugLog('Getting local media (camera/microphone or mock)...', 'info');
                     const localStream = await p2p.initLocalStream();
                     localVideo.srcObject = localStream;
+                    debugLog('Local stream acquired. Tracks: ' + localStream.getTracks().map(t => t.kind).join(', '), 'success');
                     
                     // If host, initialize compositor
                     if (userRole === 'host') {
+                        debugLog('Initializing compositor (host only)...', 'info');
                         initCompositor();
                     }
                     
                     // Check if opponent is already in room
                     const status = await p2p.getRoomStatus();
+                    debugLog('Room status: Host=' + status?.host_joined + ', Opponent=' + status?.opponent_joined, 'info');
+                    
                     if (status) {
                         if (userRole === 'host' && status.opponent_joined) {
+                            debugLog('Opponent already in room! Creating offer...', 'info');
                             await p2p.createOffer();
+                            debugLog('Offer created and sent', 'success');
                         } else if (userRole === 'opponent' && status.host_joined) {
-                            // Wait for offer from host
+                            debugLog('Host already in room. Waiting for offer...', 'info');
                         }
                     }
                     
                     // If host, watch for opponent
                     if (userRole === 'host') {
+                        debugLog('Starting opponent watcher...', 'info');
                         watchForOpponent();
                     }
                     
                 } catch (error) {
+                    debugLog('Media access failed: ' + error.message, 'error');
                     showMessage(tr.camera_error || 'Failed to access camera/microphone', 'error');
                 }
             }
@@ -479,6 +546,56 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         btn.classList.add('bg-gray-800');
                         btn.innerHTML = '<i class="fas fa-video"></i>';
                     }
+                }
+            };
+            
+            // Share screen instead of camera
+            window.shareScreen = async function() {
+                if (!p2p) {
+                    debugLog('P2P not initialized', 'error');
+                    return;
+                }
+                
+                try {
+                    debugLog('Requesting screen share...', 'info');
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { 
+                            cursor: 'always',
+                            displaySurface: 'monitor'
+                        },
+                        audio: true
+                    });
+                    
+                    // Replace video track in P2P connection
+                    const videoTrack = screenStream.getVideoTracks()[0];
+                    const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    
+                    if (sender) {
+                        await sender.replaceTrack(videoTrack);
+                        localVideo.srcObject = screenStream;
+                        isScreenSharing = true;
+                        
+                        // Update button
+                        const btn = document.getElementById('screenBtn');
+                        btn.classList.add('bg-green-600');
+                        btn.classList.remove('bg-gray-800');
+                        
+                        debugLog('Screen sharing started!', 'success');
+                        
+                        // Handle screen share ended
+                        videoTrack.onended = () => {
+                            debugLog('Screen sharing ended by user', 'info');
+                            isScreenSharing = false;
+                            btn.classList.remove('bg-green-600');
+                            btn.classList.add('bg-gray-800');
+                            // Optionally switch back to camera
+                            p2p.initLocalStream().then(stream => {
+                                localVideo.srcObject = stream;
+                            });
+                        };
+                    }
+                } catch (err) {
+                    debugLog('Screen share failed: ' + err.message, 'error');
                 }
             };
             

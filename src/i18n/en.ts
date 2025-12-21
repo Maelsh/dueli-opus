@@ -463,6 +463,7 @@ export const en = {
     recording: 'Recording',
     toggle_mic: 'Toggle Microphone',
     toggle_camera: 'Toggle Camera',
+    share_screen: 'Share Screen',
     end_stream: 'End Stream',
     you: 'You',
     opponent: 'Opponent',

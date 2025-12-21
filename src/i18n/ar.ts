@@ -439,6 +439,7 @@ export const ar = {
     recording: 'جاري التسجيل',
     toggle_mic: 'تبديل الميكروفون',
     toggle_camera: 'تبديل الكاميرا',
+    share_screen: 'مشاركة الشاشة',
     end_stream: 'إنهاء البث',
     you: 'أنت',
     opponent: 'الخصم',
