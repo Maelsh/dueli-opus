@@ -175,8 +175,36 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const streamStats = document.getElementById('streamStats');
             const recordingIndicator = document.getElementById('recordingIndicator');
             
+            // Wait for streaming services to be available from app.js
+            function waitForBundle() {
+                return new Promise((resolve, reject) => {
+                    let attempts = 0;
+                    const maxAttempts = 50; // 5 seconds max
+                    const interval = setInterval(() => {
+                        attempts++;
+                        if (window.P2PConnection && window.VideoCompositor && window.ChunkUploader) {
+                            clearInterval(interval);
+                            console.log('[LiveRoom] Streaming services loaded successfully');
+                            resolve();
+                        } else if (attempts >= maxAttempts) {
+                            clearInterval(interval);
+                            reject(new Error('Streaming services failed to load after 5 seconds'));
+                        }
+                    }, 100);
+                });
+            }
+            
             // Initialize on page load
             document.addEventListener('DOMContentLoaded', async () => {
+                // Wait for bundle to load streaming services
+                try {
+                    await waitForBundle();
+                } catch (err) {
+                    console.error('[LiveRoom] Bundle loading failed:', err);
+                    showMessage('فشل تحميل خدمات البث. يرجى إعادة تحميل الصفحة.', 'error');
+                    return;
+                }
+                
                 await checkAuth();
                 
                 if (!window.currentUser) {
