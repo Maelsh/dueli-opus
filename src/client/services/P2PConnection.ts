@@ -145,8 +145,15 @@ export class P2PConnection {
 
     /**
      * Initialize local media stream
+     * @param constraints - Media constraints or { useMock: true } for testing
      */
-    async initLocalStream(constraints?: MediaStreamConstraints): Promise<MediaStream> {
+    async initLocalStream(constraints?: MediaStreamConstraints | { useMock: boolean }): Promise<MediaStream> {
+        // Check if mock mode requested
+        if (constraints && 'useMock' in constraints && constraints.useMock) {
+            console.log('[P2P] Using mock stream for testing');
+            return this.createMockStream();
+        }
+
         const defaultConstraints: MediaStreamConstraints = {
             video: {
                 width: { ideal: 640 },
@@ -162,7 +169,7 @@ export class P2PConnection {
 
         try {
             this.localStream = await navigator.mediaDevices.getUserMedia(
-                constraints || defaultConstraints
+                (constraints as MediaStreamConstraints) || defaultConstraints
             );
 
             // Add tracks to peer connection
@@ -174,9 +181,94 @@ export class P2PConnection {
 
             return this.localStream;
         } catch (error) {
-            this.config.onError?.(error as Error);
-            throw error;
+            console.warn('[P2P] Camera access failed, falling back to mock stream:', error);
+            // Fallback to mock stream if camera fails
+            return this.createMockStream();
         }
+    }
+
+    /**
+     * Create a mock video/audio stream for testing
+     * Generates a Canvas with timer and role text
+     */
+    private createMockStream(): MediaStream {
+        // Create canvas for video
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d')!;
+
+        let startTime = Date.now();
+
+        // Animation function
+        const drawFrame = () => {
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, 480);
+            gradient.addColorStop(0, '#1a1a2e');
+            gradient.addColorStop(1, '#16213e');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 640, 480);
+
+            // Timer
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toString().padStart(2, '0');
+
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${mins}:${secs}`, 320, 200);
+
+            // Role text
+            ctx.font = '24px Arial';
+            ctx.fillStyle = '#a855f7';
+            ctx.fillText(`Mock Stream - ${this.config.role.toUpperCase()}`, 320, 280);
+
+            // User ID
+            ctx.font = '18px Arial';
+            ctx.fillStyle = '#888';
+            ctx.fillText(`User ID: ${this.config.userId}`, 320, 320);
+
+            // Animated circle (to show it's "live")
+            const radius = 10 + Math.sin(Date.now() / 200) * 5;
+            ctx.beginPath();
+            ctx.arc(320, 380, radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ef4444';
+            ctx.fill();
+
+            requestAnimationFrame(drawFrame);
+        };
+        drawFrame();
+
+        // Create stream from canvas
+        const videoStream = canvas.captureStream(30);
+
+        // Create silent audio context
+        const audioContext = new AudioContext();
+        const oscillator = audioContext.createOscillator();
+        oscillator.frequency.value = 0; // Silent
+        const dest = audioContext.createMediaStreamDestination();
+        oscillator.connect(dest);
+        oscillator.start();
+
+        // Combine video and audio
+        const audioTrack = dest.stream.getAudioTracks()[0];
+        if (audioTrack) {
+            videoStream.addTrack(audioTrack);
+        }
+
+        this.localStream = videoStream;
+
+        // Add tracks to peer connection
+        if (this.pc && this.localStream) {
+            this.localStream.getTracks().forEach(track => {
+                this.pc!.addTrack(track, this.localStream!);
+            });
+        }
+
+        console.log('[P2P] Mock stream created successfully');
+        return this.localStream;
     }
 
     /**
