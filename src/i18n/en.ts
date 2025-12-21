@@ -482,6 +482,10 @@ export const en = {
     close_ad: 'Close Ad',
     report_ad: 'Report Ad',
     ad: 'Ad',
+    clear_data: 'Clear Site Data',
+    viewers_cannot_close_ads: 'Viewers cannot close ads',
+    report_ad_confirm: 'Report this ad as inappropriate?',
+    ad_reported: 'Ad reported. Thank you!',
 
     // Navigation (new)
     notifications: 'Notifications',

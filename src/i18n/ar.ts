@@ -458,6 +458,10 @@ export const ar = {
     close_ad: 'إغلاق الإعلان',
     report_ad: 'الإبلاغ عن الإعلان',
     ad: 'إعلان',
+    clear_data: 'مسح بيانات الموقع',
+    viewers_cannot_close_ads: 'المشاهدون لا يمكنهم إغلاق الإعلانات',
+    report_ad_confirm: 'الإبلاغ عن هذا الإعلان كمحتوى غير لائق؟',
+    ad_reported: 'تم الإبلاغ عن الإعلان. شكراً لك!',
 
     // التنقل (جديد)
     notifications: 'الإشعارات',

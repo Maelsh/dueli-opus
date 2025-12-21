@@ -62,6 +62,11 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         
                         <!-- Control Buttons - All in one row, scrollable on mobile -->
                         <div class="flex items-center gap-1 overflow-x-auto">
+                            <!-- Clear Site Data (for debugging) -->
+                            <button onclick="clearSiteData()" id="clearDataBtn" class="p-2 rounded-lg bg-orange-600/80 text-white hover:bg-orange-700 transition-colors" title="${tr.clear_data || 'Clear Site Data'}">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                            
                             <!-- Fullscreen - For Everyone -->
                             <button onclick="toggleFullscreen()" id="fullscreenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.fullscreen || 'Fullscreen'}">
                                 <i class="fas fa-expand"></i>
@@ -175,15 +180,10 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 </div>
                             </div>
                             
-                            <!-- Comment Input -->
-                            <div id="commentInputArea" class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent z-40">
-                                <div class="flex gap-2 max-w-md mx-auto">
-                                    <input type="text" id="commentInput" placeholder="${tr.add_comment || 'Add a comment...'}" 
-                                        class="flex-1 bg-white/15 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
-                                        onkeypress="if(event.key==='Enter')sendComment()">
-                                    <button onclick="sendComment()" class="bg-purple-600 hover:bg-purple-700 text-white rounded-full w-10 h-10 flex items-center justify-center transition-colors">
-                                        <i class="fas fa-paper-plane text-sm"></i>
-                                    </button>
+                            <!-- Live Comments Display (from viewers) -->
+                            <div id="commentsOverlay" class="absolute bottom-4 left-4 z-30 max-w-sm max-h-48 overflow-hidden pointer-events-none transition-opacity duration-300">
+                                <div id="commentsContainer" class="space-y-1 overflow-y-auto">
+                                    <!-- Comments from viewers will be inserted here -->
                                 </div>
                             </div>
                         </div>
@@ -274,25 +274,67 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const streamStats = document.getElementById('streamStats');
             const videoContainer = document.getElementById('videoContainer');
             const commentsOverlay = document.getElementById('commentsOverlay');
-            const commentInputArea = document.getElementById('commentInputArea');
             const adBanner = document.getElementById('adBanner');
             const competitorControls = document.getElementById('competitorControls');
             const closeAdBtn = document.getElementById('closeAdBtn');
             
+            // Clear site data function (for debugging browser cache issues)
+            window.clearSiteData = async function() {
+                if (!confirm('This will clear all site data and reload. Continue?')) return;
+                
+                try {
+                    // Clear localStorage
+                    localStorage.clear();
+                    
+                    // Clear sessionStorage  
+                    sessionStorage.clear();
+                    
+                    // Unregister service workers
+                    if ('serviceWorker' in navigator) {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        for (const reg of registrations) {
+                            await reg.unregister();
+                        }
+                    }
+                    
+                    // Clear caches
+                    if ('caches' in window) {
+                        const cacheNames = await caches.keys();
+                        for (const name of cacheNames) {
+                            await caches.delete(name);
+                        }
+                    }
+                    
+                    console.log('[LiveRoom] Site data cleared');
+                    location.reload(true);
+                } catch (err) {
+                    console.error('Failed to clear data:', err);
+                    location.reload(true);
+                }
+            };
+            
             // Wait for streaming services to be available from app.js
             function waitForBundle() {
                 return new Promise((resolve, reject) => {
+                    // Check if already loaded
+                    if (window.P2PConnection && window.VideoCompositor && window.ChunkUploader) {
+                        console.log('[LiveRoom] Streaming services already loaded');
+                        resolve();
+                        return;
+                    }
+                    
                     let attempts = 0;
-                    const maxAttempts = 50; // 5 seconds max
+                    const maxAttempts = 150; // 15 seconds max (was 5)
                     const interval = setInterval(() => {
                         attempts++;
                         if (window.P2PConnection && window.VideoCompositor && window.ChunkUploader) {
                             clearInterval(interval);
-                            console.log('[LiveRoom] Streaming services loaded successfully');
+                            console.log('[LiveRoom] Streaming services loaded after ' + (attempts * 100) + 'ms');
                             resolve();
                         } else if (attempts >= maxAttempts) {
                             clearInterval(interval);
-                            reject(new Error('Streaming services failed to load after 5 seconds'));
+                            console.error('[LiveRoom] Services not found. P2P:', !!window.P2PConnection, 'Compositor:', !!window.VideoCompositor, 'Uploader:', !!window.ChunkUploader);
+                            reject(new Error('Streaming services failed to load after 15 seconds. Try clearing site data.'));
                         }
                     }, 100);
                 });
@@ -642,27 +684,58 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 document.getElementById('fullscreenBtn').innerHTML = isFullscreen ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>';
             });
             
-            // Swap Videos - For everyone
+            // Swap Videos - For everyone (no reload)
             window.swapVideos = function() {
                 videosSwapped = !videosSwapped;
                 
+                // Store current streams
+                const localStream = localVideo.srcObject;
+                const remoteStream = remoteVideo.srcObject;
+                
                 if (videosSwapped) {
-                    // Local video becomes full screen, remote becomes small
-                    localVideoWrapper.className = 'absolute inset-0 z-10';
-                    localVideoWrapper.querySelector('.relative').className = 'w-full h-full';
-                    localVideo.classList.add('w-full', 'h-full');
+                    // Swap: local becomes big, remote becomes small
+                    // Update classes for local video wrapper (make it full screen)
+                    localVideoWrapper.classList.remove('top-4', 'z-20');
+                    localVideoWrapper.classList.add('inset-0', 'z-10');
+                    localVideoWrapper.style.cssText = 'position: absolute; inset: 0; z-index: 10;';
                     
-                    remoteVideoWrapper.className = 'absolute ' + (isRTL ? 'left-4' : 'right-4') + ' top-4 z-20 transition-all duration-300';
-                    remoteVideoWrapper.innerHTML = '<div class="relative w-28 h-20 md:w-40 md:h-28 rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500 cursor-pointer hover:scale-105 transition-transform" onclick="swapVideos()"><video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video><div class="absolute top-1 ' + (isRTL ? 'left-1' : 'right-1') + ' bg-black/60 p-1 rounded text-white text-xs"><i class="fas fa-arrows-alt"></i></div></div>';
+                    // Update local video element
+                    localVideo.classList.add('w-full', 'h-full', 'object-cover');
+                    localVideo.classList.remove('rounded-xl');
                     
-                    remoteVideoWrapper.querySelector('video').srcObject = remoteVideo.srcObject;
+                    // Update classes for remote video wrapper (make it small)  
+                    remoteVideoWrapper.classList.remove('inset-0', 'z-10');
+                    remoteVideoWrapper.classList.add('top-4', 'z-20');
+                    remoteVideoWrapper.style.cssText = 'position: absolute; top: 1rem; ' + (isRTL ? 'left' : 'right') + ': 1rem; z-index: 20; width: 10rem; height: 7rem;';
+                    
+                    // Update remote video element
+                    remoteVideo.classList.remove('w-full', 'h-full');
+                    remoteVideo.classList.add('w-full', 'h-full', 'object-cover', 'rounded-xl');
                 } else {
-                    // Reset to original
-                    location.reload(); // Simple reload for now
+                    // Swap back: restore original layout
+                    // Reset local video wrapper (small in corner)
+                    localVideoWrapper.style.cssText = 'position: absolute; top: 1rem; ' + (isRTL ? 'left' : 'right') + ': 1rem; z-index: 20;';
+                    localVideoWrapper.classList.add('top-4', 'z-20');
+                    localVideoWrapper.classList.remove('inset-0', 'z-10');
+                    
+                    // Reset remote video wrapper (full screen)
+                    remoteVideoWrapper.style.cssText = 'position: absolute; inset: 0; z-index: 10;';
+                    remoteVideoWrapper.classList.add('inset-0', 'z-10');
+                    remoteVideoWrapper.classList.remove('top-4', 'z-20');
+                    
+                    // Reset video elements
+                    localVideo.classList.remove('w-full', 'h-full');
+                    remoteVideo.classList.add('w-full', 'h-full');
                 }
                 
-                document.getElementById('swapBtn').classList.toggle('bg-purple-600', videosSwapped);
-                document.getElementById('swapBtn').classList.toggle('bg-gray-800/80', !videosSwapped);
+                // Update button state
+                const btn = document.getElementById('swapBtn');
+                if (btn) {
+                    btn.classList.toggle('bg-purple-600', videosSwapped);
+                    btn.classList.toggle('bg-gray-800/80', !videosSwapped);
+                }
+                
+                log('Videos swapped: ' + (videosSwapped ? 'local big' : 'remote big'), 'info');
             };
             
             // Toggle Comments - For everyone
@@ -670,12 +743,14 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 commentsVisible = !commentsVisible;
                 commentsOverlay.style.opacity = commentsVisible ? '1' : '0';
                 commentsOverlay.style.pointerEvents = commentsVisible ? 'auto' : 'none';
-                commentInputArea.style.display = commentsVisible ? 'block' : 'none';
                 
                 const btn = document.getElementById('commentsBtn');
-                btn.classList.toggle('bg-purple-600', commentsVisible);
-                btn.classList.toggle('bg-gray-800/80', !commentsVisible);
-                btn.innerHTML = commentsVisible ? '<i class="fas fa-comment"></i>' : '<i class="fas fa-comment-slash"></i>';
+                if (btn) {
+                    btn.classList.toggle('bg-purple-600', commentsVisible);
+                    btn.classList.toggle('bg-gray-800/80', !commentsVisible);
+                    btn.innerHTML = commentsVisible ? '<i class="fas fa-comment"></i>' : '<i class="fas fa-comment-slash"></i>';
+                }
+                log('Comments ' + (commentsVisible ? 'shown' : 'hidden'), 'info');
             };
             
             // Toggle Local Video - For competitors only

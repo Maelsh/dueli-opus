@@ -28,6 +28,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     
     ${getFooter(lang)}
     
+    <!-- HLS.js for viewer mode -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
     <script>
       const lang = '${lang}';
       const isRTL = ${rtl};
@@ -127,14 +130,97 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               <div class="lg:col-span-2 space-y-6">
                 <div class="bg-gradient-to-br \${bgColor} rounded-2xl overflow-hidden shadow-xl aspect-video flex items-center justify-center relative">
                   \${isLive && comp.live_url ? \`
-                    <!-- P2P Live Stream - redirect to live room -->
-                    <div class="text-center text-white">
-                      <i class="fas fa-broadcast-tower text-6xl opacity-80 mb-4 animate-pulse"></i>
-                      <p class="text-lg font-bold mb-4">\${tr.status_live}</p>
-                      <a href="/live/\${comp.id}?lang=\${lang}" class="px-6 py-3 bg-red-600 rounded-full font-bold hover:bg-red-700 transition-all inline-flex items-center gap-2">
-                        <i class="fas fa-play"></i>
-                        \${tr.watch_competition}
-                      </a>
+                    <!-- Embedded P2P Live Stream -->
+                    <div id="embeddedLiveStream" class="absolute inset-0">
+                      <!-- Remote Video (fullscreen background) -->
+                      <video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video>
+                      
+                      <!-- Waiting Overlay -->
+                      <div id="waitingOverlay" class="absolute inset-0 flex items-center justify-center bg-gray-900/80">
+                        <div class="text-center text-white">
+                          <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
+                          <p class="text-lg">\${tr.waiting_opponent || 'Connecting...'}</p>
+                        </div>
+                      </div>
+                      
+                      <!-- Local Video (small in corner) -->
+                      <div id="localVideoWrapper" class="absolute \${isRTL ? 'left-4' : 'right-4'} top-4 z-20">
+                        <div class="relative w-24 h-16 md:w-32 md:h-24 rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500 cursor-pointer hover:scale-105 transition-transform" onclick="swapVideos()">
+                          <video id="localVideo" class="w-full h-full object-cover" autoplay muted playsinline></video>
+                          <div class="absolute top-1 \${isRTL ? 'left-1' : 'right-1'} bg-black/60 p-1 rounded text-white text-xs">
+                            <i class="fas fa-arrows-alt"></i>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Stream Controls (overlay at bottom) -->
+                      <div id="streamControls" class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-30">
+                        <div class="flex items-center justify-center gap-2 flex-wrap">
+                          <!-- Fullscreen -->
+                          <button onclick="toggleFullscreen()" id="fullscreenBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.fullscreen || 'Fullscreen'}">
+                            <i class="fas fa-expand"></i>
+                          </button>
+                          
+                          <!-- Swap Videos -->
+                          <button onclick="swapVideos()" id="swapBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.swap_videos || 'Swap'}">
+                            <i class="fas fa-exchange-alt"></i>
+                          </button>
+                          
+                          <!-- Comments Toggle -->
+                          <button onclick="toggleComments()" id="commentsBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_comments || 'Comments'}">
+                            <i class="fas fa-comment"></i>
+                          </button>
+                          
+                          <!-- Competitor-only controls -->
+                          <div id="competitorControls" class="flex items-center gap-2">
+                            <!-- Hide Local Video -->
+                            <button onclick="toggleLocalVideo()" id="localVideoBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_my_video || 'My Video'}">
+                              <i class="fas fa-user-circle"></i>
+                            </button>
+                            
+                            <!-- Switch Camera -->
+                            <button onclick="switchCamera()" id="switchCamBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.switch_camera || 'Switch Camera'}">
+                              <i class="fas fa-sync-alt"></i>
+                            </button>
+                            
+                            <!-- Screen Share -->
+                            <button onclick="shareScreen()" id="screenBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.share_screen || 'Screen Share'}">
+                              <i class="fas fa-desktop"></i>
+                            </button>
+                            
+                            <!-- Microphone -->
+                            <button onclick="toggleAudio()" id="audioBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_mic || 'Microphone'}">
+                              <i class="fas fa-microphone"></i>
+                            </button>
+                            
+                            <!-- Camera -->
+                            <button onclick="toggleVideo()" id="videoBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_camera || 'Camera'}">
+                              <i class="fas fa-video"></i>
+                            </button>
+                            
+                            <!-- End Stream -->
+                            <button onclick="endStream()" id="endBtn" class="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1" title="\${tr.end_stream || 'End'}">
+                              <i class="fas fa-stop-circle"></i>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <!-- Comments Overlay (from viewers) -->
+                      <div id="commentsOverlay" class="absolute bottom-20 left-4 z-20 max-w-sm max-h-32 overflow-hidden pointer-events-none">
+                        <div id="commentsContainer" class="space-y-1 overflow-y-auto text-sm">
+                          <!-- Comments will appear here -->
+                        </div>
+                      </div>
+                      
+                      <!-- Connection Status -->
+                      <div id="connectionStatus" class="absolute top-4 \${isRTL ? 'right-4' : 'left-4'} px-3 py-1 rounded-full text-sm hidden z-30 bg-yellow-600 text-white">
+                        <i class="fas fa-wifi mr-2"></i>
+                        <span>Connecting...</span>
+                      </div>
+                      
+                      <!-- Canvas for recording (hidden) -->
+                      <canvas id="compositeCanvas" class="hidden" width="1280" height="720"></canvas>
                     </div>
                   \` : comp.youtube_live_id && isLive ? \`
                     <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_live_id}?autoplay=1" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
@@ -537,6 +623,395 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         } catch (err) { console.error(err); }
       }
+      
+      // ============== EMBEDDED LIVE STREAMING ==============
+      // These functions are only active when isLive && comp.live_url
+      
+      let p2p = null;
+      let compositor = null;
+      let userRole = null;
+      let audioMuted = false;
+      let videoMuted = false;
+      let isFullscreen = false;
+      let videosSwapped = false;
+      let commentsVisible = true;
+      let localVideoVisible = true;
+      let isScreenSharing = false;
+      let currentFacingMode = 'user';
+      const streamServerUrl = 'https://maelsh.pro/ffmpeg';
+      
+      function log(msg, type = 'info') {
+        console.log('[LiveStream]', type === 'error' ? '❌' : '📡', msg);
+      }
+      
+      // Initialize embedded streaming when competition is live
+      async function initEmbeddedStream() {
+        const embeddedLiveStream = document.getElementById('embeddedLiveStream');
+        if (!embeddedLiveStream || !window.currentUser) return;
+        
+        // Wait for streaming services
+        try {
+          await waitForBundle();
+        } catch (err) {
+          log('Bundle load failed: ' + err.message, 'error');
+          return;
+        }
+        
+        // Determine user role
+        const userId = window.currentUser.id;
+        const comp = competitionData;
+        
+        if (userId === comp.creator_id) {
+          userRole = 'host';
+        } else if (userId === comp.opponent_id) {
+          userRole = 'opponent';
+        } else {
+          userRole = 'viewer';
+        }
+        
+        log('User role: ' + userRole);
+        setupViewerRestrictions();
+        
+        if (userRole === 'viewer') {
+          initViewerMode();
+        } else {
+          initCompetitorMode();
+        }
+      }
+      
+      function waitForBundle() {
+        return new Promise((resolve, reject) => {
+          if (window.P2PConnection && window.VideoCompositor && window.ChunkUploader) {
+            resolve();
+            return;
+          }
+          let attempts = 0;
+          const interval = setInterval(() => {
+            attempts++;
+            if (window.P2PConnection && window.VideoCompositor && window.ChunkUploader) {
+              clearInterval(interval);
+              resolve();
+            } else if (attempts >= 100) {
+              clearInterval(interval);
+              reject(new Error('Streaming services not loaded'));
+            }
+          }, 100);
+        });
+      }
+      
+      function setupViewerRestrictions() {
+        const competitorControls = document.getElementById('competitorControls');
+        if (userRole === 'viewer' && competitorControls) {
+          competitorControls.style.display = 'none';
+        }
+      }
+      
+      async function initViewerMode() {
+        const hlsPlayer = document.getElementById('remoteVideo');
+        const waitingOverlay = document.getElementById('waitingOverlay');
+        const hlsUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
+        
+        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+          const hls = new Hls({ liveSyncDuration: 3, liveMaxLatencyDuration: 10 });
+          hls.loadSource(hlsUrl);
+          hls.attachMedia(hlsPlayer);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            hlsPlayer.play().catch(() => {});
+            if (waitingOverlay) waitingOverlay.classList.add('hidden');
+          });
+        } else if (hlsPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+          hlsPlayer.src = hlsUrl;
+          hlsPlayer.addEventListener('loadedmetadata', () => {
+            hlsPlayer.play().catch(() => {});
+            if (waitingOverlay) waitingOverlay.classList.add('hidden');
+          });
+        }
+      }
+      
+      async function initCompetitorMode() {
+        const roomId = 'comp_' + competitionId;
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const waitingOverlay = document.getElementById('waitingOverlay');
+        
+        log('Initializing competitor mode. Room: ' + roomId);
+        
+        // Create room if host
+        if (userRole === 'host') {
+          await fetch('/api/signaling/room/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              competition_id: competitionId,
+              user_id: window.currentUser.id
+            })
+          });
+        }
+        
+        // Initialize P2P
+        p2p = new window.P2PConnection({
+          roomId: roomId,
+          role: userRole,
+          userId: window.currentUser.id,
+          onRemoteStream: (stream) => {
+            log('Remote stream received');
+            remoteVideo.srcObject = stream;
+            if (waitingOverlay) waitingOverlay.classList.add('hidden');
+            
+            if (userRole === 'host' && compositor) {
+              setTimeout(() => startRecording(), 1000);
+            }
+          },
+          onConnectionStateChange: (state) => {
+            log('Connection: ' + state);
+            updateConnectionStatus(state);
+          }
+        });
+        
+        // Get local media
+        try {
+          const stream = await p2p.initLocalStream();
+          localVideo.srcObject = stream;
+          log('Local stream ready');
+          
+          // Initialize compositor for host
+          if (userRole === 'host') {
+            compositor = new window.VideoCompositor({
+              localVideo: localVideo,
+              remoteVideo: remoteVideo,
+              canvas: document.getElementById('compositeCanvas'),
+              onProgress: (chunks) => {
+                if (document.getElementById('streamStats')) {
+                  document.getElementById('streamStats').innerHTML = '<span class="text-green-400">' + chunks + ' chunks</span>';
+                }
+              }
+            });
+          }
+          
+          // Connect P2P
+          await p2p.connect();
+        } catch (err) {
+          log('Failed: ' + err.message, 'error');
+          alert(tr.camera_error || 'Camera access failed. Try screen share.');
+        }
+      }
+      
+      function startRecording() {
+        if (!compositor || !p2p) return;
+        log('Starting recording');
+        compositor.startRecording();
+      }
+      
+      function updateConnectionStatus(state) {
+        const el = document.getElementById('connectionStatus');
+        if (!el) return;
+        el.classList.remove('hidden');
+        el.className = 'absolute top-4 ' + (isRTL ? 'right-4' : 'left-4') + ' px-3 py-1 rounded-full text-sm z-30 text-white ' +
+          (state === 'connected' ? 'bg-green-600' : state === 'failed' ? 'bg-red-600' : 'bg-yellow-600');
+        el.innerHTML = '<i class="fas fa-wifi mr-2"></i>' + state;
+        if (state === 'connected') setTimeout(() => el.classList.add('hidden'), 3000);
+      }
+      
+      // Control Functions
+      window.toggleFullscreen = function() {
+        const container = document.querySelector('.aspect-video');
+        if (!isFullscreen) {
+          if (container.requestFullscreen) container.requestFullscreen();
+          else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
+          isFullscreen = true;
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen();
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+          isFullscreen = false;
+        }
+        const btn = document.getElementById('fullscreenBtn');
+        if (btn) btn.innerHTML = isFullscreen ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>';
+      };
+      
+      window.swapVideos = function() {
+        const localWrapper = document.getElementById('localVideoWrapper');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const localVideo = document.getElementById('localVideo');
+        if (!localWrapper) return;
+        
+        videosSwapped = !videosSwapped;
+        
+        if (videosSwapped) {
+          localWrapper.style.cssText = 'position:absolute;inset:0;z-index:10;';
+          localVideo.classList.add('w-full', 'h-full');
+          remoteVideo.style.cssText = 'position:absolute;top:1rem;' + (isRTL ? 'left' : 'right') + ':1rem;z-index:20;width:8rem;height:6rem;border-radius:0.75rem;';
+        } else {
+          localWrapper.style.cssText = 'position:absolute;top:1rem;' + (isRTL ? 'left' : 'right') + ':1rem;z-index:20;';
+          localVideo.classList.remove('w-full', 'h-full');
+          remoteVideo.style.cssText = '';
+        }
+        
+        const btn = document.getElementById('swapBtn');
+        if (btn) btn.classList.toggle('bg-purple-500', videosSwapped);
+      };
+      
+      window.toggleComments = function() {
+        commentsVisible = !commentsVisible;
+        const overlay = document.getElementById('commentsOverlay');
+        if (overlay) overlay.style.opacity = commentsVisible ? '1' : '0';
+        const btn = document.getElementById('commentsBtn');
+        if (btn) btn.innerHTML = commentsVisible ? '<i class="fas fa-comment"></i>' : '<i class="fas fa-comment-slash"></i>';
+      };
+      
+      window.toggleLocalVideo = function() {
+        if (userRole === 'viewer') return;
+        localVideoVisible = !localVideoVisible;
+        const wrapper = document.getElementById('localVideoWrapper');
+        if (wrapper) wrapper.style.display = localVideoVisible ? 'block' : 'none';
+        const btn = document.getElementById('localVideoBtn');
+        if (btn) btn.innerHTML = localVideoVisible ? '<i class="fas fa-user-circle"></i>' : '<i class="fas fa-user-slash"></i>';
+      };
+      
+      window.switchCamera = async function() {
+        if (userRole === 'viewer' || !p2p) return;
+        try {
+          currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+          const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: currentFacingMode },
+            audio: true
+          });
+          const videoTrack = newStream.getVideoTracks()[0];
+          const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(videoTrack);
+            document.getElementById('localVideo').srcObject = newStream;
+          }
+        } catch (err) {
+          log('Camera switch failed: ' + err.message, 'error');
+        }
+      };
+      
+      window.shareScreen = async function() {
+        if (!p2p) return;
+        try {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: 'always' },
+            audio: true
+          });
+          const videoTrack = screenStream.getVideoTracks()[0];
+          const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(videoTrack);
+            document.getElementById('localVideo').srcObject = screenStream;
+            isScreenSharing = true;
+            document.getElementById('screenBtn').classList.add('bg-green-600');
+            
+            videoTrack.onended = () => {
+              isScreenSharing = false;
+              document.getElementById('screenBtn').classList.remove('bg-green-600');
+            };
+          }
+        } catch (err) {
+          log('Screen share failed: ' + err.message, 'error');
+        }
+      };
+      
+      window.toggleAudio = function() {
+        if (!p2p) return;
+        const stream = p2p.getLocalStream();
+        if (!stream) return;
+        const track = stream.getAudioTracks()[0];
+        if (track) {
+          audioMuted = !audioMuted;
+          track.enabled = !audioMuted;
+          const btn = document.getElementById('audioBtn');
+          if (btn) {
+            btn.classList.toggle('bg-red-600', audioMuted);
+            btn.innerHTML = audioMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
+          }
+        }
+      };
+      
+      window.toggleVideo = function() {
+        if (!p2p) return;
+        const stream = p2p.getLocalStream();
+        if (!stream) return;
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          videoMuted = !videoMuted;
+          track.enabled = !videoMuted;
+          const btn = document.getElementById('videoBtn');
+          if (btn) {
+            btn.classList.toggle('bg-red-600', videoMuted);
+            btn.innerHTML = videoMuted ? '<i class="fas fa-video-slash"></i>' : '<i class="fas fa-video"></i>';
+          }
+        }
+      };
+      
+      window.endStream = async function() {
+        if (!confirm(tr.end_stream_confirm || 'End the stream?')) return;
+        
+        log('Ending stream...');
+        
+        try {
+          // Stop compositor
+          if (compositor) {
+            compositor.destroy();
+            compositor = null;
+          }
+          
+          // Disconnect P2P
+          if (p2p) {
+            p2p.disconnect();
+            p2p = null;
+          }
+          
+          // Send finalize to server
+          await fetch(streamServerUrl + '/finalize.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              competition_id: competitionId,
+              user_id: window.currentUser.id
+            })
+          });
+          
+          // Update competition status
+          await fetch('/api/competitions/' + competitionId, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+            },
+            body: JSON.stringify({ status: 'completed' })
+          });
+          
+          // Leave signaling room
+          await fetch('/api/signaling/room/leave', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              competition_id: competitionId,
+              user_id: window.currentUser.id
+            })
+          });
+          
+          alert(tr.stream_ended || 'Stream ended successfully');
+          location.reload();
+        } catch (err) {
+          log('End stream error: ' + err.message, 'error');
+        }
+      };
+      
+      // Check if competition is live and initialize streaming
+      // This runs after renderCompetition
+      function checkAndInitStream() {
+        if (competitionData && competitionData.status === 'live' && competitionData.live_url) {
+          initEmbeddedStream();
+        }
+      }
+      
+      // Hook into renderCompetition
+      const originalRenderCompetition = renderCompetition;
+      renderCompetition = function(comp) {
+        originalRenderCompetition(comp);
+        setTimeout(checkAndInitStream, 100);
+      };
     </script>
   `;
 
