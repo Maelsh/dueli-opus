@@ -15,6 +15,11 @@ import { CookieUtils } from './core/CookieUtils';
 import { AuthService } from './services/AuthService';
 import { ThemeService } from './services/ThemeService';
 
+// Streaming Services
+import { P2PConnection } from './services/P2PConnection';
+import { VideoCompositor } from './services/VideoCompositor';
+import { ChunkUploader } from './services/ChunkUploader';
+
 // Countries (shared data)
 import { getCountriesList, getCountry } from '../countries';
 import { t, isRTL } from '../i18n';
@@ -204,6 +209,11 @@ declare global {
         // User Card Renderer (View from shared components)
         renderUserCard: (user: UserCardProps, lang?: string) => string;
         renderUserCards: (users: UserCardProps[], lang?: string) => string;
+
+        // Streaming Services (for live room page)
+        P2PConnection: typeof P2PConnection;
+        VideoCompositor: typeof VideoCompositor;
+        ChunkUploader: typeof ChunkUploader;
     }
 }
 
@@ -289,6 +299,11 @@ if (typeof window !== 'undefined') {
     // Bind User Card Renderer (uses shared View component)
     window.renderUserCard = (user: UserCardProps, lang: string = State.lang) => getUserCard(user, lang as any);
     window.renderUserCards = (users: UserCardProps[], lang: string = State.lang) => getUserCards(users, lang as any);
+
+    // Bind Streaming Services (for live room page)
+    window.P2PConnection = P2PConnection;
+    window.VideoCompositor = VideoCompositor;
+    window.ChunkUploader = ChunkUploader;
 }
 
 // Auto-initialize when DOM is ready

@@ -145,8 +145,9 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
         <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
         
         ${competition ? `
-        <script type="module">
-            import { P2PConnection, VideoCompositor, ChunkUploader } from '/assets/client/services/index.js';
+        <script>
+            // Streaming services are loaded from the main bundle (app.js)
+            // They are available on window after DOMContentLoaded
             
             // Configuration
             const lang = '${lang}';
@@ -260,7 +261,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 }
                 
                 // Initialize P2P connection
-                p2p = new P2PConnection({
+                p2p = new window.P2PConnection({
                     roomId: roomId,
                     role: userRole,
                     userId: window.currentUser.id,
@@ -335,7 +336,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             function initCompositor() {
                 const canvas = document.getElementById('compositeCanvas');
                 
-                compositor = new VideoCompositor({
+                compositor = new window.VideoCompositor({
                     competitionId: competitionId,
                     localVideo: localVideo,
                     remoteVideo: remoteVideo,
