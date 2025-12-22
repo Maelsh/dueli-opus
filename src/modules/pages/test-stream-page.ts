@@ -448,17 +448,24 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             // Join signaling room
             try {
                 log('الانضمام إلى الغرفة...');
+                // ✅ استخدم نفس المنطق: حوّل test_room_001 -> comp_001
+                const actualRoom = 'comp_' + roomId.replace('test_room_', '');
                 const res = await fetch('/api/signaling/room/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        room_id: roomId,
+                        room_id: actualRoom, // ← استخدم comp_001
                         user_id: 999,
                         role: 'opponent'
                     })
                 });
                 const data = await res.json();
                 log('النتيجة: ' + JSON.stringify(data), data.success ? 'success' : 'error');
+                
+                // حفظ المعرف الحقيقي
+                if (data.success) {
+                    window.actualRoomId = actualRoom;
+                }
             } catch (err) {
                 log('خطأ: ' + err.message, 'error');
             }
@@ -509,11 +516,12 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         // Send signal
         async function sendSignal(type, data) {
             try {
+                const actualRoom = window.actualRoomId || roomId;
                 await fetch('/api/signaling/signal', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        room_id: roomId,
+                        room_id: actualRoom, // ✅ استخدم المعرف الحقيقي
                         from_role: 'opponent',
                         signal_type: type,
                         signal_data: data
@@ -528,7 +536,8 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         function startPolling() {
             pollingInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/api/signaling/poll?room_id=' + roomId + '&role=opponent');
+                    const actualRoom = window.actualRoomId || roomId;
+                    const res = await fetch('/api/signaling/poll?room_id=' + actualRoom + '&role=opponent');
                     const data = await res.json();
                     
                     if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
