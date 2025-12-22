@@ -211,7 +211,7 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage } from './modules/pages';
+import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, testHostPage, testGuestPage, testViewerPage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
@@ -229,6 +229,11 @@ app.get('/live/:id', liveRoomPage);
 app.get('/earnings', earningsPage);
 app.get('/reports', reportsPage);
 app.get('/donate', donatePage);
+
+// Test streaming pages (no auth required)
+app.get('/test/host', testHostPage);
+app.get('/test/guest', testGuestPage);
+app.get('/test/viewer', testViewerPage);
 
 // ============================================
 // Error Handling - معالجة الأخطاء
