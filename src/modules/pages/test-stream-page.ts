@@ -143,12 +143,17 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        competition_id: roomId.replace('test_room_', ''),
-                        user_id: 'host_user'
+                        competition_id: roomId.replace('test_room_', ''), // يرسل '001'
+                        user_id: 1
                     })
                 });
                 const data = await res.json();
                 log('الغرفة: ' + JSON.stringify(data), data.success ? 'success' : 'error');
+                
+                // ✅ استخدم room_id الذي أرجعه السيرفر
+                if (data.success && data.data.room_id) {
+                    window.actualRoomId = data.data.room_id; // حفظ المعرف الحقيقي
+                }
                 return data.success;
             } catch (err) {
                 log('خطأ في إنشاء الغرفة: ' + err.message, 'error');
@@ -226,15 +231,15 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         // Send signal
         async function sendSignal(type, data) {
             try {
+                const actualRoom = window.actualRoomId || roomId;
                 await fetch('/api/signaling/signal', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        room_id: roomId,
-                        from_user: 'host_user',
-                        to_user: 'guest_user',
-                        type: type,
-                        data: data
+                        room_id: actualRoom, // ✅ استخدم المعرف الحقيقي
+                        from_role: 'host',
+                        signal_type: type,
+                        signal_data: data
                     })
                 });
             } catch (err) {
@@ -247,11 +252,13 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             log('بدء انتظار الرد...');
             pollingInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/api/signaling/poll?room_id=' + roomId + '&user_id=host_user');
+                    // ✅ استخدم المعرف الحقيقي من السيرفر
+                    const actualRoom = window.actualRoomId || roomId;
+                    const res = await fetch('/api/signaling/poll?room_id=' + actualRoom + '&role=host');
                     const data = await res.json();
                     
-                    if (data.success && data.signals && data.signals.length > 0) {
-                        for (const signal of data.signals) {
+                    if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
+                        for (const signal of data.data.signals) {
                             await handleSignal(signal);
                         }
                     }
@@ -446,7 +453,8 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         room_id: roomId,
-                        user_id: 'guest_user'
+                        user_id: 999,
+                        role: 'opponent'
                     })
                 });
                 const data = await res.json();
@@ -459,7 +467,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' }
                 ]
             });
             
@@ -506,10 +514,9 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         room_id: roomId,
-                        from_user: 'guest_user',
-                        to_user: 'host_user',
-                        type: type,
-                        data: data
+                        from_role: 'opponent',
+                        signal_type: type,
+                        signal_data: data
                     })
                 });
             } catch (err) {
@@ -521,11 +528,11 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         function startPolling() {
             pollingInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/api/signaling/poll?room_id=' + roomId + '&user_id=guest_user');
+                    const res = await fetch('/api/signaling/poll?room_id=' + roomId + '&role=opponent');
                     const data = await res.json();
                     
-                    if (data.success && data.signals && data.signals.length > 0) {
-                        for (const signal of data.signals) {
+                    if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
+                        for (const signal of data.data.signals) {
                             await handleSignal(signal);
                         }
                     }
