@@ -121,7 +121,23 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     video: { cursor: 'always' },
                     audio: true
                 });
-                document.getElementById('localVideo').srcObject = localStream;
+                
+                // 🔍 تفاصيل الـ Stream للتشخيص
+                log(`Stream ID: ${ localStream.id }`);
+                log(`Video tracks: ${ localStream.getVideoTracks().length } `);
+                log(`Audio tracks: ${ localStream.getAudioTracks().length } `);
+                
+                const videoElement = document.getElementById('localVideo');
+                videoElement.srcObject = localStream;
+                
+                // 🔍 تفاصيل الـ Video Element
+                log(`Video element ready: ${ videoElement.readyState } `);
+                
+                // انتظر حتى يكون الفيديو جاهز
+                videoElement.onloadedmetadata = () => {
+                    log(`Video metadata loaded: ${ videoElement.videoWidth }x${ videoElement.videoHeight } `);
+                };
+                
                 log('تم الحصول على الشاشة ✓', 'success');
                 updateStatus('الشاشة جاهزة - اضغط اتصال', 'green');
                 
