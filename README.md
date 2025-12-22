@@ -175,10 +175,28 @@ npm run build:css     # Build TailwindCSS
 # Database
 npm run db:migrate    # Run migrations
 npm run db:seed       # Seed database
-
-# Deploy
-npm run deploy        # Deploy to Cloudflare
 ```
+
+# Dueli Platform | منصة ديولي
+
+Welcome to the Dueli Platform. This project has been consolidated into definitive, bilingual reports that serve as the single source of truth for all stakeholders and developers.
+
+## 📖 Definitive Documentation | التوثيق الشامل
+
+Please refer to the following documents for everything you need to know about the project:
+
+### 🌟 Project Reference (General Information)
+- **[PROJECT_REFERENCE_EN.md](docs/PROJECT_REFERENCE_EN.md)**: Mission, features, tech stack, and roadmap (English).
+- **[PROJECT_REFERENCE_AR.md](docs/PROJECT_REFERENCE_AR.md)**: المهمة، الميزات، المكونات التقنية، وخريطة الطريق (العربية).
+
+### 🛠️ Developer Handbook (Technical Reference)
+- **[DEVELOPER_HANDBOOK_EN.md](docs/DEVELOPER_HANDBOOK_EN.md)**: Architecture, mandatory principles, incomplete features, and technical warnings (English).
+- **[DEVELOPER_HANDBOOK_AR.md](docs/DEVELOPER_HANDBOOK_AR.md)**: الهندسة البرمجية، المبادئ الإلزامية، المهام المعلقة، والتحذيرات التقنية (العربية).
+
+---
+
+## 🚀 Quick Start
+For immediate development setup, refer to the **Developer Handbook** above.
 
 ---
 
