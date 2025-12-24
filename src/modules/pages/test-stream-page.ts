@@ -95,6 +95,10 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         let pc = null;
         let localStream = null;
         let pollingInterval = null;
+        let mediaRecorder = null;
+        let chunkIndex = 0;
+        const matchId = 'match_001';
+        const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
         
         // Logging
         function log(msg, type = 'info') {
@@ -233,7 +237,8 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     pc.connectionState === 'failed' ? 'error' : 'info');
                 
                 if (pc.connectionState === 'connected') {
-                    updateStatus('متصل ✓', 'green');
+                    updateStatus('متصل ✓ - جاري التسجيل', 'green');
+                    startRecording();
                 } else if (pc.connectionState === 'failed') {
                     updateStatus('فشل الاتصال', 'red');
                 }
@@ -249,6 +254,48 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // Start polling for answer
             startPolling();
         }
+        
+        // Start recording and upload chunks
+        function startRecording() {
+            if (!localStream || mediaRecorder) return;
+            
+            log('بدء التسجيل وإرسال القطع...');
+            
+            try {
+                mediaRecorder = new MediaRecorder(localStream, {
+                    mimeType: 'video/webm;codecs=vp9,opus'
+                });
+            } catch (e) {
+                mediaRecorder = new MediaRecorder(localStream, {
+                    mimeType: 'video/webm'
+                });
+            }
+            
+            mediaRecorder.ondataavailable = async (e) => {
+                if (e.data.size > 0) {
+                    const formData = new FormData();
+                    formData.append('chunk', e.data, 'chunk_' + chunkIndex + '.webm');
+                    formData.append('match_id', matchId);
+                    formData.append('chunk_index', chunkIndex.toString());
+                    
+                    try {
+                        const res = await fetch(ffmpegUrl + '/upload.php', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await res.json();
+                        log('قطعة ' + chunkIndex + ': ' + (result.success ? '✓' : '✗'), result.success ? 'success' : 'error');
+                        chunkIndex++;
+                    } catch (err) {
+                        log('خطأ في رفع القطعة: ' + err.message, 'error');
+                    }
+                }
+            };
+            
+            mediaRecorder.start(5000); // قطعة كل 5 ثوان
+            log('التسجيل بدأ (5 ثوان/قطعة)', 'success');
+        }
+        
         
         // Send signal
         async function sendSignal(type, data) {
@@ -303,8 +350,32 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         }
         
         // Disconnect
-        function disconnect() {
+        async function disconnect() {
             log('إنهاء الاتصال...');
+            
+            // Stop recording and finalize
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                log('إيقاف التسجيل...');
+                
+                // إرسال طلب الدمج
+                try {
+                    const res = await fetch(ffmpegUrl + '/finalize.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ match_id: matchId })
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        log('🎬 الفيديو: ' + result.video_url, 'success');
+                    } else {
+                        log('خطأ في الدمج: ' + result.error, 'error');
+                    }
+                } catch (err) {
+                    log('خطأ في finalize: ' + err.message, 'error');
+                }
+            }
+            mediaRecorder = null;
             
             if (pollingInterval) {
                 clearInterval(pollingInterval);
