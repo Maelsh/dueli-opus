@@ -6,7 +6,7 @@
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
 
-const streamServerUrl = 'https://maelsh.pro/ffmpeg';
+const streamServerUrl = 'https://stream.maelsh.pro';
 const testRoomId = 'test_room_001';
 
 /**
@@ -188,7 +188,18 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    // Dueli TURN server
+                    {
+                        urls: 'turn:maelsh.pro:3000?transport=tcp',
+                        username: 'dueli',
+                        credential: 'dueli-turn-secret-2024'
+                    },
+                    {
+                        urls: 'turn:maelsh.pro:3000',
+                        username: 'dueli',
+                        credential: 'dueli-turn-secret-2024'
+                    }
                 ]
             });
             
@@ -485,7 +496,18 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    // Dueli TURN server
+                    {
+                        urls: 'turn:maelsh.pro:3000?transport=tcp',
+                        username: 'dueli',
+                        credential: 'dueli-turn-secret-2024'
+                    },
+                    {
+                        urls: 'turn:maelsh.pro:3000',
+                        username: 'dueli',
+                        credential: 'dueli-turn-secret-2024'
+                    }
                 ]
             });
             
