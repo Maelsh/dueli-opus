@@ -318,10 +318,10 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             log('بدء التسجيل وإرسال القطع... (المنافسة: ' + competitionId + ')');
             
-            // إنشاء Canvas لدمج الفيديوهين
+            // إنشاء Canvas لدمج الفيديوهين - جودة عالية
             const canvas = document.createElement('canvas');
-            canvas.width = 1280;
-            canvas.height = 360;
+            canvas.width = 1920;  // Full HD width
+            canvas.height = 540;  // HD height for side-by-side
             const ctx = canvas.getContext('2d');
             
             const localVideo = document.getElementById('localVideo');
@@ -329,36 +329,36 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             let animationId = null;
             
-            // رسم الفيديوهين على Canvas
+            // رسم الفيديوهين على Canvas - 60fps
             function drawFrame() {
                 // خلفية سوداء
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // الفيديو المحلي (يسار)
+                // الفيديو المحلي (يسار) - 960x540
                 if (localVideo && localVideo.videoWidth > 0) {
-                    ctx.drawImage(localVideo, 0, 0, 640, 360);
+                    ctx.drawImage(localVideo, 0, 0, 960, 540);
                 }
                 
-                // الفيديو البعيد (يمين) - إذا متاح
+                // الفيديو البعيد (يمين) - 960x540
                 if (remoteVideo && remoteVideo.videoWidth > 0) {
-                    ctx.drawImage(remoteVideo, 640, 0, 640, 360);
+                    ctx.drawImage(remoteVideo, 960, 0, 960, 540);
                 }
                 
                 // تسميات
-                ctx.fillStyle = 'rgba(0,0,0,0.6)';
-                ctx.fillRect(5, 335, 50, 20);
-                ctx.fillRect(645, 335, 60, 20);
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(10, 500, 80, 30);
+                ctx.fillRect(970, 500, 80, 30);
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText('أنت', 15, 349);
-                ctx.fillText('المنافس', 650, 349);
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText('أنت', 30, 522);
+                ctx.fillText('المنافس', 980, 522);
                 
                 animationId = requestAnimationFrame(drawFrame);
             }
             drawFrame();
             
-            // الحصول على stream من Canvas
+            // الحصول على stream من Canvas - 30fps
             const canvasStream = canvas.captureStream(30);
             
             // إضافة audio tracks
@@ -373,14 +373,26 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 });
             }
             
+            // MediaRecorder مع إعدادات جودة عالية
+            const recorderOptions = {
+                mimeType: 'video/webm;codecs=vp8,opus',  // VP8 أفضل توافق
+                videoBitsPerSecond: 4000000,  // 4 Mbps
+                audioBitsPerSecond: 128000    // 128 kbps
+            };
+            
             try {
-                mediaRecorder = new MediaRecorder(canvasStream, {
-                    mimeType: 'video/webm;codecs=vp9,opus'
-                });
+                mediaRecorder = new MediaRecorder(canvasStream, recorderOptions);
             } catch (e) {
-                mediaRecorder = new MediaRecorder(canvasStream, {
-                    mimeType: 'video/webm'
-                });
+                log('VP8 غير مدعوم، جاري تجربة VP9...', 'warn');
+                try {
+                    recorderOptions.mimeType = 'video/webm;codecs=vp9,opus';
+                    mediaRecorder = new MediaRecorder(canvasStream, recorderOptions);
+                } catch (e2) {
+                    mediaRecorder = new MediaRecorder(canvasStream, {
+                        mimeType: 'video/webm',
+                        videoBitsPerSecond: 4000000
+                    });
+                }
             }
             
             mediaRecorder.ondataavailable = async (e) => {
