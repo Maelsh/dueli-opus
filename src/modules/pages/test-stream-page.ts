@@ -99,7 +99,16 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         let mediaRecorder = null;
         let chunkIndex = 0;
         let canvasStream = null;
-        const competitionId = Math.floor(Math.random() * 900000 + 100000); // رقم عشوائي 6 أرقام
+        
+        // قراءة رقم المنافسة من URL أو إنشاء عشوائي
+        const urlParams = new URLSearchParams(window.location.search);
+        let competitionId = urlParams.get('comp') ? parseInt(urlParams.get('comp')) : Math.floor(Math.random() * 900000 + 100000);
+        
+        // تحديث URL إذا لم يكن موجوداً
+        if (!urlParams.get('comp')) {
+            history.replaceState(null, '', window.location.pathname + '?comp=' + competitionId);
+        }
+        
         const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
         
         // Logging
@@ -119,9 +128,21 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 '<span class="text-' + color + '-400"><i class="fas fa-circle mr-2"></i>' + text + '</span>';
         }
         
-        // إظهار رقم المنافسة
-        document.getElementById('compIdDisplay').textContent = 'رقم المنافسة: ' + competitionId + ' (شاركه مع المنافس)';
+        // إظهار رقم المنافسة مع الروابط
+        const baseUrl = window.location.origin;
+        const guestLink = baseUrl + '/test/guest?comp=' + competitionId;
+        const viewerLink = baseUrl + '/test/viewer?comp=' + competitionId;
+        
+        document.getElementById('compIdDisplay').innerHTML = 
+            'رقم المنافسة: <strong>' + competitionId + '</strong><br>' +
+            '<small class="text-gray-400">' +
+            '👤 <a href="' + guestLink + '" class="text-blue-400 hover:underline" target="_blank">رابط المنافس</a> | ' +
+            '👁️ <a href="' + viewerLink + '" class="text-purple-400 hover:underline" target="_blank">رابط المشاهدة</a>' +
+            '</small>';
+        
         log('تم تحميل صفحة Host - المنافسة: ' + competitionId);
+        log('رابط المنافس: ' + guestLink);
+        log('رابط المشاهدة: ' + viewerLink);
         
         // Share Screen
         async function shareScreen() {
@@ -599,9 +620,22 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         const role = 'guest';
         const streamServerUrl = '${streamServerUrl}';
         
+        // قراءة رقم المنافسة من URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCompId = urlParams.get('comp');
+        
         let pc = null;
         let localStream = null;
         let pollingInterval = null;
+        
+        // ملء حقل الإدخال تلقائياً من URL
+        if (urlCompId) {
+            document.addEventListener('DOMContentLoaded', () => {
+                document.getElementById('compIdInput').value = urlCompId;
+                document.getElementById('status').innerHTML = 
+                    '<span class="text-green-400"><i class="fas fa-check mr-2"></i>المنافسة: ' + urlCompId + ' - شارك الشاشة ثم اضغط الانضمام</span>';
+            });
+        }
         
         // Logging
         function log(msg, type = 'info') {
@@ -883,15 +917,23 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             <span class="text-yellow-400"><i class="fas fa-circle-notch fa-spin mr-2"></i>جاري الاتصال...</span>
         </div>
         
+        <!-- Competition ID Input -->
+        <div class="mb-4 text-center">
+            <label class="text-sm text-gray-300 ml-2">رقم المنافسة:</label>
+            <input type="number" id="compIdInput" class="bg-gray-700 text-white px-3 py-2 rounded-lg w-40 text-center font-mono" placeholder="أدخل الرقم">
+            <button onclick="loadStream()" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition mr-2">
+                <i class="fas fa-play mr-1"></i>تشغيل
+            </button>
+        </div>
+        
         <!-- Video -->
         <div class="video-container aspect-video mb-4">
             <video id="hlsPlayer" controls autoplay playsinline class="w-full h-full"></video>
         </div>
         
         <!-- Info -->
-        <div class="bg-gray-800 rounded-lg p-4 text-sm">
-            <p class="text-gray-400 mb-2">📡 رابط البث HLS:</p>
-            <code class="text-purple-400 break-all">${streamServerUrl}/storage/live/match_${testRoomId.replace('test_room_', '')}/playlist.m3u8</code>
+        <div id="hlsInfo" class="bg-gray-800 rounded-lg p-4 text-sm">
+            <p class="text-gray-400">📡 أدخل رقم المنافسة واضغط تشغيل</p>
         </div>
         
         <!-- Links -->
@@ -902,40 +944,75 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
     </div>
     
     <script>
-        const hlsUrl = '${streamServerUrl}/storage/live/match_${testRoomId.replace('test_room_', '')}/playlist.m3u8';
+        const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
         const hlsPlayer = document.getElementById('hlsPlayer');
         const statusEl = document.getElementById('status');
+        const hlsInfo = document.getElementById('hlsInfo');
+        const compIdInput = document.getElementById('compIdInput');
+        let hls = null;
+        
+        // قراءة رقم المنافسة من URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCompId = urlParams.get('comp');
+        if (urlCompId) {
+            compIdInput.value = urlCompId;
+            // تحميل تلقائي
+            setTimeout(() => loadStream(), 500);
+        }
         
         function updateStatus(text, color) {
             statusEl.innerHTML = '<span class="text-' + color + '-400"><i class="fas fa-circle mr-2"></i>' + text + '</span>';
         }
         
-        if (Hls.isSupported()) {
-            const hls = new Hls({
-                liveSyncDuration: 3,
-                liveMaxLatencyDuration: 10
-            });
+        function loadStream() {
+            const compId = compIdInput.value.trim();
+            if (!compId) {
+                updateStatus('أدخل رقم المنافسة!', 'red');
+                return;
+            }
             
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(hlsPlayer);
+            const hlsUrl = ffmpegUrl + '/storage/live/match_' + compId + '/playlist.m3u8';
+            hlsInfo.innerHTML = '<p class="text-gray-400 mb-2">📡 رابط البث HLS:</p><code class="text-purple-400 break-all">' + hlsUrl + '</code>';
             
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                updateStatus('البث متاح ✓', 'green');
-                hlsPlayer.play().catch(() => {});
-            });
+            updateStatus('جاري تحميل البث...', 'yellow');
             
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                if (data.fatal) {
-                    updateStatus('البث غير متاح حالياً - جرب لاحقاً', 'red');
-                }
-            });
-        } else if (hlsPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-            hlsPlayer.src = hlsUrl;
-            hlsPlayer.addEventListener('loadedmetadata', () => {
-                updateStatus('البث متاح ✓', 'green');
-            });
-        } else {
-            updateStatus('المتصفح لا يدعم HLS', 'red');
+            // تحديث URL
+            history.replaceState(null, '', window.location.pathname + '?comp=' + compId);
+            
+            if (hls) {
+                hls.destroy();
+            }
+            
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    liveSyncDuration: 3,
+                    liveMaxLatencyDuration: 10,
+                    manifestLoadingTimeOut: 10000,
+                    manifestLoadingMaxRetry: 3
+                });
+                
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(hlsPlayer);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    updateStatus('البث متاح ✓ (المنافسة: ' + compId + ')', 'green');
+                    hlsPlayer.play().catch(() => {});
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    console.log('HLS Error:', data);
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                        updateStatus('البث غير متاح - تأكد من أن البث بدأ', 'red');
+                    }
+                });
+            } else if (hlsPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                hlsPlayer.src = hlsUrl;
+                hlsPlayer.addEventListener('loadedmetadata', () => {
+                    updateStatus('البث متاح ✓', 'green');
+                });
+            } else {
+                updateStatus('المتصفح لا يدعم HLS', 'red');
+            }
         }
     </script>
 </body>
