@@ -304,8 +304,9 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 if (e.data.size > 0) {
                     const formData = new FormData();
                     formData.append('chunk', e.data, 'chunk_' + chunkIndex + '.webm');
-                    formData.append('match_id', matchId);
-                    formData.append('chunk_index', chunkIndex.toString());
+                    formData.append('competition_id', '001');
+                    formData.append('chunk_number', (chunkIndex + 1).toString());
+                    formData.append('extension', 'webm');
                     
                     try {
                         const res = await fetch(ffmpegUrl + '/upload.php', {
@@ -392,7 +393,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch(ffmpegUrl + '/finalize.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ match_id: matchId })
+                        body: JSON.stringify({ competition_id: 1 })
                     });
                     const result = await res.json();
                     if (result.success) {
