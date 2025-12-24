@@ -392,25 +392,33 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             // Stop recording and finalize
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
                 log('إيقاف التسجيل...');
                 
-                // إرسال طلب الدمج
-                try {
-                    const res = await fetch(ffmpegUrl + '/finalize.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ competition_id: competitionId })
-                    });
-                    const result = await res.json();
-                    if (result.success) {
-                        log('🎬 الفيديو: ' + result.video_url, 'success');
-                    } else {
-                        log('خطأ في الدمج: ' + result.error, 'error');
+                // انتظار رفع آخر قطعة
+                mediaRecorder.onstop = async () => {
+                    log('انتظار رفع آخر قطعة (5 ثوان)...');
+                    await new Promise(r => setTimeout(r, 5000));
+                    
+                    // إرسال طلب الدمج
+                    try {
+                        log('بدء الدمج للمنافسة: ' + competitionId);
+                        const res = await fetch(ffmpegUrl + '/finalize.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ competition_id: competitionId })
+                        });
+                        const result = await res.json();
+                        if (result.success) {
+                            log('🎬 الفيديو: ' + result.vod_url, 'success');
+                        } else {
+                            log('خطأ في الدمج: ' + result.error, 'error');
+                        }
+                    } catch (err) {
+                        log('خطأ في finalize: ' + err.message, 'error');
                     }
-                } catch (err) {
-                    log('خطأ في finalize: ' + err.message, 'error');
-                }
+                };
+                
+                mediaRecorder.stop();
             }
             mediaRecorder = null;
             
