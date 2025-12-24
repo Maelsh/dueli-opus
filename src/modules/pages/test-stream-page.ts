@@ -520,6 +520,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
     <script>
         const roomId = '${testRoomId}';
         const role = 'guest';
+        const streamServerUrl = '${streamServerUrl}';
         
         let pc = null;
         let localStream = null;

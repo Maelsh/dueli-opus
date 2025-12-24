@@ -107,6 +107,132 @@ app.get('/signaling', upgradeWebSocket((c: any) => {
     }
 }))
 
+// ==========================================
+// REST Signaling API (for test pages)
+// ==========================================
+interface SignalQueue {
+    host: any[]
+    opponent: any[]
+}
+
+const signalQueues = new Map<string, SignalQueue>()
+
+// Create room (no auth for testing)
+app.post('/api/signaling/room/create', async (c) => {
+    try {
+        const { competition_id } = await c.req.json()
+        const roomId = `comp_${competition_id}`
+
+        if (!rooms.has(roomId)) {
+            rooms.set(roomId, {
+                id: roomId,
+                hostSocket: null,
+                opponentSocket: null,
+                createdAt: Date.now()
+            })
+        }
+
+        if (!signalQueues.has(roomId)) {
+            signalQueues.set(roomId, { host: [], opponent: [] })
+        }
+
+        return c.json({
+            success: true,
+            data: {
+                room_id: roomId,
+                already_exists: rooms.has(roomId),
+                host_joined: false,
+                opponent_joined: false
+            }
+        })
+    } catch (err: any) {
+        return c.json({ success: false, error: err.message }, 400)
+    }
+})
+
+// Join room
+app.post('/api/signaling/room/join', async (c) => {
+    try {
+        const { room_id, role } = await c.req.json()
+
+        if (!rooms.has(room_id)) {
+            rooms.set(room_id, {
+                id: room_id,
+                hostSocket: null,
+                opponentSocket: null,
+                createdAt: Date.now()
+            })
+        }
+
+        if (!signalQueues.has(room_id)) {
+            signalQueues.set(room_id, { host: [], opponent: [] })
+        }
+
+        return c.json({
+            success: true,
+            data: {
+                joined: true,
+                role,
+                host_joined: false,
+                opponent_joined: true,
+                viewer_count: 0
+            }
+        })
+    } catch (err: any) {
+        return c.json({ success: false, error: err.message }, 400)
+    }
+})
+
+// Send signal
+app.post('/api/signaling/signal', async (c) => {
+    try {
+        const { room_id, from_role, signal_type, signal_data } = await c.req.json()
+
+        if (!signalQueues.has(room_id)) {
+            signalQueues.set(room_id, { host: [], opponent: [] })
+        }
+
+        const queue = signalQueues.get(room_id)!
+        const signal = { type: signal_type, data: signal_data, from: from_role }
+
+        // Add to opposite role's queue
+        if (from_role === 'host') {
+            queue.opponent.push(signal)
+        } else {
+            queue.host.push(signal)
+        }
+
+        return c.json({ success: true })
+    } catch (err: any) {
+        return c.json({ success: false, error: err.message }, 400)
+    }
+})
+
+// Poll for signals
+app.get('/api/signaling/poll', (c) => {
+    try {
+        const room_id = c.req.query('room_id')
+        const role = c.req.query('role')
+
+        if (!room_id || !role) {
+            return c.json({ success: false, error: 'Missing room_id or role' }, 400)
+        }
+
+        const queue = signalQueues.get(room_id)
+        if (!queue) {
+            return c.json({ success: true, data: { signals: [] } })
+        }
+
+        // Get signals for this role
+        const signals = role === 'host' ? queue.host.splice(0) : queue.opponent.splice(0)
+
+        return c.json({ success: true, data: { signals } })
+    } catch (err: any) {
+        return c.json({ success: false, error: err.message }, 400)
+    }
+})
+
+
 const port = Number(process.env.PORT) || 3000
 serve({ fetch: app.fetch, port }, () => {
     console.log(`✅ Server running on port ${port}`)
