@@ -291,18 +291,73 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             startPolling();
         }
         
-        // Start recording and upload chunks
+        // Start recording and upload chunks (with Canvas merge)
         function startRecording() {
             if (!localStream || mediaRecorder) return;
             
             log('بدء التسجيل وإرسال القطع... (المنافسة: ' + competitionId + ')');
             
+            // إنشاء Canvas لدمج الفيديوهين
+            const canvas = document.createElement('canvas');
+            canvas.width = 1280;
+            canvas.height = 360;
+            const ctx = canvas.getContext('2d');
+            
+            const localVideo = document.getElementById('localVideo');
+            const remoteVideo = document.getElementById('remoteVideo');
+            
+            let animationId = null;
+            
+            // رسم الفيديوهين على Canvas
+            function drawFrame() {
+                // خلفية سوداء
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // الفيديو المحلي (يسار)
+                if (localVideo && localVideo.videoWidth > 0) {
+                    ctx.drawImage(localVideo, 0, 0, 640, 360);
+                }
+                
+                // الفيديو البعيد (يمين) - إذا متاح
+                if (remoteVideo && remoteVideo.videoWidth > 0) {
+                    ctx.drawImage(remoteVideo, 640, 0, 640, 360);
+                }
+                
+                // تسميات
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(5, 335, 50, 20);
+                ctx.fillRect(645, 335, 60, 20);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText('أنت', 15, 349);
+                ctx.fillText('المنافس', 650, 349);
+                
+                animationId = requestAnimationFrame(drawFrame);
+            }
+            drawFrame();
+            
+            // الحصول على stream من Canvas
+            const canvasStream = canvas.captureStream(30);
+            
+            // إضافة audio tracks
+            localStream.getAudioTracks().forEach(track => {
+                canvasStream.addTrack(track);
+            });
+            
+            // إضافة صوت المنافس إذا متاح
+            if (remoteStream) {
+                remoteStream.getAudioTracks().forEach(track => {
+                    canvasStream.addTrack(track.clone());
+                });
+            }
+            
             try {
-                mediaRecorder = new MediaRecorder(localStream, {
+                mediaRecorder = new MediaRecorder(canvasStream, {
                     mimeType: 'video/webm;codecs=vp9,opus'
                 });
             } catch (e) {
-                mediaRecorder = new MediaRecorder(localStream, {
+                mediaRecorder = new MediaRecorder(canvasStream, {
                     mimeType: 'video/webm'
                 });
             }
@@ -329,8 +384,11 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 }
             };
             
+            // حفظ animationId للإيقاف لاحقاً
+            window.canvasAnimationId = animationId;
+            
             mediaRecorder.start(10000); // قطعة كل 10 ثوان
-            log('التسجيل بدأ (10 ثوان/قطعة)', 'success');
+            log('التسجيل بدأ (10 ثوان/قطعة) - Canvas دمج ✅', 'success');
         }
         
         
