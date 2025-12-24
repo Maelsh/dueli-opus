@@ -37,7 +37,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         <div class="text-center mb-6">
             <h1 class="text-3xl font-bold mb-2">🎬 اختبار البث - Host</h1>
             <p class="text-gray-400">الطرف الأول - يبدأ البث ويشارك الشاشة</p>
-            <p class="text-sm text-purple-400 mt-2">Room ID: ${testRoomId}</p>
+            <p id="compIdDisplay" class="text-lg text-green-400 mt-2 font-mono">رقم المنافسة: جاري...</p>
         </div>
         
         <!-- Status -->
@@ -94,10 +94,12 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         
         let pc = null;
         let localStream = null;
+        let remoteStream = null;
         let pollingInterval = null;
         let mediaRecorder = null;
         let chunkIndex = 0;
-        const matchId = 'match_001';
+        let canvasStream = null;
+        const competitionId = Math.floor(Math.random() * 900000 + 100000); // رقم عشوائي 6 أرقام
         const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
         
         // Logging
@@ -116,6 +118,10 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             document.getElementById('status').innerHTML = 
                 '<span class="text-' + color + '-400"><i class="fas fa-circle mr-2"></i>' + text + '</span>';
         }
+        
+        // إظهار رقم المنافسة
+        document.getElementById('compIdDisplay').textContent = 'رقم المنافسة: ' + competitionId + ' (شاركه مع المنافس)';
+        log('تم تحميل صفحة Host - المنافسة: ' + competitionId);
         
         // Share Screen
         async function shareScreen() {
@@ -158,7 +164,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        competition_id: roomId.replace('test_room_', ''), // يرسل '001'
+                        competition_id: competitionId.toString(),
                         user_id: 1
                     })
                 });
@@ -223,6 +229,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 if (event.streams[0]) {
                     log('   - stream.id: ' + event.streams[0].id);
                     log('   - stream tracks: ' + event.streams[0].getTracks().length);
+                    remoteStream = event.streams[0]; // حفظ للـ Canvas
                     const remoteVideo = document.getElementById('remoteVideo');
                     remoteVideo.srcObject = event.streams[0];
                     remoteVideo.onloadedmetadata = () => {
@@ -288,14 +295,71 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         function startRecording() {
             if (!localStream || mediaRecorder) return;
             
-            log('بدء التسجيل وإرسال القطع...');
+            log('بدء التسجيل وإرسال القطع... (المنافسة: ' + competitionId + ')');
+            
+            // إنشاء Canvas لدمج الفيديوهين
+            const canvas = document.createElement('canvas');
+            canvas.width = 1280;
+            canvas.height = 360; // نصف الارتفاع لكل فيديو جنباً إلى جنب
+            const ctx = canvas.getContext('2d');
+            
+            const localVideo = document.getElementById('localVideo');
+            const remoteVideo = document.getElementById('remoteVideo');
+            
+            // رسم الفيديوهين على Canvas
+            function drawFrame() {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+                
+                // خلفية سوداء
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // الفيديو المحلي (يسار)
+                if (localVideo.videoWidth > 0) {
+                    ctx.drawImage(localVideo, 0, 0, 640, 360);
+                }
+                
+                // الفيديو البعيد (يمين)
+                if (remoteVideo.videoWidth > 0) {
+                    ctx.drawImage(remoteVideo, 640, 0, 640, 360);
+                }
+                
+                // تسميات
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(5, 335, 60, 20);
+                ctx.fillRect(645, 335, 60, 20);
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px Arial';
+                ctx.fillText('أنت', 20, 350);
+                ctx.fillText('المنافس', 650, 350);
+                
+                requestAnimationFrame(drawFrame);
+            }
+            drawFrame();
+            
+            // الحصول على stream من Canvas
+            canvasStream = canvas.captureStream(30);
+            
+            // إضافة الصوت من localStream
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                canvasStream.addTrack(audioTrack);
+            }
+            
+            // إضافة صوت المنافس إذا موجود
+            if (remoteStream) {
+                const remoteAudio = remoteStream.getAudioTracks()[0];
+                if (remoteAudio) {
+                    canvasStream.addTrack(remoteAudio);
+                }
+            }
             
             try {
-                mediaRecorder = new MediaRecorder(localStream, {
+                mediaRecorder = new MediaRecorder(canvasStream, {
                     mimeType: 'video/webm;codecs=vp9,opus'
                 });
             } catch (e) {
-                mediaRecorder = new MediaRecorder(localStream, {
+                mediaRecorder = new MediaRecorder(canvasStream, {
                     mimeType: 'video/webm'
                 });
             }
@@ -304,7 +368,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 if (e.data.size > 0) {
                     const formData = new FormData();
                     formData.append('chunk', e.data, 'chunk_' + chunkIndex + '.webm');
-                    formData.append('competition_id', '001');
+                    formData.append('competition_id', competitionId.toString());
                     formData.append('chunk_number', (chunkIndex + 1).toString());
                     formData.append('extension', 'webm');
                     
@@ -322,8 +386,8 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 }
             };
             
-            mediaRecorder.start(5000); // قطعة كل 5 ثوان
-            log('التسجيل بدأ (5 ثوان/قطعة)', 'success');
+            mediaRecorder.start(10000); // قطعة كل 10 ثوان
+            log('التسجيل بدأ (10 ثوان/قطعة) - Canvas دمج', 'success');
         }
         
         
@@ -393,7 +457,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch(ffmpegUrl + '/finalize.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ competition_id: 1 })
+                        body: JSON.stringify({ competition_id: competitionId })
                     });
                     const result = await res.json();
                     if (result.success) {
@@ -468,12 +532,15 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         <div class="text-center mb-6">
             <h1 class="text-3xl font-bold mb-2">👤 اختبار البث - Guest</h1>
             <p class="text-gray-400">الطرف الثاني - ينضم للبث</p>
-            <p class="text-sm text-purple-400 mt-2">Room ID: ${testRoomId}</p>
+            <div class="mt-3 flex items-center justify-center gap-2">
+                <label class="text-sm text-gray-300">رقم المنافسة:</label>
+                <input type="number" id="compIdInput" class="bg-gray-700 text-white px-3 py-2 rounded-lg w-40 text-center font-mono" placeholder="أدخل الرقم">
+            </div>
         </div>
         
         <!-- Status -->
         <div id="status" class="bg-gray-800 rounded-lg p-4 mb-4 text-center">
-            <span class="text-yellow-400"><i class="fas fa-circle-notch fa-spin mr-2"></i>جاري التهيئة...</span>
+            <span class="text-yellow-400"><i class="fas fa-circle-notch fa-spin mr-2"></i>أدخل رقم المنافسة ثم اضغط الانضمام</span>
         </div>
         
         <!-- Videos -->
@@ -562,23 +629,32 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         
         // Join Room
         async function joinRoom() {
+            // التحقق من رقم المنافسة
+            const compIdInput = document.getElementById('compIdInput');
+            const competitionId = compIdInput.value.trim();
+            
+            if (!competitionId) {
+                log('أدخل رقم المنافسة أولاً!', 'error');
+                updateStatus('أدخل رقم المنافسة!', 'red');
+                return;
+            }
+            
             if (!localStream) {
                 log('شارك الشاشة أولاً!', 'warn');
                 return;
             }
             
-            updateStatus('جاري الانضمام...', 'yellow');
+            updateStatus('جاري الانضمام إلى المنافسة ' + competitionId + '...', 'yellow');
             
             // Join signaling room
             try {
-                log('الانضمام إلى الغرفة...');
-                // ✅ استخدم نفس المنطق: حوّل test_room_001 -> comp_001
-                const actualRoom = 'comp_' + roomId.replace('test_room_', '');
+                log('الانضمام إلى المنافسة: ' + competitionId);
+                const actualRoom = 'comp_' + competitionId;
                 const res = await fetch(streamServerUrl + '/api/signaling/room/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        room_id: actualRoom, // ← استخدم comp_001
+                        room_id: actualRoom,
                         user_id: 999,
                         role: 'opponent'
                     })
