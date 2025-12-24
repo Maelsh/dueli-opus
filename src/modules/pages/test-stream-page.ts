@@ -154,7 +154,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         async function createRoom() {
             try {
                 log('إنشاء غرفة الإشارات...');
-                const res = await fetch('/api/signaling/room/create', {
+                const res = await fetch(streamServerUrl + '/api/signaling/room/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -330,7 +330,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         async function sendSignal(type, data) {
             try {
                 const actualRoom = window.actualRoomId || roomId;
-                await fetch('/api/signaling/signal', {
+                await fetch(streamServerUrl + '/api/signaling/signal', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -352,7 +352,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 try {
                     // ✅ استخدم المعرف الحقيقي من السيرفر
                     const actualRoom = window.actualRoomId || roomId;
-                    const res = await fetch('/api/signaling/poll?room_id=' + actualRoom + '&role=host');
+                    const res = await fetch(streamServerUrl + '/api/signaling/poll?room_id=' + actualRoom + '&role=host');
                     const data = await res.json();
                     
                     if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
@@ -572,7 +572,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 log('الانضمام إلى الغرفة...');
                 // ✅ استخدم نفس المنطق: حوّل test_room_001 -> comp_001
                 const actualRoom = 'comp_' + roomId.replace('test_room_', '');
-                const res = await fetch('/api/signaling/room/join', {
+                const res = await fetch(streamServerUrl + '/api/signaling/room/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -674,7 +674,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         async function sendSignal(type, data) {
             try {
                 const actualRoom = window.actualRoomId || roomId;
-                await fetch('/api/signaling/signal', {
+                await fetch(streamServerUrl + '/api/signaling/signal', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -694,7 +694,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             pollingInterval = setInterval(async () => {
                 try {
                     const actualRoom = window.actualRoomId || roomId;
-                    const res = await fetch('/api/signaling/poll?room_id=' + actualRoom + '&role=opponent');
+                    const res = await fetch(streamServerUrl + '/api/signaling/poll?room_id=' + actualRoom + '&role=opponent');
                     const data = await res.json();
                     
                     if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
