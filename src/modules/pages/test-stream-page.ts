@@ -217,9 +217,21 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             // Handle remote stream
             pc.ontrack = (event) => {
-                log('🎉 تم استقبال Remote Stream!', 'success');
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-                updateStatus('متصل ✓', 'green');
+                log('📥 ontrack fired!', 'success');
+                log('   - event.track.kind: ' + event.track.kind);
+                log('   - event.streams.length: ' + event.streams.length);
+                if (event.streams[0]) {
+                    log('   - stream.id: ' + event.streams[0].id);
+                    log('   - stream tracks: ' + event.streams[0].getTracks().length);
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteVideo.onloadedmetadata = () => {
+                        log('   ✅ Remote video loaded: ' + remoteVideo.videoWidth + 'x' + remoteVideo.videoHeight, 'success');
+                    };
+                    updateStatus('متصل ✓', 'green');
+                } else {
+                    log('   ⚠️ No stream in event!', 'error');
+                }
             };
             
             // Handle ICE candidates
@@ -232,7 +244,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             // Connection state
             pc.onconnectionstatechange = () => {
-                log('حالة الاتصال: ' + pc.connectionState, 
+                log('📡 Connection State: ' + pc.connectionState, 
                     pc.connectionState === 'connected' ? 'success' : 
                     pc.connectionState === 'failed' ? 'error' : 'info');
                 
@@ -242,6 +254,23 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 } else if (pc.connectionState === 'failed') {
                     updateStatus('فشل الاتصال', 'red');
                 }
+            };
+            
+            // ICE connection state
+            pc.oniceconnectionstatechange = () => {
+                log('🧊 ICE Connection: ' + pc.iceConnectionState, 
+                    pc.iceConnectionState === 'connected' ? 'success' : 
+                    pc.iceConnectionState === 'failed' ? 'error' : 'info');
+            };
+            
+            // ICE gathering state
+            pc.onicegatheringstatechange = () => {
+                log('📦 ICE Gathering: ' + pc.iceGatheringState);
+            };
+            
+            // Signaling state
+            pc.onsignalingstatechange = () => {
+                log('🔔 Signaling State: ' + pc.signalingState);
             };
             
             // Create offer
@@ -592,24 +621,48 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             
             // Handle remote stream
             pc.ontrack = (event) => {
-                log('🎉 تم استقبال Remote Stream!', 'success');
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-                updateStatus('متصل ✓', 'green');
+                log('📥 ontrack fired!', 'success');
+                log('   - event.track.kind: ' + event.track.kind);
+                log('   - event.streams.length: ' + event.streams.length);
+                if (event.streams[0]) {
+                    log('   - stream.id: ' + event.streams[0].id);
+                    log('   - stream tracks: ' + event.streams[0].getTracks().length);
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteVideo.onloadedmetadata = () => {
+                        log('   ✅ Remote video loaded: ' + remoteVideo.videoWidth + 'x' + remoteVideo.videoHeight, 'success');
+                    };
+                    updateStatus('متصل ✓', 'green');
+                } else {
+                    log('   ⚠️ No stream in event!', 'error');
+                }
             };
             
             // Handle ICE candidates
             pc.onicecandidate = async (event) => {
                 if (event.candidate) {
-                    log('ICE Candidate');
+                    log('ICE Candidate: ' + event.candidate.candidate.substring(0, 50) + '...');
                     await sendSignal('ice', event.candidate);
                 }
             };
             
             // Connection state
             pc.onconnectionstatechange = () => {
-                log('حالة الاتصال: ' + pc.connectionState, 
+                log('📡 Connection State: ' + pc.connectionState, 
                     pc.connectionState === 'connected' ? 'success' : 
                     pc.connectionState === 'failed' ? 'error' : 'info');
+            };
+            
+            // ICE connection state
+            pc.oniceconnectionstatechange = () => {
+                log('🧊 ICE Connection: ' + pc.iceConnectionState, 
+                    pc.iceConnectionState === 'connected' ? 'success' : 
+                    pc.iceConnectionState === 'failed' ? 'error' : 'info');
+            };
+            
+            // Signaling state
+            pc.onsignalingstatechange = () => {
+                log('🔔 Signaling State: ' + pc.signalingState);
             };
             
             // Start polling for offer
