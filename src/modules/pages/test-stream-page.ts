@@ -297,69 +297,12 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             log('بدء التسجيل وإرسال القطع... (المنافسة: ' + competitionId + ')');
             
-            // إنشاء Canvas لدمج الفيديوهين
-            const canvas = document.createElement('canvas');
-            canvas.width = 1280;
-            canvas.height = 360; // نصف الارتفاع لكل فيديو جنباً إلى جنب
-            const ctx = canvas.getContext('2d');
-            
-            const localVideo = document.getElementById('localVideo');
-            const remoteVideo = document.getElementById('remoteVideo');
-            
-            // رسم الفيديوهين على Canvas
-            function drawFrame() {
-                if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
-                
-                // خلفية سوداء
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // الفيديو المحلي (يسار)
-                if (localVideo.videoWidth > 0) {
-                    ctx.drawImage(localVideo, 0, 0, 640, 360);
-                }
-                
-                // الفيديو البعيد (يمين)
-                if (remoteVideo.videoWidth > 0) {
-                    ctx.drawImage(remoteVideo, 640, 0, 640, 360);
-                }
-                
-                // تسميات
-                ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                ctx.fillRect(5, 335, 60, 20);
-                ctx.fillRect(645, 335, 60, 20);
-                ctx.fillStyle = '#fff';
-                ctx.font = '12px Arial';
-                ctx.fillText('أنت', 20, 350);
-                ctx.fillText('المنافس', 650, 350);
-                
-                requestAnimationFrame(drawFrame);
-            }
-            drawFrame();
-            
-            // الحصول على stream من Canvas
-            canvasStream = canvas.captureStream(30);
-            
-            // إضافة الصوت من localStream
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                canvasStream.addTrack(audioTrack);
-            }
-            
-            // إضافة صوت المنافس إذا موجود
-            if (remoteStream) {
-                const remoteAudio = remoteStream.getAudioTracks()[0];
-                if (remoteAudio) {
-                    canvasStream.addTrack(remoteAudio);
-                }
-            }
-            
             try {
-                mediaRecorder = new MediaRecorder(canvasStream, {
+                mediaRecorder = new MediaRecorder(localStream, {
                     mimeType: 'video/webm;codecs=vp9,opus'
                 });
             } catch (e) {
-                mediaRecorder = new MediaRecorder(canvasStream, {
+                mediaRecorder = new MediaRecorder(localStream, {
                     mimeType: 'video/webm'
                 });
             }
@@ -387,7 +330,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             };
             
             mediaRecorder.start(10000); // قطعة كل 10 ثوان
-            log('التسجيل بدأ (10 ثوان/قطعة) - Canvas دمج', 'success');
+            log('التسجيل بدأ (10 ثوان/قطعة)', 'success');
         }
         
         
