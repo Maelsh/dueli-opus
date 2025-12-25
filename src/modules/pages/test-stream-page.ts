@@ -45,6 +45,12 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             <span class="text-yellow-400"><i class="fas fa-circle-notch fa-spin mr-2"></i>جاري التهيئة...</span>
         </div>
         
+        <!-- Latency Gauge & Quality Info -->
+        <div class="flex justify-between items-center bg-gray-900 rounded-lg p-3 mb-4 text-sm">
+            <div id="latencyGauge"><span class="text-gray-400">● انتظار...</span></div>
+            <div id="qualityInfo" class="text-gray-400">الجودة: جاري التحديد...</div>
+        </div>
+        
         <!-- Videos -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
@@ -312,116 +318,293 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             startPolling();
         }
         
-        // Start recording and upload chunks (with Canvas merge)
-        function startRecording() {
+        // ===== إعدادات الجودة التكيفية =====
+        const qualityPresets = {
+            excellent: { name: 'ممتاز', width: 1280, height: 360, fps: 30, segment: 4000, bitrate: 2000000 },
+            good:      { name: 'جيد', width: 854,  height: 240, fps: 24, segment: 6000, bitrate: 1000000 },
+            medium:    { name: 'متوسط', width: 640,  height: 180, fps: 15, segment: 10000, bitrate: 500000 },
+            low:       { name: 'منخفض', width: 426,  height: 120, fps: 10, segment: 20000, bitrate: 250000 },
+            minimal:   { name: 'أدنى', width: 320,  height: 90,  fps: 10, segment: 30000, bitrate: 150000 }
+        };
+        
+        let currentQuality = qualityPresets.medium;
+        let uploadQueue = [];
+        let isUploading = false;
+        let segmentInterval = null;
+        let drawInterval = null;
+        let droppedChunks = 0;
+        let uploadStartTime = 0;
+        let lastLatency = 0;
+        let probeResults = null;
+        
+        // ===== اختبار قدرات الجهاز =====
+        async function probeDevice() {
+            log('🔍 اختبار قدرات الجهاز...');
+            const results = { cpuScore: 0, canvasFps: 0, networkSpeed: 0 };
+            
+            // 1. اختبار CPU
+            const cpuStart = performance.now();
+            let iterations = 0;
+            while (performance.now() - cpuStart < 500) {
+                Math.random() * Math.random();
+                iterations++;
+            }
+            results.cpuScore = Math.round(iterations / 10000);
+            log('CPU Score: ' + results.cpuScore);
+            
+            // 2. اختبار Canvas FPS
+            const testCanvas = document.createElement('canvas');
+            testCanvas.width = 640;
+            testCanvas.height = 360;
+            const testCtx = testCanvas.getContext('2d');
+            
+            let frames = 0;
+            const fpsStart = performance.now();
+            while (performance.now() - fpsStart < 1000) {
+                testCtx.fillStyle = 'rgb(' + Math.random()*255 + ',' + Math.random()*255 + ',' + Math.random()*255 + ')';
+                testCtx.fillRect(0, 0, 640, 360);
+                frames++;
+            }
+            results.canvasFps = frames;
+            log('Canvas FPS: ' + results.canvasFps);
+            
+            // 3. اختبار الشبكة (رفع ملف صغير)
+            try {
+                const testBlob = new Blob([new Uint8Array(50000)]); // 50KB
+                const uploadStart = performance.now();
+                await fetch(ffmpegUrl + '/upload.php', {
+                    method: 'POST',
+                    body: (() => {
+                        const fd = new FormData();
+                        fd.append('chunk', testBlob, 'speedtest.bin');
+                        fd.append('competition_id', 'speedtest');
+                        fd.append('chunk_number', '0');
+                        fd.append('extension', 'bin');
+                        return fd;
+                    })()
+                });
+                const uploadTime = performance.now() - uploadStart;
+                results.networkSpeed = Math.round(50000 / (uploadTime / 1000)); // bytes/sec
+                log('Network: ' + Math.round(results.networkSpeed / 1024) + ' KB/s');
+            } catch (e) {
+                results.networkSpeed = 50000; // افتراضي
+            }
+            
+            return results;
+        }
+        
+        // ===== اختيار الجودة بناءً على الاختبار =====
+        function selectQuality(probe) {
+            if (probe.cpuScore > 80 && probe.canvasFps > 100 && probe.networkSpeed > 200000) {
+                return qualityPresets.excellent;
+            } else if (probe.cpuScore > 50 && probe.canvasFps > 60 && probe.networkSpeed > 100000) {
+                return qualityPresets.good;
+            } else if (probe.cpuScore > 30 && probe.canvasFps > 30 && probe.networkSpeed > 50000) {
+                return qualityPresets.medium;
+            } else if (probe.cpuScore > 15) {
+                return qualityPresets.low;
+            } else {
+                return qualityPresets.minimal;
+            }
+        }
+        
+        // ===== تحديث عرض الجودة =====
+        function updateQualityInfo() {
+            const info = document.getElementById('qualityInfo');
+            if (info) {
+                info.innerHTML = 'الجودة: <span class="text-blue-400">' + currentQuality.name + '</span> (' + 
+                    (currentQuality.width * 2) + 'x' + (currentQuality.height * 2) + ' @ ' + currentQuality.fps + 'fps)';
+            }
+        }
+        
+        // ===== إدارة طابور الرفع =====
+        async function processUploadQueue() {
+            if (isUploading || uploadQueue.length === 0) return;
+            
+            // إذا زاد الطابور عن 3، أسقط الأقدم وخفض الجودة
+            while (uploadQueue.length > 3) {
+                uploadQueue.shift();
+                droppedChunks++;
+                log('⚠️ إسقاط قطعة (تراكم) - مجموع: ' + droppedChunks, 'warn');
+                downgradeQuality();
+            }
+            
+            isUploading = true;
+            const { blob, index } = uploadQueue.shift();
+            
+            const formData = new FormData();
+            formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.webm');
+            formData.append('competition_id', competitionId.toString());
+            formData.append('chunk_number', (index + 1).toString());
+            formData.append('extension', 'webm');
+            
+            uploadStartTime = performance.now();
+            
+            try {
+                const res = await fetch(ffmpegUrl + '/upload.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await res.json();
+                
+                // حساب زمن التأخير
+                lastLatency = performance.now() - uploadStartTime;
+                updateLatencyGauge(lastLatency);
+                
+                // إذا كان الرفع أبطأ من نصف مدة القطعة → خفض الجودة
+                if (lastLatency > currentQuality.segment / 2) {
+                    log('⚠️ رفع بطيء (' + Math.round(lastLatency) + 'ms) - تخفيض الجودة', 'warn');
+                    downgradeQuality();
+                }
+                
+                log('قطعة ' + index + ': ' + (result.success ? '✓' : '✗') + ' (' + Math.round(lastLatency) + 'ms)', result.success ? 'success' : 'error');
+            } catch (err) {
+                log('خطأ في رفع القطعة: ' + err.message, 'error');
+            }
+            
+            isUploading = false;
+            processUploadQueue(); // معالجة القطعة التالية
+        }
+        
+        // ===== تخفيض الجودة =====
+        function downgradeQuality() {
+            const levels = Object.keys(qualityPresets);
+            const currentIndex = levels.indexOf(Object.keys(qualityPresets).find(k => qualityPresets[k] === currentQuality));
+            
+            if (currentIndex < levels.length - 1) {
+                currentQuality = qualityPresets[levels[currentIndex + 1]];
+                log('📉 الجودة الجديدة: ' + currentQuality.name + ' (' + (currentQuality.width*2) + 'x' + (currentQuality.height*2) + ')', 'warn');
+                updateQualityInfo();
+            }
+        }
+        
+        // ===== عداد التأخير =====
+        function updateLatencyGauge(latency) {
+            const gauge = document.getElementById('latencyGauge');
+            if (!gauge) return;
+            
+            let color = 'green';
+            let status = 'ممتاز';
+            
+            if (latency > 15000) {
+                color = 'red';
+                status = 'سيء';
+            } else if (latency > 5000) {
+                color = 'yellow';
+                status = 'متوسط';
+            }
+            
+            gauge.innerHTML = '<span class="text-' + color + '-400">● ' + status + ' (' + Math.round(latency/1000) + 's)</span>';
+        }
+        
+        // ===== بدء التسجيل =====
+        async function startRecording() {
             if (!localStream || mediaRecorder) return;
             
-            log('بدء التسجيل وإرسال القطع... (المنافسة: ' + competitionId + ')');
+            // اختبار الجهاز أولاً
+            log('🔍 جاري اختبار قدرات الجهاز...');
+            updateStatus('جاري اختبار الجهاز...', 'yellow');
             
-            // إنشاء Canvas لدمج الفيديوهين - جودة عالية
+            probeResults = await probeDevice();
+            currentQuality = selectQuality(probeResults);
+            updateQualityInfo();
+            
+            log('✅ الجودة المختارة: ' + currentQuality.name + ' (' + (currentQuality.width*2) + 'x' + (currentQuality.height*2) + ')');
+            updateStatus('البث جاري...', 'green');
+            
+            log('بدء التسجيل (المنافسة: ' + competitionId + ')');
+            
+            // إنشاء Canvas بالجودة المحددة (side-by-side)
             const canvas = document.createElement('canvas');
-            canvas.width = 1920;  // Full HD width
-            canvas.height = 540;  // HD height for side-by-side
+            canvas.width = currentQuality.width * 2; // مضاعف للـ side-by-side
+            canvas.height = currentQuality.height * 2;
             const ctx = canvas.getContext('2d');
             
             const localVideo = document.getElementById('localVideo');
             const remoteVideo = document.getElementById('remoteVideo');
             
-            let animationId = null;
-            
-            // رسم الفيديوهين على Canvas - 60fps
+            // رسم الفيديوهين على Canvas باستخدام setInterval (يعمل بالخلفية)
             function drawFrame() {
-                // خلفية سوداء
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // الفيديو المحلي (يسار) - 960x540
+                // الفيديو المحلي (يسار)
                 if (localVideo && localVideo.videoWidth > 0) {
-                    ctx.drawImage(localVideo, 0, 0, 960, 540);
+                    ctx.drawImage(localVideo, 0, 0, canvas.width / 2, canvas.height);
                 }
                 
-                // الفيديو البعيد (يمين) - 960x540
+                // الفيديو البعيد (يمين)
                 if (remoteVideo && remoteVideo.videoWidth > 0) {
-                    ctx.drawImage(remoteVideo, 960, 0, 960, 540);
+                    ctx.drawImage(remoteVideo, canvas.width / 2, 0, canvas.width / 2, canvas.height);
                 }
                 
                 // تسميات
                 ctx.fillStyle = 'rgba(0,0,0,0.7)';
-                ctx.fillRect(10, 500, 80, 30);
-                ctx.fillRect(970, 500, 80, 30);
+                ctx.fillRect(5, canvas.height - 25, 50, 20);
+                ctx.fillRect(canvas.width / 2 + 5, canvas.height - 25, 60, 20);
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 16px Arial';
-                ctx.fillText('أنت', 30, 522);
-                ctx.fillText('المنافس', 980, 522);
-                
-                animationId = requestAnimationFrame(drawFrame);
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText('أنت', 15, canvas.height - 10);
+                ctx.fillText('المنافس', canvas.width / 2 + 10, canvas.height - 10);
             }
-            drawFrame();
             
-            // الحصول على stream من Canvas - 30fps
-            const canvasStream = canvas.captureStream(30);
+            // setInterval بدلاً من requestAnimationFrame
+            const frameInterval = Math.round(1000 / currentQuality.fps);
+            drawInterval = setInterval(drawFrame, frameInterval);
+            
+            // الحصول على stream من Canvas
+            const canvasStream = canvas.captureStream(currentQuality.fps);
             
             // إضافة audio tracks
             localStream.getAudioTracks().forEach(track => {
                 canvasStream.addTrack(track);
             });
             
-            // إضافة صوت المنافس إذا متاح
             if (remoteStream) {
                 remoteStream.getAudioTracks().forEach(track => {
                     canvasStream.addTrack(track.clone());
                 });
             }
             
-            // MediaRecorder مع إعدادات جودة عالية
+            // إنشاء MediaRecorder
             const recorderOptions = {
-                mimeType: 'video/webm;codecs=vp8,opus',  // VP8 أفضل توافق
-                videoBitsPerSecond: 4000000,  // 4 Mbps
-                audioBitsPerSecond: 128000    // 128 kbps
+                mimeType: 'video/webm;codecs=vp8,opus',
+                videoBitsPerSecond: currentQuality.bitrate,
+                audioBitsPerSecond: 64000
             };
             
             try {
                 mediaRecorder = new MediaRecorder(canvasStream, recorderOptions);
             } catch (e) {
-                log('VP8 غير مدعوم، جاري تجربة VP9...', 'warn');
-                try {
-                    recorderOptions.mimeType = 'video/webm;codecs=vp9,opus';
-                    mediaRecorder = new MediaRecorder(canvasStream, recorderOptions);
-                } catch (e2) {
-                    mediaRecorder = new MediaRecorder(canvasStream, {
-                        mimeType: 'video/webm',
-                        videoBitsPerSecond: 4000000
-                    });
-                }
+                log('VP8 غير مدعوم، تجربة webm عادي...', 'warn');
+                mediaRecorder = new MediaRecorder(canvasStream, {
+                    mimeType: 'video/webm',
+                    videoBitsPerSecond: currentQuality.bitrate
+                });
             }
             
-            mediaRecorder.ondataavailable = async (e) => {
+            // عند توفر بيانات → إضافة للطابور
+            mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
-                    const formData = new FormData();
-                    formData.append('chunk', e.data, 'chunk_' + chunkIndex + '.webm');
-                    formData.append('competition_id', competitionId.toString());
-                    formData.append('chunk_number', (chunkIndex + 1).toString());
-                    formData.append('extension', 'webm');
-                    
-                    try {
-                        const res = await fetch(ffmpegUrl + '/upload.php', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        const result = await res.json();
-                        log('قطعة ' + chunkIndex + ': ' + (result.success ? '✓' : '✗'), result.success ? 'success' : 'error');
-                        chunkIndex++;
-                    } catch (err) {
-                        log('خطأ في رفع القطعة: ' + err.message, 'error');
-                    }
+                    uploadQueue.push({ blob: e.data, index: chunkIndex });
+                    chunkIndex++;
+                    processUploadQueue();
                 }
             };
             
-            // حفظ animationId للإيقاف لاحقاً
-            window.canvasAnimationId = animationId;
+            // بدء التسجيل
+            mediaRecorder.start();
             
-            mediaRecorder.start(10000); // قطعة كل 10 ثوان
-            log('التسجيل بدأ (10 ثوان/قطعة) - Canvas دمج ✅', 'success');
+            // دورة stop/start لضمان keyframes في كل قطعة
+            segmentInterval = setInterval(() => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    mediaRecorder.start();
+                    log('قطعة جديدة (' + currentQuality.segment/1000 + 's)', 'info');
+                }
+            }, currentQuality.segment);
+            
+            log('التسجيل بدأ ✅ (stop/start كل ' + currentQuality.segment/1000 + 's)', 'success');
         }
         
         
@@ -477,62 +660,90 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             }
         }
         
-        // Disconnect
+        // Disconnect with proper cleanup
         async function disconnect() {
             log('إنهاء الاتصال...');
             
-            // Stop recording and finalize
+            // 1. إيقاف دورة stop/start
+            if (segmentInterval) {
+                clearInterval(segmentInterval);
+                segmentInterval = null;
+            }
+            
+            // 2. إيقاف رسم Canvas
+            if (drawInterval) {
+                clearInterval(drawInterval);
+                drawInterval = null;
+            }
+            
+            // 3. إيقاف التسجيل وانتظار آخر قطعة
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 log('إيقاف التسجيل...');
                 
-                // انتظار رفع آخر قطعة
-                mediaRecorder.onstop = async () => {
-                    log('انتظار رفع آخر قطعة (5 ثوان)...');
-                    await new Promise(r => setTimeout(r, 5000));
-                    
-                    // إرسال طلب الدمج
-                    try {
-                        log('بدء الدمج للمنافسة: ' + competitionId);
-                        const res = await fetch(ffmpegUrl + '/finalize.php', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ competition_id: competitionId })
-                        });
-                        const result = await res.json();
-                        if (result.success) {
-                            log('🎬 الفيديو: ' + result.vod_url, 'success');
-                        } else {
-                            log('خطأ في الدمج: ' + result.error, 'error');
-                        }
-                    } catch (err) {
-                        log('خطأ في finalize: ' + err.message, 'error');
-                    }
-                };
-                
-                mediaRecorder.stop();
+                await new Promise(resolve => {
+                    mediaRecorder.onstop = resolve;
+                    mediaRecorder.stop();
+                });
             }
             mediaRecorder = null;
             
+            // 4. انتظار اكتمال طابور الرفع
+            log('انتظار اكتمال الرفع (' + uploadQueue.length + ' قطع متبقية)...');
+            while (uploadQueue.length > 0 || isUploading) {
+                await new Promise(r => setTimeout(r, 500));
+            }
+            
+            // 5. تأخير إضافي للتأكد
+            log('انتظار 3 ثوان...');
+            await new Promise(r => setTimeout(r, 3000));
+            
+            // 6. طلب الدمج
+            try {
+                log('بدء الدمج للمنافسة: ' + competitionId);
+                const res = await fetch(ffmpegUrl + '/finalize.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ competition_id: competitionId })
+                });
+                const result = await res.json();
+                if (result.success) {
+                    log('🎬 الفيديو: ' + result.vod_url, 'success');
+                } else {
+                    log('خطأ في الدمج: ' + result.error, 'error');
+                }
+            } catch (err) {
+                log('خطأ في finalize: ' + err.message, 'error');
+            }
+            
+            // 7. إيقاف polling
             if (pollingInterval) {
                 clearInterval(pollingInterval);
                 pollingInterval = null;
             }
             
+            // 8. إغلاق WebRTC
             if (pc) {
                 pc.close();
                 pc = null;
             }
             
+            // 9. إيقاف streams
             if (localStream) {
                 localStream.getTracks().forEach(t => t.stop());
                 localStream = null;
             }
             
+            if (remoteStream) {
+                remoteStream.getTracks().forEach(t => t.stop());
+                remoteStream = null;
+            }
+            
+            // 10. تنظيف UI
             document.getElementById('localVideo').srcObject = null;
             document.getElementById('remoteVideo').srcObject = null;
             
             updateStatus('غير متصل', 'gray');
-            log('تم الإنهاء ✓', 'success');
+            log('تم الإنهاء ✓ (قطع مسقطة: ' + droppedChunks + ')', 'success');
         }
         
         // Init
