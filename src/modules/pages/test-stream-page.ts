@@ -1170,30 +1170,81 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
     </div>
     
     <script>
-        // ===== إعدادات =====
-        const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
-        const videoPlayer = document.getElementById('videoPlayer');
-        const modeBadge = document.getElementById('modeBadge');
-        
- 
-    async start() {
-        await this.loadPlaylist();
-        if (!this.playlist || this.playlist.chunks.length === 0) {
-            throw new Error('No chunks available');
-        }
-        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-        if (this.playlist.extension === 'webm' && isSafari) {
-            throw new Error('Safari does not support WebM chunks');
-        }
-        if (this.config.mode === 'vod') {
-            await this.startMSEPlayback();
-        } else {
-            await this.startSequentialPlayback();
-        }
-        this.isPlaying = true;
+    // ===== إعدادات =====
+    const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
+    const videoPlayer = document.getElementById('videoPlayer');
+    const modeBadge = document.getElementById('modeBadge');
+    // قراءة رقم المنافسة من URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCompId = urlParams.get('comp');
+    if (urlCompId) {
+        document.getElementById('compIdInput').value = urlCompId;
     }
-    async loadPlaylist() {
-        const url = \`\${this.config.serverUrl}/playlist.php?id=\${this.config.competitionId}\`;
+    // ===== Logging =====
+    function log(msg, type = 'info') {
+        const logEl = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        const div = document.createElement('div');
+        div.className = 'log-entry log-' + type;
+        div.textContent = '[' + time + '] ' + msg;
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+        while (logEl.children.length > 100) {
+            logEl.removeChild(logEl.firstChild);
+        }
+    }
+    function updateStatus(text, color) {
+        document.getElementById('status').innerHTML =
+            '<span class="text-' + color + '-400"><i class="fas fa-circle mr-2"></i>' + text + '</span>';
+    }
+    function setMode(mode, text) {
+        modeBadge.classList.remove('hidden', 'mode-hls', 'mode-mse', 'mode-vod');
+        if (mode === 'hls') {
+            modeBadge.classList.add('mode-hls', 'pulse');
+            modeBadge.innerHTML = '<i class="fas fa-broadcast-tower mr-1"></i>HLS';
+        } else if (mode === 'mse') {
+            modeBadge.classList.add('mode-mse', 'pulse');
+            modeBadge.innerHTML = '<i class="fas fa-puzzle-piece mr-1"></i>MSE';
+        } else if (mode === 'vod') {
+            modeBadge.classList.add('mode-vod');
+            modeBadge.innerHTML = '<i class="fas fa-film mr-1"></i>VOD';
+        } else {
+            modeBadge.classList.add('hidden');
+        }
+    }
+    // ===== ChunkPlayer Class =====
+    class ChunkPlayer {
+        constructor(config) {
+            this.config = {
+                serverUrl: 'https://maelsh.pro/ffmpeg',
+                mode: 'live',
+                ...config
+            };
+            this.video = config.videoElement;
+            this.playlist = null;
+            this.currentChunkIndex = 0;
+            this.isPlaying = false;
+            this.mediaSource = null;
+            this.sourceBuffer = null;
+        }
+        async start() {
+            await this.loadPlaylist();
+            if (!this.playlist || this.playlist.chunks.length === 0) {
+                throw new Error('No chunks available');
+            }
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            if (this.playlist.extension === 'webm' && isSafari) {
+                throw new Error('Safari does not support WebM chunks');
+            }
+            if (this.config.mode === 'vod') {
+                await this.startMSEPlayback();
+            } else {
+                await this.startSequentialPlayback();
+            }
+            this.isPlaying = true;
+        }
+        async loadPlaylist() {
+            const url = \`\${this.config.serverUrl}/playlist.php?id=\${this.config.competitionId}\`;
                 const res = await fetch(url);
                 if (!res.ok) throw new Error('Failed to load playlist');
                 this.playlist = await res.json();
@@ -1302,6 +1353,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                 this.sourceBuffer = null;
             }
         }
+        
         // ===== Viewer State =====
         let player = null;
         let compId = null;
@@ -1380,10 +1432,10 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         
         // ===== تهيئة =====
         window.addEventListener('beforeunload', stopStream);
-        log('🎬 صفحة المشاهد جاهزة - ChunkPlayer inline');
+        log('🎬 صفحة المشاهد جاهزة - ChunkPlayer');
         updateStatus('أدخل رقم المنافسة', 'blue');
         setMode('idle');
-    </script>
+</script>
 </body>
 </html>    `;
 
