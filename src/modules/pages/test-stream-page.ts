@@ -1306,7 +1306,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         
         // ===== HLS Player =====
         function tryHLS() {
-            const hlsUrl = ffmpegUrl + '/storage/live/match_' + compId + '/playlist.m3u8';
+            const hlsUrl = ffmpegUrl + '/stream.php?path=live/match_' + compId + '/playlist.m3u8';
             log('📡 محاولة HLS: ' + hlsUrl);
             
             hls = new Hls({
@@ -1346,7 +1346,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         }
         
         function tryNativeHLS() {
-            const hlsUrl = ffmpegUrl + '/storage/live/match_' + compId + '/playlist.m3u8';
+            const hlsUrl = ffmpegUrl + '/stream.php?path=live/match_' + compId + '/playlist.m3u8';
             log('📡 Safari HLS: ' + hlsUrl);
             
             videoPlayer.src = hlsUrl;
@@ -1453,7 +1453,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         
         async function fetchChunk(index) {
             const paddedIndex = String(index).padStart(4, '0');
-            const url = ffmpegUrl + '/storage/live/match_' + compId + '/chunk_' + paddedIndex + '.webm';
+            const url = ffmpegUrl + '/stream.php?path=live/match_' + compId + '/chunk_' + paddedIndex + '.webm';
             
             try {
                 const res = await fetch(url);
@@ -1505,7 +1505,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             
             stopStream();
             
-            const vodUrl = ffmpegUrl + '/storage/vod/match_' + cId + '.mp4';
+            const vodUrl = ffmpegUrl + '/stream.php?path=vod/match_' + cId + '.mp4';
             log('📼 تحميل التسجيل: match_' + cId + '.mp4');
             updateStatus('جاري تحميل التسجيل...', 'yellow');
             setMode('vod', 'تسجيل VOD');
