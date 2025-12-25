@@ -1161,7 +1161,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         <div class="mb-4 text-center">
             <label class="text-sm text-gray-300 ml-2">رقم المنافسة:</label>
             <input type="number" id="compIdInput" class="bg-gray-700 text-white px-3 py-2 rounded-lg w-40 text-center font-mono" placeholder="أدخل الرقم">
-            <button onclick="startHybridStream()" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition mr-2">
+            <button onclick="startMSEStream()" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition mr-2">
                 <i class="fas fa-play mr-1"></i>مباشر
             </button>
             <button onclick="loadVOD()" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition mr-2">
@@ -1276,135 +1276,65 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             document.getElementById('statsInfo').textContent = stats;
         }
         
-        // ===== البث الهجين (Hybrid Stream) =====
-        async function startHybridStream() {
+        
+        // ===== البث المباشر (MSE → HLS Fallback) =====
+        async function startMSEStream() {
             compId = document.getElementById('compIdInput').value.trim();
             if (!compId) {
                 updateStatus('أدخل رقم المنافسة!', 'red');
                 return;
             }
             
-            // إيقاف أي بث سابق
             stopStream();
-            
             history.replaceState(null, '', window.location.pathname + '?comp=' + compId);
-            log('🚀 بدء البث الهجين للمنافسة: ' + compId);
-            updateStatus('جاري المحاولة بـ HLS...', 'yellow');
+            log('🚀 بدء البث للمنافسة: ' + compId);
             
-            // المحاولة الأولى: HLS
-            if (Hls.isSupported()) {
-                tryHLS();
-            } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                // Safari native HLS
-                tryNativeHLS();
-            } else {
-                // المتصفح لا يدعم HLS، انتقل لـ MSE مباشرة
-                log('⚠️ HLS غير مدعوم، انتقال لـ MSE', 'warn');
+            // محاولة MSE أولاً
+            if (window.MediaSource && MediaSource.isTypeSupported('video/webm; codecs="vp8, opus"')) {
+                log('✅ المتصفح يدعم MSE WebM');
+                updateStatus('جاري تهيئة MSE...', 'yellow');
                 initMSE();
+            } 
+            // Fallback لـ HLS (Safari/iPhone)
+            else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                log('⚠️ MSE غير مدعوم، محاولة HLS...', 'warn');
+                updateStatus('جاري تهيئة HLS...', 'yellow');
+                tryNativeHLS();
+            } 
+            // لا يوجد دعم لأي منهما
+            else {
+                updateStatus('المتصفح لا يدعم البث المباشر', 'red');
+                log('❌ لا MSE ولا HLS مدعومان!', 'error');
+                log('💡 جرّب زر "تسجيل" بعد انتهاء البث', 'info');
             }
         }
         
-        // ===== HLS Player =====
-        function tryHLS() {
-            const hlsUrl = ffmpegUrl + '/stream.php?path=live/match_' + compId + '/playlist.m3u8';
-            log('📡 محاولة HLS: ' + hlsUrl);
-            
-            hls = new Hls({
-                liveSyncDuration: 3,
-                liveMaxLatencyDuration: 10,
-                manifestLoadingTimeOut: 8000,
-                manifestLoadingMaxRetry: 2,
-                levelLoadingTimeOut: 8000,
-                fragLoadingTimeOut: 10000
-            });
-            
-            hls.loadSource(hlsUrl);
-            hls.attachMedia(videoPlayer);
-            
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                setMode('hls', 'HLS مباشر');
-                updateStatus('البث مباشر (HLS) ✓', 'green');
-                log('✅ HLS يعمل!', 'success');
-                videoPlayer.play().catch(() => {});
-            });
-            
-            hls.on(Hls.Events.FRAG_LOADED, () => {
-                updateStats();
-            });
-            
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                handleHLSError(data);
-            });
-            
-            // Timeout للانتظار
-            setTimeout(() => {
-                if (currentMode !== 'hls' && currentMode !== 'mse') {
-                    log('⏰ انتهى انتظار HLS، انتقال لـ MSE', 'warn');
-                    switchToMSE();
-                }
-            }, 10000);
-        }
-        
+        // ===== HLS Native (Safari only) =====
         function tryNativeHLS() {
-            const hlsUrl = ffmpegUrl + '/stream.php?path=live/match_' + compId + '/playlist.m3u8';
+            const hlsUrl = ffmpegUrl + '/storage/live/match_' + compId + '/playlist.m3u8';
             log('📡 Safari HLS: ' + hlsUrl);
             
             videoPlayer.src = hlsUrl;
+            setMode('hls', 'HLS (Safari)');
             
             videoPlayer.onloadedmetadata = () => {
-                setMode('hls', 'HLS (Safari)');
-                updateStatus('البث مباشر (HLS Safari) ✓', 'green');
-                log('✅ Safari HLS يعمل!', 'success');
+                updateStatus('البث مباشر (HLS) ✓', 'green');
+                log('✅ HLS متصل', 'success');
             };
             
             videoPlayer.onerror = () => {
-                log('❌ Safari HLS فشل', 'error');
-                // Safari لا يدعم MSE مع WebM، عرض رسالة
-                updateStatus('البث غير متاح لـ Safari حالياً', 'red');
+                log('❌ HLS فشل - البث المباشر غير متاح', 'error');
+                log('⚠️ السبب: WebM chunks غير متوافقة مع HLS', 'warn');
+                log('💡 استخدم "تسجيل" بعد انتهاء البث', 'info');
+                updateStatus('البث المباشر غير متاح - استخدم VOD', 'red');
+                setMode('idle');
             };
-        }
-        
-        function handleHLSError(data) {
-            log('⚠️ HLS Error: ' + data.details, 'warn');
-            
-            // أخطاء تستحق التحويل
-            const fatalErrors = ['fragParsingError', 'manifestLoadError', 'manifestParsingError'];
-            
-            if (fatalErrors.includes(data.details)) {
-                hlsErrorCount++;
-                log('📊 أخطاء HLS: ' + hlsErrorCount + '/' + HLS_ERROR_THRESHOLD, 'warn');
-                
-                if (hlsErrorCount >= HLS_ERROR_THRESHOLD) {
-                    log('🔄 تجاوز حد الأخطاء، انتقال لـ MSE...', 'warn');
-                    switchToMSE();
-                }
-            }
-            
-            if (data.fatal) {
-                log('💀 خطأ قاتل في HLS، انتقال لـ MSE', 'error');
-                switchToMSE();
-            }
-            
-            updateStats();
-        }
-        
-        function switchToMSE() {
-            // إيقاف HLS
-            if (hls) {
-                hls.destroy();
-                hls = null;
-            }
-            
-            hlsErrorCount = 0;
-            initMSE();
         }
         
         // ===== MSE Player =====
         function initMSE() {
             log('🔧 تهيئة MSE WebM...', 'info');
-            updateStatus('انتقال لوضع التوافق (MSE)...', 'yellow');
             
-            // التحقق من دعم MSE
             if (!window.MediaSource) {
                 updateStatus('المتصفح لا يدعم MSE', 'red');
                 log('❌ MSE غير مدعوم!', 'error');
@@ -1413,12 +1343,11 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             
             const mimeType = 'video/webm; codecs="vp8, opus"';
             if (!MediaSource.isTypeSupported(mimeType)) {
-                updateStatus('المتصفح لا يدعم WebM', 'red');
+                updateStatus('المتصفح لا يدعم WebM/VP8', 'red');
                 log('❌ WebM/VP8 غير مدعوم!', 'error');
                 return;
             }
             
-            // إنشاء MediaSource
             mediaSource = new MediaSource();
             videoPlayer.src = URL.createObjectURL(mediaSource);
             
@@ -1439,10 +1368,9 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                         log('❌ SourceBuffer Error', 'error');
                     });
                     
-                    setMode('mse', 'MSE (وضع التوافق)');
-                    updateStatus('البث مباشر (MSE) ✓ - وضع التوافق', 'green');
+                    setMode('mse', 'MSE مباشر');
+                    updateStatus('البث مباشر ✓', 'green');
                     
-                    // بدء جلب القطع
                     startMSEPolling();
                     
                 } catch (e) {
@@ -1457,7 +1385,18 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             
             try {
                 const res = await fetch(url);
-                if (!res.ok) return null;
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        // محاولة قراءة تفاصيل الخطأ
+                        try {
+                            const error = await res.json();
+                            if (index === 0) { // لوج فقط للقطعة الأولى
+                                log('❌ 404: ' + JSON.stringify(error), 'error');
+                            }
+                        } catch {}
+                    }
+                    return null;
+                }
                 return await res.arrayBuffer();
             } catch (e) {
                 return null;
@@ -1472,6 +1411,11 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             const data = chunkQueue.shift();
             
             try {
+                // ⭐ الحل لمشكلة التجمد: ضبط timestampOffset
+                if (videoPlayer.buffered.length > 0) {
+                    sourceBuffer.timestampOffset = videoPlayer.buffered.end(0);
+                }
+                
                 sourceBuffer.appendBuffer(data);
             } catch (e) {
                 log('❌ Append error: ' + e.message, 'error');
@@ -1480,19 +1424,19 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         }
         
         function startMSEPolling() {
-            log('🔄 بدء جلب القطع...', 'info');
-            
             pollInterval = setInterval(async () => {
                 const nextIndex = lastChunkIndex + 1;
                 const data = await fetchChunk(nextIndex);
                 
                 if (data) {
-                    chunkQueue.push(data);
                     lastChunkIndex = nextIndex;
-                    log('✓ قطعة ' + nextIndex + ' (' + Math.round(data.byteLength/1024) + ' KB)', 'success');
-                    appendNextChunk();
+                    chunkQueue.push(data);
+                    
+                    if (!isAppending) {
+                        appendNextChunk();
+                    }
                 }
-            }, 3000);
+            }, 3000); // كل 3 ثواني
         }
         
         // ===== VOD Player =====
@@ -1519,18 +1463,14 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             };
             
             videoPlayer.onerror = () => {
-                updateStatus('التسجيل غير متاح', 'red');
-                log('❌ التسجيل غير موجود', 'error');
-                setMode('idle');
+                updateStatus('فشل تحميل التسجيل', 'red');
+                log('❌ لم يتم العثور على التسجيل', 'error');
             };
         }
         
         // ===== إيقاف البث =====
         function stopStream() {
-            if (hls) {
-                hls.destroy();
-                hls = null;
-            }
+            log('⏹️ إيقاف البث...');
             
             if (pollInterval) {
                 clearInterval(pollInterval);
@@ -1538,34 +1478,35 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             }
             
             if (mediaSource && mediaSource.readyState === 'open') {
-                try { mediaSource.endOfStream(); } catch (e) {}
+                try {
+                    mediaSource.endOfStream();
+                } catch (e) {}
             }
             
-            mediaSource = null;
-            sourceBuffer = null;
+            videoPlayer.src = '';
+            videoPlayer.load();
+            
             chunkQueue = [];
             isAppending = false;
             lastChunkIndex = -1;
-            hlsErrorCount = 0;
+            mediaSource = null;
+            sourceBuffer = null;
             
-            videoPlayer.src = '';
             setMode('idle');
-            updateStatus('جاهز للبث', 'blue');
-            log('⏹️ تم إيقاف البث', 'info');
+            updateStatus('متوقف', 'gray');
         }
         
         // ===== تهيئة =====
         window.addEventListener('beforeunload', stopStream);
         
-        log('🎬 صفحة المشاهد الهجين جاهزة');
-        log('📝 HLS أولاً → MSE احتياطي');
+        log('🎬 صفحة المشاهد جاهزة');
+        log('📝 MSE أولاً → HLS للـ Safari');
         updateStatus('أدخل رقم المنافسة', 'blue');
         setMode('idle');
     </script>
 </body>
 </html>
     `;
-
 
     return c.html(html);
 };
