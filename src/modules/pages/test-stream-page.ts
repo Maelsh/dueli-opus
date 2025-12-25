@@ -693,29 +693,10 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 await new Promise(r => setTimeout(r, 500));
             }
             
-            // 5. تأخير إضافي للتأكد
-            log('انتظار 3 ثوان...');
-            await new Promise(r => setTimeout(r, 3000));
+            // 5. انتهى! Chunks محفوظة للأبد
+            log('✅ اكتمل الرفع - القطع محفوظة على السيرفر', 'success');
             
-            // 6. طلب الدمج
-            try {
-                log('بدء الدمج للمنافسة: ' + competitionId);
-                const res = await fetch(ffmpegUrl + '/finalize.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ competition_id: competitionId })
-                });
-                const result = await res.json();
-                if (result.success) {
-                    log('🎬 الفيديو: ' + result.vod_url, 'success');
-                } else {
-                    log('خطأ في الدمج: ' + result.error, 'error');
-                }
-            } catch (err) {
-                log('خطأ في finalize: ' + err.message, 'error');
-            }
-            
-            // 7. إيقاف polling
+            // 6. إيقاف polling
             if (pollingInterval) {
                 clearInterval(pollingInterval);
                 pollingInterval = null;
