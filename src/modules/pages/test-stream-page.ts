@@ -1270,12 +1270,16 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                 mode: 'live',
                 ...config
             };
-            // ⭐ Double buffering setup
+            // ⭐ Double buffering للـ sequential mode
             this.players = [
                 document.getElementById('videoPlayer'),
                 document.getElementById('videoPlayer2')
             ];
             this.activeIndex = 0;
+            
+            // ⭐ للـ MSE mode و stop()
+            this.video = this.players[0];
+            
             this.playlist = null;
             this.currentChunkIndex = 0;
             this.isPlaying = false;
