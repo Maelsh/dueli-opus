@@ -53,7 +53,7 @@ export class VideoCompositor {
 
     constructor(config: VideoCompositorConfig) {
         this.config = {
-            chunkDuration: 10000,
+            chunkDuration: 5000, // ⭐ 5s بدلاً من 10s (تقليل latency)
             serverUrl: 'https://maelsh.pro/ffmpeg',
             ...config
         };
@@ -92,7 +92,7 @@ export class VideoCompositor {
         const options = [
             'video/mp4; codecs="avc1.42E01E, mp4a.40.2"', // Safari & Modern Chrome
             'video/mp4',                                   // Generic MP4
-            'video/webm; codecs=vp9,opus',                 // Best WebM
+            'video/webm; codecs=vp9,opus',                  // Best WebM
             'video/webm; codecs=vp8,opus',                 // Fallback WebM
             'video/webm'                                   // Basic WebM
         ];
@@ -110,6 +110,12 @@ export class VideoCompositor {
             this.mimeType = 'video/webm';
             this.fileExtension = 'webm';
             console.warn('[VideoCompositor] No preferred format supported, using default webm');
+        }
+
+        // ⭐ تحذير إذا WebM - Safari لن يشغلها
+        if (this.fileExtension === 'webm') {
+            console.warn('⚠️ Recording in WebM - Safari/iPhone viewers will NOT be able to watch!');
+            console.warn('💡 Recommend using Chrome/Edge for hosting to get MP4 format');
         }
 
         // Update uploader with detected extension

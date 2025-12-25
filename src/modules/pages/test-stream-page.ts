@@ -1258,236 +1258,231 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         }
         
         
-        // ===== البث المباشر (MSE → HLS Fallback) =====
+// ===== ChunkPlayer Class (مدمج inline - بدون imports) =====
+class ChunkPlayer {
+    constructor(config) {
+        this.config = {
+            serverUrl: 'https://maelsh.pro/ffmpeg',
+            mode: 'live',
+            ...config
+        };
+        this.video = config.videoElement;
+        this.playlist = null;
+        this.currentChunkIndex = 0;
+        this.isPlaying = false;
+        this.mediaSource = null;
+        this.sourceBuffer = null;
+    }
+    async start() {
+        await this.loadPlaylist();
+        if (!this.playlist || this.playlist.chunks.length === 0) {
+            throw new Error('No chunks available');
+        }
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        if (this.playlist.extension === 'webm' && isSafari) {
+            throw new Error('Safari does not support WebM chunks');
+        }
+        if (this.config.mode === 'vod') {
+            await this.startMSEPlayback();
+        } else {
+            await this.startSequentialPlayback();
+        }
+        this.isPlaying = true;
+    }
+    async loadPlaylist() {
+        const url = \`\${this.config.serverUrl}/playlist.php?id=\${this.config.competitionId}\`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('Failed to load playlist');
+                this.playlist = await res.json();
+                log(\`تم تحميل \${this.playlist.chunks.length} قطعة (\${this.playlist.extension})\`);
+            }
+            async startSequentialPlayback() {
+                this.config.onStatus?.('▶️ جار التشغيل...');
+                await this.playNextChunk();
+            }
+            async playNextChunk() {
+                if (!this.playlist) return;
+                if (this.currentChunkIndex >= this.playlist.chunks.length) {
+                    this.config.onStatus?.('⏸️ انتظار قطع جديدة...');
+                    setTimeout(() => this.checkForNewChunks(), 2000);
+                    return;
+                }
+                const chunk = this.playlist.chunks[this.currentChunkIndex];
+                this.config.onChunkChange?.(this.currentChunkIndex + 1, this.playlist.chunks.length);
+                try {
+                    this.video.src = chunk.url;
+                    await this.video.play();
+                    this.video.onended = () => {
+                        this.currentChunkIndex++;
+                        this.playNextChunk();
+                    };
+                } catch (error) {
+                    log('خطأ في التشغيل: ' + error.message, 'error');
+                    setTimeout(() => this.playNextChunk(), 1000);
+                }
+            }
+            async checkForNewChunks() {
+                if (!this.isPlaying) return;
+                try {
+                    await this.loadPlaylist();
+                    if (this.currentChunkIndex < this.playlist.chunks.length) {
+                        this.playNextChunk();
+                    } else {
+                        setTimeout(() => this.checkForNewChunks(), 2000);
+                    }
+                } catch (error) {
+                    setTimeout(() => this.checkForNewChunks(), 3000);
+                }
+            }
+            async startMSEPlayback() {
+                if (!this.playlist) return;
+                const ext = this.playlist.extension;
+                const mimeType = ext === 'mp4' 
+                    ? 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"'
+                    : 'video/webm; codecs="vp8, opus"';
+                if (!MediaSource.isTypeSupported(mimeType)) {
+                    log('MSE غير مدعوم، استخدام sequential', 'warn');
+                    return this.startSequentialPlayback();
+                }
+                this.mediaSource = new MediaSource();
+                this.video.src = URL.createObjectURL(this.mediaSource);
+                this.mediaSource.addEventListener('sourceopen', async () => {
+                    try {
+                        this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
+                        this.config.onStatus?.('⬇️ جار تحميل القطع...');
+                        for (let i = 0; i < this.playlist.chunks.length; i++) {
+                            await this.appendChunk(i);
+                            this.config.onChunkChange?.(i + 1, this.playlist.chunks.length);
+                        }
+                        this.mediaSource.endOfStream();
+                        this.config.onStatus?.('✅ جاهز للتشغيل');
+                        this.video.play();
+                    } catch (error) {
+                        this.config.onError?.(error);
+                    }
+                });
+            }
+            async appendChunk(index) {
+                if (!this.sourceBuffer || !this.playlist) return;
+                const chunk = this.playlist.chunks[index];
+                const res = await fetch(chunk.url);
+                const arrayBuffer = await res.arrayBuffer();
+                return new Promise((resolve, reject) => {
+                    if (!this.sourceBuffer) {
+                        reject(new Error('No source buffer'));
+                        return;
+                    }
+                    const doAppend = () => {
+                        try {
+                            this.sourceBuffer.appendBuffer(arrayBuffer);
+                            this.sourceBuffer.addEventListener('updateend', () => resolve(), { once: true });
+                            this.sourceBuffer.addEventListener('error', () => reject(new Error('Buffer error')), { once: true });
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+                    if (this.sourceBuffer.updating) {
+                        this.sourceBuffer.addEventListener('updateend', doAppend, { once: true });
+                    } else {
+                        doAppend();
+                    }
+                });
+            }
+            stop() {
+                this.isPlaying = false;
+                this.video.pause();
+                this.video.src = '';
+                if (this.mediaSource && this.mediaSource.readyState === 'open') {
+                    this.mediaSource.endOfStream();
+                }
+                this.mediaSource = null;
+                this.sourceBuffer = null;
+            }
+        }
+        // ===== Viewer State =====
+        let player = null;
+        let compId = null;
+        
+        // ===== البث المباشر =====
         async function startMSEStream() {
             compId = document.getElementById('compIdInput').value.trim();
             if (!compId) {
                 updateStatus('أدخل رقم المنافسة!', 'red');
                 return;
             }
-            
             stopStream();
             history.replaceState(null, '', window.location.pathname + '?comp=' + compId);
-            log('🚀 بدء البث للمنافسة: ' + compId);
-            
-            // محاولة MSE أولاً
-            if (window.MediaSource && MediaSource.isTypeSupported('video/webm; codecs="vp8, opus"')) {
-                log('✅ المتصفح يدعم MSE WebM');
-                updateStatus('جاري تهيئة MSE...', 'yellow');
-                initMSE();
-            } 
-            // Fallback لـ HLS (Safari/iPhone)
-            else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                log('⚠️ MSE غير مدعوم، محاولة HLS...', 'warn');
-                updateStatus('جاري تهيئة HLS...', 'yellow');
-                tryNativeHLS();
-            } 
-            // لا يوجد دعم لأي منهما
-            else {
-                updateStatus('المتصفح لا يدعم البث المباشر', 'red');
-                log('❌ لا MSE ولا HLS مدعومان!', 'error');
-                log('💡 جرّب زر "تسجيل" بعد انتهاء البث', 'info');
-            }
-        }
-        
-        // ===== HLS Native (Safari only) =====
-        function tryNativeHLS() {
-            const hlsUrl = ffmpegUrl + '/storage/live/match_' + compId + '/playlist.m3u8';
-            log('📡 Safari HLS: ' + hlsUrl);
-            
-            videoPlayer.src = hlsUrl;
-            setMode('hls', 'HLS (Safari)');
-            
-            videoPlayer.onloadedmetadata = () => {
-                updateStatus('البث مباشر (HLS) ✓', 'green');
-                log('✅ HLS متصل', 'success');
-            };
-            
-            videoPlayer.onerror = () => {
-                log('❌ HLS فشل - البث المباشر غير متاح', 'error');
-                log('⚠️ السبب: WebM chunks غير متوافقة مع HLS', 'warn');
-                log('💡 استخدم "تسجيل" بعد انتهاء البث', 'info');
-                updateStatus('البث المباشر غير متاح - استخدم VOD', 'red');
-                setMode('idle');
-            };
-        }
-        
-        // ===== MSE Player =====
-        function initMSE() {
-            log('🔧 تهيئة MSE WebM...', 'info');
-            
-            if (!window.MediaSource) {
-                updateStatus('المتصفح لا يدعم MSE', 'red');
-                log('❌ MSE غير مدعوم!', 'error');
-                return;
-            }
-            
-            const mimeType = 'video/webm; codecs="vp8, opus"';
-            if (!MediaSource.isTypeSupported(mimeType)) {
-                updateStatus('المتصفح لا يدعم WebM/VP8', 'red');
-                log('❌ WebM/VP8 غير مدعوم!', 'error');
-                return;
-            }
-            
-            mediaSource = new MediaSource();
-            videoPlayer.src = URL.createObjectURL(mediaSource);
-            
-            mediaSource.addEventListener('sourceopen', () => {
-                log('✅ MediaSource جاهز', 'success');
-                
-                try {
-                    sourceBuffer = mediaSource.addSourceBuffer(mimeType);
-                    sourceBuffer.mode = 'sequence';
-                    
-                    sourceBuffer.addEventListener('updateend', () => {
-                        isAppending = false;
-                        appendNextChunk();
-                        updateStats();
-                    });
-                    
-                    sourceBuffer.addEventListener('error', (e) => {
-                        log('❌ SourceBuffer Error', 'error');
-                    });
-                    
-                    setMode('mse', 'MSE مباشر');
-                    updateStatus('البث مباشر ✓', 'green');
-                    
-                    startMSEPolling();
-                    
-                } catch (e) {
-                    log('❌ خطأ SourceBuffer: ' + e.message, 'error');
-                }
+            player = new ChunkPlayer({
+                competitionId: compId,
+                videoElement: videoPlayer,
+                mode: 'live',
+                onChunkChange: (index, total) => {
+                    document.getElementById('statsInfo').textContent = \`القطعة \${index}/\${total}\`;
+                },
+                onStatus: (status) => updateStatus(status, 'yellow'),
+                onError: (error) => log('خطأ: ' + error.message, 'error')
             });
-        }
-        
-        async function fetchChunk(index) {
-            const paddedIndex = String(index).padStart(4, '0');
-            const url = ffmpegUrl + '/stream.php?path=live/match_' + compId + '/chunk_' + paddedIndex + '.webm';
-            
             try {
-                const res = await fetch(url);
-                if (!res.ok) {
-                    if (res.status === 404) {
-                        // محاولة قراءة تفاصيل الخطأ
-                        try {
-                            const error = await res.json();
-                            if (index === 0) { // لوج فقط للقطعة الأولى
-                                log('❌ 404: ' + JSON.stringify(error), 'error');
-                            }
-                        } catch {}
-                    }
-                    return null;
-                }
-                return await res.arrayBuffer();
-            } catch (e) {
-                return null;
+                log('بدء البث المباشر للمنافسة: ' + compId);
+                updateStatus('جار التحميل...', 'yellow');
+                await player.start();
+                updateStatus('البث مباشر ●', 'green');
+                setMode('mse', 'Sequential Live');
+            } catch (error) {
+                log('فشل بدء البث: ' + error.message, 'error');
+                updateStatus('خطأ', 'red');
             }
         }
         
-        function appendNextChunk() {
-            if (isAppending || chunkQueue.length === 0 || !sourceBuffer) return;
-            if (sourceBuffer.updating) return;
-            
-            isAppending = true;
-            const data = chunkQueue.shift();
-            
-            try {
-                // ⭐ الحل لمشكلة التجمد: ضبط timestampOffset
-                if (videoPlayer.buffered.length > 0) {
-                    sourceBuffer.timestampOffset = videoPlayer.buffered.end(0);
-                }
-                
-                sourceBuffer.appendBuffer(data);
-            } catch (e) {
-                log('❌ Append error: ' + e.message, 'error');
-                isAppending = false;
-            }
-        }
-        
-        function startMSEPolling() {
-            pollInterval = setInterval(async () => {
-                const nextIndex = lastChunkIndex + 1;
-                const data = await fetchChunk(nextIndex);
-                
-                if (data) {
-                    lastChunkIndex = nextIndex;
-                    chunkQueue.push(data);
-                    
-                    if (!isAppending) {
-                        appendNextChunk();
-                    }
-                }
-            }, 3000); // كل 3 ثواني
-        }
-        
-        // ===== VOD Player =====
-        function loadVOD() {
-            const cId = document.getElementById('compIdInput').value.trim();
-            if (!cId) {
+        // ===== VOD =====
+        async function loadVOD() {
+            compId = document.getElementById('compIdInput').value.trim();
+            if (!compId) {
                 updateStatus('أدخل رقم المنافسة!', 'red');
                 return;
             }
-            
             stopStream();
-            
-            const vodUrl = ffmpegUrl + '/stream.php?path=vod/match_' + cId + '.mp4';
-            log('📼 تحميل التسجيل: match_' + cId + '.mp4');
-            updateStatus('جاري تحميل التسجيل...', 'yellow');
-            setMode('vod', 'تسجيل VOD');
-            
-            videoPlayer.src = vodUrl;
-            videoPlayer.load();
-            
-            videoPlayer.onloadeddata = () => {
-                updateStatus('التسجيل جاهز ✓', 'green');
-                log('✅ التسجيل جاهز - المدة: ' + Math.round(videoPlayer.duration) + 's', 'success');
-            };
-            
-            videoPlayer.onerror = () => {
-                updateStatus('فشل تحميل التسجيل', 'red');
-                log('❌ لم يتم العثور على التسجيل', 'error');
-            };
+            player = new ChunkPlayer({
+                competitionId: compId,
+                videoElement: videoPlayer,
+                mode: 'vod',
+                onChunkChange: (index, total) => {
+                    document.getElementById('statsInfo').textContent = \`القطعة \${index}/\${total}\`;
+                },
+                onStatus: (status) => updateStatus(status, 'purple'),
+                onError: (error) => log('خطأ: ' + error.message, 'error')
+            });
+            try {
+                log('تحميل التسجيل للمنافسة: ' + compId);
+                updateStatus('جار التحميل...', 'purple');
+                await player.start();
+                updateStatus('التسجيل جاهز', 'purple');
+                setMode('vod', 'MSE VOD');
+            } catch (error) {
+                log('فشل تحميل التسجيل: ' + error.message, 'error');
+                updateStatus('خطأ', 'red');
+            }
         }
         
-        // ===== إيقاف البث =====
+        // ===== Stop =====
         function stopStream() {
-            log('⏹️ إيقاف البث...');
-            
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
+            if (player) {
+                player.stop();
+                player = null;
             }
-            
-            if (mediaSource && mediaSource.readyState === 'open') {
-                try {
-                    mediaSource.endOfStream();
-                } catch (e) {}
-            }
-            
             videoPlayer.src = '';
-            videoPlayer.load();
-            
-            chunkQueue = [];
-            isAppending = false;
-            lastChunkIndex = -1;
-            mediaSource = null;
-            sourceBuffer = null;
-            
             setMode('idle');
-            updateStatus('متوقف', 'gray');
+            log('تم إيقاف التشغيل');
         }
         
         // ===== تهيئة =====
         window.addEventListener('beforeunload', stopStream);
-        
-        log('🎬 صفحة المشاهد جاهزة');
-        log('📝 MSE أولاً → HLS للـ Safari');
+        log('🎬 صفحة المشاهد جاهزة - ChunkPlayer inline');
         updateStatus('أدخل رقم المنافسة', 'blue');
         setMode('idle');
     </script>
 </body>
-</html>
-    `;
+</html>    `;
 
     return c.html(html);
 };
