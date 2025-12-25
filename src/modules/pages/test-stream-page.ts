@@ -514,38 +514,87 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             log('بدء التسجيل (المنافسة: ' + competitionId + ')');
             
-            // إنشاء Canvas بالجودة المحددة (side-by-side)
+            // إنشاء Canvas بدقة ثابتة 16:9 (كما اقترح Gemini)
+            const CANVAS_WIDTH = 1280;
+            const CANVAS_HEIGHT = 720;
+            
             const canvas = document.createElement('canvas');
-            canvas.width = currentQuality.width * 2; // مضاعف للـ side-by-side
-            canvas.height = currentQuality.height * 2;
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
             const ctx = canvas.getContext('2d');
             
             const localVideo = document.getElementById('localVideo');
             const remoteVideo = document.getElementById('remoteVideo');
             
-            // رسم الفيديوهين على Canvas باستخدام setInterval (يعمل بالخلفية)
-            function drawFrame() {
-                ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // ✨ Helper: رسم الفيديو بتناسب صحيح (بدون stretch)
+            function drawVideoProportional(ctx, video, x, y, maxWidth, maxHeight, bgColor = '#1a1a2e') {
+                // خلفية للمنطقة
+                ctx.fillStyle = bgColor;
+                ctx.fillRect(x, y, maxWidth, maxHeight);
                 
-                // الفيديو المحلي (يسار)
-                if (localVideo && localVideo.videoWidth > 0) {
-                    ctx.drawImage(localVideo, 0, 0, canvas.width / 2, canvas.height);
+                if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+                
+                const videoRatio = video.videoWidth / video.videoHeight;
+                const targetRatio = maxWidth / maxHeight;
+                
+                let drawW, drawH;
+                if (videoRatio > targetRatio) {
+                    // فيديو أعرض - نحدد بالعرض
+                    drawW = maxWidth;
+                    drawH = maxWidth / videoRatio;
+                } else {
+                    // فيديو أطول - نحدد بالارتفاع
+                    drawH = maxHeight;
+                    drawW = maxHeight * videoRatio;
                 }
+                
+                // توسيط الفيديو
+                const offsetX = x + (maxWidth - drawW) / 2;
+                const offsetY = y + (maxHeight - drawH) / 2;
+                
+                ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
+            }
+            
+            // 🎨 رسم الإطار
+            function drawFrame() {
+                // ═══ Layer 1: Background ═══
+                const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                gradient.addColorStop(0, '#0f0f1e');
+                gradient.addColorStop(1, '#1a1a2e');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                
+                // ═══ Layer 2: Videos (Proportional) ═══
+                // الفيديو المحلي (يسار)
+                drawVideoProportional(ctx, localVideo, 10, 80, (CANVAS_WIDTH/2) - 20, CANVAS_HEIGHT - 160, '#16213e');
                 
                 // الفيديو البعيد (يمين)
-                if (remoteVideo && remoteVideo.videoWidth > 0) {
-                    ctx.drawImage(remoteVideo, canvas.width / 2, 0, canvas.width / 2, canvas.height);
-                }
+                drawVideoProportional(ctx, remoteVideo, (CANVAS_WIDTH/2) + 10, 80, (CANVAS_WIDTH/2) - 20, CANVAS_HEIGHT - 160, '#1a2a3e');
                 
-                // تسميات
-                ctx.fillStyle = 'rgba(0,0,0,0.7)';
-                ctx.fillRect(5, canvas.height - 25, 50, 20);
-                ctx.fillRect(canvas.width / 2 + 5, canvas.height - 25, 60, 20);
+                // ═══ Layer 3: UI Overlay ═══
+                // شريط علوي
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, CANVAS_WIDTH, 70);
+                
+                // عنوان
+                ctx.font = 'bold 36px Arial';
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText('أنت', 15, canvas.height - 10);
-                ctx.fillText('المنافس', canvas.width / 2 + 10, canvas.height - 10);
+                ctx.textAlign = 'center';
+                ctx.fillText('🎮 Dueli Live', CANVAS_WIDTH/2, 45);
+                
+                // أسماءاللاعبين
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(20, CANVAS_HEIGHT - 70, 200, 50);
+                ctx.fillRect(CANVAS_WIDTH - 220, CANVAS_HEIGHT - 70, 200, 50);
+                
+                ctx.font = 'bold 22px Arial';
+                ctx.fillStyle = '#4ade80';
+                ctx.textAlign = 'left';
+                ctx.fillText('👤 أنت', 35, CANVAS_HEIGHT - 35);
+                
+                ctx.textAlign = 'right';
+                ctx.fillStyle = '#f87171';
+                ctx.fillText('المنافس 🎯', CANVAS_WIDTH - 35, CANVAS_HEIGHT - 35);
             }
             
             // setInterval بدلاً من requestAnimationFrame
@@ -1154,9 +1203,10 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         </div>
         
         <!-- Video Container -->
-        <div class="video-container aspect-video mb-4">
+        <div class="video-container aspect-video mb-4" style="position: relative;">
             <div id="modeBadge" class="mode-badge hidden"></div>
-            <video id="videoPlayer" controls autoplay playsinline class="w-full h-full"></video>
+            <video id="videoPlayer" controls autoplay playsinline class="w-full h-full" style="position: absolute; top: 0; left: 0; transition: opacity 0.4s ease;"></video>
+            <video id="videoPlayer2" controls playsinline class="w-full h-full" style="position: absolute; top: 0; left: 0; opacity: 0; transition: opacity 0.4s ease;"></video>
         </div>
         
         <!-- Log -->
@@ -1220,7 +1270,12 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                 mode: 'live',
                 ...config
             };
-            this.video = config.videoElement;
+            // ⭐ Double buffering setup
+            this.players = [
+                document.getElementById('videoPlayer'),
+                document.getElementById('videoPlayer2')
+            ];
+            this.activeIndex = 0;
             this.playlist = null;
             this.currentChunkIndex = 0;
             this.isPlaying = false;
@@ -1261,15 +1316,59 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                     setTimeout(() => this.checkForNewChunks(), 2000);
                     return;
                 }
+                
                 const chunk = this.playlist.chunks[this.currentChunkIndex];
                 this.config.onChunkChange?.(this.currentChunkIndex + 1, this.playlist.chunks.length);
+                
+                // ═══ Double Buffering ═══
+                const nextIndex = (this.activeIndex + 1) % 2;
+                const activePlayer = this.players[this.activeIndex];
+                const nextPlayer = this.players[nextIndex];
+                
                 try {
-                    this.video.src = chunk.url;
-                    await this.video.play();
-                    this.video.onended = () => {
+                    // حمّل القطعة التالية في buffer
+                    nextPlayer.src = chunk.url;
+                    nextPlayer.load();
+                    
+                    // شغّل القطعة الحالية
+                    activePlayer.play();
+                    
+                    // مراقبة نهاية القطعة
+                    activePlayer.ontimeupdate = () => {
+                        if (!activePlayer.duration) return;
+                        const timeLeft = activePlayer.duration - activePlayer.currentTime;
+                        
+                        // بدّل قبل النهاية بـ 0.5s
+                        if (timeLeft < 0.5 && timeLeft > 0) {
+                            nextPlayer.play().then(() => {
+                                // تبديل سلس
+                                nextPlayer.style.opacity = '1';
+                                activePlayer.style.opacity = '0';
+                                
+                                this.activeIndex = nextIndex;
+                                this.currentChunkIndex++;
+                                
+                                // تنظيف
+                                setTimeout(() => {
+                                    activePlayer.src = '';
+                                    activePlayer.load();
+                                }, 500);
+                                
+                                this.playNextChunk();
+                            }).catch(error => {
+                                log('خطأ في التشغيل: ' + error.message, 'error');
+                            });
+                            
+                            activePlayer.ontimeupdate = null;
+                        }
+                    };
+                    
+                    // Fallback
+                    activePlayer.onended = () => {
                         this.currentChunkIndex++;
                         this.playNextChunk();
                     };
+                    
                 } catch (error) {
                     log('خطأ في التشغيل: ' + error.message, 'error');
                     setTimeout(() => this.playNextChunk(), 1000);
