@@ -160,11 +160,19 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 cameraBtns = document.createElement('div');
                 cameraBtns.id = 'cameraButtons';
                 cameraBtns.className = 'flex flex-wrap gap-2 justify-center mb-4';
-                cameraBtns.innerHTML = 
-                    '<button onclick="window.useCamera(\'user\')" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">' +
-                    '<i class="fas fa-camera mr-2"></i>الكاميرا الأمامية</button>' +
-                    '<button onclick="window.useCamera(\'environment\')" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">' +
-                    '<i class="fas fa-camera-retro mr-2"></i>الكاميرا الخلفية</button>';
+                
+                const frontBtn = document.createElement('button');
+                frontBtn.className = 'px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition';
+                frontBtn.innerHTML = '<i class="fas fa-camera mr-2"></i>الكاميرا الأمامية';
+                frontBtn.onclick = () => window.useCamera('user');
+                
+                const backBtn = document.createElement('button');
+                backBtn.className = 'px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition';
+                backBtn.innerHTML = '<i class="fas fa-camera-retro mr-2"></i>الكاميرا الخلفية';
+                backBtn.onclick = () => window.useCamera('environment');
+                
+                cameraBtns.appendChild(frontBtn);
+                cameraBtns.appendChild(backBtn);
                 
                 const controlsDiv = document.querySelector('.flex.flex-wrap.gap-2.justify-center.mb-4');
                 controlsDiv.parentElement.insertBefore(cameraBtns, controlsDiv);
