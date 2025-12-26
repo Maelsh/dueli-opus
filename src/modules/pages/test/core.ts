@@ -144,13 +144,14 @@ export function drawVideoProportional(
 // ===== Upload Queue (من الأصلي - السطر 421-467) =====
 
 /**
- * Upload Queue Class - مُستخرج من test-stream-page.ts
+ * Upload Queue Class - مُستخرج من test-stream-page.ts مع Validation
  */
 export class UploadQueue {
     private queue: Array<{ blob: Blob; index: number }> = [];
     private isUploading: boolean = false;
     private competitionId: string;
     private droppedChunks: number = 0;
+    private corruptedChunks: number = 0;
     private ffmpegUrl: string = 'https://maelsh.pro/ffmpeg';
     private onProgress?: (uploaded: number, total: number) => void;
 
@@ -159,7 +160,46 @@ export class UploadQueue {
         this.onProgress = onProgress;
     }
 
+    /**
+     * Validate chunk integrity before adding to queue
+     */
+    private validateChunk(blob: Blob, index: number): { valid: boolean; reason?: string } {
+        // 1. Check size - minimum 1KB, maximum 50MB
+        if (blob.size < 1024) {
+            return { valid: false, reason: 'حجم القطعة صغير جداً (<1KB)' };
+        }
+
+        if (blob.size > 50 * 1024 * 1024) {
+            return { valid: false, reason: 'حجم القطعة كبير جداً (>50MB)' };
+        }
+
+        // 2. Check mime type
+        if (!blob.type || !blob.type.includes('video')) {
+            return { valid: false, reason: 'نوع القطعة غير صحيح (ليست فيديو)' };
+        }
+
+        // 3. Check if blob is actually readable
+        try {
+            // Test if we can create an object URL (quick integrity check)
+            const testUrl = URL.createObjectURL(blob);
+            URL.revokeObjectURL(testUrl);
+        } catch (e) {
+            return { valid: false, reason: 'القطعة تالفة (غير قابلة للقراءة)' };
+        }
+
+        return { valid: true };
+    }
+
     add(blob: Blob, index: number): void {
+        // Validate before adding
+        const validation = this.validateChunk(blob, index);
+
+        if (!validation.valid) {
+            this.corruptedChunks++;
+            log(`⚠️ قطعة ${index} مرفوضة: ${validation.reason} (مجموع التالفة: ${this.corruptedChunks})`, 'warn');
+            return; // Don't add to queue
+        }
+
         this.queue.push({ blob, index });
         this.processQueue();
     }
@@ -202,7 +242,7 @@ export class UploadQueue {
             body: formData
         });
 
-        const result = await res.json();
+        const result = await res.json() as { success: boolean;[key: string]: any };
         const latency = performance.now() - uploadStart;
 
         log('قطعة ' + index + ': ' + (result.success ? '✓' : '✗') + ' (' + Math.round(latency) + 'ms)', result.success ? 'success' : 'error');
@@ -214,6 +254,13 @@ export class UploadQueue {
         while (this.queue.length > 0 || this.isUploading) {
             await this.delay(500);
         }
+    }
+
+    getStats(): { dropped: number; corrupted: number } {
+        return {
+            dropped: this.droppedChunks,
+            corrupted: this.corruptedChunks
+        };
     }
 
     private delay(ms: number): Promise<void> {

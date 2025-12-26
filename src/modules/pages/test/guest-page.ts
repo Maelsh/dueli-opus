@@ -161,9 +161,9 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 cameraBtns.id = 'cameraButtons';
                 cameraBtns.className = 'flex flex-wrap gap-2 justify-center mb-4';
                 cameraBtns.innerHTML = 
-                    '<button onclick="useCamera(\'user\')" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">' +
+                    '<button onclick="window.useCamera(\'user\')" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">' +
                     '<i class="fas fa-camera mr-2"></i>الكاميرا الأمامية</button>' +
-                    '<button onclick="useCamera(\'environment\')" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">' +
+                    '<button onclick="window.useCamera(\'environment\')" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">' +
                     '<i class="fas fa-camera-retro mr-2"></i>الكاميرا الخلفية</button>';
                 
                 const controlsDiv = document.querySelector('.flex.flex-wrap.gap-2.justify-center.mb-4');
@@ -172,7 +172,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             cameraBtns.style.display = 'flex';
         }
         
-        async function useCamera(facingMode) {
+        window.useCamera = async function(facingMode) {
             try {
                 log('طلب الكاميرا ' + (facingMode === 'user' ? 'الأمامية' : 'الخلفية') + '...');
                 

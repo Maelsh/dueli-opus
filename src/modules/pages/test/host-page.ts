@@ -219,9 +219,9 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 cameraBtns.id = 'cameraButtons';
                 cameraBtns.className = 'flex flex-wrap gap-2 justify-center mb-4';
                 cameraBtns.innerHTML = 
-                    '<button onclick="useCamera(\'user\')" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">' +
+                    '<button onclick="window.useCamera(\'user\')" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">' +
                     '<i class="fas fa-camera mr-2"></i>الكاميرا الأمامية</button>' +
-                    '<button onclick="useCamera(\'environment\')" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">' +
+                    '<button onclick="window.useCamera(\'environment\')" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">' +
                     '<i class="fas fa-camera-retro mr-2"></i>الكاميرا الخلفية</button>';
                 
                 const controlsDiv = document.querySelector('.flex.flex-wrap.gap-2.justify-center.mb-4');
@@ -232,7 +232,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         }
         
         // ===== استخدام الكاميرا كبديل =====
-        async function useCamera(facingMode) {
+        window.useCamera = async function(facingMode) {
             try {
                 log('طلب الوصول للكاميرا ' + (facingMode === 'user' ? 'الأمامية' : 'الخلفية') + '...');
                 
@@ -517,7 +517,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             gauge.innerHTML = '<span class="text-' + color + '-400">● ' + status + ' (' + Math.round(latency/1000) + 's)</span>';
         }
         
-        // ===== Process Upload Queue (من الأصلي - السطر 421-467) =====
+        // ===== Process Upload Queue مع Validation (من الأصلي - السطر 421-467) =====
         async function processUploadQueue() {
             if (isUploading || uploadQueue.length === 0) return;
             
@@ -531,6 +531,15 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             isUploading = true;
             const { blob, index } = uploadQueue.shift();
+            
+            // ===== Chunk Validation قبل الرفع =====
+            const validation = validateChunk(blob, index);
+            if (!validation.valid) {
+                log('⚠️ قطعة ' + index + ' مرفوضة: ' + validation.reason, 'error');
+                isUploading = false;
+                processUploadQueue(); // Try next chunk
+                return;
+            }
             
             const formData = new FormData();
             formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.webm');
@@ -562,6 +571,33 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             isUploading = false;
             processUploadQueue();
+        }
+        
+        // ===== Chunk Validation Function =====
+        function validateChunk(blob, index) {
+            // 1. Check size - minimum 1KB, maximum 50MB
+            if (blob.size < 1024) {
+                return { valid: false, reason: 'حجم صغير جداً (<1KB)' };
+            }
+            
+            if (blob.size > 50 * 1024 * 1024) {
+                return { valid: false, reason: 'حجم كبير جداً (>50MB)' };
+            }
+
+            // 2. Check mime type
+            if (!blob.type || !blob.type.includes('video')) {
+                return { valid: false, reason: 'نوع غير صحيح (ليست فيديو)' };
+            }
+
+            // 3. Check if blob is readable
+            try {
+                const testUrl = URL.createObjectURL(blob);
+                URL.revokeObjectURL(testUrl);
+            } catch (e) {
+                return { valid: false, reason: 'القطعة تالفة' };
+            }
+
+            return { valid: true };
         }
         
         // ===== Start Recording (من الأصلي - السطر 501-669) =====
