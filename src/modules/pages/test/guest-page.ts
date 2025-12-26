@@ -1,10 +1,13 @@
 /**
  * Test Guest Page
- * صفحة الضيف - WebRTC only
+ * صفحة الضيف - مُستخرجة من test-stream-page.ts (lines 805-1151)
  */
 
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
+
+const streamServerUrl = 'https://stream.maelsh.pro';
+const testRoomId = 'test_room_001';
 
 export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
     const html = `
@@ -23,139 +26,316 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         .log-info { color: #60a5fa; }
         .log-success { color: #34d399; }
         .log-error { color: #f87171; }
+        .log-warn { color: #fbbf24; }
     </style>
 </head>
 <body class="text-white p-4">
     <div class="max-w-4xl mx-auto">
         <div class="text-center mb-6">
-            <h1 class="text-3xl font-bold mb-2">🎮 اختبار البث - Guest</h1>
+            <h1 class="text-3xl font-bold mb-2">👤 اختبار البث - Guest</h1>
             <p class="text-gray-400">الطرف الثاني - ينضم للبث</p>
+            <div class="mt-3 flex items-center justify-center gap-2">
+                <label class="text-sm text-gray-300">رقم المنافسة:</label>
+                <input type="number" id="compIdInput" class="bg-gray-700 text-white px-3 py-2 rounded-lg w-40 text-center font-mono" placeholder="أدخل الرقم">
+            </div>
         </div>
         
         <!-- Status -->
         <div id="status" class="bg-gray-800 rounded-lg p-4 mb-4 text-center">
-            <span class="text-yellow-400"><i class="fas fa-circle-notch fa-spin mr-2"></i>جاري التهيئة...</span>
+            <span class="text-yellow-400"><i class="fas fa-circle-notch fa-spin mr-2"></i>أدخل رقم المنافسة ثم اضغط الانضمام</span>
         </div>
         
         <!-- Videos -->
-        <div class="grid grid-cols-2 gap-2 mb-4">
-            <div class="video-container aspect-video">
-                <video id="localVideo" autoplay muted playsinline class="w-full h-full"></video>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <p class="text-sm text-gray-400 mb-2">📹 شاشتك (Local)</p>
+                <div class="video-container aspect-video">
+                    <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+                </div>
             </div>
-            <div class="video-container aspect-video">
-                <video id="remoteVideo" autoplay playsinline class="w-full h-full"></video>
+            <div>
+                <p class="text-sm text-gray-400 mb-2">🏠 الـ Host (Remote)</p>
+                <div class="video-container aspect-video">
+                    <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                </div>
             </div>
         </div>
         
         <!-- Controls -->
-        <div class="grid grid-cols-2 gap-2 mb-4">
-            <button id="joinBtn" onclick="joinRoom()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg">
-                <i class="fas fa-sign-in-alt mr-1"></i>الانضمام
+        <div class="flex flex-wrap gap-2 justify-center mb-4">
+            <button onclick="shareScreen()" id="shareBtn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-desktop mr-2"></i>مشاركة الشاشة
             </button>
-            <button onclick="disconnect()" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded-lg">
-                <i class="fas fa-sign-out-alt mr-1"></i>قطع الاتصال
+            <button onclick="joinRoom()" id="joinBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
+                <i class="fas fa-sign-in-alt mr-2"></i>الانضمام
+            </button>
+            <button onclick="disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
+                <i class="fas fa-stop mr-2"></i>إنهاء
             </button>
         </div>
         
         <!-- Log -->
-        <div id="log" class="bg-gray-900 rounded-lg p-3 h-40 overflow-y-auto text-xs font-mono"></div>
+        <div class="bg-gray-900 rounded-lg p-4 max-h-64 overflow-y-auto" id="logContainer">
+            <p class="text-gray-500 text-sm mb-2">📋 سجل الأحداث:</p>
+            <div id="log"></div>
+        </div>
         
         <!-- Links -->
         <div class="mt-4 text-center text-sm text-gray-500">
             <a href="/test" class="text-purple-400 hover:underline mx-2">← العودة</a>
             <a href="/test/host" class="text-purple-400 hover:underline mx-2">صفحة الـ Host</a>
+            <a href="/test/viewer" class="text-purple-400 hover:underline mx-2">صفحة المشاهد</a>
         </div>
     </div>
-
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <script src="/static/app.js"></script>
     <script>
-        // Use globals from app.js bundle
-
-        const streamServerUrl = 'https://stream.maelsh.pro';
-        const testRoomId = 'test_room_001';
+        // استيراد الدوال من core.ts عبر window
+        const { log, updateStatus } = window;
         
+        const roomId = '${testRoomId}';
+        const role = 'guest';
+        const streamServerUrl = '${streamServerUrl}';
+        
+        // قراءة رقم المنافسة من URL (من الأصلي - السطر 888-903)
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCompId = urlParams.get('comp');
+        
+        let pc = null;
         let localStream = null;
-        let peerConnection = null;
-        let socket = null;
-
-        // Get local stream
-        async function initLocalStream() {
+        let pollingInterval = null;
+        
+        // ملء حقل الإدخال تلقائياً من URL
+        if (urlCompId) {
+            document.addEventListener('DOMContentLoaded', () => {
+                document.getElementById('compIdInput').value = urlCompId;
+                document.getElementById('status').innerHTML = 
+                    '<span class="text-green-400"><i class="fas fa-check mr-2"></i>المنافسة: ' + urlCompId + ' - شارك الشاشة ثم اضغط الانضمام</span>';
+            });
+        }
+        
+        // ===== Share Screen (من الأصلي - السطر 923-936) =====
+        async function shareScreen() {
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: 1280, height: 720 },
+                log('طلب مشاركة الشاشة...');
+                localStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { cursor: 'always' },
                     audio: true
                 });
                 document.getElementById('localVideo').srcObject = localStream;
-                window.testLog('✅ Camera & microphone ready');
-            } catch (error) {
-                window.testLog('خطأ في الوصول للكاميرا: ' + error.message, 'error');
+                log('تم الحصول على الشاشة ✓', 'success');
+                updateStatus('الشاشة جاهزة - اضغط الانضمام', 'green');
+            } catch (err) {
+                log('فشل: ' + err.message, 'error');
             }
         }
-
-        // Create peer connection
-        function createPeerConnection() {
-            peerConnection = new RTCPeerConnection({
-                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-            });
-
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
-
-            peerConnection.ontrack = (event) => {
-                window.testLog('📺 استلام remote stream');
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-            };
-
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    socket.emit('ice-candidate', { roomId: testRoomId, candidate: event.candidate });
-                }
-            };
-        }
-
-        window.joinRoom = async function() {
-            if (!localStream) {
-                window.testLog('انتظر تهيئة الكاميرا', 'warn');
+        
+        // ===== Join Room (من الأصلي - السطر 939-1057) =====
+        async function joinRoom() {
+            // التحقق من رقم المنافسة
+            const compIdInput = document.getElementById('compIdInput');
+            const competitionId = compIdInput.value.trim();
+            
+            if (!competitionId) {
+                log('أدخل رقم المنافسة أولاً!', 'error');
+                updateStatus('أدخل رقم المنافسة!', 'red');
                 return;
             }
-
-            // Initialize socket
-            socket = io(streamServerUrl);
             
-            socket.on('connect', () => {
-                window.testLog('✅ اتصال بالسيرفر نجح');
-                socket.emit('join-room', { roomId: testRoomId, role: 'guest' });
-            });
-
-            socket.on('offer', async (data) => {
-                window.testLog('📥 استلام offer من المضيف');
-                createPeerConnection();
-                await peerConnection.setRemoteDescription(data.offer);
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                socket.emit('answer', { roomId: testRoomId, answer });
-                window.testLog('📤 إرسال answer');
-            });
-
-            socket.on('ice-candidate', async (data) => {
-                if (peerConnection) {
-                    await peerConnection.addIceCandidate(data.candidate);
+            if (!localStream) {
+                log('شارك الشاشة أولاً!', 'warn');
+                return;
+            }
+            
+            updateStatus('جاري الانضمام إلى المنافسة ' + competitionId + '...', 'yellow');
+            
+            // Join signaling room
+            try {
+                log('الانضمام إلى المنافسة: ' + competitionId);
+                const actualRoom = 'comp_' + competitionId;
+                const res = await fetch(streamServerUrl + '/api/signaling/room/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: actualRoom,
+                        user_id: 999,
+                        role: 'opponent'
+                    })
+                });
+                const data = await res.json();
+                log('النتيجة: ' + JSON.stringify(data), data.success ? 'success' : 'error');
+                
+                // حفظ المعرف الحقيقي
+                if (data.success) {
+                    window.actualRoomId = actualRoom;
                 }
+            } catch (err) {
+                log('خطأ: ' + err.message, 'error');
+            }
+            
+            // Create peer connection
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    // Dueli TURN server
+                    {
+                        urls: 'turn:maelsh.pro:3000?transport=tcp',
+                        username: 'dueli',
+                        credential: 'dueli-turn-secret-2024'
+                    },
+                    {
+                        urls: 'turn:maelsh.pro:3000',
+                        username: 'dueli',
+                        credential: 'dueli-turn-secret-2024'
+                    }
+                ]
             });
-
-            window.testLog('🎮 انتظار اتصال المضيف...');
-        };
-
-        window.disconnect = function() {
-            if (peerConnection) peerConnection.close();
-            if (socket) socket.disconnect();
-            window.testLog('قطع الاتصال');
-        };
-
-        // Initialize
-        initLocalStream();
-        window.testLog('🎮 Guest page ready');
+            
+            log('تم إنشاء RTCPeerConnection');
+            
+            // Add local tracks
+            localStream.getTracks().forEach(track => {
+                pc.addTrack(track, localStream);
+                log('تمت إضافة track: ' + track.kind);
+            });
+            
+            // Handle remote stream
+            pc.ontrack = (event) => {
+                log('📥 ontrack fired!', 'success');
+                log('   - event.track.kind: ' + event.track.kind);
+                log('   - event.streams.length: ' + event.streams.length);
+                if (event.streams[0]) {
+                    log('   - stream.id: ' + event.streams[0].id);
+                    log('   - stream tracks: ' + event.streams[0].getTracks().length);
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    remoteVideo.srcObject = event.streams[0];
+                    remoteVideo.onloadedmetadata = () => {
+                        log('   ✅ Remote video loaded: ' + remoteVideo.videoWidth + 'x' + remoteVideo.videoHeight, 'success');
+                    };
+                    updateStatus('متصل ✓', 'green');
+                } else {
+                    log('   ⚠️ No stream in event!', 'error');
+                }
+            };
+            
+            // Handle ICE candidates
+            pc.onicecandidate = async (event) => {
+                if (event.candidate) {
+                    log('ICE Candidate: ' + event.candidate.candidate.substring(0, 50) + '...');
+                    await sendSignal('ice', event.candidate);
+                }
+            };
+            
+            // Connection state
+            pc.onconnectionstatechange = () => {
+                log('📡 Connection State: ' + pc.connectionState, 
+                    pc.connectionState === 'connected' ? 'success' : 
+                    pc.connectionState === 'failed' ? 'error' : 'info');
+            };
+            
+            // ICE connection state
+            pc.oniceconnectionstatechange = () => {
+                log('🧊 ICE Connection: ' + pc.iceConnectionState, 
+                    pc.iceConnectionState === 'connected' ? 'success' : 
+                    pc.iceConnectionState === 'failed' ? 'error' : 'info');
+            };
+            
+            // Signaling state
+            pc.onsignalingstatechange = () => {
+                log('🔔 Signaling State: ' + pc.signalingState);
+            };
+            
+            // Start polling for offer
+            log('انتظار Offer من الـ Host...');
+            startPolling();
+        }
+        
+        // ===== Signaling (من الأصلي - السطر 1059-1115) =====
+        async function sendSignal(type, data) {
+            try {
+                const actualRoom = window.actualRoomId || roomId;
+                await fetch(streamServerUrl + '/api/signaling/signal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: actualRoom,
+                        from_role: 'opponent',
+                        signal_type: type,
+                        signal_data: data
+                    })
+                });
+            } catch (err) {
+                log('خطأ في الإرسال: ' + err.message, 'error');
+            }
+        }
+        
+        function startPolling() {
+            pollingInterval = setInterval(async () => {
+                try {
+                    const actualRoom = window.actualRoomId || roomId;
+                    const res = await fetch(streamServerUrl + '/api/signaling/poll?room_id=' + actualRoom + '&role=opponent');
+                    const data = await res.json();
+                    
+                    if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
+                        for (const signal of data.data.signals) {
+                            await handleSignal(signal);
+                        }
+                    }
+                } catch (err) {
+                    // Silent
+                }
+            }, 1000);
+        }
+        
+        async function handleSignal(signal) {
+            log('إشارة واردة: ' + signal.type);
+            
+            if (signal.type === 'offer') {
+                log('تم استقبال Offer!', 'success');
+                await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
+                
+                // Create answer
+                log('إنشاء Answer...');
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                await sendSignal('answer', answer);
+                log('تم إرسال Answer', 'success');
+                
+            } else if (signal.type === 'ice') {
+                await pc.addIceCandidate(new RTCIceCandidate(signal.data));
+            }
+        }
+        
+        // ===== Disconnect (من الأصلي - السطر 1118-1141) =====
+        function disconnect() {
+            log('إنهاء الاتصال...');
+            
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            if (localStream) {
+                localStream.getTracks().forEach(t => t.stop());
+                localStream = null;
+            }
+            
+            document.getElementById('localVideo').srcObject = null;
+            document.getElementById('remoteVideo').srcObject = null;
+            
+            updateStatus('غير متصل', 'gray');
+            log('تم الإنهاء ✓', 'success');
+        }
+        
+        // Init (من الأصلي - السطر 1144-1145)
+        log('تم تحميل صفحة Guest');
+        updateStatus('اضغط "مشاركة الشاشة" ثم "الانضمام"', 'blue');
     </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 /**
- * Test Pages Index
- * المدخل لصفحات الاختبار
+ * Test Pages Router
+ * المدخل الرئيسي لصفحات الاختبار
  */
 
 import { Hono } from 'hono';
@@ -10,14 +10,9 @@ import { testViewerPage } from './viewer-page';
 
 const testRoutes = new Hono();
 
-// Routes
-testRoutes.get('/host', testHostPage);
-testRoutes.get('/guest', testGuestPage);
-testRoutes.get('/viewer', testViewerPage);
-
 // Landing page
 testRoutes.get('/', async (c) => {
-    const html = `
+    return c.html(`
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -28,89 +23,75 @@ testRoutes.get('/', async (c) => {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         body { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; }
-        .card { transition: transform 0.3s, box-shadow 0.3s; }
-        .card:hover { transform: translateY(-4px); box-shadow: 0 8px 16px rgba(0,0,0,0.3); }
     </style>
 </head>
-<body class="text-white p-8">
-    <div class="max-w-4xl mx-auto">
-        <div class="text-center mb-12">
-            <h1 class="text-5xl font-bold mb-4">🎬 Test Stream Pages</h1>
-            <p class="text-gray-400 text-lg">اختبار البث المباشر والتسجيل</p>
-            <p class="text-gray-500 text-sm mt-2">Sequential Playback + MSE VOD</p>
-        </div>
-
-        <div class="grid md:grid-cols-3 gap-6">
-            <!-- Host Card -->
-            <a href="/test/host" class="card bg-gradient-to-br from-green-600 to-green-800 rounded-xl p-6 block text-center">
-                <div class="text-6xl mb-4">🎥</div>
-                <h2 class="text-2xl font-bold mb-2">المضيف</h2>
-                <p class="text-green-100 text-sm">يبدأ البث ويسجل</p>
-                <div class="mt-4 text-xs text-green-200">
-                    <i class="fas fa-check mr-1"></i>WebRTC<br/>
-                    <i class="fas fa-check mr-1"></i>Canvas Recording<br/>
-                    <i class="fas fa-check mr-1"></i>Chunk Upload
-                </div>
+<body class="text-white">
+    <div class="max-w-4xl mx-auto p-8">
+        <h1 class="text-4xl font-bold text-center mb-4">🧪 Test Stream Pages</h1>
+        <p class="text-center text-gray-400 mb-8">اختبار البث - WebRTC + Canvas + Upload</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Host -->
+            <a href="/test/host" class="bg-gradient-to-br from-blue-600 to-blue-800 p-6 rounded-xl hover:scale-105 transition transform">
+                <div class="text-4xl mb-3">🎬</div>
+                <h2 class="text-2xl font-bold mb-2">Host</h2>
+                <p class="text-sm text-blue-200">يبدأ البث ويشارك الشاشة</p>
+                <ul class="text-xs mt-3 text-blue-100 space-y-1">
+                    <li>✓ Screen share</li>
+                    <li>✓ WebRTC</li>
+                    <li>✓ Canvas recording</li>
+                    <li>✓ Upload chunks</li>
+                </ul>
             </a>
-
-            <!-- Guest Card -->
-            <a href="/test/guest" class="card bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl p-6 block text-center">
-                <div class="text-6xl mb-4">🎮</div>
-                <h2 class="text-2xl font-bold mb-2">الضيف</h2>
-                <p class="text-blue-100 text-sm">ينضم للبث</p>
-                <div class="mt-4 text-xs text-blue-200">
-                    <i class="fas fa-check mr-1"></i>WebRTC Only<br/>
-                    <i class="fas fa-check mr-1"></i>Simple Connection
-                </div>
+            
+            <!-- Guest -->
+            <a href="/test/guest" class="bg-gradient-to-br from-green-600 to-green-800 p-6 rounded-xl hover:scale-105 transition transform">
+                <div class="text-4xl mb-3">👤</div>
+                <h2 class="text-2xl font-bold mb-2">Guest</h2>
+                <p class="text-sm text-green-200">ينضم للبث كمنافس</p>
+                <ul class="text-xs mt-3 text-green-100 space-y-1">
+                    <li>✓ Screen share</li>
+                    <li>✓ WebRTC answer</li>
+                    <li>✓ P2P connection</li>
+                </ul>
             </a>
-
-            <!-- Viewer Card -->
-            <a href="/test/viewer" class="card bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl p-6 block text-center">
-                <div class="text-6xl mb-4">👁️</div>
-                <h2 class="text-2xl font-bold mb-2">المشاهد</h2>
-                <p class="text-purple-100 text-sm">يشاهد البث/التسجيل</p>
-                <div class="mt-4 text-xs text-purple-200">
-                    <i class="fas fa-check mr-1"></i>Sequential Live<br/>
-                    <i class="fas fa-check mr-1"></i>MSE VOD<br/>
-                    <i class="fas fa-check mr-1"></i>Double Buffering
-                </div>
+            
+            <!-- Viewer -->
+            <a href="/test/viewer" class="bg-gradient-to-br from-purple-600 to-purple-800 p-6 rounded-xl hover:scale-105 transition transform">
+                <div class="text-4xl mb-3">👁️</div>
+                <h2 class="text-2xl font-bold mb-2">Viewer</h2>
+                <p class="text-sm text-purple-200">يشاهد البث (مباشר أو مسجل)</p>
+                <ul class="text-xs mt-3 text-purple-100 space-y-1">
+                    <li>✓ Live Sequential</li>
+                    <li>✓ MSE VOD</li>
+                    <li>✓ Double buffering</li>
+                    <li>✓ Adaptive polling</li>
+                </ul>
             </a>
         </div>
-
-        <!-- Features -->
-        <div class="mt-12 bg-gray-800 rounded-xl p-6">
-            <h3 class="text-xl font-bold mb-4 text-center">✨ المميزات</h3>
-            <div class="grid md:grid-cols-2 gap-4 text-sm">
-                <div>
-                    <h4 class="font-bold text-green-400 mb-2">Live Streaming</h4>
-                    <ul class="text-gray-400 space-y-1">
-                        <li><i class="fas fa-caret-left mr-2"></i>Sequential MP4 playback</li>
-                        <li><i class="fas fa-caret-left mr-2"></i>Adaptive polling</li>
-                        <li><i class="fas fa-caret-left mr-2"></i>Smooth transitions</li>
-                        <li><i class="fas fa-caret-left mr-2"></i>Low latency (5s chunks)</li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-bold text-purple-400 mb-2">VOD Playback</h4>
-                    <ul class="text-gray-400 space-y-1">
-                        <li><i class="fas fa-caret-left mr-2"></i>MSE for seekable playback</li>
-                        <li><i class="fas fa-caret-left mr-2"></i>Full video controls</li>
-                        <li><i class="fas fa-caret-left mr-2"></i>No server-side merge</li>
-                    </ul>
-                </div>
-            </div>
+        
+        <div class="mt-8 p-4 bg-gray-800 rounded-lg">
+            <h3 class="font-bold mb-2 text-yellow-400"><i class="fas fa-info-circle mr-2"></i>ملاحظات:</h3>
+            <ul class="text-sm space-y-1 text-gray-300">
+                <li>• الصفحات الثلاث تستخدم <code class="bg-gray-700 px-1 rounded">core.ts</code> المشترك</li>
+                <li>• Host: يسجل Canvas (local + remote) ويرفع chunks</li>
+                <li>• Guest: يشارك شاشته ويجيب على Offer من Host</li>
+                <li>• Viewer: مشغل ذكي مع State Machine + Adaptive polling</li>
+            </ul>
         </div>
-
-        <!-- Footer -->
-        <div class="mt-8 text-center text-sm text-gray-500">
-            <p>Test Environment - Modular Architecture</p>
-            <p class="mt-2">core.ts | host-page.ts | guest-page.ts | viewer-page.ts</p>
+        
+        <div class="text-center mt-6">
+            <a href="/" class="text-blue-400 hover:underline"><i class="fas fa-home mr-1"></i>العودة للصفحة الرئيسية</a>
         </div>
     </div>
 </body>
 </html>
-    `;
-    return c.html(html);
+    `);
 });
+
+// Routes
+testRoutes.get('/host', testHostPage);
+testRoutes.get('/guest', testGuestPage);
+testRoutes.get('/viewer', testViewerPage);
 
 export default testRoutes;

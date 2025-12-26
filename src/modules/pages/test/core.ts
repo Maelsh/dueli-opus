@@ -1,9 +1,9 @@
 /**
  * Test Stream Core Module
- * العقل - كل المنطق المشترك
+ * العقل - المنطق المشترك من test-stream-page.ts + تحسينات ChatGPT
  */
 
-// ===== Types & State Machine =====
+// ===== Types & State Machine (ChatGPT Improvement #1) =====
 
 export type PlayerState =
     | 'idle'
@@ -31,8 +31,11 @@ export interface PlaylistData {
     status: 'live' | 'finished';
 }
 
-// ===== Utilities =====
+// ===== Utilities (من الأصلي) =====
 
+/**
+ * Logging function - مُستخرج من test-stream-page.ts (السطر 121-130)
+ */
 export function log(msg: string, type: 'info' | 'success' | 'warn' | 'error' = 'info'): void {
     const logEl = document.getElementById('log');
     if (!logEl) return;
@@ -40,25 +43,30 @@ export function log(msg: string, type: 'info' | 'success' | 'warn' | 'error' = '
     const time = new Date().toLocaleTimeString();
     const div = document.createElement('div');
     div.className = `log-entry log-${type}`;
-    div.textContent = `[${time}] ${msg}`;
+    div.innerHTML = '[' + time + '] ' + msg;
     logEl.appendChild(div);
-    logEl.scrollTop = logEl.scrollHeight;
 
-    // Keep only last 100 entries
-    while (logEl.children.length > 100) {
-        if (logEl.firstChild) {
-            logEl.removeChild(logEl.firstChild);
-        }
+    if (logEl.parentElement) {
+        logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
     }
+
+    console.log('[' + type.toUpperCase() + ']', msg);
 }
 
-export function updateStatus(text: string, color: string): void {
+/**
+ * Update status - مُستخرج من test-stream-page.ts (السطر 132-135)
+ */
+export function updateStatus(text: string, color: string = 'yellow'): void {
     const statusEl = document.getElementById('status');
     if (statusEl) {
-        statusEl.innerHTML = `<span class="text-${color}-400"><i class="fas fa-circle mr-2"></i>${text}</span>`;
+        statusEl.innerHTML =
+            '<span class=\"text-' + color + '-400\"><i class=\"fas fa-circle mr-2\"></i>' + text + '</span>';
     }
 }
 
+/**
+ * Set mode badge - للـ viewer page
+ */
 export function setMode(mode: string, text?: string): void {
     const modeBadge = document.getElementById('modeBadge');
     if (!modeBadge) return;
@@ -67,19 +75,153 @@ export function setMode(mode: string, text?: string): void {
 
     if (mode === 'hls') {
         modeBadge.classList.add('mode-hls', 'pulse');
-        modeBadge.innerHTML = '<i class="fas fa-broadcast-tower mr-1"></i>HLS';
+        modeBadge.innerHTML = '<i class=\"fas fa-broadcast-tower mr-1\"></i>HLS';
     } else if (mode === 'mse') {
         modeBadge.classList.add('mode-mse', 'pulse');
-        modeBadge.innerHTML = '<i class="fas fa-puzzle-piece mr-1"></i>MSE';
+        modeBadge.innerHTML = '<i class=\"fas fa-puzzle-piece mr-1\"></i>MSE';
     } else if (mode === 'vod') {
         modeBadge.classList.add('mode-vod');
-        modeBadge.innerHTML = '<i class="fas fa-film mr-1"></i>VOD';
+        modeBadge.innerHTML = '<i class=\"fas fa-film mr-1\"></i>VOD';
     } else {
         modeBadge.classList.add('hidden');
     }
 }
 
-// ===== ChunkManager Class =====
+// ===== Canvas Helpers (من الأصلي - السطر 529-568) =====
+
+/**
+ * Draw video proportionally - مُستخرج من test-stream-page.ts
+ */
+export function drawVideoProportional(
+    ctx: CanvasRenderingContext2D,
+    video: HTMLVideoElement,
+    x: number,
+    y: number,
+    maxWidth: number,
+    maxHeight: number,
+    label: string
+): void {
+    if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
+    const videoRatio = video.videoWidth / video.videoHeight;
+    const targetRatio = maxWidth / maxHeight;
+    let drawW: number, drawH: number;
+
+    if (videoRatio > targetRatio) {
+        // Video أعرض - fit to width
+        drawW = maxWidth;
+        drawH = maxWidth / videoRatio;
+    } else {
+        // Video أطول - fit to height
+        drawH = maxHeight;
+        drawW = maxHeight * videoRatio;
+    }
+
+    // Center video in allocated space
+    const offsetX = x + (maxWidth - drawW) / 2;
+    const offsetY = y + (maxHeight - drawH) / 2;
+
+    // رسم خلفية سوداء للمساحة الفارغة
+    ctx.fillStyle = '#000';
+    ctx.fillRect(x, y, maxWidth, maxHeight);
+
+    // رسم الفيديو
+    ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
+
+    // إطار حول الفيديو
+    ctx.strokeStyle = '#4f46e5';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, maxWidth, maxHeight);
+
+    // Label
+    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+    ctx.fillRect(x + 10, y + maxHeight - 35, 80, 25);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(label, x + 20, y + maxHeight - 15);
+}
+
+// ===== Upload Queue (من الأصلي - السطر 421-467) =====
+
+/**
+ * Upload Queue Class - مُستخرج من test-stream-page.ts
+ */
+export class UploadQueue {
+    private queue: Array<{ blob: Blob; index: number }> = [];
+    private isUploading: boolean = false;
+    private competitionId: string;
+    private droppedChunks: number = 0;
+    private ffmpegUrl: string = 'https://maelsh.pro/ffmpeg';
+    private onProgress?: (uploaded: number, total: number) => void;
+
+    constructor(competitionId: string, onProgress?: (uploaded: number, total: number) => void) {
+        this.competitionId = competitionId;
+        this.onProgress = onProgress;
+    }
+
+    add(blob: Blob, index: number): void {
+        this.queue.push({ blob, index });
+        this.processQueue();
+    }
+
+    private async processQueue(): Promise<void> {
+        if (this.isUploading || this.queue.length === 0) return;
+
+        // إذا زاد الطابور عن 3، أسقط الأقدم
+        while (this.queue.length > 3) {
+            this.queue.shift();
+            this.droppedChunks++;
+            log('⚠️ إسقاط قطعة (تراكم) - مجموع: ' + this.droppedChunks, 'warn');
+        }
+
+        this.isUploading = true;
+        const { blob, index } = this.queue.shift()!;
+
+        try {
+            await this.uploadChunk(blob, index);
+            this.onProgress?.(index + 1, -1);
+        } catch (error) {
+            log('Upload error: ' + (error as Error).message, 'error');
+        } finally {
+            this.isUploading = false;
+            this.processQueue();
+        }
+    }
+
+    private async uploadChunk(blob: Blob, index: number): Promise<void> {
+        const formData = new FormData();
+        formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.webm');
+        formData.append('competition_id', this.competitionId);
+        formData.append('chunk_number', (index + 1).toString());
+        formData.append('extension', 'webm');
+
+        const uploadStart = performance.now();
+
+        const res = await fetch(this.ffmpegUrl + '/upload.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await res.json();
+        const latency = performance.now() - uploadStart;
+
+        log('قطعة ' + index + ': ' + (result.success ? '✓' : '✗') + ' (' + Math.round(latency) + 'ms)', result.success ? 'success' : 'error');
+
+        if (!res.ok) throw new Error('Upload failed');
+    }
+
+    async waitForCompletion(): Promise<void> {
+        while (this.queue.length > 0 || this.isUploading) {
+            await this.delay(500);
+        }
+    }
+
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+}
+
+// ===== ChunkManager (ChatGPT Improvement #2 - Adaptive Polling) =====
 
 export class ChunkManager {
     currentIndex: number = 0;
@@ -110,6 +252,9 @@ export class ChunkManager {
         }
     }
 
+    /**
+     * Wait for next chunk with adaptive polling (ChatGPT Improvement)
+     */
     async waitForNextChunk(): Promise<string> {
         const targetIndex = this.currentIndex + 1;
 
@@ -123,7 +268,7 @@ export class ChunkManager {
 
             this.misses++;
 
-            // Adaptive polling delay
+            // Adaptive polling delay (1s to 3s)
             const delay = Math.min(3000, 1000 + this.misses * 500);
 
             // Too many misses = stream might have ended
@@ -147,7 +292,7 @@ export class ChunkManager {
     }
 }
 
-// ===== LiveSequentialPlayer Class =====
+// ===== LiveSequentialPlayer (ChatGPT Improvement #3 - timeupdate switch) =====
 
 export class LiveSequentialPlayer {
     private state: PlayerState = 'idle';
@@ -177,6 +322,9 @@ export class LiveSequentialPlayer {
         await this.playNextChunk();
     }
 
+    /**
+     * Play next chunk with double buffering and timeupdate switch (ChatGPT Improvement)
+     */
     private async playNextChunk(): Promise<void> {
         if (this.state !== 'playing' && this.state !== 'switching') return;
 
@@ -199,7 +347,7 @@ export class LiveSequentialPlayer {
 
             this.onChunkChange?.(this.chunkManager.currentIndex + 1, -1);
 
-            // Switch BEFORE end using timeupdate
+            // Switch BEFORE end using timeupdate (ChatGPT Improvement #3)
             currentPlayer.ontimeupdate = () => {
                 const remaining = currentPlayer.duration - currentPlayer.currentTime;
                 if (remaining < 0.6 && remaining > 0 && nextPlayer.readyState >= 3 && this.state === 'playing') {
@@ -235,7 +383,7 @@ export class LiveSequentialPlayer {
         const nextIndex = (this.activePlayerIndex + 1) % 2;
         const next = this.videoPlayers[nextIndex];
 
-        // Visual transition
+        // Visual transition (ChatGPT Improvement #4 - Double Buffering)
         current.style.opacity = '0';
         current.style.zIndex = '1';
         next.style.opacity = '1';
@@ -265,7 +413,7 @@ export class LiveSequentialPlayer {
     }
 }
 
-// ===== VodMsePlayer Class =====
+// ===== VodMsePlayer (ChatGPT Improvement #5 - MSE VOD) =====
 
 export class VodMsePlayer {
     private video: HTMLVideoElement;
@@ -365,113 +513,5 @@ export class VodMsePlayer {
 
         this.mediaSource = null;
         this.sourceBuffer = null;
-    }
-}
-
-// ===== Canvas Helpers =====
-
-export function drawVideoProportional(
-    ctx: CanvasRenderingContext2D,
-    video: HTMLVideoElement,
-    x: number,
-    y: number,
-    maxWidth: number,
-    maxHeight: number,
-    label: string
-): void {
-    if (!video || video.readyState < 2 || video.videoWidth === 0) return;
-
-    const videoRatio = video.videoWidth / video.videoHeight;
-    const targetRatio = maxWidth / maxHeight;
-    let drawW: number, drawH: number;
-
-    if (videoRatio > targetRatio) {
-        drawW = maxWidth;
-        drawH = maxWidth / videoRatio;
-    } else {
-        drawH = maxHeight;
-        drawW = maxHeight * videoRatio;
-    }
-
-    const offsetX = x + (maxWidth - drawW) / 2;
-    const offsetY = y + (maxHeight - drawH) / 2;
-
-    // Background
-    ctx.fillStyle = '#000';
-    ctx.fillRect(x, y, maxWidth, maxHeight);
-
-    // Video
-    ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
-
-    // Border
-    ctx.strokeStyle = '#4f46e5';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x, y, maxWidth, maxHeight);
-
-    // Label
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    ctx.fillRect(x + 10, y + maxHeight - 35, 80, 25);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText(label, x + 20, y + maxHeight - 15);
-}
-
-// ===== Upload Queue =====
-
-export class UploadQueue {
-    private queue: Array<{ blob: Blob; index: number }> = [];
-    private isUploading: boolean = false;
-    private competitionId: string;
-    private onProgress?: (uploaded: number, total: number) => void;
-
-    constructor(competitionId: string, onProgress?: (uploaded: number, total: number) => void) {
-        this.competitionId = competitionId;
-        this.onProgress = onProgress;
-    }
-
-    add(blob: Blob, index: number): void {
-        this.queue.push({ blob, index });
-        this.processQueue();
-    }
-
-    private async processQueue(): Promise<void> {
-        if (this.isUploading || this.queue.length === 0) return;
-
-        this.isUploading = true;
-        const { blob, index } = this.queue.shift()!;
-
-        try {
-            await this.uploadChunk(blob, index);
-            this.onProgress?.(index + 1, -1);
-        } catch (error) {
-            log('Upload error: ' + (error as Error).message, 'error');
-        } finally {
-            this.isUploading = false;
-            this.processQueue();
-        }
-    }
-
-    private async uploadChunk(blob: Blob, index: number): Promise<void> {
-        const formData = new FormData();
-        formData.append('competition_id', this.competitionId);
-        formData.append('chunk_number', String(index + 1));
-        formData.append('chunk', blob);
-
-        const res = await fetch('https://maelsh.pro/ffmpeg/upload.php', {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!res.ok) throw new Error('Upload failed');
-    }
-
-    async waitForCompletion(): Promise<void> {
-        while (this.queue.length > 0 || this.isUploading) {
-            await this.delay(100);
-        }
-    }
-
-    private delay(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
