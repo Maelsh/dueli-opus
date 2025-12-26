@@ -55,13 +55,13 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         <div class="mb-4 text-center">
             <label class="text-sm text-gray-300 ml-2">رقم المنافسة:</label>
             <input type="number" id="compIdInput" class="bg-gray-700 text-white px-3 py-2 rounded-lg w-40 text-center font-mono" placeholder="أدخل الرقم">
-            <button onclick="startMSEStream()" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition mr-2">
+            <button onclick="window.startMSEStream()" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition mr-2">
                 <i class="fas fa-play mr-1"></i>مباشر
             </button>
-            <button onclick="loadVOD()" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition mr-2">
+            <button onclick="window.loadVOD()" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition mr-2">
                 <i class="fas fa-film mr-1"></i>تسجيل
             </button>
-            <button onclick="stopStream()" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
+            <button onclick="window.stopStream()" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
                 <i class="fas fa-stop mr-1"></i>إيقاف
             </button>
         </div>
@@ -111,7 +111,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         let currentMode = null;
         
         // ===== Start MSE Stream (استخدام LiveSequentialPlayer المُحسّن) =====
-        async function startMSEStream() {
+        window.startMSEStream = async function() {
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
             
@@ -158,7 +158,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         }
         
         // ===== Load VOD (استخدام VodMsePlayer المُحسّن) =====
-        async function loadVOD() {
+        window.loadVOD = async function() {
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
             
@@ -197,7 +197,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         }
         
         // ===== Stop Stream =====
-        function stopStream() {
+        window.stopStream = function() {
             if (currentPlayer) {
                 currentPlayer.stop();
                 currentPlayer = null;

@@ -66,13 +66,13 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         
         <!-- Controls -->
         <div class="flex flex-wrap gap-2 justify-center mb-4">
-            <button onclick="shareScreen()" id="shareBtn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition">
+            <button onclick="window.shareScreen()" id="shareBtn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition">
                 <i class="fas fa-desktop mr-2"></i>مشاركة الشاشة
             </button>
-            <button onclick="connect()" id="connectBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
+            <button onclick="window.connect()" id="connectBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
                 <i class="fas fa-plug mr-2"></i>اتصال
             </button>
-            <button onclick="disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
+            <button onclick="window.disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
                 <i class="fas fa-stop mr-2"></i>إنهاء
             </button>
         </div>
@@ -168,7 +168,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         }
         
         // ===== Share Screen مع دعم الموبايل =====
-        async function shareScreen() {
+        window.shareScreen = async function() {
             const caps = detectDeviceCapabilities();
             
             // على الموبايل أو إذا كانت مشاركة الشاشة غير مدعومة
@@ -298,7 +298,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         }
         
         // ===== Connect (من الأصلي - السطر 213-319) =====
-        async function connect() {
+        window.connect = async function() {
             if (!localStream) {
                 log('شارك الشاشة أولاً!', 'warn');
                 return;
@@ -781,7 +781,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         }
         
         // ===== Disconnect (من الأصلي - السطر 725-789) =====
-        async function disconnect() {
+        window.disconnect = async function() {
             log('إنهاء الاتصال...');
             
             if (segmentInterval) {

@@ -63,13 +63,13 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         
         <!-- Controls -->
         <div class="flex flex-wrap gap-2 justify-center mb-4">
-            <button onclick="shareScreen()" id="shareBtn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition">
+            <button onclick="window.shareScreen()" id="shareBtn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition">
                 <i class="fas fa-desktop mr-2"></i>مشاركة الشاشة
             </button>
-            <button onclick="joinRoom()" id="joinBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
+            <button onclick="window.joinRoom()" id="joinBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
                 <i class="fas fa-sign-in-alt mr-2"></i>الانضمام
             </button>
-            <button onclick="disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
+            <button onclick="window.disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
                 <i class="fas fa-stop mr-2"></i>إنهاء
             </button>
         </div>
@@ -127,7 +127,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         }
         
         // ===== Share Screen مع دعم الموبايل =====
-        async function shareScreen() {
+        window.shareScreen = async function() {
             const caps = detectDeviceCapabilities();
             
             if (caps.isMobile || !caps.supportsScreenShare) {
@@ -199,7 +199,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         }
         
         // ===== Join Room (من الأصلي - السطر 939-1057) =====
-        async function joinRoom() {
+        window.joinRoom = async function() {
             // التحقق من رقم المنافسة
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
@@ -376,7 +376,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         }
         
         // ===== Disconnect (من الأصلي - السطر 1118-1141) =====
-        function disconnect() {
+        window.disconnect = function() {
             log('إنهاء الاتصال...');
             
             if (pollingInterval) {
