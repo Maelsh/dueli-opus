@@ -514,87 +514,38 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             log('بدء التسجيل (المنافسة: ' + competitionId + ')');
             
-            // إنشاء Canvas بدقة ثابتة 16:9 (كما اقترح Gemini)
-            const CANVAS_WIDTH = 1280;
-            const CANVAS_HEIGHT = 720;
-            
+            // إنشاء Canvas بالجودة المحددة (side-by-side)
             const canvas = document.createElement('canvas');
-            canvas.width = CANVAS_WIDTH;
-            canvas.height = CANVAS_HEIGHT;
+            canvas.width = currentQuality.width * 2; // مضاعف للـ side-by-side
+            canvas.height = currentQuality.height * 2;
             const ctx = canvas.getContext('2d');
             
             const localVideo = document.getElementById('localVideo');
             const remoteVideo = document.getElementById('remoteVideo');
             
-            // ✨ Helper: رسم الفيديو بتناسب صحيح (بدون stretch)
-            function drawVideoProportional(ctx, video, x, y, maxWidth, maxHeight, bgColor = '#1a1a2e') {
-                // خلفية للمنطقة
-                ctx.fillStyle = bgColor;
-                ctx.fillRect(x, y, maxWidth, maxHeight);
+            // رسم الفيديوهين على Canvas باستخدام setInterval (يعمل بالخلفية)
+            function drawFrame() {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                if (!video || video.readyState < 2 || video.videoWidth === 0) return;
-                
-                const videoRatio = video.videoWidth / video.videoHeight;
-                const targetRatio = maxWidth / maxHeight;
-                
-                let drawW, drawH;
-                if (videoRatio > targetRatio) {
-                    // فيديو أعرض - نحدد بالعرض
-                    drawW = maxWidth;
-                    drawH = maxWidth / videoRatio;
-                } else {
-                    // فيديو أطول - نحدد بالارتفاع
-                    drawH = maxHeight;
-                    drawW = maxHeight * videoRatio;
+                // الفيديو المحلي (يسار)
+                if (localVideo && localVideo.videoWidth > 0) {
+                    ctx.drawImage(localVideo, 0, 0, canvas.width / 2, canvas.height);
                 }
                 
-                // توسيط الفيديو
-                const offsetX = x + (maxWidth - drawW) / 2;
-                const offsetY = y + (maxHeight - drawH) / 2;
-                
-                ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
-            }
-            
-            // 🎨 رسم الإطار
-            function drawFrame() {
-                // ═══ Layer 1: Background ═══
-                const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                gradient.addColorStop(0, '#0f0f1e');
-                gradient.addColorStop(1, '#1a1a2e');
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-                
-                // ═══ Layer 2: Videos (Proportional) ═══
-                // الفيديو المحلي (يسار)
-                drawVideoProportional(ctx, localVideo, 10, 80, (CANVAS_WIDTH/2) - 20, CANVAS_HEIGHT - 160, '#16213e');
-                
                 // الفيديو البعيد (يمين)
-                drawVideoProportional(ctx, remoteVideo, (CANVAS_WIDTH/2) + 10, 80, (CANVAS_WIDTH/2) - 20, CANVAS_HEIGHT - 160, '#1a2a3e');
+                if (remoteVideo && remoteVideo.videoWidth > 0) {
+                    ctx.drawImage(remoteVideo, canvas.width / 2, 0, canvas.width / 2, canvas.height);
+                }
                 
-                // ═══ Layer 3: UI Overlay ═══
-                // شريط علوي
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-                ctx.fillRect(0, 0, CANVAS_WIDTH, 70);
-                
-                // عنوان
-                ctx.font = 'bold 36px Arial';
+                // تسميات
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(5, canvas.height - 25, 50, 20);
+                ctx.fillRect(canvas.width / 2 + 5, canvas.height - 25, 60, 20);
                 ctx.fillStyle = '#fff';
-                ctx.textAlign = 'center';
-                ctx.fillText('🎮 Dueli Live', CANVAS_WIDTH/2, 45);
-                
-                // أسماءاللاعبين
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                ctx.fillRect(20, CANVAS_HEIGHT - 70, 200, 50);
-                ctx.fillRect(CANVAS_WIDTH - 220, CANVAS_HEIGHT - 70, 200, 50);
-                
-                ctx.font = 'bold 22px Arial';
-                ctx.fillStyle = '#4ade80';
-                ctx.textAlign = 'left';
-                ctx.fillText('👤 أنت', 35, CANVAS_HEIGHT - 35);
-                
-                ctx.textAlign = 'right';
-                ctx.fillStyle = '#f87171';
-                ctx.fillText('المنافس 🎯', CANVAS_WIDTH - 35, CANVAS_HEIGHT - 35);
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText('أنت', 15, canvas.height - 10);
+                ctx.fillText('المنافس', canvas.width / 2 + 10, canvas.height - 10);
             }
             
             // setInterval بدلاً من requestAnimationFrame
