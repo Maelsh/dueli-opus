@@ -17,5 +17,4 @@ export { liveRoomPage } from './live-room-page';
 export { earningsPage } from './earnings-page';
 export { reportsPage } from './reports-page';
 export { donatePage } from './donate-page';
-export { testHostPage, testGuestPage, testViewerPage } from './test-stream-page';
 export { default as staticPagesRoutes } from './static-pages';
