@@ -114,8 +114,28 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             });
         }
         
-        // ===== Share Screen (من الأصلي - السطر 923-936) =====
+        // ===== Device Capabilities Detection =====
+        function detectDeviceCapabilities() {
+            const capabilities = {
+                isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+                supportsScreenShare: !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia),
+                supportsCamera: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+            };
+            
+            log('قدرات الجهاز: Mobile=' + capabilities.isMobile + ', ScreenShare=' + capabilities.supportsScreenShare);
+            return capabilities;
+        }
+        
+        // ===== Share Screen مع دعم الموبايل =====
         async function shareScreen() {
+            const caps = detectDeviceCapabilities();
+            
+            if (caps.isMobile || !caps.supportsScreenShare) {
+                log('مشاركة الشاشة غير مدعومة - استخدام الكاميرا', 'warn');
+                showMobileAlternative();
+                return;
+            }
+            
             try {
                 log('طلب مشاركة الشاشة...');
                 localStream = await navigator.mediaDevices.getDisplayMedia({
@@ -126,7 +146,55 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 log('تم الحصول على الشاشة ✓', 'success');
                 updateStatus('الشاشة جاهزة - اضغط الانضمام', 'green');
             } catch (err) {
-                log('فشل: ' + err.message, 'error');
+                log('فشل: ' + err.message, 'warn');
+                showMobileAlternative();
+            }
+        }
+        
+        // ===== Mobile Camera Alternative =====
+        function showMobileAlternative() {
+            updateStatus('استخدم الكاميرا بدلاً من مشاركة الشاشة', 'yellow');
+            
+            let cameraBtns = document.getElementById('cameraButtons');
+            if (!cameraBtns) {
+                cameraBtns = document.createElement('div');
+                cameraBtns.id = 'cameraButtons';
+                cameraBtns.className = 'flex flex-wrap gap-2 justify-center mb-4';
+                cameraBtns.innerHTML = 
+                    '<button onclick="useCamera(\'user\')" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">' +
+                    '<i class="fas fa-camera mr-2"></i>الكاميرا الأمامية</button>' +
+                    '<button onclick="useCamera(\'environment\')" class="px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-700 transition">' +
+                    '<i class="fas fa-camera-retro mr-2"></i>الكاميرا الخلفية</button>';
+                
+                const controlsDiv = document.querySelector('.flex.flex-wrap.gap-2.justify-center.mb-4');
+                controlsDiv.parentElement.insertBefore(cameraBtns, controlsDiv);
+            }
+            cameraBtns.style.display = 'flex';
+        }
+        
+        async function useCamera(facingMode) {
+            try {
+                log('طلب الكاميرا ' + (facingMode === 'user' ? 'الأمامية' : 'الخلفية') + '...');
+                
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: true
+                });
+                
+                document.getElementById('localVideo').srcObject = localStream;
+                
+                const cameraBtns = document.getElementById('cameraButtons');
+                if (cameraBtns) cameraBtns.style.display = 'none';
+                
+                log('تم الحصول على الكاميرا ✓', 'success');
+                updateStatus('الكاميرا جاهزة - اضغط الانضمام', 'green');
+            } catch (err) {
+                log('فشل الكاميرا: ' + err.message, 'error');
+                if (err.name === 'NotAllowedError') {
+                    updateStatus('الرجاء السماح بالوصول للكاميرا', 'red');
+                } else if (err.name === 'NotFoundError') {
+                    updateStatus('لا توجد كاميرا', 'red');
+                }
             }
         }
         
