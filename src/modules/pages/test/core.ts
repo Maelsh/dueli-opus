@@ -365,8 +365,33 @@ export class LiveSequentialPlayer {
     }
 
     async start(): Promise<void> {
-        this.state = 'playing';
-        await this.playNextChunk();
+        try {
+            // ✅ AI Consensus: Load playlist to find latest chunk for live-tail behavior
+            log('🔍 Checking stream status...');
+            const playlist = await this.chunkManager.loadPlaylist();
+
+            if (playlist.chunks && playlist.chunks.length > 0) {
+                // Start from latest chunk minus 1 for stability (all AIs agree)
+                const latestIndex = Math.max(0, playlist.chunks.length - 2);
+                this.chunkManager.currentIndex = latestIndex;
+                this.onStatus?.(`بدء البث من القطعة ${latestIndex + 1} (مباشر)`);
+                log(`📍 Starting from chunk ${latestIndex + 1}/${playlist.chunks.length} (live-tail)`);
+            } else {
+                // No chunks yet - start from 0 and wait
+                this.chunkManager.currentIndex = 0;
+                this.onStatus?.('انتظار أول قطعة...');
+                log('⏳ Waiting for first chunk...');
+            }
+
+            this.state = 'playing';
+            await this.playNextChunk();
+        } catch (error) {
+            // If playlist fails, try starting from 0 anyway
+            log('⚠️ Playlist failed, starting from beginning: ' + (error as Error).message, 'warn');
+            this.chunkManager.currentIndex = 0;
+            this.state = 'playing';
+            await this.playNextChunk();
+        }
     }
 
     /**
@@ -430,6 +455,10 @@ export class LiveSequentialPlayer {
         const nextIndex = (this.activePlayerIndex + 1) % 2;
         const next = this.videoPlayers[nextIndex];
 
+        // ✅ AI Consensus (MiniMax + ChatGPT): Mute old player IMMEDIATELY to prevent audio overlap
+        current.muted = true;
+        current.pause();
+
         // Visual transition (ChatGPT Improvement #4 - Double Buffering)
         current.style.opacity = '0';
         current.style.zIndex = '1';
@@ -440,6 +469,13 @@ export class LiveSequentialPlayer {
         // Update indices
         this.activePlayerIndex = nextIndex;
         this.chunkManager.currentIndex++;
+
+        // ✅ Clean old player completely (ChatGPT recommendation)
+        setTimeout(() => {
+            current.src = '';
+            current.load();
+            current.muted = false; // Reset for next use
+        }, 500);
 
         this.state = 'playing';
 

@@ -708,10 +708,13 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             const canvasStream = canvas.captureStream(currentQuality.fps);
             
+            // ✅ Host records BOTH local AND remote audio
+            // This is the CORRECT behavior for composite stream
             localStream.getAudioTracks().forEach(track => {
                 canvasStream.addTrack(track);
             });
             
+            // ✅ ADD remote audio - Host needs to record both participants
             if (remoteStream) {
                 remoteStream.getAudioTracks().forEach(track => {
                     canvasStream.addTrack(track.clone());
