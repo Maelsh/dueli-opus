@@ -10,7 +10,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: 'src/client/index.ts',
-        'test-core': 'src/modules/pages/test/core.ts',
       },
       output: {
         entryFileNames: 'static/[name].js',

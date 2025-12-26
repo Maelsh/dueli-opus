@@ -20,6 +20,9 @@ import { P2PConnection } from './services/P2PConnection';
 import { VideoCompositor } from './services/VideoCompositor';
 import { ChunkUploader } from './services/ChunkUploader';
 
+// Test Streaming Modules
+import { ChunkManager, LiveSequentialPlayer, VodMsePlayer, UploadQueue, log as testLog, updateStatus, setMode, drawVideoProportional } from '../modules/pages/test/core';
+
 // Countries (shared data)
 import { getCountriesList, getCountry } from '../countries';
 import { t, isRTL } from '../i18n';
@@ -214,6 +217,16 @@ declare global {
         P2PConnection: typeof P2PConnection;
         VideoCompositor: typeof VideoCompositor;
         ChunkUploader: typeof ChunkUploader;
+
+        // Test Streaming (for test pages)
+        ChunkManager: typeof ChunkManager;
+        LiveSequentialPlayer: typeof LiveSequentialPlayer;
+        VodMsePlayer: typeof VodMsePlayer;
+        UploadQueue: typeof UploadQueue;
+        testLog: typeof testLog;
+        updateStatus: typeof updateStatus;
+        setMode: typeof setMode;
+        drawVideoProportional: typeof drawVideoProportional;
     }
 }
 
@@ -304,6 +317,16 @@ if (typeof window !== 'undefined') {
     window.P2PConnection = P2PConnection;
     window.VideoCompositor = VideoCompositor;
     window.ChunkUploader = ChunkUploader;
+
+    // Bind Test Streaming (for test pages)
+    window.ChunkManager = ChunkManager;
+    window.LiveSequentialPlayer = LiveSequentialPlayer;
+    window.VodMsePlayer = VodMsePlayer;
+    window.UploadQueue = UploadQueue;
+    window.testLog = testLog;
+    window.updateStatus = updateStatus;
+    window.setMode = setMode;
+    window.drawVideoProportional = drawVideoProportional;
 }
 
 // Auto-initialize when DOM is ready

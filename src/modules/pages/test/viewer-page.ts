@@ -130,16 +130,9 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         </div>
     </div>
 
-    <script type="module">
-        // Import من core.ts (سيتم تحويله بواسطة Vite)
-        import {
-            ChunkManager,
-            LiveSequentialPlayer,
-            VodMsePlayer,
-            log,
-            updateStatus,
-            setMode
-        } from '/static/test-core.js';
+    <script>
+        // Use globals from app.js bundle (same as live-room-page.ts)
+        const { ChunkManager, LiveSequentialPlayer, VodMsePlayer, testLog: log, updateStatus, setMode } = window;
 
         // Global state
         let currentPlayer = null;

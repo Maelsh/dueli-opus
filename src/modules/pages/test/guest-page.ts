@@ -68,8 +68,8 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script type="module">
-        import { log } from '/static/test-core.js';
+    <script>
+        // Use globals from app.js bundle
 
         const streamServerUrl = 'https://stream.maelsh.pro';
         const testRoomId = 'test_room_001';
@@ -86,9 +86,9 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                     audio: true
                 });
                 document.getElementById('localVideo').srcObject = localStream;
-                log('✅ Camera & microphone ready');
+                window.testLog('✅ Camera & microphone ready');
             } catch (error) {
-                log('خطأ في الوصول للكاميرا: ' + error.message, 'error');
+                window.testLog('خطأ في الوصول للكاميرا: ' + error.message, 'error');
             }
         }
 
@@ -103,7 +103,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             });
 
             peerConnection.ontrack = (event) => {
-                log('📺 استلام remote stream');
+                window.testLog('📺 استلام remote stream');
                 document.getElementById('remoteVideo').srcObject = event.streams[0];
             };
 
@@ -116,7 +116,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
 
         window.joinRoom = async function() {
             if (!localStream) {
-                log('انتظر تهيئة الكاميرا', 'warn');
+                window.testLog('انتظر تهيئة الكاميرا', 'warn');
                 return;
             }
 
@@ -124,18 +124,18 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             socket = io(streamServerUrl);
             
             socket.on('connect', () => {
-                log('✅ اتصال بالسيرفر نجح');
+                window.testLog('✅ اتصال بالسيرفر نجح');
                 socket.emit('join-room', { roomId: testRoomId, role: 'guest' });
             });
 
             socket.on('offer', async (data) => {
-                log('📥 استلام offer من المضيف');
+                window.testLog('📥 استلام offer من المضيف');
                 createPeerConnection();
                 await peerConnection.setRemoteDescription(data.offer);
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
                 socket.emit('answer', { roomId: testRoomId, answer });
-                log('📤 إرسال answer');
+                window.testLog('📤 إرسال answer');
             });
 
             socket.on('ice-candidate', async (data) => {
@@ -144,18 +144,18 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 }
             });
 
-            log('🎮 انتظار اتصال المضيف...');
+            window.testLog('🎮 انتظار اتصال المضيف...');
         };
 
         window.disconnect = function() {
             if (peerConnection) peerConnection.close();
             if (socket) socket.disconnect();
-            log('قطع الاتصال');
+            window.testLog('قطع الاتصال');
         };
 
         // Initialize
         initLocalStream();
-        log('🎮 Guest page ready');
+        window.testLog('🎮 Guest page ready');
     </script>
 </body>
 </html>

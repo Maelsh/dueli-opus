@@ -83,8 +83,8 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
     </div>
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script type="module">
-        import { UploadQueue, drawVideoProportional, log } from '/static/test-core.js';
+    <script>
+        // Use globals from app.js bundle (same as live-room-page.ts)
 
         const streamServerUrl = '${streamServerUrl}';
         const testRoomId = '${testRoomId}';
@@ -111,22 +111,22 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         socket = io(streamServerUrl);
         
         socket.on('connect', () => {
-            log('✅ اتصال بالسيرفر نجح');
+            window.testLog('✅ اتصال بالسيرفر نجح');
             socket.emit('join-room', { roomId: testRoomId, role: 'host' });
         });
 
         socket.on('guest-joined', () => {
-            log('🎉 ضيف انضم للغرفة');
+            window.testLog('🎉 ضيف انضم للغرفة');
             createOffer();
         });
 
         socket.on('offer', async (data) => {
-            log('📥 استلام offer');
+            window.testLog('📥 استلام offer');
             await handleOffer(data.offer);
         });
 
         socket.on('answer', async (data) => {
-            log('📥 استلام answer');
+            window.testLog('📥 استلام answer');
             await peerConnection.setRemoteDescription(data.answer);
         });
 
@@ -142,9 +142,9 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     audio: true
                 });
                 document.getElementById('localVideo').srcObject = localStream;
-                log('✅ Camera & microphone ready');
+                window.testLog('✅ Camera & microphone ready');
             } catch (error) {
-                log('خطأ في الوصول للكاميرا: ' + error.message, 'error');
+                window.testLog('خطأ في الوصول للكاميرا: ' + error.message, 'error');
             }
         }
 
@@ -159,7 +159,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             });
 
             peerConnection.ontrack = (event) => {
-                log('📺 استلام remote stream');
+                window.testLog('📺 استلام remote stream');
                 remoteStream = event.streams[0];
                 document.getElementById('remoteVideo').srcObject = remoteStream;
             };
@@ -191,11 +191,11 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         // Recording with canvas
         window.start = async function() {
             if (!localStream) {
-                log('انتظر تهيئة الكاميرا', 'warn');
+                window.testLog('انتظر تهيئة الكاميرا', 'warn');
                 return;
             }
 
-            uploadQueue = new UploadQueue(competitionId);
+            uploadQueue = new window.UploadQueue(competitionId);
             chunkIndex = 0;
 
             // Create canvas
@@ -228,10 +228,10 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const videoAreaHeight = CANVAS_HEIGHT - (margin * 2);
 
                 // Local (left)
-                drawVideoProportional(ctx, localVideo, margin, margin, videoAreaWidth, videoAreaHeight, 'أنت');
+                window.drawVideoProportional(ctx, localVideo, margin, margin, videoAreaWidth, videoAreaHeight, 'أنت');
 
                 // Remote (right)
-                drawVideoProportional(ctx, remoteVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin, videoAreaWidth, videoAreaHeight, 'المنافس');
+                window.drawVideoProportional(ctx, remoteVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin, videoAreaWidth, videoAreaHeight, 'المنافس');
             }
 
             const frameInterval = Math.round(1000 / 30);
@@ -258,12 +258,12 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 if (e.data.size > 0) {
                     uploadQueue.add(e.data, chunkIndex);
                     chunkIndex++;
-                    log(\`📤 Chunk \${chunkIndex} queued\`);
+                    window.testLog(\`📤 Chunk \${chunkIndex} queued\`);
                 }
             };
 
             mediaRecorder.start(5000); // 5s chunks
-            log('🔴 التسجيل بدأ');
+            window.testLog('🔴 التسجيل بدأ');
 
             document.getElementById('startBtn').disabled = true;
             document.getElementById('stopBtn').disabled = false;
@@ -277,7 +277,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             if (uploadQueue) {
                 await uploadQueue.waitForCompletion();
             }
-            log('⏹️ التسجيل توقف');
+            window.testLog('⏹️ التسجيل توقف');
 
             document.getElementById('startBtn').disabled = false;
             document.getElementById('stopBtn').disabled = true;
@@ -287,12 +287,12 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             stop();
             if (peerConnection) peerConnection.close();
             if (socket) socket.disconnect();
-            log('قطع الاتصال');
+            window.testLog('قطع الاتصال');
         };
 
         // Initialize
         initLocalStream();
-        log('🎬 Host page ready');
+        window.testLog('🎬 Host page ready');
     </script>
 </body>
 </html>
