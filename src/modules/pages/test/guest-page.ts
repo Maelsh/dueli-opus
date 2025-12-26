@@ -90,8 +90,8 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
     
     <script src="/static/app.js"></script>
     <script>
-        // استيراد الدوال من core.ts عبر window
-        const { log, updateStatus } = window;
+        // استيراد الدوال من core.ts عبر window (تصحيح الأسماء)
+        const { testLog: log, updateStatus } = window;
         
         const roomId = '${testRoomId}';
         const role = 'guest';

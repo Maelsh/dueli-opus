@@ -93,8 +93,8 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
     
     <script src="/static/app.js"></script>
     <script>
-        // استيراd الدوال من core.ts عبر window
-        const { UploadQueue, drawVideoProportional, log, updateStatus } = window;
+        // استيراد الدوال من core.ts عبر window (تصحيح الأسماء)
+        const { testLog: log, updateStatus, UploadQueue, drawVideoProportional } = window;
         
         const roomId = '${testRoomId}';
         const role = 'host';

@@ -86,8 +86,8 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
     
     <script src="/static/app.js"></script>
     <script>
-        // استيراد من core.ts عبر window (مع التحسينات)
-        const { ChunkManager, LiveSequentialPlayer, VodMsePlayer, log, updateStatus, setMode } = window;
+        // استيراد من core.ts عبر window (تصحيح الأسماء)
+        const { ChunkManager, LiveSequentialPlayer, VodMsePlayer, testLog: log, updateStatus, setMode } = window;
         
         // Setup (من الأصلي - السطر 1235-1248)
         const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
