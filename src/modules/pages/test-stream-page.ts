@@ -1325,17 +1325,21 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                 this.config.onChunkChange?.(this.currentChunkIndex + 1, this.playlist.chunks.length);
                 
                 // ═══ Double Buffering ═══
-                const nextIndex = (this.activeIndex + 1) % 2;
                 const activePlayer = this.players[this.activeIndex];
+                const nextIndex = (this.activeIndex + 1) % 2;
                 const nextPlayer = this.players[nextIndex];
                 
                 try {
-                    // حمّل القطعة التالية في buffer
-                    nextPlayer.src = chunk.url;
-                    nextPlayer.load();
+                    // ⭐ حمّل القطعة الحالية في active player
+                    activePlayer.src = chunk.url;
+                    await activePlayer.play();
                     
-                    // شغّل القطعة الحالية
-                    activePlayer.play();
+                    // ⭐ Preload القطعة التالية في buffer (إذا موجودة)
+                    if (this.currentChunkIndex + 1 < this.playlist.chunks.length) {
+                        const nextChunk = this.playlist.chunks[this.currentChunkIndex + 1];
+                        nextPlayer.src = nextChunk.url;
+                        nextPlayer.load();
+                    }
                     
                     // مراقبة نهاية القطعة
                     activePlayer.ontimeupdate = () => {
@@ -1344,25 +1348,20 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                         
                         // بدّل قبل النهاية بـ 0.5s
                         if (timeLeft < 0.5 && timeLeft > 0) {
-                            nextPlayer.play().then(() => {
-                                // تبديل سلس
-                                nextPlayer.style.opacity = '1';
-                                activePlayer.style.opacity = '0';
-                                
-                                this.activeIndex = nextIndex;
-                                this.currentChunkIndex++;
-                                
-                                // تنظيف
-                                setTimeout(() => {
-                                    activePlayer.src = '';
-                                    activePlayer.load();
-                                }, 500);
-                                
-                                this.playNextChunk();
-                            }).catch(error => {
-                                log('خطأ في التشغيل: ' + error.message, 'error');
-                            });
+                            // تبديل سلس
+                            nextPlayer.style.opacity = '1';
+                            activePlayer.style.opacity = '0';
+                            nextPlayer.play();
                             
+                            this.activeIndex = nextIndex;
+                            this.currentChunkIndex++;
+                            
+                            // تنظيف
+                            setTimeout(() => {
+                                activePlayer.src = '';
+                            }, 500);
+                            
+                            this.playNextChunk();
                             activePlayer.ontimeupdate = null;
                         }
                     };
@@ -1370,6 +1369,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                     // Fallback
                     activePlayer.onended = () => {
                         this.currentChunkIndex++;
+                        this.activeIndex = nextIndex;
                         this.playNextChunk();
                     };
                     
