@@ -139,7 +139,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             log,
             updateStatus,
             setMode
-        } from './core.ts';
+        } from '/static/test-core.js';
 
         // Global state
         let currentPlayer = null;

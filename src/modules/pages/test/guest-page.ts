@@ -69,7 +69,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script type="module">
-        import { log } from './core.ts';
+        import { log } from '/static/test-core.js';
 
         const streamServerUrl = 'https://stream.maelsh.pro';
         const testRoomId = 'test_room_001';

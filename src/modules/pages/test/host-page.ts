@@ -84,7 +84,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
 
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script type="module">
-        import { UploadQueue, drawVideoProportional, log } from './core.ts';
+        import { UploadQueue, drawVideoProportional, log } from '/static/test-core.js';
 
         const streamServerUrl = '${streamServerUrl}';
         const testRoomId = '${testRoomId}';
