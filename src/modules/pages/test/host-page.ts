@@ -163,7 +163,11 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 supportsCamera: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
             };
             
-            log('قدرات الجهاز: Mobile=' + capabilities.isMobile + ', ScreenShare=' + capabilities.supportsScreenShare + ', Camera=' + capabilities.supportsCamera);
+            log('📱 قدرات الجهاز:', 'info');
+            log('   - Mobile: ' + capabilities.isMobile, capabilities.isMobile ? 'warn' : 'info');
+            log('   - Screen Share: ' + capabilities.supportsScreenShare, capabilities.supportsScreenShare ? 'success' : 'error');
+            log('   - Camera: ' + capabilities.supportsCamera, capabilities.supportsCamera ? 'success' : 'error');
+            
             return capabilities;
         }
         
@@ -173,7 +177,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             // على الموبايل أو إذا كانت مشاركة الشاشة غير مدعومة
             if (caps.isMobile || !caps.supportsScreenShare) {
-                log('مشاركة الشاشة غير مدعومة - استخدام الكاميرا', 'warn');
+                log('⚠️ مشاركة الشاشة غير متاحة - عرض خيارات الكاميرا', 'warn');
                 showMobileAlternative();
                 return;
             }
@@ -204,20 +208,24 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     disconnect();
                 };
             } catch (err) {
-                log('مشاركة الشاشة فشلت: ' + err.message, 'warn');
+                log('⚠️ مشاركة الشاشة فشلت: ' + err.message, 'warn');
+                log('📹 عرض خيارات الكاميرا البديلة...', 'info');
                 showMobileAlternative();
             }
         }
         
         // ===== عرض خيار الموبايل البديل =====
         function showMobileAlternative() {
-            updateStatus('استخدم الكاميرا بدلاً من مشاركة الشاشة', 'yellow');
+            log('📱 تفعيل وضع الموبايل (كاميرا)', 'info');
+            updateStatus('استخدم الكاميرا للبث 📹', 'yellow');
             
             let cameraBtns = document.getElementById('cameraButtons');
             if (!cameraBtns) {
+                log('إنشاء أزرار الكاميرا...', 'info');
                 cameraBtns = document.createElement('div');
                 cameraBtns.id = 'cameraButtons';
                 cameraBtns.className = 'flex flex-wrap gap-2 justify-center mb-4';
+                cameraBtns.style.display = 'flex'; // ✅ Force display
                 
                 // Create front camera button
                 const frontBtn = document.createElement('button');
@@ -235,10 +243,16 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 cameraBtns.appendChild(backBtn);
                 
                 const controlsDiv = document.querySelector('.flex.flex-wrap.gap-2.justify-center.mb-4');
-                controlsDiv.parentElement.insertBefore(cameraBtns, controlsDiv);
+                if (controlsDiv && controlsDiv.parentElement) {
+                    controlsDiv.parentElement.insertBefore(cameraBtns, controlsDiv);
+                    log('✅ أزرار الكاميرا تم إضافتها', 'success');
+                } else {
+                    log('❌ لم يتم العثور على مكان لإضافة الأزرار', 'error');
+                }
+            } else {
+                cameraBtns.style.display = 'flex';
+                log('✅ أزرار الكاميرا معروضة', 'success');
             }
-            
-            cameraBtns.style.display = 'flex';
         }
         
         // ===== استخدام الكاميرا كبديل =====
@@ -849,7 +863,16 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         
         // Init (من الأصلي - السطر 792-793)
         log('تم تحميل صفحة Host');
-        updateStatus('اضغط "مشاركة الشاشة" للبدء', 'blue');
+        
+        // ✅ Auto-detect mobile on page load
+        const initialCaps = detectDeviceCapabilities();
+        if (initialCaps.isMobile || !initialCaps.supportsScreenShare) {
+            log('🔍 جهاز موبايل مكتشف - عرض خيارات الكاميرا تلقائياً', 'info');
+            updateStatus('📱 استخدم الكاميرا للبث', 'blue');
+            // Don't call showMobileAlternative here, wait for user to click shareScreen
+        } else {
+            updateStatus('اضغط "مشاركة الشاشة" للبدء', 'blue');
+        }
     </script>
 </body>
 </html>
