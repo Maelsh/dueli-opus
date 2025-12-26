@@ -1203,10 +1203,9 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         </div>
         
         <!-- Video Container -->
-        <div class="video-container aspect-video mb-4" style="position: relative;">
+        <div class="video-container aspect-video mb-4">
             <div id="modeBadge" class="mode-badge hidden"></div>
-            <video id="videoPlayer" controls autoplay playsinline class="w-full h-full" style="position: absolute; top: 0; left: 0; transition: opacity 0.4s ease;"></video>
-            <video id="videoPlayer2" controls playsinline class="w-full h-full" style="position: absolute; top: 0; left: 0; opacity: 0; transition: opacity 0.4s ease;"></video>
+            <video id="videoPlayer" controls autoplay playsinline class="w-full h-full"></video>
         </div>
         
         <!-- Log -->
@@ -1270,16 +1269,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                 mode: 'live',
                 ...config
             };
-            // ⭐ Double buffering للـ sequential mode
-            this.players = [
-                document.getElementById('videoPlayer'),
-                document.getElementById('videoPlayer2')
-            ];
-            this.activeIndex = 0;
-            
-            // ⭐ للـ MSE mode و stop()
-            this.video = this.players[0];
-            
+            this.video = config.videoElement;
             this.playlist = null;
             this.currentChunkIndex = 0;
             this.isPlaying = false;
@@ -1320,59 +1310,15 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                     setTimeout(() => this.checkForNewChunks(), 2000);
                     return;
                 }
-                
                 const chunk = this.playlist.chunks[this.currentChunkIndex];
                 this.config.onChunkChange?.(this.currentChunkIndex + 1, this.playlist.chunks.length);
-                
-                // ═══ Double Buffering ═══
-                const activePlayer = this.players[this.activeIndex];
-                const nextIndex = (this.activeIndex + 1) % 2;
-                const nextPlayer = this.players[nextIndex];
-                
                 try {
-                    // ⭐ حمّل القطعة الحالية في active player
-                    activePlayer.src = chunk.url;
-                    await activePlayer.play();
-                    
-                    // ⭐ Preload القطعة التالية في buffer (إذا موجودة)
-                    if (this.currentChunkIndex + 1 < this.playlist.chunks.length) {
-                        const nextChunk = this.playlist.chunks[this.currentChunkIndex + 1];
-                        nextPlayer.src = nextChunk.url;
-                        nextPlayer.load();
-                    }
-                    
-                    // مراقبة نهاية القطعة
-                    activePlayer.ontimeupdate = () => {
-                        if (!activePlayer.duration) return;
-                        const timeLeft = activePlayer.duration - activePlayer.currentTime;
-                        
-                        // بدّل قبل النهاية بـ 0.5s
-                        if (timeLeft < 0.5 && timeLeft > 0) {
-                            // تبديل سلس
-                            nextPlayer.style.opacity = '1';
-                            activePlayer.style.opacity = '0';
-                            nextPlayer.play();
-                            
-                            this.activeIndex = nextIndex;
-                            this.currentChunkIndex++;
-                            
-                            // تنظيف
-                            setTimeout(() => {
-                                activePlayer.src = '';
-                            }, 500);
-                            
-                            this.playNextChunk();
-                            activePlayer.ontimeupdate = null;
-                        }
-                    };
-                    
-                    // Fallback
-                    activePlayer.onended = () => {
+                    this.video.src = chunk.url;
+                    await this.video.play();
+                    this.video.onended = () => {
                         this.currentChunkIndex++;
-                        this.activeIndex = nextIndex;
                         this.playNextChunk();
                     };
-                    
                 } catch (error) {
                     log('خطأ في التشغيل: ' + error.message, 'error');
                     setTimeout(() => this.playNextChunk(), 1000);
