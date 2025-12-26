@@ -514,38 +514,99 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             log('بدء التسجيل (المنافسة: ' + competitionId + ')');
             
-            // إنشاء Canvas بالجودة المحددة (side-by-side)
+            // إنشاء Canvas بجودة ثابتة 1280x720 (16:9)
+            const CANVAS_WIDTH = 1280;
+            const CANVAS_HEIGHT = 720;
             const canvas = document.createElement('canvas');
-            canvas.width = currentQuality.width * 2; // مضاعف للـ side-by-side
-            canvas.height = currentQuality.height * 2;
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
             const ctx = canvas.getContext('2d');
             
             const localVideo = document.getElementById('localVideo');
             const remoteVideo = document.getElementById('remoteVideo');
             
-            // رسم الفيديوهين على Canvas باستخدام setInterval (يعمل بالخلفية)
-            function drawFrame() {
+            // ===== دالة رسم فيديو proportional =====
+            function drawVideoProportional(video, x, y, maxWidth, maxHeight, label) {
+                if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+                
+                const videoRatio = video.videoWidth / video.videoHeight;
+                const targetRatio = maxWidth / maxHeight;
+                let drawW, drawH;
+                
+                if (videoRatio > targetRatio) {
+                    // Video أعرض - fit to width
+                    drawW = maxWidth;
+                    drawH = maxWidth / videoRatio;
+                } else {
+                    // Video أطول - fit to height
+                    drawH = maxHeight;
+                    drawW = maxHeight * videoRatio;
+                }
+                
+                // Center video in allocated space
+                const offsetX = x + (maxWidth - drawW) / 2;
+                const offsetY = y + (maxHeight - drawH) / 2;
+                
+                // رسم خلفية سوداء للمساحة الفارغة
                 ctx.fillStyle = '#000';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillRect(x, y, maxWidth, maxHeight);
+                
+                // رسم الفيديو
+                ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
+                
+                // إطار حول الفيديو
+                ctx.strokeStyle = '#4f46e5';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, maxWidth, maxHeight);
+                
+                // Label
+                ctx.fillStyle = 'rgba(0,0,0,0.8)';
+                ctx.fillRect(x + 10, y + maxHeight - 35, 80, 25);
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText(label, x + 20, y + maxHeight - 15);
+            }
+            
+            // ===== رسم الإطار =====
+            function drawFrame() {
+                // Background gradient
+                const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                gradient.addColorStop(0, '#1a1a2e');
+                gradient.addColorStop(1, '#16213e');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                
+                // Logo/Watermark (optional)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('DUELI', CANVAS_WIDTH / 2, 60);
+                ctx.textAlign = 'left'; // reset
+                
+                // Define video areas (with margins)
+                const margin = 40;
+                const videoAreaWidth = (CANVAS_WIDTH / 2) - (margin * 1.5);
+                const videoAreaHeight = CANVAS_HEIGHT - (margin * 2);
                 
                 // الفيديو المحلي (يسار)
-                if (localVideo && localVideo.videoWidth > 0) {
-                    ctx.drawImage(localVideo, 0, 0, canvas.width / 2, canvas.height);
-                }
+                drawVideoProportional(
+                    localVideo,
+                    margin,
+                    margin,
+                    videoAreaWidth,
+                    videoAreaHeight,
+                    'أنت'
+                );
                 
                 // الفيديو البعيد (يمين)
-                if (remoteVideo && remoteVideo.videoWidth > 0) {
-                    ctx.drawImage(remoteVideo, canvas.width / 2, 0, canvas.width / 2, canvas.height);
-                }
-                
-                // تسميات
-                ctx.fillStyle = 'rgba(0,0,0,0.7)';
-                ctx.fillRect(5, canvas.height - 25, 50, 20);
-                ctx.fillRect(canvas.width / 2 + 5, canvas.height - 25, 60, 20);
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 12px Arial';
-                ctx.fillText('أنت', 15, canvas.height - 10);
-                ctx.fillText('المنافس', canvas.width / 2 + 10, canvas.height - 10);
+                drawVideoProportional(
+                    remoteVideo,
+                    (CANVAS_WIDTH / 2) + (margin / 2),
+                    margin,
+                    videoAreaWidth,
+                    videoAreaHeight,
+                    'المنافس'
+                );
             }
             
             // setInterval بدلاً من requestAnimationFrame
@@ -1153,11 +1214,11 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
             </button>
         </div>
         
-        <!-- Video Container -->
-        <div class="video-container aspect-video mb-4">
+        <div class="video-container aspect-video mb-4" style="position: relative;">
             <div id="modeBadge" class="mode-badge hidden"></div>
-            <video id="videoPlayer" controls autoplay playsinline class="w-full h-full"></video>
-        </div>
+            <video id="videoPlayer1" controls autoplay playsinline style="position: absolute; width: 100%; height: 100%; transition: opacity 0.3s; opacity: 1; z-index: 2;"></video>
+            <video id="videoPlayer2" autoplay playsinline style="position: absolute; width: 100%; height: 100%; transition: opacity 0.3s; opacity: 0; z-index: 1;"></video>
+        </div>  
         
         <!-- Log -->
         <div id="log" class="bg-gray-900 rounded-lg p-3 h-40 overflow-y-auto text-xs font-mono"></div>
@@ -1172,7 +1233,12 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
     <script>
     // ===== إعدادات =====
     const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
-    const videoPlayer = document.getElementById('videoPlayer');
+    const videoPlayers = [
+        document.getElementById('videoPlayer1'),
+        document.getElementById('videoPlayer2')
+    ];
+    let activePlayerIndex = 0;
+    const videoPlayer = videoPlayers[0]; // للتوافق مع الكود القديم
     const modeBadge = document.getElementById('modeBadge');
     // قراءة رقم المنافسة من URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -1261,15 +1327,46 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
                     setTimeout(() => this.checkForNewChunks(), 2000);
                     return;
                 }
+                
                 const chunk = this.playlist.chunks[this.currentChunkIndex];
                 this.config.onChunkChange?.(this.currentChunkIndex + 1, this.playlist.chunks.length);
+                
+                // Double buffering logic
+                const currentPlayer = videoPlayers[activePlayerIndex];
+                const nextPlayerIndex = (activePlayerIndex + 1) % 2;
+                const nextPlayer = videoPlayers[nextPlayerIndex];
+                
                 try {
-                    this.video.src = chunk.url;
-                    await this.video.play();
-                    this.video.onended = () => {
+                    // حمّل القطعة التالية في المشغل الخفي مسبقاً
+                    if (this.currentChunkIndex + 1 < this.playlist.chunks.length) {
+                        const nextChunk = this.playlist.chunks[this.currentChunkIndex + 1];
+                        nextPlayer.src = nextChunk.url;
+                        await nextPlayer.load();
+                    }
+                    
+                    // شغّل القطعة الحالية
+                    currentPlayer.src = chunk.url;
+                    await currentPlayer.play();
+                    
+                    // بدّل قبل النهاية بـ 0.3s
+                    currentPlayer.ontimeupdate = () => {
+                        const remaining = currentPlayer.duration - currentPlayer.currentTime;
+                        if (remaining < 0.3 && remaining > 0 && nextPlayer.readyState >= 3) {
+                            // بدّل العرض
+                            currentPlayer.style.opacity = '0';
+                            currentPlayer.style.zIndex = '1';
+                            nextPlayer.style.opacity = '1';
+                            nextPlayer.style.zIndex = '2';
+                            nextPlayer.play();
+                            activePlayerIndex = nextPlayerIndex;
+                        }
+                    };
+                    
+                    currentPlayer.onended = () => {
                         this.currentChunkIndex++;
                         this.playNextChunk();
                     };
+                    
                 } catch (error) {
                     log('خطأ في التشغيل: ' + error.message, 'error');
                     setTimeout(() => this.playNextChunk(), 1000);
