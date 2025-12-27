@@ -395,8 +395,9 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     pc.connectionState === 'failed' ? 'error' : 'info');
                 
                 if (pc.connectionState === 'connected') {
-                    updateStatus('متصل ✓ - جاري التسجيل', 'green');
-                    startRecording();
+                    updateStatus('متصل ✓ - انتظار الضيف...', 'green');
+                    // ✅ FIX: Wait for remoteStream before recording
+                    waitForRemoteStreamThenRecord();
                 } else if (pc.connectionState === 'failed') {
                     updateStatus('فشل الاتصال', 'red');
                 }
@@ -622,6 +623,32 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             }
 
             return { valid: true };
+        }
+        
+        // ✅ FIX: Wait for remote stream before recording
+        async function waitForRemoteStreamThenRecord() {
+            log('⏳ انتظار بث الضيف...', 'info');
+            
+            let attempts = 0;
+            const maxAttempts = 20; // 10 seconds max (20 * 500ms)
+            
+            while (!remoteStream && attempts < maxAttempts) {
+                await new Promise(r => setTimeout(r, 500));
+                attempts++;
+                log('   انتظار... (' + attempts + '/' + maxAttempts + ')');
+            }
+            
+            if (remoteStream) {
+                log('✅ تم استلام بث الضيف!', 'success');
+                log('   Audio tracks: ' + remoteStream.getAudioTracks().length);
+                log('   Video tracks: ' + remoteStream.getVideoTracks().length);
+                updateStatus('متصل ✓ - جاري التسجيل', 'green');
+                startRecording();
+            } else {
+                log('⚠️ لم يصل بث الضيف - التسجيل بدون صوت الضيف', 'warn');
+                updateStatus('متصل ✓ - التسجيل بدون ضيف', 'yellow');
+                startRecording();
+            }
         }
         
         // ===== Start Recording (من الأصلي - السطر 501-669) =====
