@@ -814,30 +814,54 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             const canvasStream = canvas.captureStream(currentQuality.fps);
             
-            // ✅ Host records BOTH local AND remote audio
-            log('📊 إعداد المسارات الصوتية للتسجيل...');
+            // ✅ CRITICAL FIX: استخدام Web Audio API لدمج الصوتين
+            // MediaRecorder لا يدعم تسجيل أكثر من audio track واحد!
+            log('📊 دمج المسارات الصوتية باستخدام Web Audio API...');
             log('   - Local audio tracks: ' + localStream.getAudioTracks().length);
             log('   - Remote audio tracks: ' + (remoteStream ? remoteStream.getAudioTracks().length : 0));
             
-            localStream.getAudioTracks().forEach(track => {
-                canvasStream.addTrack(track);
-                log('   ✅ تمت إضافة صوت المضيف: ' + track.label, 'success');
-            });
-            
-            // ✅ ADD remote audio - بدون clone! الـ clone يقطع الربط مع WebRTC
-            if (remoteStream && remoteStream.getAudioTracks().length > 0) {
-                remoteStream.getAudioTracks().forEach(track => {
-                    canvasStream.addTrack(track); // ❌ لا تستخدم clone()!
-                    log('   ✅ تمت إضافة صوت الضيف: ' + track.label, 'success');
+            try {
+                const audioContext = new AudioContext();
+                const destination = audioContext.createMediaStreamDestination();
+                
+                // إضافة صوت المضيف
+                if (localStream.getAudioTracks().length > 0) {
+                    const localSource = audioContext.createMediaStreamSource(localStream);
+                    localSource.connect(destination);
+                    log('   ✅ صوت المضيف متصل بالـ mixer', 'success');
+                }
+                
+                // إضافة صوت الضيف
+                if (remoteStream && remoteStream.getAudioTracks().length > 0) {
+                    const remoteSource = audioContext.createMediaStreamSource(remoteStream);
+                    remoteSource.connect(destination);
+                    log('   ✅ صوت الضيف متصل بالـ mixer', 'success');
+                } else {
+                    log('   ⚠️ تحذير: لا يوجد صوت للضيف', 'warn');
+                }
+                
+                // إضافة الصوت المدمج للـ canvasStream
+                const mixedAudioTrack = destination.stream.getAudioTracks()[0];
+                if (mixedAudioTrack) {
+                    canvasStream.addTrack(mixedAudioTrack);
+                    log('   ✅ تم دمج الصوتين في track واحد!', 'success');
+                }
+                
+                // حفظ الـ audioContext للتنظيف لاحقاً
+                window.recordingAudioContext = audioContext;
+                
+            } catch (audioErr) {
+                log('⚠️ فشل Web Audio API - استخدام الطريقة القديمة: ' + audioErr.message, 'warn');
+                // Fallback: إضافة صوت المضيف فقط
+                localStream.getAudioTracks().forEach(track => {
+                    canvasStream.addTrack(track);
                 });
-            } else {
-                log('   ⚠️ تحذير: لم يتم العثور على صوت للضيف لحظة بدء التسجيل!', 'warn');
             }
             
             const recorderOptions = {
                 mimeType: 'video/webm;codecs=vp8,opus',
                 videoBitsPerSecond: currentQuality.bitrate,
-                audioBitsPerSecond: 64000
+                audioBitsPerSecond: 128000 // زيادة جودة الصوت
             };
             
             try {
