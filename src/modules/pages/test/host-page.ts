@@ -103,7 +103,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         // Global state (من الأصلي - السطر 101-108)
         let pc = null;
         let localStream = null;
-        let remoteStream = null;
+        let remoteStream = new MediaStream(); // ✅ وعاء ثابت لاستقبال المسارات
         let pollingInterval = null;
         let mediaRecorder = null;
         let chunkIndex = 0;
@@ -360,23 +360,35 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('تمت إضافة track: ' + track.kind);
             });
             
-            // Handle remote stream
+            // Handle remote stream - إضافة المسارات للوعاء الثابت
             pc.ontrack = (event) => {
-                log('📥 ontrack fired!', 'success');
-                log('   - event.track.kind: ' + event.track.kind);
-                log('   - event.streams.length: ' + event.streams.length);
-                if (event.streams[0]) {
-                    log('   - stream.id: ' + event.streams[0].id);
-                    log('   - stream tracks: ' + event.streams[0].getTracks().length);
-                    remoteStream = event.streams[0]; // حفظ للـ Canvas
-                    const remoteVideo = document.getElementById('remoteVideo');
-                    remoteVideo.srcObject = event.streams[0];
-                    remoteVideo.onloadedmetadata = () => {
-                        log('   ✅ Remote video loaded: ' + remoteVideo.videoWidth + 'x' + remoteVideo.videoHeight, 'success');
-                    };
-                    updateStatus('متصل ✓', 'green');
-                } else {
-                    log('   ⚠️ No stream in event!', 'error');
+                log('📥 ontrack fired: ' + event.track.kind, 'success');
+                
+                // ✅ إضافة المسار للوعاء الثابت بدلاً من استبداله
+                if (!remoteStream.getTracks().find(t => t.id === event.track.id)) {
+                    remoteStream.addTrack(event.track);
+                    log('   ✅ تمت إضافة ' + event.track.kind + ' track للوعاء', 'success');
+                }
+                
+                // تحديث عدد المسارات
+                log('   - إجمالي المسارات في remoteStream: ' + remoteStream.getTracks().length);
+                log('   - Video tracks: ' + remoteStream.getVideoTracks().length);
+                log('   - Audio tracks: ' + remoteStream.getAudioTracks().length);
+                
+                // ربط الفيديو بالعنصر
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo.srcObject !== remoteStream) {
+                    remoteVideo.srcObject = remoteStream;
+                }
+                
+                remoteVideo.onloadedmetadata = () => {
+                    log('   ✅ Remote video loaded: ' + remoteVideo.videoWidth + 'x' + remoteVideo.videoHeight, 'success');
+                };
+                
+                // تحديث الحالة عند وصول الصوت
+                if (event.track.kind === 'audio') {
+                    log('🎤 صوت الضيف وصل!', 'success');
+                    updateStatus('متصل ✓ (صوت + فيديو)', 'green');
                 }
             };
             
@@ -395,9 +407,8 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     pc.connectionState === 'failed' ? 'error' : 'info');
                 
                 if (pc.connectionState === 'connected') {
-                    updateStatus('متصل ✓ - انتظار الضيف...', 'green');
-                    // ✅ FIX: Wait for remoteStream before recording
-                    waitForRemoteStreamThenRecord();
+                    updateStatus('متصل ✓ - جاري التسجيل', 'green');
+                    startRecording();
                 } else if (pc.connectionState === 'failed') {
                     updateStatus('فشل الاتصال', 'red');
                 }
@@ -625,32 +636,6 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             return { valid: true };
         }
         
-        // ✅ FIX: Wait for remote stream before recording
-        async function waitForRemoteStreamThenRecord() {
-            log('⏳ انتظار بث الضيف...', 'info');
-            
-            let attempts = 0;
-            const maxAttempts = 20; // 10 seconds max (20 * 500ms)
-            
-            while (!remoteStream && attempts < maxAttempts) {
-                await new Promise(r => setTimeout(r, 500));
-                attempts++;
-                log('   انتظار... (' + attempts + '/' + maxAttempts + ')');
-            }
-            
-            if (remoteStream) {
-                log('✅ تم استلام بث الضيف!', 'success');
-                log('   Audio tracks: ' + remoteStream.getAudioTracks().length);
-                log('   Video tracks: ' + remoteStream.getVideoTracks().length);
-                updateStatus('متصل ✓ - جاري التسجيل', 'green');
-                startRecording();
-            } else {
-                log('⚠️ لم يصل بث الضيف - التسجيل بدون صوت الضيف', 'warn');
-                updateStatus('متصل ✓ - التسجيل بدون ضيف', 'yellow');
-                startRecording();
-            }
-        }
-        
         // ===== Start Recording (من الأصلي - السطر 501-669) =====
         async function startRecording() {
             if (!localStream || mediaRecorder) return;
@@ -736,16 +721,23 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const canvasStream = canvas.captureStream(currentQuality.fps);
             
             // ✅ Host records BOTH local AND remote audio
-            // This is the CORRECT behavior for composite stream
+            log('📊 إعداد المسارات الصوتية للتسجيل...');
+            log('   - Local audio tracks: ' + localStream.getAudioTracks().length);
+            log('   - Remote audio tracks: ' + (remoteStream ? remoteStream.getAudioTracks().length : 0));
+            
             localStream.getAudioTracks().forEach(track => {
                 canvasStream.addTrack(track);
+                log('   ✅ تمت إضافة صوت المضيف: ' + track.label, 'success');
             });
             
             // ✅ ADD remote audio - Host needs to record both participants
-            if (remoteStream) {
+            if (remoteStream && remoteStream.getAudioTracks().length > 0) {
                 remoteStream.getAudioTracks().forEach(track => {
                     canvasStream.addTrack(track.clone());
+                    log('   ✅ تمت إضافة صوت الضيف: ' + track.label, 'success');
                 });
+            } else {
+                log('   ⚠️ تحذير: لم يتم العثور على صوت للضيف لحظة بدء التسجيل!', 'warn');
             }
             
             const recorderOptions = {
