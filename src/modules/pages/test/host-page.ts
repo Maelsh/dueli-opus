@@ -50,33 +50,78 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         
         <!-- Videos -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-                <p class="text-sm text-gray-400 mb-2">📹 شاشتك (Local)</p>
-                <div class="video-container aspect-video">
+            <div class="relative">
+                <div class="video-container aspect-video" id="localVideoContainer">
                     <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
                 </div>
             </div>
             <div>
-                <p class="text-sm text-gray-400 mb-2">👤 الطرف الآخر (Remote)</p>
                 <div class="video-container aspect-video">
                     <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
                 </div>
             </div>
         </div>
         
-        <!-- Controls -->
-        <div class="flex flex-wrap gap-2 justify-center mb-4">
-            <button onclick="window.shareScreen()" id="shareBtn" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition">
-                <i class="fas fa-desktop mr-2"></i>مشاركة الشاشة
+        <!-- Media Controls - أزرار الوسائط -->
+        <div class="flex flex-wrap gap-3 justify-center mb-3">
+            <!-- مشاركة الشاشة -->
+            <div class="relative">
+                <button onclick="window.toggleScreen()" id="screenBtn" title="مشاركة الشاشة" 
+                    class="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition flex items-center justify-center">
+                    <i class="fas fa-desktop text-white"></i>
+                </button>
+                <span id="screenUnavailable" class="hidden absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-red-400 whitespace-nowrap">غير متاح</span>
+            </div>
+            
+            <!-- الكاميرا -->
+            <button onclick="window.toggleCamera()" id="cameraBtn" title="تشغيل/إيقاف الكاميرا"
+                class="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-700 transition flex items-center justify-center">
+                <i class="fas fa-video text-white" id="cameraIcon"></i>
             </button>
-            <button onclick="window.connect()" id="connectBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
-                <i class="fas fa-plug mr-2"></i>اتصال
+            
+            <!-- تبديل الكاميرا -->
+            <button onclick="window.switchCamera()" id="switchCamBtn" title="تبديل أمامية/خلفية"
+                class="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-700 transition flex items-center justify-center">
+                <i class="fas fa-sync-alt text-white"></i>
             </button>
-            <button onclick="window.reconnect()" id="reconnectBtn" class="px-4 py-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 transition">
-                <i class="fas fa-sync mr-2"></i>تحديث الاتصال
+            
+            <!-- الميكروفون -->
+            <button onclick="window.toggleMic()" id="micBtn" title="تشغيل/إيقاف الميكروفون"
+                class="w-10 h-10 rounded-full bg-green-600 hover:bg-green-700 transition flex items-center justify-center">
+                <i class="fas fa-microphone text-white" id="micIcon"></i>
             </button>
-            <button onclick="window.disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
-                <i class="fas fa-stop mr-2"></i>إنهاء
+            
+            <!-- السماعة -->
+            <button onclick="window.toggleSpeaker()" id="speakerBtn" title="تشغيل/إيقاف السماعة"
+                class="w-10 h-10 rounded-full bg-teal-600 hover:bg-teal-700 transition flex items-center justify-center">
+                <i class="fas fa-volume-up text-white" id="speakerIcon"></i>
+            </button>
+            
+            <!-- إظهار/إخفاء الفيديو المحلي -->
+            <button onclick="window.toggleLocalVideo()" id="hideLocalBtn" title="إظهار/إخفاء صورتك"
+                class="w-10 h-10 rounded-full bg-gray-600 hover:bg-gray-700 transition flex items-center justify-center">
+                <i class="fas fa-eye text-white" id="hideLocalIcon"></i>
+            </button>
+        </div>
+        
+        <!-- Connection Controls - أزرار الاتصال -->
+        <div class="flex flex-wrap gap-3 justify-center mb-4">
+            <!-- اتصال (يظهر قبل الاتصال) -->
+            <button onclick="window.connect()" id="connectBtn" title="بدء الاتصال"
+                class="w-12 h-12 rounded-full bg-green-600 hover:bg-green-700 transition flex items-center justify-center">
+                <i class="fas fa-plug text-white text-lg"></i>
+            </button>
+            
+            <!-- تحديث (يظهر بعد الاتصال) -->
+            <button onclick="window.reconnect()" id="reconnectBtn" title="تحديث الاتصال"
+                class="w-12 h-12 rounded-full bg-yellow-600 hover:bg-yellow-700 transition flex items-center justify-center hidden">
+                <i class="fas fa-sync text-white text-lg"></i>
+            </button>
+            
+            <!-- إنهاء -->
+            <button onclick="window.disconnect()" id="disconnectBtn" title="إنهاء الاتصال"
+                class="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 transition flex items-center justify-center">
+                <i class="fas fa-phone-slash text-white text-lg"></i>
             </button>
         </div>
         
@@ -157,6 +202,15 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         let uploadStartTime = 0;
         let lastLatency = 0;
         let probeResults = null;
+        
+        // حالة الأزرار
+        let isScreenSharing = false;
+        let isCameraOn = false;
+        let currentFacing = 'user'; // 'user' أو 'environment'
+        let isMicOn = true;
+        let isSpeakerOn = true;
+        let isLocalVideoVisible = true;
+        let isConnected = false;
         
         // ===== Device Capabilities Detection =====
         function detectDeviceCapabilities() {
@@ -334,6 +388,132 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             }
         }
         
+        // ===== Toggle Screen Sharing =====
+        window.toggleScreen = async function() {
+            const caps = detectDeviceCapabilities();
+            
+            if (!caps.supportsScreenShare) {
+                document.getElementById('screenUnavailable').classList.remove('hidden');
+                setTimeout(() => document.getElementById('screenUnavailable').classList.add('hidden'), 2000);
+                return;
+            }
+            
+            if (isScreenSharing) {
+                // إيقاف مشاركة الشاشة
+                if (localStream) {
+                    localStream.getTracks().forEach(t => t.stop());
+                    localStream = null;
+                }
+                document.getElementById('localVideo').srcObject = null;
+                document.getElementById('screenBtn').classList.remove('bg-blue-800');
+                document.getElementById('screenBtn').classList.add('bg-blue-600');
+                isScreenSharing = false;
+                isCameraOn = false;
+                log('تم إيقاف مشاركة الشاشة', 'info');
+            } else {
+                // بدء مشاركة الشاشة
+                await window.shareScreen();
+                if (localStream) {
+                    isScreenSharing = true;
+                    isCameraOn = false;
+                    document.getElementById('screenBtn').classList.remove('bg-blue-600');
+                    document.getElementById('screenBtn').classList.add('bg-blue-800');
+                    document.getElementById('cameraBtn').classList.remove('bg-purple-800');
+                    document.getElementById('cameraBtn').classList.add('bg-purple-600');
+                    document.getElementById('cameraIcon').className = 'fas fa-video text-white';
+                }
+            }
+        }
+        
+        // ===== Toggle Camera =====
+        window.toggleCamera = async function() {
+            if (isCameraOn) {
+                // إيقاف الكاميرا
+                if (localStream) {
+                    localStream.getTracks().forEach(t => t.stop());
+                    localStream = null;
+                }
+                document.getElementById('localVideo').srcObject = null;
+                document.getElementById('cameraBtn').classList.remove('bg-purple-800');
+                document.getElementById('cameraBtn').classList.add('bg-purple-600');
+                document.getElementById('cameraIcon').className = 'fas fa-video-slash text-white';
+                isCameraOn = false;
+                isScreenSharing = false;
+                log('تم إيقاف الكاميرا', 'info');
+            } else {
+                // تشغيل الكاميرا
+                await window.useCamera(currentFacing);
+                if (localStream) {
+                    isCameraOn = true;
+                    isScreenSharing = false;
+                    document.getElementById('cameraBtn').classList.remove('bg-purple-600');
+                    document.getElementById('cameraBtn').classList.add('bg-purple-800');
+                    document.getElementById('cameraIcon').className = 'fas fa-video text-white';
+                    document.getElementById('screenBtn').classList.remove('bg-blue-800');
+                    document.getElementById('screenBtn').classList.add('bg-blue-600');
+                }
+            }
+        }
+        
+        // ===== Switch Camera (Front/Back) =====
+        window.switchCamera = async function() {
+            if (!isCameraOn) {
+                log('شغّل الكاميرا أولاً', 'warn');
+                return;
+            }
+            currentFacing = currentFacing === 'user' ? 'environment' : 'user';
+            await window.useCamera(currentFacing);
+            log('تم التبديل إلى الكاميرا ' + (currentFacing === 'user' ? 'الأمامية' : 'الخلفية'), 'success');
+        }
+        
+        // ===== Toggle Microphone =====
+        window.toggleMic = function() {
+            if (!localStream) return;
+            
+            const audioTracks = localStream.getAudioTracks();
+            audioTracks.forEach(track => {
+                track.enabled = !track.enabled;
+            });
+            
+            isMicOn = !isMicOn;
+            document.getElementById('micIcon').className = isMicOn ? 
+                'fas fa-microphone text-white' : 'fas fa-microphone-slash text-white';
+            document.getElementById('micBtn').classList.toggle('bg-green-800', isMicOn);
+            document.getElementById('micBtn').classList.toggle('bg-red-600', !isMicOn);
+            log(isMicOn ? 'تم تشغيل الميكروفون' : 'تم إيقاف الميكروفون', 'info');
+        }
+        
+        // ===== Toggle Speaker =====
+        window.toggleSpeaker = function() {
+            const remoteVideo = document.getElementById('remoteVideo');
+            remoteVideo.muted = !remoteVideo.muted;
+            
+            isSpeakerOn = !remoteVideo.muted;
+            document.getElementById('speakerIcon').className = isSpeakerOn ? 
+                'fas fa-volume-up text-white' : 'fas fa-volume-mute text-white';
+            document.getElementById('speakerBtn').classList.toggle('bg-teal-600', isSpeakerOn);
+            document.getElementById('speakerBtn').classList.toggle('bg-red-600', !isSpeakerOn);
+            log(isSpeakerOn ? 'تم تشغيل السماعة' : 'تم إيقاف السماعة', 'info');
+        }
+        
+        // ===== Toggle Local Video Visibility =====
+        window.toggleLocalVideo = function() {
+            const container = document.getElementById('localVideoContainer');
+            isLocalVideoVisible = !isLocalVideoVisible;
+            
+            container.style.opacity = isLocalVideoVisible ? '1' : '0.2';
+            document.getElementById('hideLocalIcon').className = isLocalVideoVisible ? 
+                'fas fa-eye text-white' : 'fas fa-eye-slash text-white';
+            log(isLocalVideoVisible ? 'صورتك مرئية' : 'صورتك مخفية', 'info');
+        }
+        
+        // ===== Update Connection Buttons =====
+        function updateConnectionButtons(connected) {
+            isConnected = connected;
+            document.getElementById('connectBtn').classList.toggle('hidden', connected);
+            document.getElementById('reconnectBtn').classList.toggle('hidden', !connected);
+        }
+        
         // ===== Create signaling room (من الأصلي - السطر 187-210) =====
         async function createRoom() {
             try {
@@ -447,6 +627,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 
                 if (pc.connectionState === 'connected') {
                     updateStatus('متصل ✓ - جاري التسجيل', 'green');
+                    updateConnectionButtons(true);
                     startRecording();
                 } else if (pc.connectionState === 'disconnected') {
                     log('⚠️ الاتصال انقطع مؤقتاً...', 'warn');
@@ -454,6 +635,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 } else if (pc.connectionState === 'failed') {
                     log('❌ فشل الاتصال', 'error');
                     updateStatus('فشل الاتصال - اضغط اتصال للمحاولة مجدداً', 'red');
+                    updateConnectionButtons(false);
                     handleConnectionFailure();
                 }
             };
@@ -758,6 +940,11 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             canvas.height = CANVAS_HEIGHT;
             const ctx = canvas.getContext('2d');
             
+            // تحميل شعار Dueli
+            const dueliLogo = new Image();
+            dueliLogo.crossOrigin = 'anonymous';
+            dueliLogo.src = '/static/dueli-icon.png';
+            
             const localVideo = document.getElementById('localVideo');
             const remoteVideo = document.getElementById('remoteVideo');
             
@@ -800,15 +987,24 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
                 
-                // Dueli Logo/Text في الأعلى
-                const logoGradient = ctx.createLinearGradient(CANVAS_WIDTH/2 - 80, 0, CANVAS_WIDTH/2 + 80, 0);
+                // Dueli Logo + Text في الأعلى
+                const logoSize = 40;
+                const logoX = (CANVAS_WIDTH / 2) - 70;
+                const logoY = 10;
+                
+                // رسم الشعار إذا كان محملاً
+                if (dueliLogo.complete && dueliLogo.naturalWidth > 0) {
+                    ctx.drawImage(dueliLogo, logoX, logoY, logoSize, logoSize);
+                }
+                
+                // رسم النص بجوار الشعار
+                const logoGradient = ctx.createLinearGradient(logoX + logoSize, 0, logoX + logoSize + 100, 0);
                 logoGradient.addColorStop(0, '#9333ea'); // purple-600
                 logoGradient.addColorStop(1, '#f59e0b'); // amber-500
                 ctx.fillStyle = logoGradient;
-                ctx.font = 'bold 36px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText('Dueli', CANVAS_WIDTH / 2, 50);
+                ctx.font = 'bold 32px Arial';
                 ctx.textAlign = 'left';
+                ctx.fillText('Dueli', logoX + logoSize + 10, logoY + 32);
                 
                 const margin = 40;
                 const videoAreaWidth = (CANVAS_WIDTH / 2) - (margin * 1.5);
