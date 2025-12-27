@@ -368,13 +368,20 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         
         // ===== Switch Camera =====
         window.switchCamera = async function() {
-            if (!isCameraOn) {
+            if (!localStream) {
                 log('شغّل الكاميرا أولاً', 'warn');
                 return;
             }
+            
+            if (isScreenSharing) {
+                log('التبديل متاح للكاميرا فقط', 'warn');
+                return;
+            }
+            
             currentFacing = currentFacing === 'user' ? 'environment' : 'user';
             await window.useCamera(currentFacing);
-            log('تم التبديل إلى الكاميرا ' + (currentFacing === 'user' ? 'الأمامية' : 'الخلفية'), 'success');
+            isCameraOn = true;
+            log('✅ تم التبديل إلى الكاميرا ' + (currentFacing === 'user' ? 'الأمامية' : 'الخلفية'), 'success');
         }
         
         // ===== Toggle Microphone =====
@@ -410,7 +417,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             const container = document.getElementById('localVideoContainer');
             isLocalVideoVisible = !isLocalVideoVisible;
             
-            container.style.opacity = isLocalVideoVisible ? '1' : '0.2';
+            container.style.display = isLocalVideoVisible ? 'block' : 'none';
             document.getElementById('hideLocalIcon').className = isLocalVideoVisible ? 
                 'fas fa-eye text-white' : 'fas fa-eye-slash text-white';
             log(isLocalVideoVisible ? 'صورتك مرئية' : 'صورتك مخفية', 'info');
