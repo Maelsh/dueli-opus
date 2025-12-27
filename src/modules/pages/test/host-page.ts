@@ -72,6 +72,9 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             <button onclick="window.connect()" id="connectBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
                 <i class="fas fa-plug mr-2"></i>اتصال
             </button>
+            <button onclick="window.reconnect()" id="reconnectBtn" class="px-4 py-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 transition">
+                <i class="fas fa-sync mr-2"></i>تحديث الاتصال
+            </button>
             <button onclick="window.disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
                 <i class="fas fa-stop mr-2"></i>إنهاء
             </button>
@@ -203,9 +206,11 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('تم الحصول على الشاشة ✓', 'success');
                 updateStatus('الشاشة جاهزة - اضغط اتصال', 'green');
                 
+                // ⚠️ لا تفصل تلقائياً - قد يكون المستخدم يُبدّل الكاميرا
                 localStream.getVideoTracks()[0].onended = () => {
-                    log('تم إيقاف مشاركة الشاشة', 'warn');
-                    disconnect();
+                    log('تم إيقاف مشاركة الشاشة من قِبل المستخدم', 'warn');
+                    updateStatus('الشاشة متوقفة - شارك شاشة جديدة أو استخدم الكاميرا', 'yellow');
+                    // لا نفصل الاتصال تلقائياً
                 };
             } catch (err) {
                 log('⚠️ مشاركة الشاشة فشلت: ' + err.message, 'warn');
@@ -757,7 +762,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const remoteVideo = document.getElementById('remoteVideo');
             
             // دالة رسم proportional (local version)
-            function drawVideoProportionalLocal(video, x, y, maxWidth, maxHeight, label) {
+            function drawVideoProportionalLocal(video, x, y, maxWidth, maxHeight) {
                 if (!video || video.readyState < 2 || video.videoWidth === 0) return;
                 
                 const videoRatio = video.videoWidth / video.videoHeight;
@@ -778,14 +783,14 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 ctx.fillStyle = '#000';
                 ctx.fillRect(x, y, maxWidth, maxHeight);
                 ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
-                ctx.strokeStyle = '#4f46e5';
+                
+                // إطار بألوان Dueli
+                const borderGradient = ctx.createLinearGradient(x, y, x + maxWidth, y + maxHeight);
+                borderGradient.addColorStop(0, '#9333ea'); // purple-600
+                borderGradient.addColorStop(1, '#f59e0b'); // amber-500
+                ctx.strokeStyle = borderGradient;
                 ctx.lineWidth = 3;
                 ctx.strokeRect(x, y, maxWidth, maxHeight);
-                ctx.fillStyle = 'rgba(0,0,0,0.8)';
-                ctx.fillRect(x + 10, y + maxHeight - 35, 80, 25);
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 16px Arial';
-                ctx.fillText(label, x + 20, y + maxHeight - 15);
             }
             
             function drawFrame() {
@@ -795,18 +800,22 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
                 
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-                ctx.font = 'bold 48px Arial';
+                // Dueli Logo/Text في الأعلى
+                const logoGradient = ctx.createLinearGradient(CANVAS_WIDTH/2 - 80, 0, CANVAS_WIDTH/2 + 80, 0);
+                logoGradient.addColorStop(0, '#9333ea'); // purple-600
+                logoGradient.addColorStop(1, '#f59e0b'); // amber-500
+                ctx.fillStyle = logoGradient;
+                ctx.font = 'bold 36px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText('DUELI', CANVAS_WIDTH / 2, 60);
+                ctx.fillText('Dueli', CANVAS_WIDTH / 2, 50);
                 ctx.textAlign = 'left';
                 
                 const margin = 40;
                 const videoAreaWidth = (CANVAS_WIDTH / 2) - (margin * 1.5);
                 const videoAreaHeight = CANVAS_HEIGHT - (margin * 2);
                 
-                drawVideoProportionalLocal(localVideo, margin, margin, videoAreaWidth, videoAreaHeight, 'أنت');
-                drawVideoProportionalLocal(remoteVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin, videoAreaWidth, videoAreaHeight, 'المنافس');
+                drawVideoProportionalLocal(localVideo, margin, margin + 20, videoAreaWidth, videoAreaHeight - 20);
+                drawVideoProportionalLocal(remoteVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin + 20, videoAreaWidth, videoAreaHeight - 20);
             }
             
             const frameInterval = Math.round(1000 / currentQuality.fps);
@@ -942,6 +951,49 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             } else if (signal.type === 'ice') {
                 await pc.addIceCandidate(new RTCIceCandidate(signal.data));
             }
+        }
+        
+        // ===== Reconnect - تحديث الاتصال بدون تحديث الصفحة =====
+        window.reconnect = async function() {
+            log('🔄 تحديث الاتصال...', 'info');
+            updateStatus('جاري تحديث الاتصال...', 'yellow');
+            
+            // إيقاف التسجيل فقط (بدون إيقاف الـ stream المحلي)
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            mediaRecorder = null;
+            
+            if (drawInterval) {
+                clearInterval(drawInterval);
+                drawInterval = null;
+            }
+            
+            // إغلاق الـ peer connection
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            // إيقاف الـ polling
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            // إعادة تهيئة remoteStream
+            remoteStream = new MediaStream();
+            document.getElementById('remoteVideo').srcObject = null;
+            
+            // إعادة الاتصال بعد ثانية
+            log('⏳ انتظار ثانية ثم إعادة الاتصال...', 'info');
+            setTimeout(() => {
+                if (localStream) {
+                    window.connect();
+                } else {
+                    updateStatus('شارك الشاشة أو الكاميرا أولاً', 'yellow');
+                }
+            }, 1000);
         }
         
         // ===== Disconnect (من الأصلي - السطر 725-789) =====

@@ -69,6 +69,9 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             <button onclick="window.joinRoom()" id="joinBtn" class="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700 transition">
                 <i class="fas fa-sign-in-alt mr-2"></i>الانضمام
             </button>
+            <button onclick="window.reconnect()" id="reconnectBtn" class="px-4 py-2 bg-yellow-600 rounded-lg hover:bg-yellow-700 transition">
+                <i class="fas fa-sync mr-2"></i>تحديث الاتصال
+            </button>
             <button onclick="window.disconnect()" id="disconnectBtn" class="px-4 py-2 bg-red-600 rounded-lg hover:bg-red-700 transition">
                 <i class="fas fa-stop mr-2"></i>إنهاء
             </button>
@@ -145,6 +148,12 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 document.getElementById('localVideo').srcObject = localStream;
                 log('تم الحصول على الشاشة ✓', 'success');
                 updateStatus('الشاشة جاهزة - اضغط الانضمام', 'green');
+                
+                // ⚠️ لا تفصل تلقائياً - قد يكون المستخدم يُبدّل الكاميرا
+                localStream.getVideoTracks()[0].onended = () => {
+                    log('تم إيقاف مشاركة الشاشة من قِبل المستخدم', 'warn');
+                    updateStatus('الشاشة متوقفة - شارك شاشة جديدة أو استخدم الكاميرا', 'yellow');
+                };
             } catch (err) {
                 log('فشل: ' + err.message, 'warn');
                 showMobileAlternative();
@@ -450,6 +459,37 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             }
             
             log('✅ جاهز لإعادة الاتصال - اضغط زر "الانضمام"', 'info');
+        }
+        
+        // ===== Reconnect - تحديث الاتصال بدون تحديث الصفحة =====
+        window.reconnect = async function() {
+            log('🔄 تحديث الاتصال...', 'info');
+            updateStatus('جاري تحديث الاتصال...', 'yellow');
+            
+            // إغلاق الـ peer connection
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            // إيقاف الـ polling
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            // مسح الفيديو البعيد
+            document.getElementById('remoteVideo').srcObject = null;
+            
+            // إعادة الانضمام بعد ثانية
+            log('⏳ انتظار ثانية ثم إعادة الانضمام...', 'info');
+            setTimeout(() => {
+                if (localStream) {
+                    window.joinRoom();
+                } else {
+                    updateStatus('شارك الشاشة أو الكاميرا أولاً', 'yellow');
+                }
+            }, 1000);
         }
         
         // ===== Disconnect (من الأصلي - السطر 1118-1141) =====
