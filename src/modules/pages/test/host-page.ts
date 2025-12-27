@@ -260,7 +260,11 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             try {
                 log('طلب الوصول للكاميرا ' + (facingMode === 'user' ? 'الأمامية' : 'الخلفية') + '...');
                 
-                localStream = await navigator.mediaDevices.getUserMedia({
+                // حفظ الـ stream القديم
+                const oldStream = localStream;
+                
+                // الحصول على stream جديد
+                const newStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1280 },
@@ -269,8 +273,38 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     audio: true
                 });
                 
-                log('Camera stream ID: ' + localStream.id);
+                log('Camera stream ID: ' + newStream.id);
                 
+                // ✅ إذا كان الاتصال قائماً - استبدال الـ tracks
+                if (pc && pc.connectionState === 'connected') {
+                    log('🔄 استبدال المسارات في الاتصال القائم...');
+                    
+                    const senders = pc.getSenders();
+                    
+                    // استبدال video track
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    const newVideoTrack = newStream.getVideoTracks()[0];
+                    if (videoSender && newVideoTrack) {
+                        await videoSender.replaceTrack(newVideoTrack);
+                        log('   ✅ تم استبدال video track', 'success');
+                    }
+                    
+                    // استبدال audio track
+                    const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+                    const newAudioTrack = newStream.getAudioTracks()[0];
+                    if (audioSender && newAudioTrack) {
+                        await audioSender.replaceTrack(newAudioTrack);
+                        log('   ✅ تم استبدال audio track', 'success');
+                    }
+                }
+                
+                // إيقاف الـ stream القديم
+                if (oldStream) {
+                    oldStream.getTracks().forEach(t => t.stop());
+                }
+                
+                // تحديث المتغير والعرض
+                localStream = newStream;
                 const videoElement = document.getElementById('localVideo');
                 videoElement.srcObject = localStream;
                 
@@ -409,8 +443,13 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 if (pc.connectionState === 'connected') {
                     updateStatus('متصل ✓ - جاري التسجيل', 'green');
                     startRecording();
+                } else if (pc.connectionState === 'disconnected') {
+                    log('⚠️ الاتصال انقطع مؤقتاً...', 'warn');
+                    updateStatus('انقطع الاتصال - جاري المحاولة...', 'yellow');
                 } else if (pc.connectionState === 'failed') {
-                    updateStatus('فشل الاتصال', 'red');
+                    log('❌ فشل الاتصال', 'error');
+                    updateStatus('فشل الاتصال - اضغط اتصال للمحاولة مجدداً', 'red');
+                    handleConnectionFailure();
                 }
             };
             
@@ -419,6 +458,11 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('🧊 ICE Connection: ' + pc.iceConnectionState, 
                     pc.iceConnectionState === 'connected' ? 'success' : 
                     pc.iceConnectionState === 'failed' ? 'error' : 'info');
+                
+                if (pc.iceConnectionState === 'failed') {
+                    log('⚠️ ICE فشل - محاولة إعادة التفاوض...', 'warn');
+                    pc.restartIce();
+                }
             };
             
             // ICE gathering state
@@ -636,12 +680,62 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             return { valid: true };
         }
         
+        // ===== Handle Connection Failure =====
+        function handleConnectionFailure() {
+            log('🔄 تنظيف الاتصال الفاشل...', 'warn');
+            
+            // إيقاف التسجيل إذا كان قائماً
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            mediaRecorder = null;
+            
+            // إغلاق الـ peer connection
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            // إيقاف الـ polling
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            log('✅ جاهز لإعادة الاتصال - اضغط زر "اتصال"', 'info');
+        }
+        
+        // ===== Get Last Chunk Index from Server =====
+        async function getLastChunkIndex() {
+            try {
+                const res = await fetch(ffmpegUrl + '/playlist.php?id=' + competitionId);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.chunks && data.chunks.length > 0) {
+                        const lastIndex = data.chunks.length;
+                        log('📊 آخر قطعة على السيرفر: ' + lastIndex, 'info');
+                        return lastIndex;
+                    }
+                }
+            } catch (e) {
+                log('⚠️ لم نتمكن من جلب آخر index - البدء من 0', 'warn');
+            }
+            return 0;
+        }
+        
         // ===== Start Recording (من الأصلي - السطر 501-669) =====
         async function startRecording() {
             if (!localStream || mediaRecorder) return;
             
             log('🔍 جاري اختبار قدرات الجهاز...');
             updateStatus('جاري اختبار الجهاز...', 'yellow');
+            
+            // ✅ جلب آخر chunk index من السيرفر لمنع الكتابة فوق القطع القديمة
+            const lastIndex = await getLastChunkIndex();
+            if (lastIndex > 0) {
+                chunkIndex = lastIndex;
+                log('🔢 استئناف من القطعة: ' + chunkIndex, 'success');
+            }
             
             probeResults = await probeDevice();
             currentQuality = selectQuality(probeResults);

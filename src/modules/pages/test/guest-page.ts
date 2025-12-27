@@ -184,11 +184,45 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             try {
                 log('طلب الكاميرا ' + (facingMode === 'user' ? 'الأمامية' : 'الخلفية') + '...');
                 
-                localStream = await navigator.mediaDevices.getUserMedia({
+                // حفظ الـ stream القديم
+                const oldStream = localStream;
+                
+                // الحصول على stream جديد
+                const newStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
                     audio: true
                 });
                 
+                // ✅ إذا كان الاتصال قائماً - استبدال الـ tracks
+                if (pc && pc.connectionState === 'connected') {
+                    log('🔄 استبدال المسارات في الاتصال القائم...');
+                    
+                    const senders = pc.getSenders();
+                    
+                    // استبدال video track
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    const newVideoTrack = newStream.getVideoTracks()[0];
+                    if (videoSender && newVideoTrack) {
+                        await videoSender.replaceTrack(newVideoTrack);
+                        log('   ✅ تم استبدال video track', 'success');
+                    }
+                    
+                    // استبدال audio track
+                    const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+                    const newAudioTrack = newStream.getAudioTracks()[0];
+                    if (audioSender && newAudioTrack) {
+                        await audioSender.replaceTrack(newAudioTrack);
+                        log('   ✅ تم استبدال audio track', 'success');
+                    }
+                }
+                
+                // إيقاف الـ stream القديم
+                if (oldStream) {
+                    oldStream.getTracks().forEach(t => t.stop());
+                }
+                
+                // تحديث المتغير والعرض
+                localStream = newStream;
                 document.getElementById('localVideo').srcObject = localStream;
                 
                 const cameraBtns = document.getElementById('cameraButtons');
@@ -308,6 +342,17 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 log('📡 Connection State: ' + pc.connectionState, 
                     pc.connectionState === 'connected' ? 'success' : 
                     pc.connectionState === 'failed' ? 'error' : 'info');
+                
+                if (pc.connectionState === 'connected') {
+                    updateStatus('متصل ✓', 'green');
+                } else if (pc.connectionState === 'disconnected') {
+                    log('⚠️ الاتصال انقطع مؤقتاً...', 'warn');
+                    updateStatus('انقطع الاتصال - جاري المحاولة...', 'yellow');
+                } else if (pc.connectionState === 'failed') {
+                    log('❌ فشل الاتصال', 'error');
+                    updateStatus('فشل الاتصال - اضغط انضمام للمحاولة مجدداً', 'red');
+                    handleConnectionFailure();
+                }
             };
             
             // ICE connection state
@@ -315,6 +360,11 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                 log('🧊 ICE Connection: ' + pc.iceConnectionState, 
                     pc.iceConnectionState === 'connected' ? 'success' : 
                     pc.iceConnectionState === 'failed' ? 'error' : 'info');
+                
+                if (pc.iceConnectionState === 'failed') {
+                    log('⚠️ ICE فشل - محاولة إعادة التفاوض...', 'warn');
+                    pc.restartIce();
+                }
             };
             
             // Signaling state
@@ -381,6 +431,25 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
             } else if (signal.type === 'ice') {
                 await pc.addIceCandidate(new RTCIceCandidate(signal.data));
             }
+        }
+        
+        // ===== Handle Connection Failure =====
+        function handleConnectionFailure() {
+            log('🔄 تنظيف الاتصال الفاشل...', 'warn');
+            
+            // إغلاق الـ peer connection
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            // إيقاف الـ polling
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            log('✅ جاهز لإعادة الاتصال - اضغط زر "الانضمام"', 'info');
         }
         
         // ===== Disconnect (من الأصلي - السطر 1118-1141) =====
