@@ -2215,6 +2215,16 @@
       }
     }
   }
+  .hover\:bg-black\/70 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: color-mix(in srgb, #000 70%, transparent);
+        @supports (color: color-mix(in lab, red, red)) {
+          background-color: color-mix(in oklab, var(--color-black) 70%, transparent);
+        }
+      }
+    }
+  }
   .hover\:bg-blue-200 {
     &:hover {
       @media (hover: hover) {

@@ -46,15 +46,22 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         </div>
         
         <!-- Videos -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div class="relative">
+        <div class="flex justify-center gap-4 mb-4" id="videosContainer">
+            <!-- Local Video -->
+            <div class="relative transition-all duration-300" id="localVideoWrapper" style="width: 48%;">
                 <div class="video-container aspect-video" id="localVideoContainer">
                     <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
                 </div>
             </div>
-            <div>
-                <div class="video-container aspect-video">
+            <!-- Remote Video -->
+            <div class="relative transition-all duration-300" id="remoteVideoWrapper" style="width: 48%;">
+                <div class="video-container aspect-video relative" id="remoteVideoContainer">
                     <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                    <!-- Fullscreen Button -->
+                    <button onclick="window.toggleFullscreen()" id="fullscreenBtn" title="ملء الشاشة"
+                        class="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 hover:bg-black/70 transition flex items-center justify-center">
+                        <i class="fas fa-expand text-white text-sm" id="fullscreenIcon"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -414,14 +421,61 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
         
         // ===== Toggle Local Video Visibility =====
         window.toggleLocalVideo = function() {
-            const container = document.getElementById('localVideoContainer');
+            const localWrapper = document.getElementById('localVideoWrapper');
+            const remoteWrapper = document.getElementById('remoteVideoWrapper');
             isLocalVideoVisible = !isLocalVideoVisible;
             
-            container.style.display = isLocalVideoVisible ? 'block' : 'none';
+            if (isLocalVideoVisible) {
+                localWrapper.style.width = '48%';
+                localWrapper.style.visibility = 'visible';
+                localWrapper.style.position = 'relative';
+                remoteWrapper.style.width = '48%';
+            } else {
+                localWrapper.style.width = '0';
+                localWrapper.style.visibility = 'hidden';
+                localWrapper.style.position = 'absolute';
+                remoteWrapper.style.width = '80%';
+            }
+            
             document.getElementById('hideLocalIcon').className = isLocalVideoVisible ? 
                 'fas fa-eye text-white' : 'fas fa-eye-slash text-white';
             log(isLocalVideoVisible ? 'صورتك مرئية' : 'صورتك مخفية', 'info');
         }
+        
+        // ===== Toggle Fullscreen =====
+        let isFullscreen = false;
+        window.toggleFullscreen = function() {
+            const remoteContainer = document.getElementById('remoteVideoContainer');
+            
+            if (!isFullscreen) {
+                if (remoteContainer.requestFullscreen) {
+                    remoteContainer.requestFullscreen();
+                } else if (remoteContainer.webkitRequestFullscreen) {
+                    remoteContainer.webkitRequestFullscreen();
+                } else if (remoteContainer.msRequestFullscreen) {
+                    remoteContainer.msRequestFullscreen();
+                }
+                document.getElementById('fullscreenIcon').className = 'fas fa-compress text-white text-sm';
+                isFullscreen = true;
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                document.getElementById('fullscreenIcon').className = 'fas fa-expand text-white text-sm';
+                isFullscreen = false;
+            }
+        }
+        
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                document.getElementById('fullscreenIcon').className = 'fas fa-expand text-white text-sm';
+                isFullscreen = false;
+            }
+        });
         
         // ===== Update Connection Buttons =====
         function updateConnectionButtons(connected) {
