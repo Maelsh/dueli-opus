@@ -824,10 +824,10 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('   ✅ تمت إضافة صوت المضيف: ' + track.label, 'success');
             });
             
-            // ✅ ADD remote audio - Host needs to record both participants
+            // ✅ ADD remote audio - بدون clone! الـ clone يقطع الربط مع WebRTC
             if (remoteStream && remoteStream.getAudioTracks().length > 0) {
                 remoteStream.getAudioTracks().forEach(track => {
-                    canvasStream.addTrack(track.clone());
+                    canvasStream.addTrack(track); // ❌ لا تستخدم clone()!
                     log('   ✅ تمت إضافة صوت الضيف: ' + track.label, 'success');
                 });
             } else {
