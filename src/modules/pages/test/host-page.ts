@@ -49,15 +49,15 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
         </div>
         
         <!-- Videos -->
-        <div class="flex justify-center gap-4 mb-4" id="videosContainer">
+        <div class="flex flex-col md:flex-row justify-center gap-4 mb-4" id="videosContainer">
             <!-- Local Video -->
-            <div class="relative transition-all duration-300" id="localVideoWrapper" style="width: 48%;">
+            <div class="relative transition-all duration-300 w-full md:w-[48%]" id="localVideoWrapper">
                 <div class="video-container aspect-video" id="localVideoContainer">
                     <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
                 </div>
             </div>
             <!-- Remote Video -->
-            <div class="relative transition-all duration-300" id="remoteVideoWrapper" style="width: 48%;">
+            <div class="relative transition-all duration-300 w-full md:w-[48%]" id="remoteVideoWrapper">
                 <div class="video-container aspect-video relative" id="remoteVideoContainer">
                     <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
                     <!-- Fullscreen Button -->
@@ -520,17 +520,17 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             if (isLocalVideoVisible) {
                 // إظهار الفيديو المحلي - عودة للتقسيم 50/50
-                localWrapper.style.width = '48%';
-                localWrapper.style.visibility = 'visible';
-                localWrapper.style.position = 'relative';
-                remoteWrapper.style.width = '48%';
+                localWrapper.classList.remove('opacity-0', 'pointer-events-none', 'absolute', 'w-0');
+                localWrapper.classList.add('w-full', 'md:w-[48%]');
+                remoteWrapper.classList.remove('w-full', 'md:w-[80%]');
+                remoteWrapper.classList.add('w-full', 'md:w-[48%]');
             } else {
                 // إخفاء من العرض - توسيط فيديو المنافس
-                // نخفيه بصرياً لكن نبقيه موجوداً للتسجيل
-                localWrapper.style.width = '0';
-                localWrapper.style.visibility = 'hidden';
-                localWrapper.style.position = 'absolute';
-                remoteWrapper.style.width = '80%';
+                // نستخدم opacity-0 بدلاً من hidden حتى يستمر التسجيل
+                localWrapper.classList.add('opacity-0', 'pointer-events-none', 'absolute', 'w-0');
+                localWrapper.classList.remove('w-full', 'md:w-[48%]');
+                remoteWrapper.classList.remove('w-full', 'md:w-[48%]');
+                remoteWrapper.classList.add('w-full', 'md:w-[80%]');
             }
             
             document.getElementById('hideLocalIcon').className = isLocalVideoVisible ? 
