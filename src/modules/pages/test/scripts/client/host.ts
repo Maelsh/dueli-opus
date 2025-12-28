@@ -332,7 +332,7 @@ export function getHostScript(lang: Language): string {
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
                     startRecording();
-                    // Keep isConnecting true so user can't click again while connected
+                    isConnecting = false; // Allow future re-connections
                 } else if (ms.pc.connectionState === 'failed') {
                     console.log('[DEBUG] Connection failed!');
                     updateStatus('${tr.error}', 'red');

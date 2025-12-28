@@ -122,6 +122,7 @@ export function getGuestScript(lang: Language): string {
                     console.log('[DEBUG] Guest connection successful!');
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
+                    isJoining = false; // Allow future re-joins
                 } else if (ms.pc.connectionState === 'failed') {
                     console.log('[DEBUG] Guest connection failed!');
                     updateStatus('${tr.error}', 'red');
