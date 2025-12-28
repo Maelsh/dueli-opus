@@ -224,6 +224,7 @@ export function getGuestScript(lang: Language): string {
             isConnected = connected;
             document.getElementById('joinBtn').classList.toggle('hidden', connected);
             document.getElementById('reconnectBtn').classList.toggle('hidden', !connected);
+            document.getElementById('disconnectBtn').classList.toggle('hidden', !connected);
         }
         
         // ===== Join Room =====

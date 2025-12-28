@@ -438,6 +438,7 @@ export const ar = {
     // البث المباشر (P2P)
     recording: 'جاري التسجيل',
     toggle_mic: 'تبديل الميكروفون',
+    toggle_speaker: 'تبديل السماعة',
     toggle_camera: 'تبديل الكاميرا',
     share_screen: 'مشاركة الشاشة',
     end_stream: 'إنهاء البث',
@@ -518,6 +519,7 @@ export const ar = {
     viewer_desc: 'يشاهد البث مباشر أو مسجل',
     screen_share: 'مشاركة الشاشة',
     canvas_recording: 'تسجيل Canvas',
+    new_chunk: 'قطعة جديدة',
     upload_chunks: 'رفع القطع',
     adaptive_streaming: 'بث متكيف',
     notes: 'ملاحظات',

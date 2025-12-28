@@ -262,6 +262,7 @@ export function getHostScript(lang: Language): string {
             isConnected = connected;
             document.getElementById('connectBtn').classList.toggle('hidden', connected);
             document.getElementById('reconnectBtn').classList.toggle('hidden', !connected);
+            document.getElementById('disconnectBtn').classList.toggle('hidden', !connected);
         }
         
         // ===== Connection =====
@@ -372,21 +373,115 @@ export function getHostScript(lang: Language): string {
             log('${tr.canvas_recording}...');
             updateQualityInfo();
             
+            const CANVAS_WIDTH = 1280;
+            const CANVAS_HEIGHT = 720;
             const canvas = document.createElement('canvas');
-            canvas.width = 1280;
-            canvas.height = 720;
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
             const ctx = canvas.getContext('2d');
+            
+            // تحميل شعار Dueli
+            const dueliLogo = new Image();
+            dueliLogo.crossOrigin = 'anonymous';
+            dueliLogo.src = '/static/dueli-icon.png';
             
             const localVideo = document.getElementById('localVideo');
             const remoteVideo = document.getElementById('remoteVideo');
             
-            function drawFrame() {
-                ctx.fillStyle = '#1a1a2e';
-                ctx.fillRect(0, 0, 1280, 720);
+            // اللغة والاتجاه
+            const isRTL = '${lang}' === 'ar';
+            const platformName = isRTL ? 'دويلي' : 'Dueli';
+            
+            // دالة رسم الفيديو بشكل متناسب
+            function drawVideoProportionalLocal(video, x, y, maxWidth, maxHeight) {
+                if (!video || video.readyState < 2 || video.videoWidth === 0) return;
                 
-                // رسم الفيديوهات
-                if (localVideo.readyState >= 2) ctx.drawImage(localVideo, 20, 60, 600, 600);
-                if (remoteVideo.readyState >= 2) ctx.drawImage(remoteVideo, 660, 60, 600, 600);
+                const videoRatio = video.videoWidth / video.videoHeight;
+                const targetRatio = maxWidth / maxHeight;
+                let drawW, drawH;
+                
+                if (videoRatio > targetRatio) {
+                    drawW = maxWidth;
+                    drawH = maxWidth / videoRatio;
+                } else {
+                    drawH = maxHeight;
+                    drawW = maxHeight * videoRatio;
+                }
+                
+                const offsetX = x + (maxWidth - drawW) / 2;
+                const offsetY = y + (maxHeight - drawH) / 2;
+                
+                ctx.fillStyle = '#000';
+                ctx.fillRect(x, y, maxWidth, maxHeight);
+                ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
+                
+                // إطار بألوان Dueli
+                const borderGradient = ctx.createLinearGradient(x, y, x + maxWidth, y + maxHeight);
+                borderGradient.addColorStop(0, '#9333ea'); // purple-600
+                borderGradient.addColorStop(1, '#f59e0b'); // amber-500
+                ctx.strokeStyle = borderGradient;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, maxWidth, maxHeight);
+            }
+            
+            function drawFrame() {
+                // خلفية متدرجة
+                const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                gradient.addColorStop(0, '#1a1a2e');
+                gradient.addColorStop(1, '#16213e');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                
+                // Dueli Logo + Text
+                const logoSize = 40;
+                const logoY = 10;
+                
+                if (isRTL) {
+                    // RTL: النص يسار الشعار
+                    const logoX = (CANVAS_WIDTH / 2) + 30;
+                    
+                    if (dueliLogo.complete && dueliLogo.naturalWidth > 0) {
+                        ctx.drawImage(dueliLogo, logoX, logoY, logoSize, logoSize);
+                    }
+                    
+                    const logoGradient = ctx.createLinearGradient(logoX - 100, 0, logoX, 0);
+                    logoGradient.addColorStop(0, '#f59e0b');
+                    logoGradient.addColorStop(1, '#9333ea');
+                    ctx.fillStyle = logoGradient;
+                    ctx.font = 'bold 32px Cairo, Arial';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(platformName, logoX - 10, logoY + 32);
+                } else {
+                    // LTR: النص يمين الشعار
+                    const logoX = (CANVAS_WIDTH / 2) - 70;
+                    
+                    if (dueliLogo.complete && dueliLogo.naturalWidth > 0) {
+                        ctx.drawImage(dueliLogo, logoX, logoY, logoSize, logoSize);
+                    }
+                    
+                    const logoGradient = ctx.createLinearGradient(logoX + logoSize, 0, logoX + logoSize + 100, 0);
+                    logoGradient.addColorStop(0, '#9333ea');
+                    logoGradient.addColorStop(1, '#f59e0b');
+                    ctx.fillStyle = logoGradient;
+                    ctx.font = 'bold 32px Inter, Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(platformName, logoX + logoSize + 10, logoY + 32);
+                }
+                
+                const margin = 40;
+                const videoAreaWidth = (CANVAS_WIDTH / 2) - (margin * 1.5);
+                const videoAreaHeight = CANVAS_HEIGHT - (margin * 2);
+                
+                // رسم الفيديوهات (الترتيب حسب الاتجاه)
+                if (isRTL) {
+                    // RTL: المضيف يمين، الضيف يسار
+                    drawVideoProportionalLocal(localVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin + 20, videoAreaWidth, videoAreaHeight - 20);
+                    drawVideoProportionalLocal(remoteVideo, margin, margin + 20, videoAreaWidth, videoAreaHeight - 20);
+                } else {
+                    // LTR: المضيف يسار، الضيف يمين
+                    drawVideoProportionalLocal(localVideo, margin, margin + 20, videoAreaWidth, videoAreaHeight - 20);
+                    drawVideoProportionalLocal(remoteVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin + 20, videoAreaWidth, videoAreaHeight - 20);
+                }
             }
             
             drawInterval = setInterval(drawFrame, Math.round(1000 / currentQuality.fps));
@@ -399,9 +494,11 @@ export function getHostScript(lang: Language): string {
                 const destination = audioContext.createMediaStreamDestination();
                 if (localStream.getAudioTracks().length > 0) {
                     audioContext.createMediaStreamSource(localStream).connect(destination);
+                    log('   ✅ ${tr.host} audio connected', 'success');
                 }
                 if (remoteStream && remoteStream.getAudioTracks().length > 0) {
                     audioContext.createMediaStreamSource(remoteStream).connect(destination);
+                    log('   ✅ ${tr.guest} audio connected', 'success');
                 }
                 const mixedAudioTrack = destination.stream.getAudioTracks()[0];
                 if (mixedAudioTrack) canvasStream.addTrack(mixedAudioTrack);
@@ -411,7 +508,8 @@ export function getHostScript(lang: Language): string {
             
             mediaRecorder = new MediaRecorder(canvasStream, {
                 mimeType: 'video/webm;codecs=vp8,opus',
-                videoBitsPerSecond: currentQuality.bitrate
+                videoBitsPerSecond: currentQuality.bitrate,
+                audioBitsPerSecond: 128000
             });
             
             mediaRecorder.ondataavailable = function(e) {
@@ -426,6 +524,7 @@ export function getHostScript(lang: Language): string {
                 if (mediaRecorder && mediaRecorder.state === 'recording') {
                     mediaRecorder.stop();
                     mediaRecorder.start();
+                    log('${tr.new_chunk} (' + currentQuality.segment/1000 + 's)', 'info');
                 }
             }, currentQuality.segment);
             

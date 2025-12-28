@@ -72,7 +72,7 @@ export function getGuestContent(lang: Language): string {
                 <i class="fas fa-microphone text-white" id="micIcon" aria-hidden="true"></i>
             </button>
             
-            <button onclick="window.toggleSpeaker()" id="speakerBtn" title="${tr.toggle_mic}"
+            <button onclick="window.toggleSpeaker()" id="speakerBtn" title="${tr.toggle_speaker}"
                 class="control-btn bg-teal-600 hover:bg-teal-700">
                 <i class="fas fa-volume-up text-white" id="speakerIcon" aria-hidden="true"></i>
             </button>
@@ -87,17 +87,17 @@ export function getGuestContent(lang: Language): string {
         <div class="flex flex-wrap gap-3 justify-center mb-4">
             <button onclick="window.joinRoom()" id="joinBtn" title="${tr.join}"
                 class="control-btn control-btn-lg bg-green-600 hover:bg-green-700">
-                <i class="fas fa-sign-in-alt text-white text-lg" aria-hidden="true"></i>
+                <i class="fas fa-play text-white text-lg" aria-hidden="true"></i>
             </button>
             
             <button onclick="window.reconnect()" id="reconnectBtn" title="${tr.reconnect}"
-                class="control-btn control-btn-lg bg-yellow-600 hover:bg-yellow-700 hidden">
-                <i class="fas fa-sync text-white text-lg" aria-hidden="true"></i>
+                class="control-btn control-btn-lg bg-amber-600 hover:bg-amber-700 hidden">
+                <i class="fas fa-redo text-white text-lg" aria-hidden="true"></i>
             </button>
             
             <button onclick="window.disconnect()" id="disconnectBtn" title="${tr.disconnect}"
-                class="control-btn control-btn-lg bg-red-600 hover:bg-red-700">
-                <i class="fas fa-phone-slash text-white text-lg" aria-hidden="true"></i>
+                class="control-btn control-btn-lg bg-red-600 hover:bg-red-700 hidden">
+                <i class="fas fa-stop text-white text-lg" aria-hidden="true"></i>
             </button>
         </div>
         

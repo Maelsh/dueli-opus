@@ -462,6 +462,7 @@ export const en = {
     // Live Streaming (P2P)
     recording: 'Recording',
     toggle_mic: 'Toggle Microphone',
+    toggle_speaker: 'Toggle Speaker',
     toggle_camera: 'Toggle Camera',
     share_screen: 'Share Screen',
     end_stream: 'End Stream',
@@ -542,6 +543,7 @@ export const en = {
     viewer_desc: 'Watches the stream live or recorded',
     screen_share: 'Screen Share',
     canvas_recording: 'Canvas Recording',
+    new_chunk: 'New Chunk',
     upload_chunks: 'Upload Chunks',
     adaptive_streaming: 'Adaptive Streaming',
     notes: 'Notes',
