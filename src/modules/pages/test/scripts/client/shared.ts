@@ -5,6 +5,8 @@
  */
 
 const FFMPEG_URL = 'https://maelsh.pro/ffmpeg';
+const STREAM_SERVER_URL = 'https://stream.maelsh.pro';
+const TEST_ROOM_ID = 'test_room_001';
 
 /**
  * Get Client Shared Script - توليد الـ JavaScript المشترك
@@ -145,395 +147,6 @@ const qualityPresets = {
 
 window.qualityPresets = qualityPresets;
 
-// ===== Classes =====
-
-/**
- * UploadQueue - إدارة رفع القطع
- */
-class UploadQueue {
-    constructor(competitionId, onProgress) {
-        this.queue = [];
-        this.isUploading = false;
-        this.competitionId = competitionId;
-        this.droppedChunks = 0;
-        this.corruptedChunks = 0;
-        this.ffmpegUrl = '${FFMPEG_URL}';
-        this.onProgress = onProgress;
-    }
-
-    validateChunk(blob, index) {
-        if (blob.size < 1024) {
-            return { valid: false, reason: 'Chunk too small (<1KB)' };
-        }
-
-        if (blob.size > 50 * 1024 * 1024) {
-            return { valid: false, reason: 'Chunk too large (>50MB)' };
-        }
-
-        if (!blob.type || !blob.type.includes('video')) {
-            return { valid: false, reason: 'Invalid type (not video)' };
-        }
-
-        try {
-            const testUrl = URL.createObjectURL(blob);
-            URL.revokeObjectURL(testUrl);
-        } catch (e) {
-            return { valid: false, reason: 'Corrupted chunk' };
-        }
-
-        return { valid: true };
-    }
-
-    add(blob, index) {
-        const validation = this.validateChunk(blob, index);
-
-        if (!validation.valid) {
-            this.corruptedChunks++;
-            testLog('⚠️ Chunk ' + index + ' rejected: ' + validation.reason + ' (Total: ' + this.corruptedChunks + ')', 'warn');
-            return;
-        }
-
-        this.queue.push({ blob, index });
-        this.processQueue();
-    }
-
-    async processQueue() {
-        if (this.isUploading || this.queue.length === 0) return;
-
-        while (this.queue.length > 3) {
-            this.queue.shift();
-            this.droppedChunks++;
-            testLog('⚠️ Dropped chunk - Total: ' + this.droppedChunks, 'warn');
-        }
-
-        this.isUploading = true;
-        const { blob, index } = this.queue.shift();
-
-        try {
-            await this.uploadChunk(blob, index);
-            if (this.onProgress) this.onProgress(index + 1, -1);
-        } catch (error) {
-            testLog('Upload error: ' + error.message, 'error');
-        } finally {
-            this.isUploading = false;
-            this.processQueue();
-        }
-    }
-
-    async uploadChunk(blob, index) {
-        const formData = new FormData();
-        formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.webm');
-        formData.append('competition_id', this.competitionId);
-        formData.append('chunk_number', (index + 1).toString());
-        formData.append('extension', 'webm');
-
-        const uploadStart = performance.now();
-
-        const res = await fetch(this.ffmpegUrl + '/upload.php', {
-            method: 'POST',
-            body: formData
-        });
-
-        const result = await res.json();
-        const latency = performance.now() - uploadStart;
-
-        testLog('Chunk ' + index + ': ' + (result.success ? '✓' : '✗') + ' (' + Math.round(latency) + 'ms)', result.success ? 'success' : 'error');
-
-        if (!res.ok) throw new Error('Upload failed');
-    }
-
-    async waitForCompletion() {
-        while (this.queue.length > 0 || this.isUploading) {
-            await this.delay(500);
-        }
-    }
-
-    getStats() {
-        return {
-            dropped: this.droppedChunks,
-            corrupted: this.corruptedChunks
-        };
-    }
-
-    delay(ms) {
-        return new Promise(function(resolve) { setTimeout(resolve, ms); });
-    }
-}
-
-window.UploadQueue = UploadQueue;
-
-/**
- * ChunkManager - إدارة القطع للمشاهد
- */
-class ChunkManager {
-    constructor(competitionId, extension = 'webm') {
-        this.currentIndex = 0;
-        this.misses = 0;
-        this.competitionId = competitionId;
-        this.extension = extension;
-        this.basePath = '${FFMPEG_URL}/stream.php?path=live/match_' + competitionId;
-    }
-
-    getUrl(index) {
-        const chunkNumber = index + 1;
-        const paddedIndex = String(chunkNumber).padStart(4, '0');
-        return this.basePath + '/chunk_' + paddedIndex + '.' + this.extension;
-    }
-
-    async exists(index) {
-        try {
-            const url = this.getUrl(index);
-            const res = await fetch(url, { method: 'HEAD' });
-            return res.ok;
-        } catch (e) {
-            return false;
-        }
-    }
-
-    async waitForNextChunk() {
-        const targetIndex = this.currentIndex + 1;
-
-        while (true) {
-            const exists = await this.exists(targetIndex);
-            if (exists) {
-                this.currentIndex = targetIndex;
-                this.misses = 0;
-                return targetIndex;
-            }
-
-            this.misses++;
-            const delay = Math.min(1000 + this.misses * 500, 5000);
-            await new Promise(function(r) { setTimeout(r, delay); });
-        }
-    }
-
-    async getAvailableChunks() {
-        const chunks = [];
-        let index = 0;
-
-        while (true) {
-            const exists = await this.exists(index);
-            if (!exists) break;
-            chunks.push({
-                index: index,
-                url: this.getUrl(index)
-            });
-            index++;
-        }
-
-        return chunks;
-    }
-}
-
-window.ChunkManager = ChunkManager;
-
-/**
- * LiveSequentialPlayer - مشغل البث المباشر
- */
-class LiveSequentialPlayer {
-    constructor(options) {
-        this.videoPlayers = options.videoPlayers;
-        this.chunkManager = options.chunkManager;
-        this.onChunkChange = options.onChunkChange;
-        this.onStatus = options.onStatus;
-        this.onError = options.onError;
-
-        this.activePlayerIndex = 0;
-        this.isRunning = false;
-        this.preloadedChunks = new Map();
-    }
-
-    async start() {
-        this.isRunning = true;
-        this.onStatus && this.onStatus('Starting live stream...');
-
-        const firstChunk = await this.chunkManager.waitForNextChunk();
-        this.onStatus && this.onStatus('Found first chunk: ' + firstChunk);
-
-        await this.playChunk(firstChunk);
-        this.runLoop();
-    }
-
-    async runLoop() {
-        while (this.isRunning) {
-            try {
-                const nextIndex = await this.chunkManager.waitForNextChunk();
-                await this.playChunk(nextIndex);
-            } catch (error) {
-                this.onError && this.onError(error);
-                await new Promise(function(r) { setTimeout(r, 2000); });
-            }
-        }
-    }
-
-    async playChunk(index) {
-        const url = this.chunkManager.getUrl(index);
-        const nextPlayerIndex = (this.activePlayerIndex + 1) % 2;
-        const nextPlayer = this.videoPlayers[nextPlayerIndex];
-        const currentPlayer = this.videoPlayers[this.activePlayerIndex];
-
-        nextPlayer.src = url;
-        await nextPlayer.load();
-
-        await new Promise(function(resolve, reject) {
-            nextPlayer.oncanplay = resolve;
-            nextPlayer.onerror = reject;
-            setTimeout(resolve, 3000);
-        });
-
-        nextPlayer.style.opacity = '1';
-        nextPlayer.style.zIndex = '2';
-        currentPlayer.style.opacity = '0';
-        currentPlayer.style.zIndex = '1';
-
-        nextPlayer.play().catch(function() {});
-        this.activePlayerIndex = nextPlayerIndex;
-
-        this.onChunkChange && this.onChunkChange(index, -1);
-    }
-
-    stop() {
-        this.isRunning = false;
-        this.videoPlayers.forEach(function(v) {
-            v.pause();
-            v.src = '';
-        });
-    }
-}
-
-window.LiveSequentialPlayer = LiveSequentialPlayer;
-
-/**
- * VodMsePlayer - مشغل الفيديو عند الطلب
- */
-class VodMsePlayer {
-    constructor(options) {
-        this.videoElement = options.videoElement;
-        this.chunkManager = options.chunkManager;
-        this.onProgress = options.onProgress;
-
-        this.mediaSource = null;
-        this.sourceBuffer = null;
-        this.chunks = [];
-    }
-
-    async start() {
-        this.chunks = await this.chunkManager.getAvailableChunks();
-
-        if (this.chunks.length === 0) {
-            throw new Error('No chunks available');
-        }
-
-        this.mediaSource = new MediaSource();
-        this.videoElement.src = URL.createObjectURL(this.mediaSource);
-
-        await new Promise(function(resolve) {
-            this.mediaSource.addEventListener('sourceopen', resolve, { once: true });
-        }.bind(this));
-
-        this.sourceBuffer = this.mediaSource.addSourceBuffer('video/webm; codecs="vp8, opus"');
-
-        for (let i = 0; i < this.chunks.length; i++) {
-            await this.appendChunk(this.chunks[i]);
-            this.onProgress && this.onProgress(i + 1, this.chunks.length);
-        }
-
-        this.mediaSource.endOfStream();
-    }
-
-    async appendChunk(chunk) {
-        const response = await fetch(chunk.url);
-        const buffer = await response.arrayBuffer();
-
-        await new Promise(function(resolve) {
-            if (this.sourceBuffer.updating) {
-                this.sourceBuffer.addEventListener('updateend', resolve, { once: true });
-            } else {
-                resolve();
-            }
-        }.bind(this));
-
-        this.sourceBuffer.appendBuffer(buffer);
-
-        await new Promise(function(resolve) {
-            this.sourceBuffer.addEventListener('updateend', resolve, { once: true });
-        }.bind(this));
-    }
-
-    stop() {
-        if (this.videoElement) {
-            this.videoElement.pause();
-            this.videoElement.src = '';
-        }
-    }
-}
-
-window.VodMsePlayer = VodMsePlayer;
-
-// ===== Common UI Functions =====
-
-/**
- * toggleFullscreen - تبديل ملء الشاشة
- */
-window.toggleFullscreen = function() {
-    const remoteContainer = document.getElementById('remoteVideoContainer');
-    if (!remoteContainer) return;
-    
-    if (!document.fullscreenElement) {
-        if (remoteContainer.requestFullscreen) {
-            remoteContainer.requestFullscreen();
-        } else if (remoteContainer.webkitRequestFullscreen) {
-            remoteContainer.webkitRequestFullscreen();
-        } else if (remoteContainer.msRequestFullscreen) {
-            remoteContainer.msRequestFullscreen();
-        }
-    } else {
-        if (document.exitFullscreen) {
-            document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-            document.webkitExitFullscreen();
-        } else if (document.msExitFullscreen) {
-            document.msExitFullscreen();
-        }
-    }
-}
-
-// استماع لتغيير حالة ملء الشاشة
-document.addEventListener('fullscreenchange', function() {
-    const icon = document.getElementById('fullscreenIcon');
-    if (icon) {
-        icon.className = document.fullscreenElement ? 
-            'fas fa-compress text-white text-sm' : 
-            'fas fa-expand text-white text-sm';
-    }
-});
-
-/**
- * toggleLocalVideoVisibility - تبديل رؤية الفيديو المحلي
- */
-window.toggleLocalVideoVisibility = function() {
-    const localWrapper = document.getElementById('localVideoWrapper');
-    const remoteWrapper = document.getElementById('remoteVideoWrapper');
-    const icon = document.getElementById('hideLocalIcon');
-    
-    if (!localWrapper || !remoteWrapper) return;
-    
-    const isVisible = !localWrapper.classList.contains('video-wrapper-hidden');
-    
-    if (isVisible) {
-        localWrapper.classList.add('video-wrapper-hidden');
-        localWrapper.classList.remove('w-full', 'md:w-[48%]');
-        remoteWrapper.classList.remove('w-full', 'md:w-[48%]');
-        remoteWrapper.classList.add('w-full', 'md:w-[80%]');
-        if (icon) icon.className = 'fas fa-eye-slash text-white';
-    } else {
-        localWrapper.classList.remove('video-wrapper-hidden');
-        localWrapper.classList.add('w-full', 'md:w-[48%]');
-        remoteWrapper.classList.remove('w-full', 'md:w-[80%]');
-        remoteWrapper.classList.add('w-full', 'md:w-[48%]');
-        if (icon) icon.className = 'fas fa-eye text-white';
-    }
-}
 // ===== Shared State Variables =====
 // متغيرات الحالة المشتركة بين host و guest
 let localStream = null;
@@ -545,6 +158,7 @@ let currentFacing = 'user';
 let isMicOn = true;
 let isSpeakerOn = true;
 let isConnected = false;
+let remoteStream = null;
 
 // تصدير للـ window
 window.mediaState = {
@@ -565,7 +179,9 @@ window.mediaState = {
     get isSpeakerOn() { return isSpeakerOn; },
     set isSpeakerOn(v) { isSpeakerOn = v; },
     get isConnected() { return isConnected; },
-    set isConnected(v) { isConnected = v; }
+    set isConnected(v) { isConnected = v; },
+    get remoteStream() { return remoteStream; },
+    set remoteStream(v) { remoteStream = v; }
 };
 
 // ===== Common Media Functions =====
@@ -594,10 +210,109 @@ function updateButtonStates() {
         screenIcon.className = isScreenSharing ? 'fas fa-desktop text-white' : 'fas fa-desktop text-white';
     }
 }
+
 window.updateButtonStates = updateButtonStates;
 
 /**
- * window.toggleSpeaker - تبديل السماعة
+ * updateConnectionButtons - تحديث أزرار الاتصال
+ * تعمل مع كلا الـ host (connectBtn) و guest (joinBtn)
+ */
+function updateConnectionButtons(connected) {
+    isConnected = connected;
+    
+    // Host buttons
+    const connectBtn = document.getElementById('connectBtn');
+    const reconnectBtn = document.getElementById('reconnectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    
+    // Guest buttons
+    const joinBtn = document.getElementById('joinBtn');
+    
+    if (connectBtn) {
+        connectBtn.classList.toggle('hidden', connected);
+    }
+    if (joinBtn) {
+        joinBtn.classList.toggle('hidden', connected);
+    }
+    if (reconnectBtn) {
+        reconnectBtn.classList.toggle('hidden', !connected);
+    }
+    if (disconnectBtn) {
+        disconnectBtn.classList.toggle('hidden', !connected);
+    }
+    
+    testLog('أزرار الاتصال تم تحديثها - متصل: ' + connected, 'info');
+}
+
+window.updateConnectionButtons = updateConnectionButtons;
+
+/**
+ * toggleFullscreen - تبديل ملء الشاشة
+ */
+window.toggleFullscreen = function() {
+    const remoteContainer = document.getElementById('remoteVideoContainer');
+    if (!remoteContainer) return;
+    
+    if (!document.fullscreenElement) {
+        if (remoteContainer.requestFullscreen) {
+            remoteContainer.requestFullscreen();
+        } else if (remoteContainer.webkitRequestFullscreen) {
+            remoteContainer.webkitRequestFullscreen();
+        } else if (remoteContainer.msRequestFullscreen) {
+            remoteContainer.msRequestFullscreen();
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+};
+
+// استماع لتغيير حالة ملء الشاشة
+document.addEventListener('fullscreenchange', function() {
+    const icon = document.getElementById('fullscreenIcon');
+    if (icon) {
+        icon.className = document.fullscreenElement ? 
+            'fas fa-compress text-white text-sm' : 
+            'fas fa-expand text-white text-sm';
+    }
+});
+
+/**
+ * toggleLocalVideoVisibility - تبديل رؤية الفيديو المحلي
+ */
+function toggleLocalVideoVisibility() {
+    const localWrapper = document.getElementById('localVideoWrapper');
+    const remoteWrapper = document.getElementById('remoteVideoWrapper');
+    const icon = document.getElementById('hideLocalIcon');
+    
+    if (!localWrapper || !remoteWrapper) return;
+    
+    const isVisible = !localWrapper.classList.contains('video-wrapper-hidden');
+    
+    if (isVisible) {
+        localWrapper.classList.add('video-wrapper-hidden');
+        localWrapper.classList.remove('w-full', 'md:w-[48%]');
+        remoteWrapper.classList.remove('w-full', 'md:w-[48%]');
+        remoteWrapper.classList.add('w-full', 'md:w-[80%]');
+        if (icon) icon.className = 'fas fa-eye-slash text-white';
+    } else {
+        localWrapper.classList.remove('video-wrapper-hidden');
+        localWrapper.classList.add('w-full', 'md:w-[48%]');
+        remoteWrapper.classList.remove('w-full', 'md:w-[80%]');
+        remoteWrapper.classList.add('w-full', 'md:w-[48%]');
+        if (icon) icon.className = 'fas fa-eye text-white';
+    }
+}
+
+window.toggleLocalVideoVisibility = toggleLocalVideoVisibility;
+
+/**
+ * toggleSpeaker - تبديل السماعة
  */
 window.toggleSpeaker = function() {
     const remoteVideo = document.getElementById('remoteVideo');
@@ -608,23 +323,26 @@ window.toggleSpeaker = function() {
 };
 
 /**
- * window.toggleLocalVideo - تبديل رؤية الفيديو المحلي
+ * toggleLocalVideo - تبديل رؤية الفيديو المحلي
  */
 window.toggleLocalVideo = function() {
     toggleLocalVideoVisibility();
 };
 
 /**
- * window.switchCamera - تبديل الكاميرا أمامية/خلفية
+ * switchCamera - تبديل الكاميرا أمامية/خلفية
  */
 window.switchCamera = async function() {
-    if (!localStream || isScreenSharing) return;
+    if (!localStream || isScreenSharing) {
+        testLog('الرجاء تشغيل الكاميرا أولاً', 'warn');
+        return;
+    }
     currentFacing = currentFacing === 'user' ? 'environment' : 'user';
     await window.useCamera(currentFacing);
 };
 
 /**
- * window.toggleMic - تبديل الميكروفون (بدون log)
+ * toggleMic - تبديل الميكروفون
  */
 window.toggleMic = function() {
     if (!localStream) return;
@@ -632,11 +350,11 @@ window.toggleMic = function() {
     localStream.getAudioTracks().forEach(function(track) { track.enabled = isMicOn; });
     const icon = document.getElementById('micIcon');
     if (icon) icon.className = isMicOn ? 'fas fa-microphone text-white' : 'fas fa-microphone-slash text-white';
+    testLog(isMicOn ? 'تم تشغيل الميكروفون' : 'تم إيقاف الميكروفون', 'info');
 };
 
 /**
- * window.toggleScreen - تبديل مشاركة الشاشة
- * إذا كانت الكاميرا مفعلة، أغلقها أولاً
+ * toggleScreen - تبديل مشاركة الشاشة
  */
 window.toggleScreen = async function() {
     if (isScreenSharing) {
@@ -646,8 +364,9 @@ window.toggleScreen = async function() {
         const localVideo = document.getElementById('localVideo');
         if (localVideo) localVideo.srcObject = null;
         isScreenSharing = false;
-        testLog('Screen share stopped', 'info');
-        updateStatus('Share screen or use camera', 'yellow');
+        isCameraOn = false;
+        testLog('تم إيقاف مشاركة الشاشة', 'info');
+        updateStatus('اضغط "مشاركة الشاشة"', 'yellow');
     } else {
         // إغلاق الكاميرا أولاً إن كانت مفعلة
         if (isCameraOn && localStream) {
@@ -666,8 +385,7 @@ window.toggleScreen = async function() {
 };
 
 /**
- * window.toggleCamera - تبديل الكاميرا
- * إذا كانت مشاركة الشاشة مفعلة، أغلقها أولاً
+ * toggleCamera - تبديل الكاميرا
  */
 window.toggleCamera = async function() {
     if (isCameraOn) {
@@ -677,8 +395,9 @@ window.toggleCamera = async function() {
         const localVideo = document.getElementById('localVideo');
         if (localVideo) localVideo.srcObject = null;
         isCameraOn = false;
-        testLog('Camera stopped', 'info');
-        updateStatus('Share screen or use camera', 'yellow');
+        isScreenSharing = false;
+        testLog('تم إيقاف الكاميرا', 'info');
+        updateStatus('اضغط "تشغيل الكاميرا"', 'yellow');
     } else {
         // إغلاق مشاركة الشاشة أولاً إن كانت مفعلة
         if (isScreenSharing && localStream) {
@@ -708,12 +427,12 @@ function showMobileAlternative(frontLabel, backLabel) {
         
         const frontBtn = document.createElement('button');
         frontBtn.className = 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition';
-        frontBtn.innerHTML = '<i class="fas fa-camera mr-2"></i>' + frontLabel;
+        frontBtn.innerHTML = '<i class="fas fa-camera mr-2"></i>' + (frontLabel || 'الكاميرا الأمامية');
         frontBtn.onclick = function() { window.useCamera('user'); };
         
         const backBtn = document.createElement('button');
         backBtn.className = 'px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition';
-        backBtn.innerHTML = '<i class="fas fa-camera-retro mr-2"></i>' + backLabel;
+        backBtn.innerHTML = '<i class="fas fa-camera-retro mr-2"></i>' + (backLabel || 'الكاميرا الخلفية');
         backBtn.onclick = function() { window.useCamera('environment'); };
         
         cameraBtns.appendChild(frontBtn);
@@ -726,54 +445,52 @@ function showMobileAlternative(frontLabel, backLabel) {
     }
     cameraBtns.style.display = 'flex';
 }
+
 window.showMobileAlternative = showMobileAlternative;
+
 /**
- * window.shareScreen - مشاركة الشاشة
+ * shareScreen - مشاركة الشاشة
  */
 window.shareScreen = async function() {
     const caps = detectDeviceCapabilities();
     
     if (caps.isMobile || !caps.supportsScreenShare) {
-        testLog('Screen share not supported', 'warn');
-        if (window._showMobileAlternativeCallback) {
-            window._showMobileAlternativeCallback();
-        }
+        testLog('مشاركة الشاشة غير متاحة على هذا الجهاز', 'warn');
+        showMobileAlternative();
         return;
     }
     
     try {
-        testLog('Starting screen share...');
+        testLog('طلب مشاركة الشاشة...');
         localStream = await navigator.mediaDevices.getDisplayMedia({
             video: { cursor: 'always' },
             audio: true
         });
         
-        console.log('[DEBUG] shareScreen - localStream assigned:', localStream);
-        console.log('[DEBUG] shareScreen - window.mediaState.localStream:', window.mediaState.localStream);
-        
         const localVideo = document.getElementById('localVideo');
         if (localVideo) localVideo.srcObject = localStream;
-        testLog('Screen share started ✓', 'success');
-        updateStatus('Screen share ✓', 'green');
+        
+        testLog('تم الحصول على الشاشة ✓', 'success');
+        updateStatus('الشاشة جاهزة - اضغط الاتصال', 'green');
         
         localStream.getVideoTracks()[0].onended = function() {
-            testLog('Screen share stopped', 'warn');
-            updateStatus('Share screen to continue', 'yellow');
+            testLog('تم إيقاف مشاركة الشاشة', 'warn');
+            updateStatus('الشاشة متوقفة - شارك شاشة جديدة', 'yellow');
+            isScreenSharing = false;
+            updateButtonStates();
         };
     } catch (err) {
-        testLog('Error: ' + err.message, 'warn');
-        if (window._showMobileAlternativeCallback) {
-            window._showMobileAlternativeCallback();
-        }
+        testLog('فشل مشاركة الشاشة: ' + err.message, 'warn');
+        showMobileAlternative();
     }
 };
 
 /**
- * window.useCamera - استخدام الكاميرا
+ * useCamera - استخدام الكاميرا
  */
 window.useCamera = async function(facingMode) {
     try {
-        testLog('Starting camera: ' + facingMode + '...');
+        testLog('طلب الكاميرا ' + (facingMode === 'user' ? 'الأمامية' : 'الخلفية') + '...');
         
         const oldStream = localStream;
         const newStream = await navigator.mediaDevices.getUserMedia({
@@ -781,7 +498,9 @@ window.useCamera = async function(facingMode) {
             audio: true
         });
         
+        // إذا كان الاتصال قائماً - استبدال الـ tracks
         if (pc && pc.connectionState === 'connected') {
+            testLog('🔄 استبدال المسارات في الاتصال القائم...', 'info');
             const senders = pc.getSenders();
             const videoSender = senders.find(function(s) { return s.track && s.track.kind === 'video'; });
             const audioSender = senders.find(function(s) { return s.track && s.track.kind === 'audio'; });
@@ -803,53 +522,105 @@ window.useCamera = async function(facingMode) {
         isScreenSharing = false;
         currentFacing = facingMode;
         
-        testLog('Camera started ✓', 'success');
-        updateStatus('Camera ✓ - Ready to connect', 'green');
+        testLog('تم الحصول على الكاميرا ✓', 'success');
+        updateStatus('الكاميرا جاهزة - اضغط الاتصال', 'green');
     } catch (err) {
-        testLog('Error: ' + err.message, 'error');
+        testLog('فشل الكاميرا: ' + err.message, 'error');
+        if (err.name === 'NotAllowedError') {
+            updateStatus('الرجاء السماح بالوصول للكاميرا', 'red');
+        } else if (err.name === 'NotFoundError') {
+            updateStatus('لا توجد كاميرا', 'red');
+        }
+    }
+};
+
+// ===== Signaling Functions =====
+
+/**
+ * sendSignal - إرسال إشارة
+ */
+window.sendSignal = async function(type, data) {
+    const actualRoom = window.actualRoomId || window.roomId || '${TEST_ROOM_ID}';
+    try {
+        await fetch('${STREAM_SERVER_URL}' + '/api/signaling/signal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                room_id: actualRoom,
+                from_role: window.role || 'host',
+                signal_type: type,
+                signal_data: data
+            })
+        });
+    } catch (err) {
+        testLog('خطأ في الإرسال: ' + err.message, 'error');
     }
 };
 
 /**
- * updateConnectionButtons - تحديث أزرار الاتصال
- * تعمل مع كلا الـ host (connectBtn) و guest (joinBtn)
+ * handleConnectionFailure - معالجة فشل الاتصال
  */
-function updateConnectionButtons(connected) {
-    console.log('[DEBUG] updateConnectionButtons called with:', connected);
-    isConnected = connected;
+window.handleConnectionFailure = function() {
+    testLog('🔄 تنظيف الاتصال الفاشل...', 'warn');
     
-    // Host uses connectBtn, Guest uses joinBtn
-    const connectBtn = document.getElementById('connectBtn');
-    const joinBtn = document.getElementById('joinBtn');
-    const reconnectBtn = document.getElementById('reconnectBtn');
-    const disconnectBtn = document.getElementById('disconnectBtn');
+    // إيقاف التسجيل إذا كان قائماً
+    if (window.mediaRecorder && window.mediaRecorder.state !== 'inactive') {
+        window.mediaRecorder.stop();
+    }
+    window.mediaRecorder = null;
     
-    console.log('[DEBUG] Buttons found:', {
-        connectBtn: !!connectBtn,
-        joinBtn: !!joinBtn,
-        reconnectBtn: !!reconnectBtn,
-        disconnectBtn: !!disconnectBtn
-    });
+    // إغلاق الـ peer connection
+    if (pc) {
+        pc.close();
+        pc = null;
+    }
     
-    if (connectBtn) {
-        connectBtn.classList.toggle('hidden', connected);
-        console.log('[DEBUG] connectBtn hidden:', connected);
+    // إيقاف الـ polling
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
     }
-    if (joinBtn) {
-        joinBtn.classList.toggle('hidden', connected);
-        console.log('[DEBUG] joinBtn hidden:', connected);
-    }
-    if (reconnectBtn) {
-        reconnectBtn.classList.toggle('hidden', !connected);
-        console.log('[DEBUG] reconnectBtn hidden:', !connected);
-    }
-    if (disconnectBtn) {
-        disconnectBtn.classList.toggle('hidden', !connected);
-        console.log('[DEBUG] disconnectBtn hidden:', !connected);
-    }
-}
-window.updateConnectionButtons = updateConnectionButtons;
+    
+    testLog('✅ جاهز لإعادة الاتصال', 'info');
+    updateConnectionButtons(false);
+};
 
-console.log('[Client Shared] Loaded successfully');
-    `;
+/**
+ * disconnect - إنهاء الاتصال
+ */
+window.disconnect = function() {
+    testLog('إنهاء الاتصال...');
+    
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    
+    if (pc) {
+        pc.close();
+        pc = null;
+    }
+    
+    if (localStream) {
+        localStream.getTracks().forEach(function(t) { t.stop(); });
+        localStream = null;
+    }
+    
+    if (remoteStream) {
+        remoteStream.getTracks().forEach(function(t) { t.stop(); });
+        remoteStream = null;
+    }
+    
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    
+    updateStatus('غير متصل', 'gray');
+    testLog('تم الإنهاء ✓', 'success');
+    updateConnectionButtons(false);
+};
+
+console.log('[Client Shared] تم تحميل الدوال المشتركة بنجاح');
+`;
 }
