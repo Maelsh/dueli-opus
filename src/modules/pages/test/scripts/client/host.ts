@@ -507,7 +507,7 @@ export function getHostScript(lang: Language): string {
                     ctx.fillStyle = logoGradient;
                     ctx.font = 'bold 32px Cairo, Arial';
                     ctx.textAlign = 'right';
-                    ctx.fillText(platformName, logoX - 20, logoY + 32);
+                    ctx.fillText(platformName, logoX - 25, logoY + 32);
                 } else {
                     // LTR: النص يمين الشعار
                     const logoX = (CANVAS_WIDTH / 2) - 70;
