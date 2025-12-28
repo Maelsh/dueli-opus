@@ -20,8 +20,8 @@ import { P2PConnection } from './services/P2PConnection';
 import { VideoCompositor } from './services/VideoCompositor';
 import { ChunkUploader } from './services/ChunkUploader';
 
-// Test Streaming Modules
-import { ChunkManager, LiveSequentialPlayer, VodMsePlayer, UploadQueue, log as testLog, updateStatus, setMode, drawVideoProportional } from '../modules/pages/test/core';
+// Note: Test Streaming functions are now injected as inline scripts in test pages
+// See: modules/pages/test/scripts/client/shared.ts
 
 // Countries (shared data)
 import { getCountriesList, getCountry } from '../countries';
@@ -218,15 +218,7 @@ declare global {
         VideoCompositor: typeof VideoCompositor;
         ChunkUploader: typeof ChunkUploader;
 
-        // Test Streaming (for test pages)
-        ChunkManager: typeof ChunkManager;
-        LiveSequentialPlayer: typeof LiveSequentialPlayer;
-        VodMsePlayer: typeof VodMsePlayer;
-        UploadQueue: typeof UploadQueue;
-        testLog: typeof testLog;
-        updateStatus: typeof updateStatus;
-        setMode: typeof setMode;
-        drawVideoProportional: typeof drawVideoProportional;
+        // Note: Test Streaming functions are injected as inline scripts in test pages
     }
 }
 
@@ -318,15 +310,7 @@ if (typeof window !== 'undefined') {
     window.VideoCompositor = VideoCompositor;
     window.ChunkUploader = ChunkUploader;
 
-    // Bind Test Streaming (for test pages)
-    window.ChunkManager = ChunkManager;
-    window.LiveSequentialPlayer = LiveSequentialPlayer;
-    window.VodMsePlayer = VodMsePlayer;
-    window.UploadQueue = UploadQueue;
-    window.testLog = testLog;
-    window.updateStatus = updateStatus;
-    window.setMode = setMode;
-    window.drawVideoProportional = drawVideoProportional;
+    // Note: Test Streaming functions are injected as inline scripts in test pages
 }
 
 // Auto-initialize when DOM is ready

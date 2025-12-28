@@ -1,0 +1,116 @@
+/**
+ * Test Pages Styles
+ * ستايلات صفحات الاختبار المشتركة
+ */
+
+/* ===== Video Container ===== */
+.video-container { 
+    background: #000; 
+    border-radius: 12px; 
+    overflow: hidden; 
+}
+
+/* ===== Log Entries ===== */
+.log-entry { 
+    font-family: monospace; 
+    font-size: 12px; 
+    padding: 2px 0; 
+}
+
+.log-info { color: #60a5fa; }
+.log-success { color: #34d399; }
+.log-error { color: #f87171; }
+.log-warn { color: #fbbf24; }
+
+/* ===== Mode Badge (Viewer) ===== */
+.mode-badge { 
+    position: absolute; 
+    top: 10px; 
+    right: 10px; 
+    padding: 4px 12px; 
+    border-radius: 20px; 
+    font-size: 12px; 
+    font-weight: bold; 
+    z-index: 10; 
+}
+
+.mode-hls { 
+    background: linear-gradient(135deg, #8b5cf6, #6366f1); 
+    color: white; 
+}
+
+.mode-mse { 
+    background: linear-gradient(135deg, #10b981, #059669); 
+    color: white; 
+}
+
+.mode-vod { 
+    background: linear-gradient(135deg, #f59e0b, #d97706); 
+    color: white; 
+}
+
+/* ===== Pulse Animation ===== */
+.pulse { 
+    animation: pulse 2s infinite; 
+}
+
+@keyframes pulse { 
+    0%, 100% { opacity: 1; } 
+    50% { opacity: 0.7; } 
+}
+
+/* ===== Test Page Cards ===== */
+.test-card {
+    background: linear-gradient(135deg, var(--card-from), var(--card-to));
+    padding: 1.5rem;
+    border-radius: 12px;
+    transition: transform 0.2s;
+    color: white;
+}
+
+.test-card:hover {
+    transform: scale(1.05);
+}
+
+.test-card-host {
+    --card-from: #2563eb;
+    --card-to: #1e40af;
+}
+
+.test-card-guest {
+    --card-from: #16a34a;
+    --card-to: #166534;
+}
+
+.test-card-viewer {
+    --card-from: #9333ea;
+    --card-to: #7e22ce;
+}
+
+/* ===== Control Buttons ===== */
+.control-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.control-btn-lg {
+    width: 48px;
+    height: 48px;
+}
+
+/* ===== Video Wrapper Transitions ===== */
+.video-wrapper {
+    transition: all 0.3s ease;
+}
+
+.video-wrapper-hidden {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+    width: 0;
+}
