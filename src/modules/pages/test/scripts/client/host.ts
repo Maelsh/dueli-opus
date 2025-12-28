@@ -249,15 +249,18 @@ export function getHostScript(lang: Language): string {
         async function createRoom() {
             try {
                 log('${tr.loading}...');
+                console.log('[DEBUG] createRoom - calling API...');
                 const res = await fetch(streamServerUrl + '/api/signaling/room/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ competition_id: competitionId.toString(), user_id: 1 })
                 });
                 const data = await res.json();
+                console.log('[DEBUG] createRoom - response:', data);
                 if (data.success && data.data.room_id) window.actualRoomId = data.data.room_id;
                 return data.success;
             } catch (err) {
+                console.log('[DEBUG] createRoom - ERROR:', err.message);
                 log('${tr.error}: ' + err.message, 'error');
                 return false;
             }
@@ -301,12 +304,15 @@ export function getHostScript(lang: Language): string {
             };
             
             ms.pc.onconnectionstatechange = function() {
+                console.log('[DEBUG] onconnectionstatechange:', ms.pc.connectionState);
                 log('📡 ' + ms.pc.connectionState, ms.pc.connectionState === 'connected' ? 'success' : 'info');
                 if (ms.pc.connectionState === 'connected') {
+                    console.log('[DEBUG] Connection successful! Calling updateConnectionButtons(true)');
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
                     startRecording();
                 } else if (ms.pc.connectionState === 'failed') {
+                    console.log('[DEBUG] Connection failed! Calling updateConnectionButtons(false)');
                     updateStatus('${tr.error}', 'red');
                     updateConnectionButtons(false);
                 }

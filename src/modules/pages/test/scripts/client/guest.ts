@@ -101,11 +101,14 @@ export function getGuestScript(lang: Language): string {
             };
             
             ms.pc.onconnectionstatechange = function() {
+                console.log('[DEBUG] guest onconnectionstatechange:', ms.pc.connectionState);
                 log('📡 ' + ms.pc.connectionState, ms.pc.connectionState === 'connected' ? 'success' : 'info');
                 if (ms.pc.connectionState === 'connected') {
+                    console.log('[DEBUG] Guest connection successful! Calling updateConnectionButtons(true)');
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
                 } else if (ms.pc.connectionState === 'failed') {
+                    console.log('[DEBUG] Guest connection failed!');
                     updateStatus('${tr.error}', 'red');
                     updateConnectionButtons(false);
                     handleConnectionFailure();

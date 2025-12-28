@@ -56,6 +56,9 @@ const testStyles = `
 /* Video Wrapper */
 .video-wrapper { transition: all 0.3s ease; }
 .video-wrapper-hidden { opacity: 0; pointer-events: none; position: absolute; width: 0; }
+
+/* Utility Classes (TailwindCSS compatibility) */
+.hidden { display: none !important; }
 `;
 
 /**
