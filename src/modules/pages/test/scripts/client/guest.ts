@@ -25,36 +25,6 @@ export function getGuestScript(lang: Language): string {
         const urlParams = new URLSearchParams(window.location.search);
         const urlCompId = urlParams.get('comp');
         
-        // Global state - linked to shared state
-        // Use getters/setters to sync with window.mediaState
-        Object.defineProperty(window, 'pc', {
-            get: function() { return window.mediaState.pc; },
-            set: function(v) { window.mediaState.pc = v; },
-            configurable: true
-        });
-        Object.defineProperty(window, 'localStream', {
-            get: function() { return window.mediaState.localStream; },
-            set: function(v) { window.mediaState.localStream = v; },
-            configurable: true
-        });
-        Object.defineProperty(window, 'pollingInterval', {
-            get: function() { return window.mediaState.pollingInterval; },
-            set: function(v) { window.mediaState.pollingInterval = v; },
-            configurable: true
-        });
-        
-        // Local shortcuts for easy access
-        let pc = null;
-        let localStream = null;
-        let pollingInterval = null;
-        
-        // Sync function - call before using vars
-        function syncState() {
-            pc = window.mediaState.pc;
-            localStream = window.mediaState.localStream;
-            pollingInterval = window.mediaState.pollingInterval;
-        }
-        
         // Use shared state from window.mediaState
         const state = window.mediaState;
         
@@ -75,7 +45,7 @@ export function getGuestScript(lang: Language): string {
         
         // ===== Join Room =====
         window.joinRoom = async function() {
-            syncState(); // Get latest state from shared
+            const ms = window.mediaState;
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
             
@@ -85,7 +55,7 @@ export function getGuestScript(lang: Language): string {
                 return;
             }
             
-            if (!localStream) {
+            if (!ms.localStream) {
                 log('${tr.share_screen}!', 'warn');
                 return;
             }
@@ -104,34 +74,33 @@ export function getGuestScript(lang: Language): string {
                 log('${tr.error}: ' + err.message, 'error');
             }
             
-            window.mediaState.pc = new RTCPeerConnection({
+            ms.pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'turn:maelsh.pro:3000?transport=tcp', username: 'dueli', credential: 'dueli-turn-secret-2024' },
                     { urls: 'turn:maelsh.pro:3000', username: 'dueli', credential: 'dueli-turn-secret-2024' }
                 ]
             });
-            syncState(); // Update local pc reference
             
-            localStream.getTracks().forEach(function(track) { pc.addTrack(track, localStream); });
+            ms.localStream.getTracks().forEach(function(track) { ms.pc.addTrack(track, ms.localStream); });
             
-            pc.ontrack = function(event) {
+            ms.pc.ontrack = function(event) {
                 if (event.streams[0]) {
                     document.getElementById('remoteVideo').srcObject = event.streams[0];
                     updateStatus('${tr.live} ✓', 'green');
                 }
             };
             
-            pc.onicecandidate = async function(event) {
+            ms.pc.onicecandidate = async function(event) {
                 if (event.candidate) await sendSignal('ice', event.candidate);
             };
             
-            pc.onconnectionstatechange = function() {
-                log('📡 ' + pc.connectionState, pc.connectionState === 'connected' ? 'success' : 'info');
-                if (pc.connectionState === 'connected') {
+            ms.pc.onconnectionstatechange = function() {
+                log('📡 ' + ms.pc.connectionState, ms.pc.connectionState === 'connected' ? 'success' : 'info');
+                if (ms.pc.connectionState === 'connected') {
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
-                } else if (pc.connectionState === 'failed') {
+                } else if (ms.pc.connectionState === 'failed') {
                     updateStatus('${tr.error}', 'red');
                     updateConnectionButtons(false);
                     handleConnectionFailure();
@@ -143,16 +112,17 @@ export function getGuestScript(lang: Language): string {
         
         // ===== Handle Connection Failure =====
         function handleConnectionFailure() {
+            const ms = window.mediaState;
             log('🔄 Cleaning failed connection...', 'warn');
             
-            if (pc) {
-                pc.close();
-                pc = null;
+            if (ms.pc) {
+                ms.pc.close();
+                ms.pc = null;
             }
             
-            if (pollingInterval) {
-                clearInterval(pollingInterval);
-                pollingInterval = null;
+            if (ms.pollingInterval) {
+                clearInterval(ms.pollingInterval);
+                ms.pollingInterval = null;
             }
             
             log('✅ Ready to reconnect - press join', 'info');
@@ -175,19 +145,20 @@ export function getGuestScript(lang: Language): string {
         }
         
         function startPolling() {
-            pollingInterval = setInterval(async function() {
+            const ms = window.mediaState;
+            ms.pollingInterval = setInterval(async function() {
                 try {
                     const res = await fetch(streamServerUrl + '/api/signaling/poll?room_id=' + (window.actualRoomId || roomId) + '&role=opponent');
                     const data = await res.json();
                     if (data.success && data.data && data.data.signals) {
                         for (const signal of data.data.signals) {
                             if (signal.type === 'offer') {
-                                await pc.setRemoteDescription(new RTCSessionDescription(signal.data));
-                                const answer = await pc.createAnswer();
-                                await pc.setLocalDescription(answer);
+                                await ms.pc.setRemoteDescription(new RTCSessionDescription(signal.data));
+                                const answer = await ms.pc.createAnswer();
+                                await ms.pc.setLocalDescription(answer);
                                 await sendSignal('answer', answer);
                             } else if (signal.type === 'ice') {
-                                await pc.addIceCandidate(new RTCIceCandidate(signal.data));
+                                await ms.pc.addIceCandidate(new RTCIceCandidate(signal.data));
                             }
                         }
                     }
@@ -197,22 +168,28 @@ export function getGuestScript(lang: Language): string {
         
         // ===== Reconnect & Disconnect =====
         window.reconnect = async function() {
+            const ms = window.mediaState;
             log('${tr.reconnect}...', 'info');
-            if (pc) { pc.close(); pc = null; }
-            if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+            if (ms.pc) { ms.pc.close(); ms.pc = null; }
+            if (ms.pollingInterval) { clearInterval(ms.pollingInterval); ms.pollingInterval = null; }
             document.getElementById('remoteVideo').srcObject = null;
-            setTimeout(function() { if (localStream) window.joinRoom(); }, 1000);
+            setTimeout(function() { if (ms.localStream) window.joinRoom(); }, 1000);
         }
         
         window.disconnect = function() {
+            const ms = window.mediaState;
             log('${tr.disconnect}...');
-            if (pollingInterval) clearInterval(pollingInterval);
-            if (pc) pc.close();
-            if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
+            if (ms.pollingInterval) clearInterval(ms.pollingInterval);
+            if (ms.pc) ms.pc.close();
+            if (ms.localStream) ms.localStream.getTracks().forEach(function(t) { t.stop(); });
+            ms.localStream = null;
+            ms.pc = null;
+            ms.pollingInterval = null;
             document.getElementById('localVideo').srcObject = null;
             document.getElementById('remoteVideo').srcObject = null;
             updateStatus('${tr.disconnect}', 'gray');
             log('${tr.disconnect} ✓', 'success');
+            updateConnectionButtons(false);
         }
         
         // Init
