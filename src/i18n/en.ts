@@ -461,9 +461,9 @@ export const en = {
 
     // Live Streaming (P2P)
     recording: 'Recording',
-    toggle_mic: 'Toggle Microphone',
-    toggle_speaker: 'Toggle Speaker',
-    toggle_camera: 'Toggle Camera',
+    toggle_mic: 'Mute/Unmute Mic',
+    toggle_speaker: 'Mute/Unmute Sound',
+    toggle_camera: 'Turn Camera On/Off',
     share_screen: 'Share Screen',
     end_stream: 'End Stream',
     end: 'End',

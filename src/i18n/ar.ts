@@ -437,9 +437,9 @@ export const ar = {
 
     // البث المباشر (P2P)
     recording: 'جاري التسجيل',
-    toggle_mic: 'تبديل الميكروفون',
-    toggle_speaker: 'تبديل السماعة',
-    toggle_camera: 'تبديل الكاميرا',
+    toggle_mic: 'افتح/أغلق المايك',
+    toggle_speaker: 'افتح/أغلق الصوت',
+    toggle_camera: 'افتح/أغلق الكاميرا',
     share_screen: 'مشاركة الشاشة',
     end_stream: 'إنهاء البث',
     end: 'إنهاء',
