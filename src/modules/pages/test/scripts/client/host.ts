@@ -265,8 +265,13 @@ export function getHostScript(lang: Language): string {
         
         window.connect = async function() {
             const ms = window.mediaState;
+            console.log('[DEBUG] window.connect called');
+            console.log('[DEBUG] ms.localStream:', ms.localStream);
+            console.log('[DEBUG] ms.pc:', ms.pc);
+            
             if (!ms.localStream) {
                 log('${tr.share_screen}!', 'warn');
+                console.log('[DEBUG] No localStream - exiting connect');
                 return;
             }
             

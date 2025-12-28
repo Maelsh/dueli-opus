@@ -748,6 +748,9 @@ window.shareScreen = async function() {
             audio: true
         });
         
+        console.log('[DEBUG] shareScreen - localStream assigned:', localStream);
+        console.log('[DEBUG] shareScreen - window.mediaState.localStream:', window.mediaState.localStream);
+        
         const localVideo = document.getElementById('localVideo');
         if (localVideo) localVideo.srcObject = localStream;
         testLog('Screen share started ✓', 'success');
@@ -812,6 +815,7 @@ window.useCamera = async function(facingMode) {
  * تعمل مع كلا الـ host (connectBtn) و guest (joinBtn)
  */
 function updateConnectionButtons(connected) {
+    console.log('[DEBUG] updateConnectionButtons called with:', connected);
     isConnected = connected;
     
     // Host uses connectBtn, Guest uses joinBtn
@@ -820,10 +824,29 @@ function updateConnectionButtons(connected) {
     const reconnectBtn = document.getElementById('reconnectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
     
-    if (connectBtn) connectBtn.classList.toggle('hidden', connected);
-    if (joinBtn) joinBtn.classList.toggle('hidden', connected);
-    if (reconnectBtn) reconnectBtn.classList.toggle('hidden', !connected);
-    if (disconnectBtn) disconnectBtn.classList.toggle('hidden', !connected);
+    console.log('[DEBUG] Buttons found:', {
+        connectBtn: !!connectBtn,
+        joinBtn: !!joinBtn,
+        reconnectBtn: !!reconnectBtn,
+        disconnectBtn: !!disconnectBtn
+    });
+    
+    if (connectBtn) {
+        connectBtn.classList.toggle('hidden', connected);
+        console.log('[DEBUG] connectBtn hidden:', connected);
+    }
+    if (joinBtn) {
+        joinBtn.classList.toggle('hidden', connected);
+        console.log('[DEBUG] joinBtn hidden:', connected);
+    }
+    if (reconnectBtn) {
+        reconnectBtn.classList.toggle('hidden', !connected);
+        console.log('[DEBUG] reconnectBtn hidden:', !connected);
+    }
+    if (disconnectBtn) {
+        disconnectBtn.classList.toggle('hidden', !connected);
+        console.log('[DEBUG] disconnectBtn hidden:', !connected);
+    }
 }
 window.updateConnectionButtons = updateConnectionButtons;
 

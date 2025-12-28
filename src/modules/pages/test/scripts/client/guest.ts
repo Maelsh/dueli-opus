@@ -46,6 +46,10 @@ export function getGuestScript(lang: Language): string {
         // ===== Join Room =====
         window.joinRoom = async function() {
             const ms = window.mediaState;
+            console.log('[DEBUG] window.joinRoom called');
+            console.log('[DEBUG] ms.localStream:', ms.localStream);
+            console.log('[DEBUG] ms.pc:', ms.pc);
+            
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
             
@@ -57,6 +61,7 @@ export function getGuestScript(lang: Language): string {
             
             if (!ms.localStream) {
                 log('${tr.share_screen}!', 'warn');
+                console.log('[DEBUG] No localStream - exiting joinRoom');
                 return;
             }
             
