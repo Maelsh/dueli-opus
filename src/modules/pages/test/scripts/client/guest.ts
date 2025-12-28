@@ -25,9 +25,35 @@ export function getGuestScript(lang: Language): string {
         const urlParams = new URLSearchParams(window.location.search);
         const urlCompId = urlParams.get('comp');
         
+        // Global state - linked to shared state
+        // Use getters/setters to sync with window.mediaState
+        Object.defineProperty(window, 'pc', {
+            get: function() { return window.mediaState.pc; },
+            set: function(v) { window.mediaState.pc = v; },
+            configurable: true
+        });
+        Object.defineProperty(window, 'localStream', {
+            get: function() { return window.mediaState.localStream; },
+            set: function(v) { window.mediaState.localStream = v; },
+            configurable: true
+        });
+        Object.defineProperty(window, 'pollingInterval', {
+            get: function() { return window.mediaState.pollingInterval; },
+            set: function(v) { window.mediaState.pollingInterval = v; },
+            configurable: true
+        });
+        
+        // Local shortcuts for easy access
         let pc = null;
         let localStream = null;
         let pollingInterval = null;
+        
+        // Sync function - call before using vars
+        function syncState() {
+            pc = window.mediaState.pc;
+            localStream = window.mediaState.localStream;
+            pollingInterval = window.mediaState.pollingInterval;
+        }
         
         // Use shared state from window.mediaState
         const state = window.mediaState;
@@ -49,6 +75,7 @@ export function getGuestScript(lang: Language): string {
         
         // ===== Join Room =====
         window.joinRoom = async function() {
+            syncState(); // Get latest state from shared
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
             
@@ -77,13 +104,14 @@ export function getGuestScript(lang: Language): string {
                 log('${tr.error}: ' + err.message, 'error');
             }
             
-            pc = new RTCPeerConnection({
+            window.mediaState.pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'turn:maelsh.pro:3000?transport=tcp', username: 'dueli', credential: 'dueli-turn-secret-2024' },
                     { urls: 'turn:maelsh.pro:3000', username: 'dueli', credential: 'dueli-turn-secret-2024' }
                 ]
             });
+            syncState(); // Update local pc reference
             
             localStream.getTracks().forEach(function(track) { pc.addTrack(track, localStream); });
             

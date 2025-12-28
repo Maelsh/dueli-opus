@@ -577,6 +577,7 @@ function updateButtonStates() {
     const screenBtn = document.getElementById('screenBtn');
     const cameraBtn = document.getElementById('cameraBtn');
     const cameraIcon = document.getElementById('cameraIcon');
+    const screenIcon = document.getElementById('screenIcon');
     
     if (screenBtn) {
         screenBtn.classList.toggle('bg-blue-800', isScreenSharing);
@@ -588,6 +589,9 @@ function updateButtonStates() {
     }
     if (cameraIcon) {
         cameraIcon.className = isCameraOn ? 'fas fa-video text-white' : 'fas fa-video-slash text-white';
+    }
+    if (screenIcon) {
+        screenIcon.className = isScreenSharing ? 'fas fa-desktop text-white' : 'fas fa-desktop text-white';
     }
 }
 window.updateButtonStates = updateButtonStates;
@@ -632,16 +636,26 @@ window.toggleMic = function() {
 
 /**
  * window.toggleScreen - تبديل مشاركة الشاشة
+ * إذا كانت الكاميرا مفعلة، أغلقها أولاً
  */
 window.toggleScreen = async function() {
     if (isScreenSharing) {
+        // إيقاف مشاركة الشاشة
         if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
         localStream = null;
         const localVideo = document.getElementById('localVideo');
         if (localVideo) localVideo.srcObject = null;
         isScreenSharing = false;
-        isCameraOn = false;
+        testLog('Screen share stopped', 'info');
+        updateStatus('Share screen or use camera', 'yellow');
     } else {
+        // إغلاق الكاميرا أولاً إن كانت مفعلة
+        if (isCameraOn && localStream) {
+            localStream.getTracks().forEach(function(t) { t.stop(); });
+            localStream = null;
+            isCameraOn = false;
+        }
+        // بدء مشاركة الشاشة
         await window.shareScreen();
         if (localStream) {
             isScreenSharing = true;
@@ -653,16 +667,26 @@ window.toggleScreen = async function() {
 
 /**
  * window.toggleCamera - تبديل الكاميرا
+ * إذا كانت مشاركة الشاشة مفعلة، أغلقها أولاً
  */
 window.toggleCamera = async function() {
     if (isCameraOn) {
+        // إيقاف الكاميرا
         if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
         localStream = null;
         const localVideo = document.getElementById('localVideo');
         if (localVideo) localVideo.srcObject = null;
         isCameraOn = false;
-        isScreenSharing = false;
+        testLog('Camera stopped', 'info');
+        updateStatus('Share screen or use camera', 'yellow');
     } else {
+        // إغلاق مشاركة الشاشة أولاً إن كانت مفعلة
+        if (isScreenSharing && localStream) {
+            localStream.getTracks().forEach(function(t) { t.stop(); });
+            localStream = null;
+            isScreenSharing = false;
+        }
+        // بدء الكاميرا
         await window.useCamera(currentFacing);
         if (localStream) {
             isCameraOn = true;

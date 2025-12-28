@@ -23,11 +23,37 @@ export function getHostScript(lang: Language): string {
         const streamServerUrl = '${STREAM_SERVER_URL}';
         const ffmpegUrl = '${FFMPEG_URL}';
         
-        // Global state
+        // Global state - linked to shared state
+        // Use getters/setters to sync with window.mediaState
+        Object.defineProperty(window, 'pc', {
+            get: function() { return window.mediaState.pc; },
+            set: function(v) { window.mediaState.pc = v; },
+            configurable: true
+        });
+        Object.defineProperty(window, 'localStream', {
+            get: function() { return window.mediaState.localStream; },
+            set: function(v) { window.mediaState.localStream = v; },
+            configurable: true
+        });
+        Object.defineProperty(window, 'pollingInterval', {
+            get: function() { return window.mediaState.pollingInterval; },
+            set: function(v) { window.mediaState.pollingInterval = v; },
+            configurable: true
+        });
+        
+        // Local shortcuts for easy access
         let pc = null;
         let localStream = null;
-        let remoteStream = new MediaStream();
         let pollingInterval = null;
+        
+        // Sync function - call before using vars
+        function syncState() {
+            pc = window.mediaState.pc;
+            localStream = window.mediaState.localStream;
+            pollingInterval = window.mediaState.pollingInterval;
+        }
+        
+        let remoteStream = new MediaStream();
         let mediaRecorder = null;
         let chunkIndex = 0;
         
@@ -266,6 +292,7 @@ export function getHostScript(lang: Language): string {
         }
         
         window.connect = async function() {
+            syncState(); // Get latest state from shared
             if (!localStream) {
                 log('${tr.share_screen}!', 'warn');
                 return;
@@ -274,13 +301,14 @@ export function getHostScript(lang: Language): string {
             updateStatus('${tr.connect}...', 'yellow');
             await createRoom();
             
-            pc = new RTCPeerConnection({
+            window.mediaState.pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
                     { urls: 'turn:maelsh.pro:3000?transport=tcp', username: 'dueli', credential: 'dueli-turn-secret-2024' },
                     { urls: 'turn:maelsh.pro:3000', username: 'dueli', credential: 'dueli-turn-secret-2024' }
                 ]
             });
+            syncState(); // Update local pc reference
             
             localStream.getTracks().forEach(function(track) { pc.addTrack(track, localStream); });
             
