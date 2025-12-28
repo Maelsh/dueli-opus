@@ -534,6 +534,274 @@ window.toggleLocalVideoVisibility = function() {
         if (icon) icon.className = 'fas fa-eye text-white';
     }
 }
+// ===== Shared State Variables =====
+// متغيرات الحالة المشتركة بين host و guest
+let localStream = null;
+let pc = null;
+let pollingInterval = null;
+let isScreenSharing = false;
+let isCameraOn = false;
+let currentFacing = 'user';
+let isMicOn = true;
+let isSpeakerOn = true;
+let isConnected = false;
+
+// تصدير للـ window
+window.mediaState = {
+    get localStream() { return localStream; },
+    set localStream(v) { localStream = v; },
+    get pc() { return pc; },
+    set pc(v) { pc = v; },
+    get pollingInterval() { return pollingInterval; },
+    set pollingInterval(v) { pollingInterval = v; },
+    get isScreenSharing() { return isScreenSharing; },
+    set isScreenSharing(v) { isScreenSharing = v; },
+    get isCameraOn() { return isCameraOn; },
+    set isCameraOn(v) { isCameraOn = v; },
+    get currentFacing() { return currentFacing; },
+    set currentFacing(v) { currentFacing = v; },
+    get isMicOn() { return isMicOn; },
+    set isMicOn(v) { isMicOn = v; },
+    get isSpeakerOn() { return isSpeakerOn; },
+    set isSpeakerOn(v) { isSpeakerOn = v; },
+    get isConnected() { return isConnected; },
+    set isConnected(v) { isConnected = v; }
+};
+
+// ===== Common Media Functions =====
+
+/**
+ * updateButtonStates - تحديث حالة أزرار الشاشة والكاميرا
+ */
+function updateButtonStates() {
+    const screenBtn = document.getElementById('screenBtn');
+    const cameraBtn = document.getElementById('cameraBtn');
+    const cameraIcon = document.getElementById('cameraIcon');
+    
+    if (screenBtn) {
+        screenBtn.classList.toggle('bg-blue-800', isScreenSharing);
+        screenBtn.classList.toggle('bg-blue-600', !isScreenSharing);
+    }
+    if (cameraBtn) {
+        cameraBtn.classList.toggle('bg-purple-800', isCameraOn);
+        cameraBtn.classList.toggle('bg-purple-600', !isCameraOn);
+    }
+    if (cameraIcon) {
+        cameraIcon.className = isCameraOn ? 'fas fa-video text-white' : 'fas fa-video-slash text-white';
+    }
+}
+window.updateButtonStates = updateButtonStates;
+
+/**
+ * window.toggleSpeaker - تبديل السماعة
+ */
+window.toggleSpeaker = function() {
+    const remoteVideo = document.getElementById('remoteVideo');
+    isSpeakerOn = !isSpeakerOn;
+    if (remoteVideo) remoteVideo.muted = !isSpeakerOn;
+    const icon = document.getElementById('speakerIcon');
+    if (icon) icon.className = isSpeakerOn ? 'fas fa-volume-up text-white' : 'fas fa-volume-mute text-white';
+};
+
+/**
+ * window.toggleLocalVideo - تبديل رؤية الفيديو المحلي
+ */
+window.toggleLocalVideo = function() {
+    toggleLocalVideoVisibility();
+};
+
+/**
+ * window.switchCamera - تبديل الكاميرا أمامية/خلفية
+ */
+window.switchCamera = async function() {
+    if (!localStream || isScreenSharing) return;
+    currentFacing = currentFacing === 'user' ? 'environment' : 'user';
+    await window.useCamera(currentFacing);
+};
+
+/**
+ * window.toggleMic - تبديل الميكروفون (بدون log)
+ */
+window.toggleMic = function() {
+    if (!localStream) return;
+    isMicOn = !isMicOn;
+    localStream.getAudioTracks().forEach(function(track) { track.enabled = isMicOn; });
+    const icon = document.getElementById('micIcon');
+    if (icon) icon.className = isMicOn ? 'fas fa-microphone text-white' : 'fas fa-microphone-slash text-white';
+};
+
+/**
+ * window.toggleScreen - تبديل مشاركة الشاشة
+ */
+window.toggleScreen = async function() {
+    if (isScreenSharing) {
+        if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
+        localStream = null;
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = null;
+        isScreenSharing = false;
+        isCameraOn = false;
+    } else {
+        await window.shareScreen();
+        if (localStream) {
+            isScreenSharing = true;
+            isCameraOn = false;
+        }
+    }
+    updateButtonStates();
+};
+
+/**
+ * window.toggleCamera - تبديل الكاميرا
+ */
+window.toggleCamera = async function() {
+    if (isCameraOn) {
+        if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
+        localStream = null;
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = null;
+        isCameraOn = false;
+        isScreenSharing = false;
+    } else {
+        await window.useCamera(currentFacing);
+        if (localStream) {
+            isCameraOn = true;
+            isScreenSharing = false;
+        }
+    }
+    updateButtonStates();
+};
+
+/**
+ * showMobileAlternative - عرض أزرار بديلة للموبايل
+ */
+function showMobileAlternative(frontLabel, backLabel) {
+    let cameraBtns = document.getElementById('cameraButtons');
+    if (!cameraBtns) {
+        cameraBtns = document.createElement('div');
+        cameraBtns.id = 'cameraButtons';
+        cameraBtns.className = 'flex flex-wrap gap-2 justify-center mb-4';
+        
+        const frontBtn = document.createElement('button');
+        frontBtn.className = 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition';
+        frontBtn.innerHTML = '<i class="fas fa-camera mr-2"></i>' + frontLabel;
+        frontBtn.onclick = function() { window.useCamera('user'); };
+        
+        const backBtn = document.createElement('button');
+        backBtn.className = 'px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition';
+        backBtn.innerHTML = '<i class="fas fa-camera-retro mr-2"></i>' + backLabel;
+        backBtn.onclick = function() { window.useCamera('environment'); };
+        
+        cameraBtns.appendChild(frontBtn);
+        cameraBtns.appendChild(backBtn);
+        
+        const controlsDiv = document.querySelector('.flex.flex-wrap.gap-2.justify-center.mb-4');
+        if (controlsDiv && controlsDiv.parentElement) {
+            controlsDiv.parentElement.insertBefore(cameraBtns, controlsDiv);
+        }
+    }
+    cameraBtns.style.display = 'flex';
+}
+window.showMobileAlternative = showMobileAlternative;
+/**
+ * window.shareScreen - مشاركة الشاشة
+ */
+window.shareScreen = async function() {
+    const caps = detectDeviceCapabilities();
+    
+    if (caps.isMobile || !caps.supportsScreenShare) {
+        testLog('Screen share not supported', 'warn');
+        if (window._showMobileAlternativeCallback) {
+            window._showMobileAlternativeCallback();
+        }
+        return;
+    }
+    
+    try {
+        testLog('Starting screen share...');
+        localStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { cursor: 'always' },
+            audio: true
+        });
+        
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = localStream;
+        testLog('Screen share started ✓', 'success');
+        updateStatus('Screen share ✓', 'green');
+        
+        localStream.getVideoTracks()[0].onended = function() {
+            testLog('Screen share stopped', 'warn');
+            updateStatus('Share screen to continue', 'yellow');
+        };
+    } catch (err) {
+        testLog('Error: ' + err.message, 'warn');
+        if (window._showMobileAlternativeCallback) {
+            window._showMobileAlternativeCallback();
+        }
+    }
+};
+
+/**
+ * window.useCamera - استخدام الكاميرا
+ */
+window.useCamera = async function(facingMode) {
+    try {
+        testLog('Starting camera: ' + facingMode + '...');
+        
+        const oldStream = localStream;
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true
+        });
+        
+        if (pc && pc.connectionState === 'connected') {
+            const senders = pc.getSenders();
+            const videoSender = senders.find(function(s) { return s.track && s.track.kind === 'video'; });
+            const audioSender = senders.find(function(s) { return s.track && s.track.kind === 'audio'; });
+            
+            if (videoSender) await videoSender.replaceTrack(newStream.getVideoTracks()[0]);
+            if (audioSender) await audioSender.replaceTrack(newStream.getAudioTracks()[0]);
+        }
+        
+        if (oldStream) oldStream.getTracks().forEach(function(t) { t.stop(); });
+        
+        localStream = newStream;
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = localStream;
+        
+        const cameraBtns = document.getElementById('cameraButtons');
+        if (cameraBtns) cameraBtns.style.display = 'none';
+        
+        isCameraOn = true;
+        isScreenSharing = false;
+        currentFacing = facingMode;
+        
+        testLog('Camera started ✓', 'success');
+        updateStatus('Camera ✓ - Ready to connect', 'green');
+    } catch (err) {
+        testLog('Error: ' + err.message, 'error');
+    }
+};
+
+/**
+ * updateConnectionButtons - تحديث أزرار الاتصال
+ * تعمل مع كلا الـ host (connectBtn) و guest (joinBtn)
+ */
+function updateConnectionButtons(connected) {
+    isConnected = connected;
+    
+    // Host uses connectBtn, Guest uses joinBtn
+    const connectBtn = document.getElementById('connectBtn');
+    const joinBtn = document.getElementById('joinBtn');
+    const reconnectBtn = document.getElementById('reconnectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    
+    if (connectBtn) connectBtn.classList.toggle('hidden', connected);
+    if (joinBtn) joinBtn.classList.toggle('hidden', connected);
+    if (reconnectBtn) reconnectBtn.classList.toggle('hidden', !connected);
+    if (disconnectBtn) disconnectBtn.classList.toggle('hidden', !connected);
+}
+window.updateConnectionButtons = updateConnectionButtons;
 
 console.log('[Client Shared] Loaded successfully');
     `;

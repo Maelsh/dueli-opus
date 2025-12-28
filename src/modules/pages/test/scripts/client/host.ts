@@ -72,13 +72,8 @@ export function getHostScript(lang: Language): string {
         let lastLatency = 0;
         let probeResults = null;
         
-        // حالة الأزرار
-        let isScreenSharing = false;
-        let isCameraOn = false;
-        let currentFacing = 'user';
-        let isMicOn = true;
-        let isSpeakerOn = true;
-        let isConnected = false;
+        // Use shared state from window.mediaState
+        const state = window.mediaState;
         
         // ===== Device Probing =====
         async function probeDevice() {
@@ -242,193 +237,15 @@ export function getHostScript(lang: Language): string {
             return 0;
         }
         
-        // ===== Share Screen =====
-        window.shareScreen = async function() {
-            const caps = detectDeviceCapabilities();
-            
-            if (caps.isMobile || !caps.supportsScreenShare) {
-                log('${tr.share_screen} - ${tr.error}', 'warn');
-                showMobileAlternative();
-                return;
-            }
-            
-            try {
-                log('${tr.share_screen}...');
-                localStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { cursor: 'always' },
-                    audio: true
-                });
-                
-                document.getElementById('localVideo').srcObject = localStream;
-                log('${tr.share_screen} ✓', 'success');
-                updateStatus('${tr.share_screen} ✓ - ${tr.connect}', 'green');
-                
-                localStream.getVideoTracks()[0].onended = function() {
-                    log('${tr.share_screen} - ${tr.stop_watching}', 'warn');
-                    updateStatus('${tr.share_then_join}', 'yellow');
-                };
-            } catch (err) {
-                log('${tr.error}: ' + err.message, 'warn');
-                showMobileAlternative();
-            }
-        }
+        // ===== Media Functions (from shared.ts) =====
+        // shareScreen, useCamera, toggleScreen, toggleCamera, switchCamera
+        // toggleMic, toggleSpeaker, toggleLocalVideo, updateButtonStates, updateConnectionButtons
         
-        // ===== Mobile Alternative =====
-        function showMobileAlternative() {
+        // Set mobile alternative callback for translated messages
+        window._showMobileAlternativeCallback = function() {
             updateStatus('${tr.toggle_camera} 📹', 'yellow');
-            
-            let cameraBtns = document.getElementById('cameraButtons');
-            if (!cameraBtns) {
-                cameraBtns = document.createElement('div');
-                cameraBtns.id = 'cameraButtons';
-                cameraBtns.className = 'flex flex-wrap gap-2 justify-center mb-4';
-                
-                const frontBtn = document.createElement('button');
-                frontBtn.className = 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition';
-                frontBtn.innerHTML = '<i class="fas fa-camera mr-2"></i>${tr.toggle_camera}';
-                frontBtn.onclick = function() { window.useCamera('user'); };
-                
-                const backBtn = document.createElement('button');
-                backBtn.className = 'px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition';
-                backBtn.innerHTML = '<i class="fas fa-camera-retro mr-2"></i>${tr.switch_camera}';
-                backBtn.onclick = function() { window.useCamera('environment'); };
-                
-                cameraBtns.appendChild(frontBtn);
-                cameraBtns.appendChild(backBtn);
-                
-                const controlsDiv = document.querySelector('.flex.flex-wrap.gap-2.justify-center.mb-4');
-                if (controlsDiv && controlsDiv.parentElement) {
-                    controlsDiv.parentElement.insertBefore(cameraBtns, controlsDiv);
-                }
-            }
-            cameraBtns.style.display = 'flex';
-        }
-        
-        // ===== Use Camera =====
-        window.useCamera = async function(facingMode) {
-            try {
-                log('${tr.toggle_camera}...');
-                
-                const oldStream = localStream;
-                const newStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: true
-                });
-                
-                if (pc && pc.connectionState === 'connected') {
-                    const senders = pc.getSenders();
-                    const videoSender = senders.find(function(s) { return s.track && s.track.kind === 'video'; });
-                    const audioSender = senders.find(function(s) { return s.track && s.track.kind === 'audio'; });
-                    
-                    if (videoSender) await videoSender.replaceTrack(newStream.getVideoTracks()[0]);
-                    if (audioSender) await audioSender.replaceTrack(newStream.getAudioTracks()[0]);
-                }
-                
-                if (oldStream) oldStream.getTracks().forEach(function(t) { t.stop(); });
-                
-                localStream = newStream;
-                document.getElementById('localVideo').srcObject = localStream;
-                
-                const cameraBtns = document.getElementById('cameraButtons');
-                if (cameraBtns) cameraBtns.style.display = 'none';
-                
-                isCameraOn = true;
-                isScreenSharing = false;
-                currentFacing = facingMode;
-                
-                log('${tr.toggle_camera} ✓', 'success');
-                updateStatus('${tr.toggle_camera} ✓ - ${tr.connect}', 'green');
-            } catch (err) {
-                log('${tr.error}: ' + err.message, 'error');
-            }
-        }
-        
-        // ===== Toggle Functions =====
-        window.toggleScreen = async function() {
-            if (isScreenSharing) {
-                if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
-                localStream = null;
-                document.getElementById('localVideo').srcObject = null;
-                isScreenSharing = false;
-                isCameraOn = false;
-                log('${tr.stop_watching}', 'info');
-            } else {
-                await window.shareScreen();
-                if (localStream) {
-                    isScreenSharing = true;
-                    isCameraOn = false;
-                }
-            }
-            updateButtonStates();
-        }
-        
-        window.toggleCamera = async function() {
-            if (isCameraOn) {
-                if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
-                localStream = null;
-                document.getElementById('localVideo').srcObject = null;
-                isCameraOn = false;
-                isScreenSharing = false;
-                log('${tr.stop_watching}', 'info');
-            } else {
-                await window.useCamera(currentFacing);
-                if (localStream) {
-                    isCameraOn = true;
-                    isScreenSharing = false;
-                }
-            }
-            updateButtonStates();
-        }
-        
-        window.switchCamera = async function() {
-            if (!localStream || isScreenSharing) return;
-            currentFacing = currentFacing === 'user' ? 'environment' : 'user';
-            await window.useCamera(currentFacing);
-        }
-        
-        window.toggleMic = function() {
-            if (!localStream) return;
-            isMicOn = !isMicOn;
-            localStream.getAudioTracks().forEach(function(track) { track.enabled = isMicOn; });
-            document.getElementById('micIcon').className = isMicOn ? 'fas fa-microphone text-white' : 'fas fa-microphone-slash text-white';
-            log('${tr.toggle_mic}', 'info');
-        }
-        
-        window.toggleSpeaker = function() {
-            const remoteVideo = document.getElementById('remoteVideo');
-            isSpeakerOn = !isSpeakerOn;
-            remoteVideo.muted = !isSpeakerOn;
-            document.getElementById('speakerIcon').className = isSpeakerOn ? 'fas fa-volume-up text-white' : 'fas fa-volume-mute text-white';
-        }
-        
-        window.toggleLocalVideo = function() {
-            toggleLocalVideoVisibility();
-        }
-        
-        function updateButtonStates() {
-            const screenBtn = document.getElementById('screenBtn');
-            const cameraBtn = document.getElementById('cameraBtn');
-            const cameraIcon = document.getElementById('cameraIcon');
-            
-            if (screenBtn) {
-                screenBtn.classList.toggle('bg-blue-800', isScreenSharing);
-                screenBtn.classList.toggle('bg-blue-600', !isScreenSharing);
-            }
-            if (cameraBtn) {
-                cameraBtn.classList.toggle('bg-purple-800', isCameraOn);
-                cameraBtn.classList.toggle('bg-purple-600', !isCameraOn);
-            }
-            if (cameraIcon) {
-                cameraIcon.className = isCameraOn ? 'fas fa-video text-white' : 'fas fa-video-slash text-white';
-            }
-        }
-        
-        function updateConnectionButtons(connected) {
-            isConnected = connected;
-            document.getElementById('connectBtn').classList.toggle('hidden', connected);
-            document.getElementById('reconnectBtn').classList.toggle('hidden', !connected);
-            document.getElementById('disconnectBtn').classList.toggle('hidden', !connected);
-        }
+            window.showMobileAlternative('${tr.toggle_camera}', '${tr.switch_camera}');
+        };
         
         // ===== Connection =====
         async function createRoom() {
