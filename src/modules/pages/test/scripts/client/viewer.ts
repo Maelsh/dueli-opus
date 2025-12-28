@@ -13,6 +13,7 @@ export function getViewerScript(lang: Language): string {
     const tr = translations[getUILanguage(lang)];
 
     return `
+        (function() {
         // ===== Viewer Page Script =====
         const { ChunkManager, LiveSequentialPlayer, VodMsePlayer, testLog: log, updateStatus, setMode } = window;
         
@@ -144,5 +145,6 @@ export function getViewerScript(lang: Language): string {
         // Init
         log('${tr.page_loaded}');
         updateStatus('${tr.enter_comp_to_watch}', 'blue');
+        })();
     `;
 }

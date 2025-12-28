@@ -14,6 +14,7 @@ export function getHostScript(lang: Language): string {
     const tr = translations[getUILanguage(lang)];
 
     return `
+        (function() {
         // ===== Host Page Script =====
         const { testLog: log, updateStatus, detectDeviceCapabilities, qualityPresets, toggleFullscreen, toggleLocalVideoVisibility } = window;
         
@@ -491,5 +492,6 @@ export function getHostScript(lang: Language): string {
         } else {
             updateStatus('${tr.share_screen}', 'blue');
         }
+        })();
     `;
 }

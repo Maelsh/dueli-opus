@@ -14,6 +14,7 @@ export function getGuestScript(lang: Language): string {
     const tr = translations[getUILanguage(lang)];
 
     return `
+        (function() {
         // ===== Guest Page Script =====
         const { testLog: log, updateStatus, detectDeviceCapabilities, toggleFullscreen, toggleLocalVideoVisibility } = window;
         
@@ -350,5 +351,6 @@ export function getGuestScript(lang: Language): string {
         // Init
         log('${tr.page_loaded}');
         if (!urlCompId) updateStatus('${tr.share_then_join}', 'blue');
+        })();
     `;
 }
