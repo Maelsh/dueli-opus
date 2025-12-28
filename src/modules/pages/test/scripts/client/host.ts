@@ -55,11 +55,11 @@ export function getHostScript(lang: Language): string {
         
         // Quality & Recording state
         const localQualityPresets = qualityPresets || {
-            excellent: { name: '${tr.quality} ممتاز', width: 1280, height: 360, fps: 30, segment: 4000, bitrate: 2000000 },
-            good:      { name: '${tr.quality} جيد', width: 854,  height: 240, fps: 24, segment: 6000, bitrate: 1000000 },
-            medium:    { name: '${tr.quality} متوسط', width: 640,  height: 180, fps: 15, segment: 10000, bitrate: 500000 },
-            low:       { name: '${tr.quality} منخفض', width: 426,  height: 120, fps: 10, segment: 20000, bitrate: 250000 },
-            minimal:   { name: '${tr.quality} أدنى', width: 320,  height: 90,  fps: 10, segment: 30000, bitrate: 150000 }
+            excellent: { name: 'Excellent', width: 1280, height: 360, fps: 30, segment: 4000, bitrate: 2000000 },
+            good:      { name: 'Good', width: 854,  height: 240, fps: 24, segment: 6000, bitrate: 1000000 },
+            medium:    { name: 'Medium', width: 640,  height: 180, fps: 15, segment: 10000, bitrate: 500000 },
+            low:       { name: 'Low', width: 426,  height: 120, fps: 10, segment: 20000, bitrate: 250000 },
+            minimal:   { name: 'Minimal', width: 320,  height: 90,  fps: 10, segment: 30000, bitrate: 150000 }
         };
         
         let currentQuality = localQualityPresets.medium;
@@ -68,6 +68,9 @@ export function getHostScript(lang: Language): string {
         let segmentInterval = null;
         let drawInterval = null;
         let droppedChunks = 0;
+        let uploadStartTime = 0;
+        let lastLatency = 0;
+        let probeResults = null;
         
         // حالة الأزرار
         let isScreenSharing = false;
@@ -76,6 +79,168 @@ export function getHostScript(lang: Language): string {
         let isMicOn = true;
         let isSpeakerOn = true;
         let isConnected = false;
+        
+        // ===== Device Probing =====
+        async function probeDevice() {
+            log('🔍 Testing device capabilities...');
+            const results = { cpuScore: 0, canvasFps: 0, networkSpeed: 0 };
+            
+            // 1. CPU test
+            const cpuStart = performance.now();
+            let iterations = 0;
+            while (performance.now() - cpuStart < 500) {
+                Math.random() * Math.random();
+                iterations++;
+            }
+            results.cpuScore = Math.round(iterations / 10000);
+            log('CPU Score: ' + results.cpuScore);
+            
+            // 2. Canvas FPS test
+            const testCanvas = document.createElement('canvas');
+            testCanvas.width = 640;
+            testCanvas.height = 360;
+            const testCtx = testCanvas.getContext('2d');
+            
+            let frames = 0;
+            const fpsStart = performance.now();
+            while (performance.now() - fpsStart < 1000) {
+                testCtx.fillStyle = 'rgb(' + Math.random()*255 + ',' + Math.random()*255 + ',' + Math.random()*255 + ')';
+                testCtx.fillRect(0, 0, 640, 360);
+                frames++;
+            }
+            results.canvasFps = frames;
+            log('Canvas FPS: ' + results.canvasFps);
+            
+            // 3. Network speed test
+            try {
+                const testBlob = new Blob([new Uint8Array(50000)]);
+                const uploadStart = performance.now();
+                await fetch(ffmpegUrl + '/upload.php', {
+                    method: 'POST',
+                    body: (function() {
+                        const fd = new FormData();
+                        fd.append('chunk', testBlob, 'speedtest.bin');
+                        fd.append('competition_id', 'speedtest');
+                        fd.append('chunk_number', '0');
+                        fd.append('extension', 'bin');
+                        return fd;
+                    })()
+                });
+                const uploadTime = performance.now() - uploadStart;
+                results.networkSpeed = Math.round(50000 / (uploadTime / 1000));
+                log('Network: ' + Math.round(results.networkSpeed / 1024) + ' KB/s');
+            } catch (e) {
+                results.networkSpeed = 50000;
+            }
+            
+            return results;
+        }
+        
+        // ===== Quality Selection =====
+        function selectQuality(probe) {
+            if (probe.cpuScore > 80 && probe.canvasFps > 100 && probe.networkSpeed > 200000) {
+                return localQualityPresets.excellent;
+            } else if (probe.cpuScore > 50 && probe.canvasFps > 60 && probe.networkSpeed > 100000) {
+                return localQualityPresets.good;
+            } else if (probe.cpuScore > 30 && probe.canvasFps > 30 && probe.networkSpeed > 50000) {
+                return localQualityPresets.medium;
+            } else if (probe.cpuScore > 15) {
+                return localQualityPresets.low;
+            } else {
+                return localQualityPresets.minimal;
+            }
+        }
+        
+        // ===== Downgrade Quality =====
+        function downgradeQuality() {
+            const levels = Object.keys(localQualityPresets);
+            const currentIndex = levels.indexOf(Object.keys(localQualityPresets).find(function(k) { return localQualityPresets[k] === currentQuality; }));
+            
+            if (currentIndex < levels.length - 1) {
+                currentQuality = localQualityPresets[levels[currentIndex + 1]];
+                log('📉 Quality downgraded to: ' + currentQuality.name, 'warn');
+                updateQualityInfo();
+            }
+        }
+        
+        // ===== Update Latency Gauge =====
+        function updateLatencyGauge(latency) {
+            const gauge = document.getElementById('latencyGauge');
+            if (!gauge) return;
+            
+            let color = 'green';
+            let status = 'Excellent';
+            
+            if (latency > 15000) {
+                color = 'red';
+                status = 'Bad';
+            } else if (latency > 5000) {
+                color = 'yellow';
+                status = 'Medium';
+            }
+            
+            gauge.innerHTML = '<span class="text-' + color + '-400">● ' + status + ' (' + Math.round(latency/1000) + 's)</span>';
+        }
+        
+        // ===== Validate Chunk =====
+        function validateChunk(blob, index) {
+            if (blob.size < 1024) {
+                return { valid: false, reason: 'Chunk too small (<1KB)' };
+            }
+            if (blob.size > 50 * 1024 * 1024) {
+                return { valid: false, reason: 'Chunk too large (>50MB)' };
+            }
+            if (!blob.type || !blob.type.includes('video')) {
+                return { valid: false, reason: 'Invalid type (not video)' };
+            }
+            try {
+                const testUrl = URL.createObjectURL(blob);
+                URL.revokeObjectURL(testUrl);
+            } catch (e) {
+                return { valid: false, reason: 'Chunk corrupted' };
+            }
+            return { valid: true };
+        }
+        
+        // ===== Handle Connection Failure =====
+        function handleConnectionFailure() {
+            log('🔄 Cleaning failed connection...', 'warn');
+            
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            mediaRecorder = null;
+            
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            log('✅ Ready to reconnect - press connect', 'info');
+        }
+        
+        // ===== Get Last Chunk Index =====
+        async function getLastChunkIndex() {
+            try {
+                const res = await fetch(ffmpegUrl + '/playlist.php?id=' + competitionId);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.chunks && data.chunks.length > 0) {
+                        const lastIndex = data.chunks.length;
+                        log('📊 Last chunk on server: ' + lastIndex, 'info');
+                        return lastIndex;
+                    }
+                }
+            } catch (e) {
+                log('⚠️ Could not get last index - Starting from 0', 'warn');
+            }
+            return 0;
+        }
         
         // ===== Share Screen =====
         window.shareScreen = async function() {
@@ -370,8 +535,25 @@ export function getHostScript(lang: Language): string {
         async function startRecording() {
             if (!localStream || mediaRecorder) return;
             
-            log('${tr.canvas_recording}...');
+            log('🔍 Testing device capabilities...');
+            updateStatus('Testing device...', 'yellow');
+            
+            // جلب آخر chunk index من السيرفر لمنع الكتابة فوق القطع القديمة
+            const lastIndex = await getLastChunkIndex();
+            if (lastIndex > 0) {
+                chunkIndex = lastIndex;
+                log('🔢 Resuming from chunk: ' + chunkIndex, 'success');
+            }
+            
+            // اختبار قدرات الجهاز واختيار الجودة المناسبة
+            probeResults = await probeDevice();
+            currentQuality = selectQuality(probeResults);
             updateQualityInfo();
+            
+            log('✅ Quality: ' + currentQuality.name + ' (' + (currentQuality.width*2) + 'x' + (currentQuality.height*2) + ')');
+            updateStatus('Streaming...', 'green');
+            
+            log('${tr.canvas_recording}... (Competition: ' + competitionId + ')');
             
             const CANVAS_WIDTH = 1280;
             const CANVAS_HEIGHT = 720;
@@ -535,8 +717,25 @@ export function getHostScript(lang: Language): string {
         async function processUploadQueue() {
             if (isUploading || uploadQueue.length === 0) return;
             
+            // إذا زاد الطابور عن 3، أسقط الأقدم وخفض الجودة
+            while (uploadQueue.length > 3) {
+                uploadQueue.shift();
+                droppedChunks++;
+                log('⚠️ Chunk dropped - Total: ' + droppedChunks, 'warn');
+                downgradeQuality();
+            }
+            
             isUploading = true;
             const { blob, index } = uploadQueue.shift();
+            
+            // التحقق من صحة القطعة
+            const validation = validateChunk(blob, index);
+            if (!validation.valid) {
+                log('⚠️ Chunk ' + index + ' rejected: ' + validation.reason, 'error');
+                isUploading = false;
+                processUploadQueue();
+                return;
+            }
             
             const formData = new FormData();
             formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.webm');
@@ -544,10 +743,25 @@ export function getHostScript(lang: Language): string {
             formData.append('chunk_number', (index + 1).toString());
             formData.append('extension', 'webm');
             
+            uploadStartTime = performance.now();
+            
             try {
-                await fetch(ffmpegUrl + '/upload.php', { method: 'POST', body: formData });
-                log('${tr.chunks} ' + index + ' ✓', 'success');
-            } catch (err) {}
+                const res = await fetch(ffmpegUrl + '/upload.php', { method: 'POST', body: formData });
+                const result = await res.json();
+                
+                lastLatency = performance.now() - uploadStartTime;
+                updateLatencyGauge(lastLatency);
+                
+                // إذا كان الرفع بطيئاً، خفض الجودة
+                if (lastLatency > currentQuality.segment / 2) {
+                    log('⚠️ Slow upload (' + Math.round(lastLatency) + 'ms)', 'warn');
+                    downgradeQuality();
+                }
+                
+                log('Chunk ' + index + ': ' + (result.success ? '✓' : '✗') + ' (' + Math.round(lastLatency) + 'ms)', result.success ? 'success' : 'error');
+            } catch (err) {
+                log('${tr.error}: ' + err.message, 'error');
+            }
             
             isUploading = false;
             processUploadQueue();
