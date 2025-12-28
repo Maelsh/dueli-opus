@@ -3,7 +3,7 @@
  * الـ JavaScript الخاص بصفحة الضيف
  */
 
-import { STREAM_SERVER_URL, TEST_ROOM_ID } from '../server/core';
+import { STREAM_SERVER_URL, TEST_ROOM_ID, ICE_SERVERS } from '../server/core';
 import type { Language } from '../../../../../config/types';
 import { translations, getUILanguage } from '../../../../../i18n';
 
@@ -12,6 +12,7 @@ import { translations, getUILanguage } from '../../../../../i18n';
  */
 export function getGuestScript(lang: Language): string {
     const tr = translations[getUILanguage(lang)];
+    const iceServersJson = JSON.stringify(ICE_SERVERS);
 
     return `
         (function() {
@@ -21,6 +22,7 @@ export function getGuestScript(lang: Language): string {
         
         const roomId = '${TEST_ROOM_ID}';
         const streamServerUrl = '${STREAM_SERVER_URL}';
+        const iceServers = ${iceServersJson};
         
         // قراءة رقم المنافسة من URL
         const urlParams = new URLSearchParams(window.location.search);
@@ -82,11 +84,7 @@ export function getGuestScript(lang: Language): string {
             }
             
             ms.pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'turn:maelsh.pro:3000?transport=tcp', username: 'dueli', credential: 'dueli-turn-secret-2024' },
-                    { urls: 'turn:maelsh.pro:3000', username: 'dueli', credential: 'dueli-turn-secret-2024' }
-                ]
+                iceServers: iceServers
             });
             console.log('[DEBUG] pc created:', ms.pc);
             

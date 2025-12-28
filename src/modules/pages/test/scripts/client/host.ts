@@ -3,15 +3,18 @@
  * الـ JavaScript الخاص بصفحة المضيف
  */
 
-import { STREAM_SERVER_URL, TEST_ROOM_ID, FFMPEG_URL } from '../server/core';
+import { STREAM_SERVER_URL, TEST_ROOM_ID, FFMPEG_URL, ICE_SERVERS } from '../server/core';
 import type { Language } from '../../../../../config/types';
-import { translations, getUILanguage } from '../../../../../i18n';
+import { translations, getUILanguage, isRTL } from '../../../../../i18n';
 
 /**
  * Get Host Script - توليد الـ JavaScript الخاص بصفحة المضيف
  */
 export function getHostScript(lang: Language): string {
-    const tr = translations[getUILanguage(lang)];
+    const uiLang = getUILanguage(lang);
+    const tr = translations[uiLang];
+    const isRightToLeft = isRTL(uiLang); // Use global isRTL helper
+    const iceServersJson = JSON.stringify(ICE_SERVERS);
 
     return `
         (function() {
@@ -26,6 +29,7 @@ export function getHostScript(lang: Language): string {
         const role = 'host';
         const streamServerUrl = '${STREAM_SERVER_URL}';
         const ffmpegUrl = '${FFMPEG_URL}';
+        const iceServers = ${iceServersJson};
         
         // Local state (only for host-specific logic unrelated to connection state)
         let remoteStream = new MediaStream();
@@ -289,11 +293,7 @@ export function getHostScript(lang: Language): string {
             
             // Create PeerConnection inside window.mediaState
             ms.pc = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'turn:maelsh.pro:3000?transport=tcp', username: 'dueli', credential: 'dueli-turn-secret-2024' },
-                    { urls: 'turn:maelsh.pro:3000', username: 'dueli', credential: 'dueli-turn-secret-2024' }
-                ]
+                iceServers: iceServers
             });
             console.log('[DEBUG] pc created:', ms.pc);
             
@@ -445,9 +445,9 @@ export function getHostScript(lang: Language): string {
             const localVideo = document.getElementById('localVideo');
             const remoteVideo = document.getElementById('remoteVideo');
             
-            // اللغة والاتجاه
-            const isRTL = '${lang}' === 'ar';
-            const platformName = isRTL ? 'دويلي' : 'Dueli';
+            // اللغة والاتجاه (dynamically injected)
+            const isRTL = ${isRightToLeft};
+            const platformName = '${tr.app_title}';
             
             // دالة رسم الفيديو بشكل متناسب
             function drawVideoProportionalLocal(video, x, y, maxWidth, maxHeight) {
