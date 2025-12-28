@@ -392,6 +392,11 @@ export function getHostScript(lang: Language): string {
                             } else if (signal.type === 'ice') {
                                 // console.log('[DEBUG] Processing ICE signal');
                                 await ms.pc.addIceCandidate(new RTCIceCandidate(signal.data));
+                            } else if (signal.type === 'request_offer') {
+                                console.log('[DEBUG] Guest requested offer - Renegotiating...');
+                                const offer = await ms.pc.createOffer();
+                                await ms.pc.setLocalDescription(offer);
+                                await sendSignal('offer', offer);
                             }
                         }
                     }

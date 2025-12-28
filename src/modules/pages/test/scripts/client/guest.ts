@@ -138,6 +138,9 @@ export function getGuestScript(lang: Language): string {
                 console.log('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
             };
             
+            // Request offer from host (in case of reconnection)
+            await sendSignal('request_offer', {});
+            
             startPolling();
         }
         
