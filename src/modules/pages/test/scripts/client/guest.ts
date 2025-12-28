@@ -286,10 +286,28 @@ export function getGuestScript(lang: Language): string {
                 } else if (pc.connectionState === 'failed') {
                     updateStatus('${tr.error}', 'red');
                     updateConnectionButtons(false);
+                    handleConnectionFailure();
                 }
             };
             
             startPolling();
+        }
+        
+        // ===== Handle Connection Failure =====
+        function handleConnectionFailure() {
+            log('🔄 Cleaning failed connection...', 'warn');
+            
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
+            
+            log('✅ Ready to reconnect - press join', 'info');
         }
         
         // ===== Signaling =====
