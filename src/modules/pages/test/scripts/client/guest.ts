@@ -16,7 +16,8 @@ export function getGuestScript(lang: Language): string {
     return `
         (function() {
         // ===== Guest Page Script =====
-        const { testLog: log, updateStatus, detectDeviceCapabilities, toggleFullscreen, toggleLocalVideoVisibility } = window;
+        const { testLog: log, updateStatus, detectDeviceCapabilities, toggleFullscreen, toggleLocalVideoVisibility, updateConnectionButtons } = window;
+        const ms = window.mediaState;
         
         const roomId = '${TEST_ROOM_ID}';
         const streamServerUrl = '${STREAM_SERVER_URL}';
@@ -25,17 +26,11 @@ export function getGuestScript(lang: Language): string {
         const urlParams = new URLSearchParams(window.location.search);
         const urlCompId = urlParams.get('comp');
         
-        // Use shared state from window.mediaState
-        const state = window.mediaState;
-        
         // ملء حقل الإدخال تلقائياً من URL
         if (urlCompId) {
             document.getElementById('compIdInput').value = urlCompId;
             updateStatus('${tr.competition_number}: ' + urlCompId + ' - ${tr.share_then_join}', 'green');
         }
-                // ===== Media Functions (from shared.ts) =====
-        // shareScreen, useCamera, toggleScreen, toggleCamera, switchCamera
-        // toggleMic, toggleSpeaker, toggleLocalVideo, updateButtonStates, updateConnectionButtons
         
         // Set mobile alternative callback for translated messages
         window._showMobileAlternativeCallback = function() {
@@ -45,10 +40,8 @@ export function getGuestScript(lang: Language): string {
         
         // ===== Join Room =====
         window.joinRoom = async function() {
-            const ms = window.mediaState;
             console.log('[DEBUG] window.joinRoom called');
             console.log('[DEBUG] ms.localStream:', ms.localStream);
-            console.log('[DEBUG] ms.pc:', ms.pc);
             
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
@@ -86,25 +79,38 @@ export function getGuestScript(lang: Language): string {
                     { urls: 'turn:maelsh.pro:3000', username: 'dueli', credential: 'dueli-turn-secret-2024' }
                 ]
             });
+            console.log('[DEBUG] pc created:', ms.pc);
             
-            ms.localStream.getTracks().forEach(function(track) { ms.pc.addTrack(track, ms.localStream); });
+            // Add local tracks
+            ms.localStream.getTracks().forEach(function(track) { 
+                ms.pc.addTrack(track, ms.localStream); 
+                console.log('[DEBUG] Added track:', track.kind);
+            });
             
+            // Handle remote track
             ms.pc.ontrack = function(event) {
+                console.log('[DEBUG] ontrack:', event.track.kind);
                 if (event.streams[0]) {
                     document.getElementById('remoteVideo').srcObject = event.streams[0];
                     updateStatus('${tr.live} ✓', 'green');
                 }
             };
             
+            // Handle ICE candidates
             ms.pc.onicecandidate = async function(event) {
-                if (event.candidate) await sendSignal('ice', event.candidate);
+                if (event.candidate) {
+                    // console.log('[DEBUG] ICE candidate:', event.candidate.candidate.substring(0, 50));
+                    await sendSignal('ice', event.candidate);
+                }
             };
             
+            // Connection state
             ms.pc.onconnectionstatechange = function() {
                 console.log('[DEBUG] guest onconnectionstatechange:', ms.pc.connectionState);
                 log('📡 ' + ms.pc.connectionState, ms.pc.connectionState === 'connected' ? 'success' : 'info');
+                
                 if (ms.pc.connectionState === 'connected') {
-                    console.log('[DEBUG] Guest connection successful! Calling updateConnectionButtons(true)');
+                    console.log('[DEBUG] Guest connection successful!');
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
                 } else if (ms.pc.connectionState === 'failed') {
@@ -115,12 +121,15 @@ export function getGuestScript(lang: Language): string {
                 }
             };
             
+            ms.pc.oniceconnectionstatechange = function() {
+                console.log('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
+            };
+            
             startPolling();
         }
         
         // ===== Handle Connection Failure =====
         function handleConnectionFailure() {
-            const ms = window.mediaState;
             log('🔄 Cleaning failed connection...', 'warn');
             
             if (ms.pc) {
@@ -138,6 +147,7 @@ export function getGuestScript(lang: Language): string {
         
         // ===== Signaling =====
         async function sendSignal(type, data) {
+            // console.log('[DEBUG] sendSignal:', type, 'to: room');
             try {
                 await fetch(streamServerUrl + '/api/signaling/signal', {
                     method: 'POST',
@@ -153,19 +163,25 @@ export function getGuestScript(lang: Language): string {
         }
         
         function startPolling() {
-            const ms = window.mediaState;
+            // console.log('[DEBUG] startPolling called');
             ms.pollingInterval = setInterval(async function() {
                 try {
                     const res = await fetch(streamServerUrl + '/api/signaling/poll?room_id=' + (window.actualRoomId || roomId) + '&role=opponent');
                     const data = await res.json();
-                    if (data.success && data.data && data.data.signals) {
+                    if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
+                        console.log('[DEBUG] Polling: Got ' + data.data.signals.length + ' signals');
                         for (const signal of data.data.signals) {
                             if (signal.type === 'offer') {
+                                console.log('[DEBUG] Processing OFFER signal');
                                 await ms.pc.setRemoteDescription(new RTCSessionDescription(signal.data));
+                                
                                 const answer = await ms.pc.createAnswer();
                                 await ms.pc.setLocalDescription(answer);
                                 await sendSignal('answer', answer);
+                                console.log('[DEBUG] Sent ANSWER');
+                                
                             } else if (signal.type === 'ice') {
+                                // console.log('[DEBUG] Processing ICE signal');
                                 await ms.pc.addIceCandidate(new RTCIceCandidate(signal.data));
                             }
                         }
@@ -176,7 +192,6 @@ export function getGuestScript(lang: Language): string {
         
         // ===== Reconnect & Disconnect =====
         window.reconnect = async function() {
-            const ms = window.mediaState;
             log('${tr.reconnect}...', 'info');
             if (ms.pc) { ms.pc.close(); ms.pc = null; }
             if (ms.pollingInterval) { clearInterval(ms.pollingInterval); ms.pollingInterval = null; }
@@ -185,7 +200,6 @@ export function getGuestScript(lang: Language): string {
         }
         
         window.disconnect = function() {
-            const ms = window.mediaState;
             log('${tr.disconnect}...');
             if (ms.pollingInterval) clearInterval(ms.pollingInterval);
             if (ms.pc) ms.pc.close();

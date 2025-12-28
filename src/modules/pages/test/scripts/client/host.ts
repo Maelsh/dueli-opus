@@ -16,14 +16,18 @@ export function getHostScript(lang: Language): string {
     return `
         (function() {
         // ===== Host Page Script =====
-        const { testLog: log, updateStatus, detectDeviceCapabilities, qualityPresets, toggleFullscreen, toggleLocalVideoVisibility } = window;
+        // استيراد الوظائف من window التي تم تعريفها في shared.ts
+        const { testLog: log, updateStatus, detectDeviceCapabilities, qualityPresets, toggleFullscreen, toggleLocalVideoVisibility, updateConnectionButtons } = window;
+        
+        // اختصار للحالة المشتركة
+        const ms = window.mediaState;
         
         const roomId = '${TEST_ROOM_ID}';
         const role = 'host';
         const streamServerUrl = '${STREAM_SERVER_URL}';
         const ffmpegUrl = '${FFMPEG_URL}';
         
-        // Local state (only for host-specific vars)
+        // Local state (only for host-specific logic unrelated to connection state)
         let remoteStream = new MediaStream();
         let mediaRecorder = null;
         let chunkIndex = 0;
@@ -68,9 +72,6 @@ export function getHostScript(lang: Language): string {
         let uploadStartTime = 0;
         let lastLatency = 0;
         let probeResults = null;
-        
-        // Use shared state from window.mediaState
-        const state = window.mediaState;
         
         // ===== Device Probing =====
         async function probeDevice() {
@@ -196,7 +197,6 @@ export function getHostScript(lang: Language): string {
         
         // ===== Handle Connection Failure =====
         function handleConnectionFailure() {
-            const ms = window.mediaState;
             log('🔄 Cleaning failed connection...', 'warn');
             
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -235,16 +235,6 @@ export function getHostScript(lang: Language): string {
             return 0;
         }
         
-        // ===== Media Functions (from shared.ts) =====
-        // shareScreen, useCamera, toggleScreen, toggleCamera, switchCamera
-        // toggleMic, toggleSpeaker, toggleLocalVideo, updateButtonStates, updateConnectionButtons
-        
-        // Set mobile alternative callback for translated messages
-        window._showMobileAlternativeCallback = function() {
-            updateStatus('${tr.toggle_camera} 📹', 'yellow');
-            window.showMobileAlternative('${tr.toggle_camera}', '${tr.switch_camera}');
-        };
-        
         // ===== Connection =====
         async function createRoom() {
             try {
@@ -267,10 +257,8 @@ export function getHostScript(lang: Language): string {
         }
         
         window.connect = async function() {
-            const ms = window.mediaState;
             console.log('[DEBUG] window.connect called');
             console.log('[DEBUG] ms.localStream:', ms.localStream);
-            console.log('[DEBUG] ms.pc:', ms.pc);
             
             if (!ms.localStream) {
                 log('${tr.share_screen}!', 'warn');
@@ -281,6 +269,7 @@ export function getHostScript(lang: Language): string {
             updateStatus('${tr.connect}...', 'yellow');
             await createRoom();
             
+            // Create PeerConnection inside window.mediaState
             ms.pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -288,46 +277,68 @@ export function getHostScript(lang: Language): string {
                     { urls: 'turn:maelsh.pro:3000', username: 'dueli', credential: 'dueli-turn-secret-2024' }
                 ]
             });
+            console.log('[DEBUG] pc created:', ms.pc);
             
-            ms.localStream.getTracks().forEach(function(track) { ms.pc.addTrack(track, ms.localStream); });
+            // Add tracks from ms.localStream
+            ms.localStream.getTracks().forEach(function(track) { 
+                ms.pc.addTrack(track, ms.localStream); 
+                console.log('[DEBUG] Added track:', track.kind);
+            });
             
+            // Handle remote tracks
             ms.pc.ontrack = function(event) {
+                console.log('[DEBUG] ontrack:', event.track.kind);
                 if (!remoteStream.getTracks().find(function(t) { return t.id === event.track.id; })) {
                     remoteStream.addTrack(event.track);
+                    log('✅ Received remote ' + event.track.kind + ' track', 'success');
                 }
                 document.getElementById('remoteVideo').srcObject = remoteStream;
                 if (event.track.kind === 'audio') updateStatus('${tr.live} ✓', 'green');
             };
             
+            // Handle ICE candidates
             ms.pc.onicecandidate = async function(event) {
-                if (event.candidate) await sendSignal('ice', event.candidate);
+                if (event.candidate) {
+                    // console.log('[DEBUG] ICE candidate:', event.candidate.candidate.substring(0, 50));
+                    await sendSignal('ice', event.candidate);
+                }
             };
             
+            // Connection state changes
             ms.pc.onconnectionstatechange = function() {
                 console.log('[DEBUG] onconnectionstatechange:', ms.pc.connectionState);
                 log('📡 ' + ms.pc.connectionState, ms.pc.connectionState === 'connected' ? 'success' : 'info');
+                
                 if (ms.pc.connectionState === 'connected') {
-                    console.log('[DEBUG] Connection successful! Calling updateConnectionButtons(true)');
+                    console.log('[DEBUG] Connection successful!');
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
                     startRecording();
                 } else if (ms.pc.connectionState === 'failed') {
-                    console.log('[DEBUG] Connection failed! Calling updateConnectionButtons(false)');
+                    console.log('[DEBUG] Connection failed!');
                     updateStatus('${tr.error}', 'red');
                     updateConnectionButtons(false);
                 }
             };
             
+            ms.pc.oniceconnectionstatechange = function() {
+                console.log('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
+            };
+            
+            // Create Offer
             const offer = await ms.pc.createOffer();
+            console.log('[DEBUG] Offer created');
             await ms.pc.setLocalDescription(offer);
             await sendSignal('offer', offer);
+            
             startPolling();
         }
         
         // ===== Signaling =====
         async function sendSignal(type, data) {
+            // console.log('[DEBUG] sendSignal:', type, 'to room:', window.actualRoomId || roomId);
             try {
-                await fetch(streamServerUrl + '/api/signaling/signal', {
+                const res = await fetch(streamServerUrl + '/api/signaling/signal', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -337,31 +348,40 @@ export function getHostScript(lang: Language): string {
                         signal_data: data
                     })
                 });
-            } catch (err) {}
+                // const result = await res.json();
+                // console.log('[DEBUG] sendSignal response:', result);
+            } catch (err) {
+                console.log('[DEBUG] sendSignal ERROR:', err);
+            }
         }
         
         function startPolling() {
-            const ms = window.mediaState;
+            // console.log('[DEBUG] startPolling called, room:', window.actualRoomId || roomId);
             ms.pollingInterval = setInterval(async function() {
                 try {
                     const res = await fetch(streamServerUrl + '/api/signaling/poll?room_id=' + (window.actualRoomId || roomId) + '&role=host');
                     const data = await res.json();
-                    if (data.success && data.data && data.data.signals) {
+                    if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
+                        console.log('[DEBUG] Polling: Got ' + data.data.signals.length + ' signals');
                         for (const signal of data.data.signals) {
                             if (signal.type === 'answer') {
+                                console.log('[DEBUG] Processing ANSWER signal');
                                 await ms.pc.setRemoteDescription(new RTCSessionDescription(signal.data));
                             } else if (signal.type === 'ice') {
+                                // console.log('[DEBUG] Processing ICE signal');
                                 await ms.pc.addIceCandidate(new RTCIceCandidate(signal.data));
                             }
                         }
                     }
-                } catch (err) {}
+                } catch (err) {
+                   // console.log('[DEBUG] Polling error:', err);
+                }
             }, 1000);
         }
         
         // ===== Recording =====
         async function startRecording() {
-            if (!window.mediaState.localStream || mediaRecorder) return;
+            if (!ms.localStream || mediaRecorder) return;
             
             log('🔍 Testing device capabilities...');
             updateStatus('Testing device...', 'yellow');
@@ -502,8 +522,8 @@ export function getHostScript(lang: Language): string {
             try {
                 const audioContext = new AudioContext();
                 const destination = audioContext.createMediaStreamDestination();
-                if (localStream.getAudioTracks().length > 0) {
-                    audioContext.createMediaStreamSource(localStream).connect(destination);
+                if (ms.localStream.getAudioTracks().length > 0) {
+                    audioContext.createMediaStreamSource(ms.localStream).connect(destination);
                     log('   ✅ ${tr.host} audio connected', 'success');
                 }
                 if (remoteStream && remoteStream.getAudioTracks().length > 0) {
@@ -513,7 +533,7 @@ export function getHostScript(lang: Language): string {
                 const mixedAudioTrack = destination.stream.getAudioTracks()[0];
                 if (mixedAudioTrack) canvasStream.addTrack(mixedAudioTrack);
             } catch (e) {
-                localStream.getAudioTracks().forEach(function(t) { canvasStream.addTrack(t); });
+                ms.localStream.getAudioTracks().forEach(function(t) { canvasStream.addTrack(t); });
             }
             
             mediaRecorder = new MediaRecorder(canvasStream, {
@@ -602,7 +622,6 @@ export function getHostScript(lang: Language): string {
         
         // ===== Reconnect & Disconnect =====
         window.reconnect = async function() {
-            const ms = window.mediaState;
             log('${tr.reconnect}...', 'info');
             if (mediaRecorder) { mediaRecorder.stop(); mediaRecorder = null; }
             if (drawInterval) { clearInterval(drawInterval); drawInterval = null; }
@@ -614,7 +633,6 @@ export function getHostScript(lang: Language): string {
         }
         
         window.disconnect = async function() {
-            const ms = window.mediaState;
             log('${tr.disconnect}...');
             if (segmentInterval) clearInterval(segmentInterval);
             if (drawInterval) clearInterval(drawInterval);
@@ -631,6 +649,12 @@ export function getHostScript(lang: Language): string {
             log('${tr.disconnect} ✓', 'success');
             updateConnectionButtons(false);
         }
+        
+        // Set mobile alternative callback for translated messages
+        window._showMobileAlternativeCallback = function() {
+            updateStatus('${tr.toggle_camera} 📹', 'yellow');
+            window.showMobileAlternative('${tr.toggle_camera}', '${tr.switch_camera}');
+        };
         
         // Init
         const caps = detectDeviceCapabilities();
