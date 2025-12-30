@@ -363,12 +363,6 @@ export function getHostScript(lang: Language): string {
             
             // Setup WebSocket signaling (will send offer after connected)
             setupSignaling(roomCreated);
-            
-            // Create and send offer
-            const offer = await ms.pc.createOffer();
-            console.log('[DEBUG] Offer created');
-            await ms.pc.setLocalDescription(offer);
-            sendSignal('offer', offer);
         }
         
         // ===== Signaling (WebSocket) =====
@@ -421,6 +415,14 @@ export function getHostScript(lang: Language): string {
                 },
                 onError: function(error) {
                     log('❌ خطأ في الاتصال', 'error');
+                },
+                onConnected: async function() {
+                    // إرسال Offer بعد اكتمال الاتصال
+                    const offer = await ms.pc.createOffer();
+                    console.log('[DEBUG] Offer created');
+                    await ms.pc.setLocalDescription(offer);
+                    sendSignal('offer', offer);
+                    console.log('[DEBUG] Offer sent');
                 }
             });
             
