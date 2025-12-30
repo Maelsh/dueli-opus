@@ -538,6 +538,12 @@ export class CompetitionController extends BaseController {
                 vodUrl: body?.vod_url
             });
 
+            // Delete chunk keys when competition ends (live → completed)
+            // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة
+            await c.env.DB.prepare(
+                'DELETE FROM chunk_keys WHERE competition_id = ?'
+            ).bind(id).run();
+
             return this.success(c, { ended: true, status: 'completed' });
         } catch (error) {
             return this.serverError(c, error as Error);

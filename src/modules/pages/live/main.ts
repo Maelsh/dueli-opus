@@ -112,11 +112,41 @@ export const testMainPage = async (c: Context<{ Bindings: Bindings; Variables: V
 };
 
 /**
- * Test Host Page
+ * Test Host Page - Protected for competition creator only
  */
 export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
     const lang = (c.get('lang') || c.req.query('lang') || 'ar') as Language;
     const tr = translations[getUILanguage(lang)];
+    const compId = c.req.query('comp');
+
+    // Check session
+    const sessionId = c.req.header('Cookie')?.match(/sessionId=([^;]+)/)?.[1];
+    if (!sessionId) {
+        return c.redirect('/login?redirect=/live/host?comp=' + compId + '&lang=' + lang);
+    }
+
+    // Verify session and role
+    if (compId) {
+        try {
+            const session = await c.env.DB.prepare(
+                'SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime("now")'
+            ).bind(sessionId).first<{ user_id: number }>();
+
+            if (!session) {
+                return c.redirect('/login?redirect=/live/host?comp=' + compId + '&lang=' + lang);
+            }
+
+            const competition = await c.env.DB.prepare(
+                'SELECT creator_id FROM competitions WHERE id = ?'
+            ).bind(compId).first<{ creator_id: number }>();
+
+            if (!competition || competition.creator_id !== session.user_id) {
+                return c.redirect('/competition/' + compId + '?lang=' + lang + '&error=not_authorized');
+            }
+        } catch (err) {
+            console.error('Host page auth error:', err);
+        }
+    }
 
     const content = getHostContent(lang);
     const pageScript = getHostScript(lang);
@@ -125,11 +155,41 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
 };
 
 /**
- * Test Guest Page
+ * Test Guest Page - Protected for competition opponent only
  */
 export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
     const lang = (c.get('lang') || c.req.query('lang') || 'ar') as Language;
     const tr = translations[getUILanguage(lang)];
+    const compId = c.req.query('comp');
+
+    // Check session
+    const sessionId = c.req.header('Cookie')?.match(/sessionId=([^;]+)/)?.[1];
+    if (!sessionId) {
+        return c.redirect('/login?redirect=/live/guest?comp=' + compId + '&lang=' + lang);
+    }
+
+    // Verify session and role
+    if (compId) {
+        try {
+            const session = await c.env.DB.prepare(
+                'SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime("now")'
+            ).bind(sessionId).first<{ user_id: number }>();
+
+            if (!session) {
+                return c.redirect('/login?redirect=/live/guest?comp=' + compId + '&lang=' + lang);
+            }
+
+            const competition = await c.env.DB.prepare(
+                'SELECT opponent_id FROM competitions WHERE id = ?'
+            ).bind(compId).first<{ opponent_id: number }>();
+
+            if (!competition || competition.opponent_id !== session.user_id) {
+                return c.redirect('/competition/' + compId + '?lang=' + lang + '&error=not_authorized');
+            }
+        } catch (err) {
+            console.error('Guest page auth error:', err);
+        }
+    }
 
     const content = getGuestContent(lang);
     const pageScript = getGuestScript(lang);
@@ -149,3 +209,4 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
 
     return c.html(generateTestPage(content, pageScript, `${tr.viewer} - ${tr.test_stream}`, lang));
 };
+

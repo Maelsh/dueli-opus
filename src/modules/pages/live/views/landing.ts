@@ -20,7 +20,7 @@ export function getLandingContent(lang: Language): string {
         
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Host -->
-            <a href="/test/host?lang=${lang}" class="test-card test-card-host" title="${tr.host}">
+            <a href="/live/host?lang=${lang}" class="test-card test-card-host" title="${tr.host}">
                 <div class="text-4xl mb-3" aria-hidden="true">🎬</div>
                 <h2 class="text-2xl font-bold mb-2">${tr.host}</h2>
                 <p class="text-sm opacity-80">${tr.host_desc}</p>
@@ -33,7 +33,7 @@ export function getLandingContent(lang: Language): string {
             </a>
             
             <!-- Guest -->
-            <a href="/test/guest?lang=${lang}" class="test-card test-card-guest" title="${tr.guest}">
+            <a href="/live/guest?lang=${lang}" class="test-card test-card-guest" title="${tr.guest}">
                 <div class="text-4xl mb-3" aria-hidden="true">👤</div>
                 <h2 class="text-2xl font-bold mb-2">${tr.guest}</h2>
                 <p class="text-sm opacity-80">${tr.guest_desc}</p>
@@ -45,7 +45,7 @@ export function getLandingContent(lang: Language): string {
             </a>
             
             <!-- Viewer -->
-            <a href="/test/viewer?lang=${lang}" class="test-card test-card-viewer" title="${tr.viewer}">
+            <a href="/live/viewer?lang=${lang}" class="test-card test-card-viewer" title="${tr.viewer}">
                 <div class="text-4xl mb-3" aria-hidden="true">👁️</div>
                 <h2 class="text-2xl font-bold mb-2">${tr.viewer}</h2>
                 <p class="text-sm opacity-80">${tr.viewer_desc}</p>
@@ -85,3 +85,4 @@ export function getLandingScript(): string {
         console.log('[Test] Landing page loaded');
     `;
 }
+

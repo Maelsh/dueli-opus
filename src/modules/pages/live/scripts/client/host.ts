@@ -46,8 +46,8 @@ export function getHostScript(lang: Language): string {
         
         // إظهار رقم المنافسة مع الروابط
         const baseUrl = window.location.origin;
-        const guestLink = baseUrl + '/test/guest?comp=' + competitionId + '&lang=${lang}';
-        const viewerLink = baseUrl + '/test/viewer?comp=' + competitionId + '&lang=${lang}';
+        const guestLink = baseUrl + '/live/guest?comp=' + competitionId + '&lang=${lang}';
+        const viewerLink = baseUrl + '/live/viewer?comp=' + competitionId + '&lang=${lang}';
         
         document.getElementById('compIdDisplay').innerHTML = 
             '${tr.competition_number}: <strong>' + competitionId + '</strong><br>' +
@@ -240,21 +240,29 @@ export function getHostScript(lang: Language): string {
         }
         
         // ===== Connection =====
+        let signalingManager = null;
+        
         async function createRoom() {
             try {
                 log('${tr.loading}...');
-                console.log('[DEBUG] createRoom - calling API...');
+                const token = window.getSessionToken();
+                if (!token) {
+                    log('❌ يجب تسجيل الدخول أولاً', 'error');
+                    return false;
+                }
+                
                 const res = await fetch(streamServerUrl + '/api/signaling/room/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ competition_id: competitionId.toString(), user_id: 1 })
+                    body: JSON.stringify({ competition_id: competitionId.toString() })
                 });
                 const data = await res.json();
-                console.log('[DEBUG] createRoom - response:', data);
-                if (data.success && data.data.room_id) window.actualRoomId = data.data.room_id;
-                return data.success;
+                if (data.success && data.data.room_id) {
+                    window.actualRoomId = data.data.room_id;
+                    return { roomId: data.data.room_id, token };
+                }
+                return false;
             } catch (err) {
-                console.log('[DEBUG] createRoom - ERROR:', err.message);
                 log('${tr.error}: ' + err.message, 'error');
                 return false;
             }
@@ -291,9 +299,12 @@ export function getHostScript(lang: Language): string {
                 return;
             }
             
+            // Fetch ICE servers dynamically
+            const dynamicIceServers = await window.fetchIceServers();
+            
             // Create PeerConnection inside window.mediaState
             ms.pc = new RTCPeerConnection({
-                iceServers: iceServers
+                iceServers: dynamicIceServers
             });
             console.log('[DEBUG] pc created:', ms.pc);
             
@@ -347,63 +358,58 @@ export function getHostScript(lang: Language): string {
                 console.log('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
             };
             
-            // Create Offer
+            // Setup WebSocket signaling (will send offer after connected)
+            setupSignaling(roomCreated);
+            
+            // Create and send offer
             const offer = await ms.pc.createOffer();
             console.log('[DEBUG] Offer created');
             await ms.pc.setLocalDescription(offer);
-            await sendSignal('offer', offer);
-            
-            startPolling();
+            sendSignal('offer', offer);
         }
         
-        // ===== Signaling =====
-        async function sendSignal(type, data) {
-            // console.log('[DEBUG] sendSignal:', type, 'to room:', window.actualRoomId || roomId);
-            try {
-                const res = await fetch(streamServerUrl + '/api/signaling/signal', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        room_id: window.actualRoomId || roomId,
-                        from_role: 'host',
-                        signal_type: type,
-                        signal_data: data
-                    })
-                });
-                // const result = await res.json();
-                // console.log('[DEBUG] sendSignal response:', result);
-            } catch (err) {
-                console.log('[DEBUG] sendSignal ERROR:', err);
+        // ===== Signaling (WebSocket) =====
+        function sendSignal(type, data) {
+            if (signalingManager) {
+                signalingManager.sendSignal(type, data);
             }
         }
         
-        function startPolling() {
-            // console.log('[DEBUG] startPolling called, room:', window.actualRoomId || roomId);
-            ms.pollingInterval = setInterval(async function() {
-                try {
-                    const res = await fetch(streamServerUrl + '/api/signaling/poll?room_id=' + (window.actualRoomId || roomId) + '&role=host');
-                    const data = await res.json();
-                    if (data.success && data.data && data.data.signals && data.data.signals.length > 0) {
-                        console.log('[DEBUG] Polling: Got ' + data.data.signals.length + ' signals');
-                        for (const signal of data.data.signals) {
-                            if (signal.type === 'answer') {
-                                console.log('[DEBUG] Processing ANSWER signal');
-                                await ms.pc.setRemoteDescription(new RTCSessionDescription(signal.data));
-                            } else if (signal.type === 'ice') {
-                                // console.log('[DEBUG] Processing ICE signal');
-                                await ms.pc.addIceCandidate(new RTCIceCandidate(signal.data));
-                            } else if (signal.type === 'request_offer') {
-                                console.log('[DEBUG] Guest requested offer - Renegotiating...');
-                                const offer = await ms.pc.createOffer();
-                                await ms.pc.setLocalDescription(offer);
-                                await sendSignal('offer', offer);
-                            }
+        function setupSignaling(roomData) {
+            signalingManager = new window.SignalingManager({
+                signalingUrl: streamServerUrl,
+                roomId: roomData.roomId,
+                role: 'host',
+                token: roomData.token,
+                onSignal: async function(data) {
+                    try {
+                        if (data.signalType === 'answer') {
+                            console.log('[DEBUG] Processing ANSWER signal');
+                            await ms.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
+                        } else if (data.signalType === 'ice') {
+                            await ms.pc.addIceCandidate(new RTCIceCandidate(data.signalData));
+                        } else if (data.signalType === 'request_offer') {
+                            console.log('[DEBUG] Guest requested offer - Renegotiating...');
+                            const offer = await ms.pc.createOffer();
+                            await ms.pc.setLocalDescription(offer);
+                            sendSignal('offer', offer);
                         }
+                    } catch (err) {
+                        console.error('[Signaling] Error processing signal:', err);
                     }
-                } catch (err) {
-                   // console.log('[DEBUG] Polling error:', err);
+                },
+                onPeerJoined: function(data) {
+                    log('👋 الضيف انضم للغرفة', 'success');
+                },
+                onPeerLeft: function(data) {
+                    log('👋 الضيف غادر الغرفة', 'warn');
+                },
+                onError: function(error) {
+                    log('❌ خطأ في الاتصال', 'error');
                 }
-            }, 1000);
+            });
+            
+            signalingManager.connect();
         }
         
         // ===== Recording =====
@@ -693,3 +699,4 @@ export function getHostScript(lang: Language): string {
         })();
     `;
 }
+

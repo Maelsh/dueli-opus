@@ -1,7 +1,14 @@
 /**
  * Test Stream Server Core
  * Server-Side TypeScript - Types, Interfaces, Constants
+ * 
+ * الآن يستخدم config/defaults.ts للثوابت
  */
+
+import {
+    DEFAULT_STREAMING_URL,
+    DEFAULT_UPLOAD_URL
+} from '../../../../../config/defaults';
 
 // ===== Types & State Machine =====
 
@@ -46,10 +53,10 @@ export interface DeviceCapabilities {
     supportsCamera: boolean;
 }
 
-// ===== Constants =====
+// ===== Constants from defaults.ts =====
 
-export const STREAM_SERVER_URL = 'https://stream.maelsh.pro';
-export const FFMPEG_URL = 'https://maelsh.pro/ffmpeg';
+export const STREAM_SERVER_URL = DEFAULT_STREAMING_URL;
+export const FFMPEG_URL = DEFAULT_UPLOAD_URL;
 export const TEST_ROOM_ID = 'test_room_001';
 
 // ===== Quality Presets =====
@@ -62,19 +69,32 @@ export const QUALITY_PRESETS: Record<string, QualityPreset> = {
     minimal: { name: 'Minimal', width: 320, height: 90, fps: 10, segment: 30000, bitrate: 150000 }
 };
 
-// ===== ICE Servers Configuration =====
+// ===== ICE Servers =====
+// ملاحظة: ICE Servers تُجلب الآن ديناميكياً من /api/signaling/ice-servers
+// Note: ICE Servers are now fetched dynamically from /api/signaling/ice-servers
 
+// للتوافق المؤقت فقط - ستُزال لاحقاً
+// For backward compatibility only - will be removed later
 export const ICE_SERVERS = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    {
-        urls: 'turn:maelsh.pro:3000?transport=tcp',
-        username: 'dueli',
-        credential: 'dueli-turn-secret-2024'
-    },
-    {
-        urls: 'turn:maelsh.pro:3000',
-        username: 'dueli',
-        credential: 'dueli-turn-secret-2024'
-    }
+    { urls: 'stun:stun.cloudflare.com:3478' },
 ];
+
+/**
+ * Fetch ICE servers from platform API
+ * جلب إعدادات ICE من المنصة
+ */
+export async function fetchIceServers(): Promise<RTCIceServer[]> {
+    try {
+        const response = await fetch('/api/signaling/ice-servers');
+        const data = await response.json();
+        if (data.success && data.data.iceServers) {
+            return data.data.iceServers;
+        }
+    } catch (error) {
+        console.error('Failed to fetch ICE servers:', error);
+    }
+    return ICE_SERVERS; // Fallback to static list
+}
+

@@ -61,9 +61,10 @@ export function getViewerContent(lang: Language): string {
         
         <!-- Links -->
         <div class="mt-4 text-center text-sm">
-            <a href="/test?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline mx-2" title="${tr.back}">← ${tr.back}</a>
-            <a href="/test/host?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline mx-2" title="${tr.host}">${tr.host}</a>
-            <a href="/test/guest?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline mx-2" title="${tr.guest}">${tr.guest}</a>
+            <a href="/live?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline mx-2" title="${tr.back}">← ${tr.back}</a>
+            <a href="/live/host?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline mx-2" title="${tr.host}">${tr.host}</a>
+            <a href="/live/guest?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline mx-2" title="${tr.guest}">${tr.guest}</a>
         </div>
     `;
 }
+

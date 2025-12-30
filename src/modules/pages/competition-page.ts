@@ -366,6 +366,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       async function goLive() {
         if (!window.currentUser) { showLoginModal(); return; }
         
+        const isCreator = window.currentUser.id === competitionData.creator_id;
+        const isOpponent = window.currentUser.id === competitionData.opponent_id;
+        
+        if (!isCreator && !isOpponent) {
+          showToast(tr.not_authorized || 'Not authorized', 'error');
+          return;
+        }
+        
         const streamServerUrl = 'https://maelsh.pro/ffmpeg';
         const liveUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
         
@@ -381,8 +389,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           
           const data = await res.json();
           if (data.success) {
-            // Redirect to live room
-            window.location.href = '/live/' + competitionId + '?lang=' + lang;
+            // Redirect based on role
+            if (isCreator) {
+              window.location.href = '/live/host?comp=' + competitionId + '&lang=' + lang;
+            } else if (isOpponent) {
+              window.location.href = '/live/guest?comp=' + competitionId + '&lang=' + lang;
+            }
           } else {
             showToast(data.error || 'Failed to start', 'error');
           }

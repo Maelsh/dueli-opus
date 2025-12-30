@@ -22,6 +22,7 @@ import oauthRoutes from './modules/api/auth/oauth-routes';
 import countriesRoutes from './modules/api/countries/routes';
 import jitsiRoutes from './modules/api/jitsi/routes';
 import signalingRoutes from './modules/api/signaling/routes';
+import chunksRoutes from './modules/api/chunks/routes';
 
 // Import New Feature Routes - استيراد مسارات الميزات الجديدة
 import searchRoutes from './modules/api/search/routes';
@@ -34,7 +35,7 @@ import scheduleRoutes from './modules/api/schedule/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
-import testRoutes from './modules/pages/test';
+import liveRoutes from './modules/pages/live';
 
 // Import Components - استيراد المكونات
 import { getNavigation, getLoginModal, getFooter } from './shared/components';
@@ -81,6 +82,7 @@ app.route('/api/auth/oauth', oauthRoutes);
 app.route('/api/countries', countriesRoutes);
 app.route('/api/jitsi', jitsiRoutes);
 app.route('/api/signaling', signalingRoutes);
+app.route('/api/chunks', chunksRoutes);
 
 // Mount New Feature Routes - تركيب مسارات الميزات الجديدة
 app.route('/api/search', searchRoutes);
@@ -94,8 +96,8 @@ app.route('/api', scheduleRoutes);
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);
 
-// Mount Test Routes - تركيب مسارات الاختبار
-app.route('/test', testRoutes);
+// Mount Live Stream Routes - تركيب مسارات البث المباشر
+app.route('/live', liveRoutes);
 
 // ============================================
 // Page Routes - مسارات الصفحات
