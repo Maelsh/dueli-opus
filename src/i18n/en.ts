@@ -570,6 +570,8 @@ export const en = {
     connect: 'Connect',
     join: 'Join',
     disconnect: 'Disconnect',
+    download: 'Download',
+    converting: 'Converting',
     page_loaded: 'Page loaded',
 };
 

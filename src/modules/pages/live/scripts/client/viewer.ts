@@ -15,7 +15,7 @@ export function getViewerScript(lang: Language): string {
     return `
         (function() {
         // ===== Viewer Page Script =====
-        const { ChunkManager, LiveSequentialPlayer, VodMsePlayer, testLog: log, updateStatus, setMode } = window;
+        const { ChunkManager, LiveSequentialPlayer, VodMsePlayer, SmartVodPlayer, testLog: log, updateStatus, setMode } = window;
         
         // Elements
         const videoPlayers = [
@@ -81,7 +81,7 @@ export function getViewerScript(lang: Language): string {
             }
         }
         
-        // ===== Load VOD =====
+        // ===== Load VOD (Smart) =====
         window.loadVOD = async function() {
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
@@ -95,23 +95,47 @@ export function getViewerScript(lang: Language): string {
             try {
                 stopStreamInternal();
                 
-                log('${tr.recorded}: ' + competitionId);
+                log('📼 ${tr.recorded}: ' + competitionId);
                 updateStatus('${tr.loading}', 'yellow');
-                setMode('vod', 'VOD');
+                setMode('vod', 'Smart VOD');
                 
-                chunkManager = new ChunkManager(competitionId, 'webm');
-                
-                currentPlayer = new VodMsePlayer({
+                // استخدام SmartVodPlayer الجديد
+                currentPlayer = new SmartVodPlayer({
                     videoElement: videoPlayers[0],
-                    chunkManager: chunkManager,
+                    competitionId: competitionId,
                     onProgress: function(current, total) {
                         document.getElementById('statsInfo').textContent = 
-                            '${tr.loading}: ' + current + '/' + total;
+                            '▶️ Chunk ' + current + '/' + total;
+                    },
+                    onChunkLoaded: function(index, loaded) {
+                        log('📦 Chunk ' + (index + 1) + ' preloaded (' + loaded + ' total)', 'info');
+                        // تحديث عداد التحميل
+                        const loadingInfo = document.getElementById('vodLoadingInfo');
+                        if (loadingInfo && currentPlayer) {
+                            loadingInfo.textContent = '📦 ' + loaded + '/' + currentPlayer.chunks.length;
+                        }
+                    },
+                    onReady: function(info) {
+                        log('✅ Ready: ' + info.chunks + ' chunks, ' + Math.round(info.totalDuration) + 's (' + info.extension + ')', 'success');
+                        updateStatus('${tr.recorded} ✓ (' + info.extension.toUpperCase() + ')', 'green');
+                        
+                        // إظهار VOD Controls
+                        const vodControls = document.getElementById('vodControls');
+                        if (vodControls) vodControls.classList.remove('hidden');
+                        
+                        // ربط seekbar
+                        setupSeekbar();
+                        
+                        // إظهار زر التحميل
+                        showDownloadButton(info.extension);
+                    },
+                    onError: function(error) {
+                        log('❌ ' + error.message, 'error');
+                        updateStatus('${tr.error}', 'red');
                     }
                 });
                 
                 await currentPlayer.start();
-                updateStatus('${tr.recorded} ✓', 'green');
                 currentMode = 'vod';
                 
             } catch (error) {
@@ -120,10 +144,85 @@ export function getViewerScript(lang: Language): string {
             }
         }
         
+        // ===== Setup Seekbar =====
+        function setupSeekbar() {
+            const seekbar = document.getElementById('vodSeekbar');
+            if (!seekbar || !currentPlayer) return;
+            
+            // عند تحريك seekbar
+            seekbar.addEventListener('input', function() {
+                if (!currentPlayer || !currentPlayer.totalDuration) return;
+                const percent = parseFloat(seekbar.value);
+                const targetTime = (percent / 100) * currentPlayer.totalDuration;
+                currentPlayer.seekTo(targetTime);
+            });
+        }
+        
+        // ===== Show Download Button =====
+        function showDownloadButton(extension) {
+            // إزالة زر قديم إذا موجود
+            const existingBtn = document.getElementById('downloadBtn');
+            if (existingBtn) existingBtn.remove();
+            
+            // إنشاء container للأزرار
+            const container = document.createElement('div');
+            container.id = 'downloadBtn';
+            container.className = 'mt-4 flex flex-wrap justify-center gap-2';
+            
+            // زر تحميل مباشر
+            const directBtn = document.createElement('button');
+            directBtn.className = 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2';
+            directBtn.innerHTML = '<i class="fas fa-download"></i> ${tr.download} (' + extension.toUpperCase() + ')';
+            directBtn.onclick = async function() {
+                directBtn.disabled = true;
+                directBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ${tr.loading}...';
+                try {
+                    await currentPlayer.downloadVideo();
+                } catch (e) {
+                    log('❌ Download failed: ' + e.message, 'error');
+                }
+                directBtn.disabled = false;
+                directBtn.innerHTML = '<i class="fas fa-download"></i> ${tr.download} (' + extension.toUpperCase() + ')';
+            };
+            container.appendChild(directBtn);
+            
+            // زر تحويل لـ MP4 إذا كان WebM
+            if (extension === 'webm') {
+                const convertBtn = document.createElement('button');
+                convertBtn.className = 'px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2';
+                convertBtn.innerHTML = '<i class="fas fa-exchange-alt"></i> ${tr.download} MP4';
+                convertBtn.onclick = async function() {
+                    convertBtn.disabled = true;
+                    convertBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ${tr.converting}...';
+                    try {
+                        await currentPlayer.downloadAsMp4(null, function(stage, progress) {
+                            if (stage === 'loading') convertBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading FFmpeg...';
+                            else if (stage === 'converting') convertBtn.innerHTML = '<i class="fas fa-cog fa-spin"></i> Converting...';
+                        });
+                    } catch (e) {
+                        log('❌ Conversion failed: ' + e.message, 'error');
+                    }
+                    convertBtn.disabled = false;
+                    convertBtn.innerHTML = '<i class="fas fa-exchange-alt"></i> ${tr.download} MP4';
+                };
+                container.appendChild(convertBtn);
+            }
+            
+            // إضافة للصفحة
+            const logContainer = document.getElementById('logContainer');
+            if (logContainer) {
+                logContainer.parentNode.insertBefore(container, logContainer);
+            }
+        }
+        
         // ===== Stop Stream Internal =====
         function stopStreamInternal() {
             if (currentPlayer) {
-                currentPlayer.stop();
+                if (currentPlayer.destroy) {
+                    currentPlayer.destroy();
+                } else if (currentPlayer.stop) {
+                    currentPlayer.stop();
+                }
                 currentPlayer = null;
             }
             
@@ -131,6 +230,14 @@ export function getViewerScript(lang: Language): string {
                 v.src = '';
                 v.load();
             });
+            
+            // إخفاء VOD Controls
+            const vodControls = document.getElementById('vodControls');
+            if (vodControls) vodControls.classList.add('hidden');
+            
+            // إزالة أزرار التحميل
+            const downloadBtn = document.getElementById('downloadBtn');
+            if (downloadBtn) downloadBtn.remove();
             
             setMode('', '');
             currentMode = null;

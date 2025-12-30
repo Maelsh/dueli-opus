@@ -53,6 +53,17 @@ export function getViewerContent(lang: Language): string {
             <video id="videoPlayer2" autoplay playsinline style="position: absolute; width: 100%; height: 100%; transition: opacity 0.3s; opacity: 0; z-index: 1;"></video>
         </div>  
         
+        <!-- VOD Seekbar (Hidden by default, shown for VOD) -->
+        <div id="vodControls" class="hidden bg-gray-200 dark:bg-gray-800 rounded-lg p-3 mb-4">
+            <div class="flex items-center gap-3">
+                <span id="vodTimeDisplay" class="text-sm font-mono text-gray-600 dark:text-gray-300 min-w-24">0:00 / 0:00</span>
+                <input type="range" id="vodSeekbar" min="0" max="100" value="0" 
+                    class="flex-1 h-2 bg-gray-400 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                    title="Seek" />
+                <span id="vodLoadingInfo" class="text-xs text-gray-500">📦 0/0</span>
+            </div>
+        </div>
+        
         <!-- Log -->
         <div class="bg-gray-200 dark:bg-gray-900 rounded-lg p-4 max-h-40 overflow-y-auto" id="logContainer">
             <p class="text-gray-500 text-sm mb-2">📋 ${tr.notes}:</p>

@@ -546,6 +546,8 @@ export const ar = {
     connect: 'اتصال',
     join: 'الانضمام',
     disconnect: 'إنهاء',
+    download: 'تحميل',
+    converting: 'جاري التحويل',
     page_loaded: 'تم تحميل الصفحة',
 };
 
