@@ -54,9 +54,9 @@ signalingRoutes.get('/ice-servers', async (c) => {
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun.cloudflare.com:3478' },
-        // TURN without auth (dummy credentials for browser compatibility)
-        { urls: turnUrl, username: 'user', credential: 'pass' },
-        { urls: `${turnUrl}?transport=tcp`, username: 'user', credential: 'pass' }
+        // TURN with long-term credentials
+        { urls: turnUrl, username: 'dueli', credential: 'DueliTurn2024!' },
+        { urls: `${turnUrl}?transport=tcp`, username: 'dueli', credential: 'DueliTurn2024!' }
     ];
 
     return c.json({
