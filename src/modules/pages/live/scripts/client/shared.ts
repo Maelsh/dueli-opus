@@ -70,93 +70,138 @@ async function fetchIceServers() {
 
 window.fetchIceServers = fetchIceServers;
 
-// ===== Signaling Manager (WebSocket) =====
+// ===== Signaling Manager (HTTP Polling with Verification) =====
 
 /**
- * SignalingManager - إدارة اتصال WebSocket مع سيرفر الإشارات
+ * SignalingManager - إدارة الإشارات عبر HTTP Polling مع التأمين
  */
 class SignalingManager {
     constructor(config) {
         this.signalingUrl = config.signalingUrl;
         this.roomId = config.roomId;
+        this.competitionId = config.roomId.replace('comp_', '');
         this.role = config.role;
         this.token = config.token;
-        this.ws = null;
         this.onSignal = config.onSignal || function() {};
         this.onPeerJoined = config.onPeerJoined || function() {};
         this.onPeerLeft = config.onPeerLeft || function() {};
         this.onError = config.onError || function() {};
         this.onConnected = config.onConnected || function() {};
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 3;
+        this.pollInterval = null;
+        this.lastTimestamp = 0;
+        this.peerWasConnected = false;
+        this.isConnected = false;
     }
     
-    connect() {
-        const wsUrl = this.signalingUrl.replace('https://', 'wss://').replace('http://', 'ws://') +
-            '/signaling?room=' + encodeURIComponent(this.roomId) +
-            '&role=' + encodeURIComponent(this.role) +
-            '&token=' + encodeURIComponent(this.token);
+    async connect() {
+        testLog('🔌 Connecting to signaling (Polling)...', 'info');
         
-        testLog('🔌 Connecting to signaling...', 'info');
-        
-        this.ws = new WebSocket(wsUrl);
-        
-        this.ws.onopen = () => {
-            testLog('✅ Signaling connected', 'success');
-            this.reconnectAttempts = 0;
+        try {
+            const res = await fetch(this.signalingUrl + '/api/signaling/room/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    competition_id: this.competitionId,
+                    role: this.role,
+                    token: this.token
+                })
+            });
+            
+            const data = await res.json();
+            
+            if (!data.success) {
+                testLog('❌ Join failed: ' + (data.error || 'Unknown'), 'error');
+                this.onError(new Error(data.error));
+                return;
+            }
+            
+            testLog('✅ Joined room as ' + this.role, 'success');
+            this.isConnected = true;
             this.onConnected();
-        };
+            this.startPolling();
+            
+        } catch (err) {
+            testLog('❌ Connection error: ' + err.message, 'error');
+            this.onError(err);
+        }
+    }
+    
+    startPolling() {
+        if (this.pollInterval) clearInterval(this.pollInterval);
         
-        this.ws.onmessage = (event) => {
+        this.pollInterval = setInterval(async () => {
+            if (!this.isConnected) return;
+            
             try {
-                const data = JSON.parse(event.data);
+                const res = await fetch(this.signalingUrl + '/api/signaling/poll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room_id: this.roomId,
+                        role: this.role,
+                        token: this.token,
+                        last_timestamp: this.lastTimestamp
+                    })
+                });
                 
-                if (data.type === 'joined') {
-                    testLog('🎯 Joined room as ' + data.role, 'success');
-                } else if (data.type === 'peer-joined') {
-                    testLog('👋 Peer joined: ' + data.role, 'info');
-                    this.onPeerJoined(data);
-                } else if (data.type === 'peer-left') {
-                    testLog('👋 Peer left: ' + data.role, 'warn');
-                    this.onPeerLeft(data);
-                } else if (data.type === 'signal') {
-                    this.onSignal(data);
+                const data = await res.json();
+                if (!data.success) return;
+                
+                if (data.data.peer_connected && !this.peerWasConnected) {
+                    this.peerWasConnected = true;
+                    testLog('👋 Peer connected', 'info');
+                    this.onPeerJoined({ role: this.role === 'host' ? 'opponent' : 'host' });
+                } else if (!data.data.peer_connected && this.peerWasConnected) {
+                    this.peerWasConnected = false;
+                    testLog('👋 Peer disconnected', 'warn');
+                    this.onPeerLeft({ role: this.role === 'host' ? 'opponent' : 'host' });
                 }
-            } catch (e) {
-                console.error('Signaling message error:', e);
+                
+                if (data.data.signals && data.data.signals.length > 0) {
+                    for (const signal of data.data.signals) {
+                        this.lastTimestamp = Math.max(this.lastTimestamp, signal.timestamp);
+                        this.onSignal({ signalType: signal.signalType, signalData: signal.signalData });
+                    }
+                }
+            } catch (err) {
+                console.error('Poll error:', err);
             }
-        };
-        
-        this.ws.onerror = (error) => {
-            testLog('❌ Signaling error', 'error');
-            this.onError(error);
-        };
-        
-        this.ws.onclose = () => {
-            testLog('🔌 Signaling disconnected', 'warn');
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.reconnectAttempts++;
-                testLog('🔄 Reconnecting... (' + this.reconnectAttempts + '/' + this.maxReconnectAttempts + ')', 'info');
-                setTimeout(() => this.connect(), 2000);
-            }
-        };
+        }, 1000);
     }
     
-    send(data) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify(data));
+    async sendSignal(signalType, signalData) {
+        if (!this.isConnected) return;
+        try {
+            await fetch(this.signalingUrl + '/api/signaling/signal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room_id: this.roomId,
+                    role: this.role,
+                    token: this.token,
+                    signal_type: signalType,
+                    signal_data: signalData
+                })
+            });
+        } catch (err) {
+            console.error('Send signal error:', err);
         }
     }
     
-    sendSignal(type, signalData) {
-        this.send({ signalType: type, signalData: signalData });
-    }
-    
-    disconnect() {
-        this.maxReconnectAttempts = 0; // Prevent reconnect
-        if (this.ws) {
-            this.ws.close();
+    async disconnect() {
+        this.isConnected = false;
+        if (this.pollInterval) {
+            clearInterval(this.pollInterval);
+            this.pollInterval = null;
         }
+        try {
+            await fetch(this.signalingUrl + '/api/signaling/room/leave', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room_id: this.roomId, role: this.role, token: this.token })
+            });
+        } catch (err) { console.error('Leave error:', err); }
+        testLog('🔌 Signaling disconnected', 'warn');
     }
 }
 
