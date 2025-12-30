@@ -186,13 +186,15 @@ export function getGuestScript(lang: Language): string {
                 },
                 onError: function(error) {
                     log('❌ خطأ في الاتصال', 'error');
+                },
+                onConnected: function() {
+                    // طلب Offer من المضيف بعد اكتمال الاتصال
+                    console.log('[DEBUG] Connected - requesting offer from host');
+                    sendSignal('request_offer', {});
                 }
             });
             
             signalingManager.connect();
-            
-            // Request offer from host
-            sendSignal('request_offer', {});
         }
         
         // ===== Handle Connection Failure =====
