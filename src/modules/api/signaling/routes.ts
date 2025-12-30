@@ -47,28 +47,17 @@ async function generateTurnCredentials(secret: string, userId: string = 'dueli-u
  * يُرجع إعدادات خوادم TURN/STUN مع بيانات اعتماد ديناميكية
  */
 signalingRoutes.get('/ice-servers', async (c) => {
+    const turnUrl = c.env.TURN_URL || 'turn:maelsh.pro:3000';
+
     const iceServers: any[] = [
         // Free STUN servers
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun.cloudflare.com:3478' },
+        // TURN without auth (for testing)
+        { urls: turnUrl },
+        { urls: `${turnUrl}?transport=tcp` }
     ];
-
-    // Add TURN server if secret is configured
-    const turnSecret = c.env.TURN_SECRET;
-    const turnUrl = c.env.TURN_URL || 'turn:maelsh.pro:3000';
-
-    if (turnSecret) {
-        try {
-            const { username, credential } = await generateTurnCredentials(turnSecret);
-            iceServers.push(
-                { urls: turnUrl, username, credential },
-                { urls: `${turnUrl}?transport=tcp`, username, credential }
-            );
-        } catch (error) {
-            console.error('Error generating TURN credentials:', error);
-        }
-    }
 
     return c.json({
         success: true,

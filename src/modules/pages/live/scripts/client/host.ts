@@ -35,6 +35,9 @@ export function getHostScript(lang: Language): string {
         let remoteStream = new MediaStream();
         let mediaRecorder = null;
         let chunkIndex = 0;
+        // تخزين ICE candidates حتى يتم setRemoteDescription
+        let pendingIceCandidates = [];
+        let hasRemoteDescription = false;
         
         // قراءة رقم المنافسة من URL أو إنشاء عشوائي
         const urlParams = new URLSearchParams(window.location.search);
@@ -386,8 +389,20 @@ export function getHostScript(lang: Language): string {
                         if (data.signalType === 'answer') {
                             console.log('[DEBUG] Processing ANSWER signal');
                             await ms.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
+                            hasRemoteDescription = true;
+                            // معالجة ICE candidates المعلقة
+                            while (pendingIceCandidates.length > 0) {
+                                const ice = pendingIceCandidates.shift();
+                                await ms.pc.addIceCandidate(new RTCIceCandidate(ice));
+                                console.log('[DEBUG] Added pending ICE candidate');
+                            }
                         } else if (data.signalType === 'ice') {
-                            await ms.pc.addIceCandidate(new RTCIceCandidate(data.signalData));
+                            if (hasRemoteDescription) {
+                                await ms.pc.addIceCandidate(new RTCIceCandidate(data.signalData));
+                            } else {
+                                pendingIceCandidates.push(data.signalData);
+                                console.log('[DEBUG] Queued ICE candidate (waiting for answer)');
+                            }
                         } else if (data.signalType === 'request_offer') {
                             console.log('[DEBUG] Guest requested offer - Renegotiating...');
                             const offer = await ms.pc.createOffer();

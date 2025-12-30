@@ -42,6 +42,9 @@ export function getGuestScript(lang: Language): string {
         
         // Flag to prevent double clicks
         let isJoining = false;
+        // تخزين ICE candidates حتى يتم setRemoteDescription
+        let pendingIceCandidates = [];
+        let hasRemoteDescription = false;
 
         // ===== Join Room =====
         window.joinRoom = async function() {
@@ -149,12 +152,27 @@ export function getGuestScript(lang: Language): string {
                         if (data.signalType === 'offer') {
                             console.log('[DEBUG] Processing OFFER signal');
                             await ms.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
+                            hasRemoteDescription = true;
+                            
+                            // معالجة ICE candidates المعلقة
+                            while (pendingIceCandidates.length > 0) {
+                                const ice = pendingIceCandidates.shift();
+                                await ms.pc.addIceCandidate(new RTCIceCandidate(ice));
+                                console.log('[DEBUG] Added pending ICE candidate');
+                            }
+                            
                             const answer = await ms.pc.createAnswer();
                             await ms.pc.setLocalDescription(answer);
                             sendSignal('answer', answer);
                             console.log('[DEBUG] Sent ANSWER');
                         } else if (data.signalType === 'ice') {
-                            await ms.pc.addIceCandidate(new RTCIceCandidate(data.signalData));
+                            if (hasRemoteDescription) {
+                                await ms.pc.addIceCandidate(new RTCIceCandidate(data.signalData));
+                            } else {
+                                // تخزين ICE حتى يتم setRemoteDescription
+                                pendingIceCandidates.push(data.signalData);
+                                console.log('[DEBUG] Queued ICE candidate (waiting for offer)');
+                            }
                         }
                     } catch (err) {
                         console.error('[Signaling] Error:', err);
