@@ -307,16 +307,16 @@ window.drawVideoProportional = drawVideoProportional;
 
 /**
  * detectBestMimeType - كشف أفضل صيغة مدعومة
- * يفضل MP4 أولاً للتوافق مع Safari/iOS + Chrome 2024+
+ * يفضل MP4 مع H.264/AAC للتوافق مع Safari/iOS + Chrome 2024+
  */
 function detectBestMimeType() {
     const options = [
-        // MP4 أولاً - Chrome 126+ و Safari
-        'video/mp4; codecs="avc1.424028, mp4a.40.2"',  // H.264 High Profile
-        'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',  // H.264 Baseline
-        'video/mp4; codecs="avc1,mp4a.40.2"',          // Generic H.264 + AAC
-        'video/mp4; codecs="avc1,opus"',               // H.264 + Opus (Chrome 129+)
-        'video/mp4',                                    // Generic MP4
+        // MP4 مع H.264 + AAC (الأكثر توافقاً)
+        'video/mp4; codecs="avc1.424028, mp4a.40.2"',  // H.264 Constrained Baseline Level 4 + AAC
+        'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',  // H.264 Baseline + AAC
+        'video/mp4; codecs="avc1.4d002a, mp4a.40.2"',  // H.264 Main Profile + AAC
+        'video/mp4;codecs="avc1,mp4a.40.2"',           // Generic H.264 + AAC
+        // ⚠️ لا نستخدم video/mp4 العام لأنه قد يختار VP9
         // WebM كخيار أخير
         'video/webm; codecs=vp9,opus',
         'video/webm; codecs=vp8,opus',
@@ -326,13 +326,17 @@ function detectBestMimeType() {
     for (const type of options) {
         if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
             const extension = type.includes('mp4') ? 'mp4' : 'webm';
-            console.log('[detectBestMimeType] ✅ Using format: ' + extension + ' (' + type + ')');
+            const codec = type.includes('avc1') ? 'H.264' : (type.includes('vp9') ? 'VP9' : 'VP8');
+            console.log('[detectBestMimeType] ✅ Using: ' + extension.toUpperCase() + ' with ' + codec);
+            console.log('[detectBestMimeType] Full mimeType: ' + type);
             
             if (extension === 'webm') {
                 console.warn('⚠️ Recording in WebM - Safari/iPhone viewers will NOT be able to watch!');
             }
             
             return { mimeType: type, extension: extension };
+        } else {
+            console.log('[detectBestMimeType] ❌ Not supported: ' + type);
         }
     }
 
