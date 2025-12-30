@@ -305,6 +305,44 @@ function drawVideoProportional(ctx, video, x, y, maxWidth, maxHeight, label) {
 
 window.drawVideoProportional = drawVideoProportional;
 
+/**
+ * detectBestMimeType - كشف أفضل صيغة مدعومة
+ * يفضل MP4 أولاً للتوافق مع Safari/iOS + Chrome 2024+
+ */
+function detectBestMimeType() {
+    const options = [
+        // MP4 أولاً - Chrome 126+ و Safari
+        'video/mp4; codecs="avc1.424028, mp4a.40.2"',  // H.264 High Profile
+        'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',  // H.264 Baseline
+        'video/mp4; codecs="avc1,mp4a.40.2"',          // Generic H.264 + AAC
+        'video/mp4; codecs="avc1,opus"',               // H.264 + Opus (Chrome 129+)
+        'video/mp4',                                    // Generic MP4
+        // WebM كخيار أخير
+        'video/webm; codecs=vp9,opus',
+        'video/webm; codecs=vp8,opus',
+        'video/webm'
+    ];
+
+    for (const type of options) {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
+            const extension = type.includes('mp4') ? 'mp4' : 'webm';
+            console.log('[detectBestMimeType] ✅ Using format: ' + extension + ' (' + type + ')');
+            
+            if (extension === 'webm') {
+                console.warn('⚠️ Recording in WebM - Safari/iPhone viewers will NOT be able to watch!');
+            }
+            
+            return { mimeType: type, extension: extension };
+        }
+    }
+
+    // Fallback
+    console.warn('[detectBestMimeType] No preferred format supported, using default webm');
+    return { mimeType: 'video/webm', extension: 'webm' };
+}
+
+window.detectBestMimeType = detectBestMimeType;
+
 // ===== Quality Presets =====
 
 const qualityPresets = {
@@ -323,7 +361,7 @@ window.qualityPresets = qualityPresets;
  * UploadQueue - إدارة رفع القطع
  */
 class UploadQueue {
-    constructor(competitionId, onProgress) {
+    constructor(competitionId, onProgress, extension) {
         this.queue = [];
         this.isUploading = false;
         this.competitionId = competitionId;
@@ -331,6 +369,12 @@ class UploadQueue {
         this.corruptedChunks = 0;
         this.ffmpegUrl = '${FFMPEG_URL}';
         this.onProgress = onProgress;
+        this.extension = extension || 'webm';
+    }
+
+    setExtension(ext) {
+        this.extension = ext;
+        console.log('[UploadQueue] Extension set to: ' + ext);
     }
 
     validateChunk(blob, index) {
@@ -394,10 +438,10 @@ class UploadQueue {
 
     async uploadChunk(blob, index) {
         const formData = new FormData();
-        formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.webm');
+        formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.' + this.extension);
         formData.append('competition_id', this.competitionId);
         formData.append('chunk_number', (index + 1).toString());
-        formData.append('extension', 'webm');
+        formData.append('extension', this.extension);
 
         const uploadStart = performance.now();
 
@@ -596,6 +640,14 @@ class VodMsePlayer {
             throw new Error('No chunks available');
         }
 
+        // اختيار mimeType بناءً على extension
+        const ext = this.chunkManager.extension || 'webm';
+        const mimeType = ext === 'mp4' 
+            ? 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"'
+            : 'video/webm; codecs="vp8, opus"';
+        
+        console.log('[VodMsePlayer] Using format: ' + ext + ' (' + mimeType + ')');
+
         this.mediaSource = new MediaSource();
         this.videoElement.src = URL.createObjectURL(this.mediaSource);
 
@@ -603,7 +655,7 @@ class VodMsePlayer {
             this.mediaSource.addEventListener('sourceopen', resolve, { once: true });
         }.bind(this));
 
-        this.sourceBuffer = this.mediaSource.addSourceBuffer('video/webm; codecs="vp8, opus"');
+        this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
 
         for (let i = 0; i < this.chunks.length; i++) {
             await this.appendChunk(this.chunks[i]);

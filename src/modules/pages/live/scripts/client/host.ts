@@ -586,8 +586,14 @@ export function getHostScript(lang: Language): string {
                 ms.localStream.getAudioTracks().forEach(function(t) { canvasStream.addTrack(t); });
             }
             
+            // كشف أفضل صيغة (MP4 أولاً للتوافق مع Safari)
+            const formatInfo = window.detectBestMimeType();
+            const recordingMimeType = formatInfo.mimeType;
+            const recordingExtension = formatInfo.extension;
+            log('📹 Recording format: ' + recordingExtension + ' (' + recordingMimeType + ')', 'info');
+            
             mediaRecorder = new MediaRecorder(canvasStream, {
-                mimeType: 'video/webm;codecs=vp8,opus',
+                mimeType: recordingMimeType,
                 videoBitsPerSecond: currentQuality.bitrate,
                 audioBitsPerSecond: 128000
             });
@@ -636,10 +642,10 @@ export function getHostScript(lang: Language): string {
             }
             
             const formData = new FormData();
-            formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.webm');
+            formData.append('chunk', blob, 'chunk_' + String(index).padStart(4, '0') + '.' + recordingExtension);
             formData.append('competition_id', competitionId.toString());
             formData.append('chunk_number', (index + 1).toString());
-            formData.append('extension', 'webm');
+            formData.append('extension', recordingExtension);
             
             uploadStartTime = performance.now();
             
