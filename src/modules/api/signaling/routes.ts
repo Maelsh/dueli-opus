@@ -54,9 +54,9 @@ signalingRoutes.get('/ice-servers', async (c) => {
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun.cloudflare.com:3478' },
-        // TURN without auth (for testing)
-        { urls: turnUrl },
-        { urls: `${turnUrl}?transport=tcp` }
+        // TURN without auth (dummy credentials for browser compatibility)
+        { urls: turnUrl, username: 'user', credential: 'pass' },
+        { urls: `${turnUrl}?transport=tcp`, username: 'user', credential: 'pass' }
     ];
 
     return c.json({
