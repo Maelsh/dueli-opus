@@ -22,8 +22,8 @@ const signalingRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>()
  * - password: base64(hmac-sha1(secret, username))
  */
 async function generateTurnCredentials(secret: string, userId: string = 'dueli-user'): Promise<{ username: string, credential: string }> {
-    // Expire after 24 hours
-    const expiresAt = Math.floor(Date.now() / 1000) + 86400;
+    // Expire after 2 hours (max competition duration)
+    const expiresAt = Math.floor(Date.now() / 1000) + 7200;
     const username = `${expiresAt}:${userId}`;
 
     // Generate HMAC-SHA1 signature
@@ -48,16 +48,27 @@ async function generateTurnCredentials(secret: string, userId: string = 'dueli-u
  */
 signalingRoutes.get('/ice-servers', async (c) => {
     const turnUrl = c.env.TURN_URL || 'turn:maelsh.pro:3000';
+    const turnSecret = c.env.TURN_SECRET;
 
     const iceServers: any[] = [
         // Free STUN servers
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:stun.cloudflare.com:3478' },
-        // TURN with long-term credentials
-        { urls: turnUrl, username: 'dueli', credential: 'DueliTurn2024!' },
-        { urls: `${turnUrl}?transport=tcp`, username: 'dueli', credential: 'DueliTurn2024!' }
     ];
+
+    // Add TURN with dynamic credentials if secret is configured
+    if (turnSecret) {
+        try {
+            const { username, credential } = await generateTurnCredentials(turnSecret);
+            iceServers.push(
+                { urls: turnUrl, username, credential },
+                { urls: `${turnUrl}?transport=tcp`, username, credential }
+            );
+        } catch (error) {
+            console.error('Error generating TURN credentials:', error);
+        }
+    }
 
     return c.json({
         success: true,
