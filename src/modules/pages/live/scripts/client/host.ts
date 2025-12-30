@@ -79,6 +79,7 @@ export function getHostScript(lang: Language): string {
         let uploadStartTime = 0;
         let lastLatency = 0;
         let probeResults = null;
+        let recordingExtension = 'webm'; // سيتم تحديثه من detectBestMimeType
         
         // ===== Device Probing =====
         async function probeDevice() {
@@ -589,7 +590,7 @@ export function getHostScript(lang: Language): string {
             // كشف أفضل صيغة (MP4 أولاً للتوافق مع Safari)
             const formatInfo = window.detectBestMimeType();
             const recordingMimeType = formatInfo.mimeType;
-            const recordingExtension = formatInfo.extension;
+            recordingExtension = formatInfo.extension; // تحديث المتغير global
             log('📹 Recording format: ' + recordingExtension + ' (' + recordingMimeType + ')', 'info');
             
             mediaRecorder = new MediaRecorder(canvasStream, {
