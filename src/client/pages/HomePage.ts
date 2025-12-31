@@ -37,7 +37,7 @@ export class HomePage {
             const params: any = { limit: 24 };
             if (this.currentMainTab === 'live') params.status = 'live';
             else if (this.currentMainTab === 'recorded') params.status = 'recorded';
-            else if (this.currentMainTab === 'upcoming') params.status = 'pending';
+            else if (this.currentMainTab === 'upcoming') params.status = 'upcoming';
 
             // Check if upcoming tab should be visible (only for logged in users)
             const isUpcoming = this.currentMainTab === 'upcoming';
@@ -61,7 +61,7 @@ export class HomePage {
 
             if (this.currentSubTab !== 'all') {
                 // Category tab (dialogue/science/talents): Fetch each subcategory separately
-                const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'pending';
+                const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'upcoming';
                 const subcategories = CATEGORY_SUBCATEGORIES[this.currentSubTab] || [];
 
                 // Fetch all subcategories in parallel
@@ -85,7 +85,7 @@ export class HomePage {
                 });
             } else {
                 // 'All' tab: Fetch 4 separate datasets for distinct sections
-                const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'pending';
+                const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'upcoming';
 
                 const [recommendedRes, dialogueRes, scienceRes, talentsRes] = await Promise.all([
                     CompetitionService.list({ status: statusParam, limit: 15 }),
@@ -199,7 +199,7 @@ export class HomePage {
 
             if (this.currentMainTab === 'live') params.status = 'live';
             else if (this.currentMainTab === 'recorded') params.status = 'recorded';
-            else if (this.currentMainTab === 'upcoming') params.status = 'pending';
+            else if (this.currentMainTab === 'upcoming') params.status = 'upcoming';
 
             if (this.currentSubTab !== 'all') {
                 params.category = this.currentSubTab;

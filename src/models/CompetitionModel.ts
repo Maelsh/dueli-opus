@@ -12,7 +12,7 @@ import type { Competition, CompetitionStatus } from '../config/types';
  * Competition filter options
  */
 export interface CompetitionFilters {
-    status?: CompetitionStatus | 'recorded';
+    status?: CompetitionStatus | 'recorded' | 'upcoming';
     category?: string | number;
     subcategory?: string;
     country?: string;
@@ -130,11 +130,17 @@ export class CompetitionModel extends BaseModel<Competition> {
                 query += ' AND c.status = ?';
                 params.push('live');
             } else if (filters.status === 'pending') {
+                // pending فقط (بانتظار خصم)
                 query += ' AND c.status = ?';
                 params.push('pending');
             } else if (filters.status === 'accepted') {
+                // accepted فقط (مجدولة)
                 query += ' AND c.status = ?';
                 params.push('accepted');
+            } else if (filters.status === 'upcoming') {
+                // upcoming = pending + accepted (اللاحقة: فورية ومجدولة)
+                query += ' AND (c.status = ? OR c.status = ?)';
+                params.push('pending', 'accepted');
             }
         }
 
