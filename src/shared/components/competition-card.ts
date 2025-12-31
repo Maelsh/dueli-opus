@@ -29,6 +29,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
 
   const isLive = item.status === 'live';
   const isPending = item.status === 'pending';
+  const isAccepted = item.status === 'accepted';
 
   // Format date/time
   const date = item.scheduled_at || item.started_at || item.created_at;
@@ -102,7 +103,8 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <div class="absolute top-3 ${rtl ? 'right-3' : 'left-3'} z-20">
               ${isLive ? `<span class="badge-live shadow-md"><span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>${tr.status_live}</span>` :
       isPending ? `<span class="badge-pending shadow-md">${tr.status_pending}</span>` :
-        `<span class="badge-recorded shadow-md"><i class="fas fa-play text-xs"></i>${tr.recorded}</span>`}
+        isAccepted ? `<span class="px-2.5 py-1 rounded-full bg-blue-500 text-white text-xs font-bold shadow-md"><i class="fas fa-check mr-1"></i>${tr.status_accepted || 'Ready'}</span>` :
+          `<span class="badge-recorded shadow-md"><i class="fas fa-play text-xs"></i>${tr.recorded}</span>`}
             </div>
             
             <!-- Date/Time in top right corner -->
@@ -142,13 +144,13 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
           </a>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-gray-500 font-medium whitespace-nowrap overflow-hidden">
             <a href="/profile/${item.creator_username || item.creator_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" onclick="event.stopPropagation()">
-               <img src="${item.creator_avatar || ''}" class="w-4 h-4 rounded-full bg-gray-200" onerror="this.style.display='none'">
-               <span class="truncate max-w-[80px]">${item.creator_name}</span>
+               <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" class="w-4 h-4 rounded-full bg-gray-200" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">
+               <span class="truncate max-w-[80px]">${item.creator_name || 'User'}</span>
             </a>
             <span class="mx-0.5 text-gray-300">vs</span>
              ${item.opponent_name ?
       `<a href="/profile/${item.opponent_username || item.opponent_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" onclick="event.stopPropagation()">
-                <img src="${item.opponent_avatar || ''}" class="w-4 h-4 rounded-full bg-gray-200" onerror="this.style.display='none'">
+                <img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" class="w-4 h-4 rounded-full bg-gray-200" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">
                 <span class="truncate max-w-[80px]">${item.opponent_name}</span>
               </a>` :
       `<span class="text-gray-400">?</span>`

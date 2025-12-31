@@ -89,6 +89,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       function renderCompetition(comp) {
         const isLive = comp.status === 'live';
         const isPending = comp.status === 'pending';
+        const isAccepted = comp.status === 'accepted';
+        const isCompleted = comp.status === 'completed';
         const isCreator = window.currentUser && window.currentUser.id === comp.creator_id;
         const isOpponent = window.currentUser && window.currentUser.id === comp.opponent_id;
         const hasRequested = comp.requests?.some(r => r.requester_id === window.currentUser?.id && r.status === 'pending');
@@ -112,10 +114,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   <span class="\${
                     isLive ? 'badge-live' :
                     isPending ? 'badge-pending' :
+                    isAccepted ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-bold' :
                     'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold'
                   } flex items-center gap-1">
                     \${isLive ? '<span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>' : ''}
-                    \${isLive ? tr.status_live : isPending ? tr.status_pending : tr.status_completed}
+                    \${isLive ? tr.status_live : isPending ? tr.status_pending : isAccepted ? (tr.status_accepted || 'Ready') : tr.status_completed}
                   </span>
                   <span class="text-sm text-gray-500">
                     <i class="\${comp.category_icon} mr-1"></i>

@@ -107,7 +107,8 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
                 container.innerHTML = '<div class="text-center py-12"><i class="fas fa-spinner fa-spin text-4xl text-purple-400"></i></div>';
                 
                 try {
-                    let url = '/api/competitions?creator=' + window.currentUser.id;
+                    // استخدام user= لجلب المنافسات التي يكون فيها المستخدم creator أو opponent
+                    let url = '/api/competitions?user=' + window.currentUser.id;
                     if (currentTab !== 'all') {
                         url += '&status=' + currentTab;
                     }

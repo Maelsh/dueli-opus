@@ -115,7 +115,10 @@ export class AuthService {
                 const userName = document.getElementById('userName');
                 const userEmail = document.getElementById('userEmail');
 
-                if (userAvatar) userAvatar.src = State.currentUser.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user';
+                if (userAvatar) {
+                    const avatarSeed = State.currentUser.display_name || State.currentUser.username || 'user';
+                    userAvatar.src = State.currentUser.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(avatarSeed);
+                }
                 if (userName) userName.textContent = State.currentUser.display_name || State.currentUser.username;
                 if (userEmail) userEmail.textContent = State.currentUser.email;
             }

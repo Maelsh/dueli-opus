@@ -18,6 +18,7 @@ export interface CompetitionFilters {
     country?: string;
     language?: string;
     creatorId?: number;
+    userId?: number; // جلب منافسات المستخدم كـ creator أو opponent
     search?: string;
     limit?: number;
     offset?: number;
@@ -162,6 +163,12 @@ export class CompetitionModel extends BaseModel<Competition> {
         if (filters.creatorId) {
             query += ' AND c.creator_id = ?';
             params.push(filters.creatorId);
+        }
+
+        // User filter (creator OR opponent)
+        if (filters.userId) {
+            query += ' AND (c.creator_id = ? OR c.opponent_id = ?)';
+            params.push(filters.userId, filters.userId);
         }
 
         // Search filter
