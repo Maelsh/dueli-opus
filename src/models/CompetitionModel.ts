@@ -123,7 +123,7 @@ export class CompetitionModel extends BaseModel<Competition> {
 
         // Status filter
         if (filters.status) {
-            if (filters.status === 'recorded') {
+            if (filters.status === 'recorded' || filters.status === 'completed') {
                 query += ' AND c.status = ?';
                 params.push('completed');
             } else if (filters.status === 'live') {
@@ -132,6 +132,9 @@ export class CompetitionModel extends BaseModel<Competition> {
             } else if (filters.status === 'pending') {
                 query += ' AND c.status = ?';
                 params.push('pending');
+            } else if (filters.status === 'accepted') {
+                query += ' AND c.status = ?';
+                params.push('accepted');
             }
         }
 
