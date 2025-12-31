@@ -788,15 +788,22 @@ class SmartVodPlayer {
      * حساب مدة كل chunk والمدة الإجمالية
      */
     calculateDurations() {
-        const defaultDuration = this.playlist.chunk_duration || 5; // ثواني
+        // استخدام total_duration من playlist إذا موجود
+        if (this.playlist.total_duration && this.playlist.total_duration > 0) {
+            this.totalDuration = this.playlist.total_duration;
+            // توزيع المدة على الـ chunks بالتساوي
+            const perChunk = this.totalDuration / this.chunks.length;
+            this.chunkDurations = this.chunks.map(function() { return perChunk; });
+        } else {
+            // حساب من duration كل chunk
+            const defaultDuration = this.playlist.chunk_duration || 10; // ثواني
+            this.chunkDurations = this.chunks.map(function(chunk) {
+                return chunk.duration || defaultDuration;
+            });
+            this.totalDuration = this.chunkDurations.reduce(function(sum, d) { return sum + d; }, 0);
+        }
         
-        this.chunkDurations = this.chunks.map(function(chunk) {
-            return chunk.duration || defaultDuration;
-        });
-        
-        this.totalDuration = this.chunkDurations.reduce(function(sum, d) { return sum + d; }, 0);
-        
-        testLog('⏱️ Total duration: ' + Math.round(this.totalDuration) + 's', 'info');
+        testLog('⏱️ Total duration: ' + Math.round(this.totalDuration) + 's (' + this.chunks.length + ' chunks)', 'info');
     }
 
     /**
@@ -835,7 +842,28 @@ class SmartVodPlayer {
             this.videoElement.currentTime = Math.max(0, timeInChunk);
         }
         
-        await this.videoElement.play();
+        // حل مشكلة autoplay policy - البدء muted ثم محاولة unmute
+        this.videoElement.muted = true;
+        try {
+            await this.videoElement.play();
+            // محاولة unmute بعد بدء التشغيل
+            setTimeout(function() {
+                this.videoElement.muted = false;
+            }.bind(this), 100);
+        } catch (e) {
+            testLog('⚠️ Autoplay blocked, waiting for user interaction', 'warn');
+            // إضافة listener لأول تفاعل
+            const self = this;
+            const playOnInteraction = function() {
+                self.videoElement.play().then(function() {
+                    self.videoElement.muted = false;
+                });
+                document.removeEventListener('click', playOnInteraction);
+                document.removeEventListener('touchstart', playOnInteraction);
+            };
+            document.addEventListener('click', playOnInteraction, { once: true });
+            document.addEventListener('touchstart', playOnInteraction, { once: true });
+        }
         
         // عند انتهاء الـ chunk، انتقل للتالية
         this.videoElement.onended = function() {

@@ -55,21 +55,36 @@ export function getViewerScript(lang: Language): string {
                 updateStatus('${tr.loading}...', 'yellow');
                 log('🔍 Checking competition #' + competitionId + '...', 'info');
                 
-                // فحص حالة المنافسة من playlist
-                const res = await fetch(FFMPEG_URL + '/playlist.php?id=' + competitionId);
-                if (!res.ok) {
+                // 1. جلب حالة المنافسة من API الرئيسي (قاعدة البيانات)
+                const compRes = await fetch('/api/competitions/' + competitionId);
+                if (!compRes.ok) {
                     throw new Error('Competition not found');
                 }
+                const compData = await compRes.json();
+                const competition = compData.data || compData;
                 
-                const data = await res.json();
+                log('📋 Competition: ' + competition.title, 'info');
+                log('📊 Status: ' + competition.status + ', Stream: ' + (competition.stream_status || 'idle'), 'info');
                 
-                // تحديد النوع: live أو VOD
-                if (data.is_live) {
-                    log('🔴 Live stream detected!', 'info');
+                // تحديد النوع من حالة المنافسة في قاعدة البيانات
+                const isLive = competition.status === 'live' || competition.stream_status === 'live';
+                
+                if (isLive) {
+                    log('🔴 Live stream!', 'success');
                     await startLiveStream(competitionId);
+                } else if (competition.status === 'completed' || competition.stream_status === 'ready') {
+                    log('📼 Recorded video', 'success');
+                    
+                    // 2. جلب playlist من سيرفر البث للحصول على chunks
+                    const playlistRes = await fetch(FFMPEG_URL + '/playlist.php?id=' + competitionId);
+                    if (!playlistRes.ok) {
+                        throw new Error('Video not available');
+                    }
+                    const playlistData = await playlistRes.json();
+                    await loadVOD(competitionId, playlistData);
                 } else {
-                    log('📼 Recorded video detected (' + data.chunks.length + ' chunks)', 'info');
-                    await loadVOD(competitionId, data);
+                    log('⏳ Competition not started yet', 'warn');
+                    updateStatus('${tr.waiting}', 'yellow');
                 }
                 
             } catch (error) {

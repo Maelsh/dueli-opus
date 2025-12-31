@@ -691,6 +691,8 @@ export function getHostScript(lang: Language): string {
         
         window.disconnect = async function() {
             log('${tr.disconnect}...');
+            
+            // إيقاف التسجيل والاتصال
             if (segmentInterval) clearInterval(segmentInterval);
             if (drawInterval) clearInterval(drawInterval);
             if (mediaRecorder) mediaRecorder.stop();
@@ -702,6 +704,29 @@ export function getHostScript(lang: Language): string {
             ms.pollingInterval = null;
             document.getElementById('localVideo').srcObject = null;
             document.getElementById('remoteVideo').srcObject = null;
+            
+            // إرسال إشارة انتهاء للـ API الرئيسي (قاعدة البيانات)
+            const urlParams = new URLSearchParams(window.location.search);
+            const compId = urlParams.get('comp');
+            if (compId) {
+                try {
+                    // تحديث حالة المنافسة في قاعدة البيانات الرئيسية
+                    const res = await fetch('/api/competitions/' + compId + '/end', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        log('✅ Competition ended successfully', 'success');
+                    } else if (data.error) {
+                        log('⚠️ ' + data.error, 'warn');
+                    }
+                } catch (e) {
+                    log('⚠️ Could not update competition status: ' + e.message, 'warn');
+                }
+            }
+            
             updateStatus('${tr.disconnect}', 'gray');
             log('${tr.disconnect} ✓', 'success');
             updateConnectionButtons(false);
