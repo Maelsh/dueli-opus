@@ -316,6 +316,20 @@ export function getHostScript(lang: Language): string {
                     const startData = await startRes.json();
                     if (startData.success) {
                         log('✅ Competition is now LIVE!', 'success');
+                        
+                        // ⏰ إنهاء المنافسة تلقائياً بعد ساعتين
+                        const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+                        window._autoEndTimeout = setTimeout(function() {
+                            log('⏰ Competition reached 2-hour limit - auto-ending...', 'warn');
+                            if (typeof window.disconnect === 'function') {
+                                window.disconnect();
+                            }
+                            // توجيه المستخدم لصفحة المنافسة
+                            setTimeout(function() {
+                                window.location.href = '/competition/' + compId + '?lang=' + (new URLSearchParams(window.location.search).get('lang') || 'en');
+                            }, 2000);
+                        }, TWO_HOURS_MS);
+                        log('⏰ Auto-end scheduled in 2 hours', 'info');
                     } else if (startData.error) {
                         log('⚠️ ' + startData.error, 'warn');
                     }
@@ -713,6 +727,12 @@ export function getHostScript(lang: Language): string {
         window.disconnect = async function() {
             log('${tr.disconnect}...');
             
+            // إلغاء timer الإنهاء التلقائي
+            if (window._autoEndTimeout) {
+                clearTimeout(window._autoEndTimeout);
+                window._autoEndTimeout = null;
+            }
+            
             // إيقاف التسجيل والاتصال
             if (segmentInterval) clearInterval(segmentInterval);
             if (drawInterval) clearInterval(drawInterval);
@@ -729,6 +749,8 @@ export function getHostScript(lang: Language): string {
             // إرسال إشارة انتهاء للـ API الرئيسي (قاعدة البيانات)
             const urlParams = new URLSearchParams(window.location.search);
             const compId = urlParams.get('comp');
+            const lang = urlParams.get('lang') || 'en';
+            
             if (compId) {
                 try {
                     // تحديث حالة المنافسة في قاعدة البيانات الرئيسية
@@ -751,6 +773,14 @@ export function getHostScript(lang: Language): string {
             updateStatus('${tr.disconnect}', 'gray');
             log('${tr.disconnect} ✓', 'success');
             updateConnectionButtons(false);
+            
+            // توجيه المستخدم لصفحة المنافسة بعد الإنهاء
+            if (compId) {
+                log('📍 Redirecting to competition page...', 'info');
+                setTimeout(function() {
+                    window.location.href = '/competition/' + compId + '?lang=' + lang;
+                }, 2000);
+            }
         }
         
         // Set mobile alternative callback for translated messages

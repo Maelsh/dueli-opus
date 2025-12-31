@@ -92,8 +92,8 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
 
               <div class="flex flex-col items-center">
                 <div class="competitor-avatar p-0.5 transform hover:scale-105 transition-transform duration-300">
-                  ${item.opponent_avatar ?
-      `<img src="${item.opponent_avatar}" alt="" class="w-full h-full rounded-full" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-bold border-2 border-white/20\\'>?</div>'">` :
+                  ${item.opponent_name ?
+      `<img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" alt="" class="w-full h-full rounded-full" loading="lazy" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">` :
       `<div class="w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-bold border-2 border-white/20 animate-pulse">?</div>`
     }
                 </div>
