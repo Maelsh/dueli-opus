@@ -149,7 +149,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                                             </div>
                                             <div class="p-4">
                                                 <h3 class="font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-purple-600 transition-colors">${comp.title}</h3>
-                                                <p class="text-sm text-gray-500 mt-1">\${comp.views || 0} \${tr.viewers || 'views'}</p>
+                                                <p class="text-sm text-gray-500 mt-1">${comp.total_views || comp.views || 0} ${tr.viewers || 'views'}</p>
                                             </div>
                                         </a>
                                     `).join('')}
