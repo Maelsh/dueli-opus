@@ -1,6 +1,0 @@
-[22-Dec-2025 11:50:48 UTC] PHP Warning:  Undefined variable $log_file in /home/maelshpr/ffmpeg/finalize.php on line 96
-[22-Dec-2025 11:50:48 UTC] PHP Fatal error:  Uncaught ValueError: Path cannot be empty in /home/maelshpr/ffmpeg/finalize.php:96
-Stack trace:
-#0 /home/maelshpr/ffmpeg/finalize.php(96): file_put_contents()
-#1 {main}
-  thrown in /home/maelshpr/ffmpeg/finalize.php on line 96
