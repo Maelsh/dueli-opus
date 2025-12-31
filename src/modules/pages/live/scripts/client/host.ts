@@ -303,6 +303,27 @@ export function getHostScript(lang: Language): string {
                 return;
             }
             
+            // تحديث حالة المنافسة في قاعدة البيانات إلى 'live'
+            const urlParams = new URLSearchParams(window.location.search);
+            const compId = urlParams.get('comp');
+            if (compId) {
+                try {
+                    const startRes = await fetch('/api/competitions/' + compId + '/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    const startData = await startRes.json();
+                    if (startData.success) {
+                        log('✅ Competition is now LIVE!', 'success');
+                    } else if (startData.error) {
+                        log('⚠️ ' + startData.error, 'warn');
+                    }
+                } catch (e) {
+                    log('⚠️ Could not update competition status: ' + e.message, 'warn');
+                }
+            }
+            
             // Fetch ICE servers dynamically
             const dynamicIceServers = await window.fetchIceServers();
             
