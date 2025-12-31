@@ -713,6 +713,7 @@ class SmartVodPlayer {
     constructor(options) {
         this.videoElement = options.videoElement;
         this.competitionId = options.competitionId;
+        this.playlistData = options.playlistData || null; // بيانات محملة مسبقاً (اختياري)
         this.ffmpegUrl = options.ffmpegUrl || '${FFMPEG_URL}';
         this.onProgress = options.onProgress;
         this.onReady = options.onReady;
@@ -738,14 +739,18 @@ class SmartVodPlayer {
      */
     async start() {
         try {
-            testLog('📥 Loading playlist...', 'info');
+            // 1. استخدام البيانات المحملة مسبقاً أو جلب playlist جديد
+            if (this.playlistData) {
+                testLog('📥 Using pre-loaded playlist...', 'info');
+                this.playlist = this.playlistData;
+            } else {
+                testLog('📥 Loading playlist...', 'info');
+                const playlistUrl = this.ffmpegUrl + '/playlist.php?id=' + this.competitionId;
+                const res = await fetch(playlistUrl);
+                if (!res.ok) throw new Error('Failed to load playlist');
+                this.playlist = await res.json();
+            }
             
-            // 1. جلب playlist
-            const playlistUrl = this.ffmpegUrl + '/playlist.php?id=' + this.competitionId;
-            const res = await fetch(playlistUrl);
-            if (!res.ok) throw new Error('Failed to load playlist');
-            
-            this.playlist = await res.json();
             this.chunks = this.playlist.chunks || [];
             this.extension = this.playlist.extension || 'webm';
             
@@ -1037,45 +1042,62 @@ class SmartVodPlayer {
         }
         
         testLog('🔄 Converting WebM to MP4...', 'info');
-        
-        // تحميل FFmpeg.wasm
-        if (typeof FFmpeg === 'undefined') {
-            testLog('📦 Loading FFmpeg.wasm...', 'info');
-            
-            // إضافة script إذا لم يكن موجوداً
-            if (!document.getElementById('ffmpeg-script')) {
-                const script = document.createElement('script');
-                script.id = 'ffmpeg-script';
-                script.src = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.min.js';
-                document.head.appendChild(script);
-                
-                await new Promise(function(resolve, reject) {
-                    script.onload = resolve;
-                    script.onerror = reject;
-                });
-            }
-        }
+        testLog('⚠️ This may take a while and use significant memory', 'warn');
         
         try {
-            const { FFmpeg } = window.FFmpegWASM || window;
+            onProgress && onProgress('loading', 0);
+            
+            // تحميل FFmpeg.wasm 0.12 من CDN
+            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+            
+            // تحميل الـ script إذا لم يكن محملاً
+            if (!window.FFmpegWASM) {
+                testLog('📦 Loading FFmpeg.wasm core...', 'info');
+                
+                // تحميل FFmpeg module
+                const { FFmpeg } = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/+esm');
+                window.FFmpegWASM = { FFmpeg };
+            }
+            
+            const { FFmpeg } = window.FFmpegWASM;
             const ffmpeg = new FFmpeg();
             
-            onProgress && onProgress('loading', 0);
-            await ffmpeg.load();
+            // تحميل core files
+            testLog('📦 Loading FFmpeg core files...', 'info');
+            await ffmpeg.load({
+                coreURL: baseURL + '/ffmpeg-core.js',
+                wasmURL: baseURL + '/ffmpeg-core.wasm',
+            });
+            
+            testLog('✅ FFmpeg loaded!', 'success');
             
             // كتابة ملف الإدخال
+            onProgress && onProgress('converting', 30);
             const webmBlob = await this.mergeChunks();
             const webmData = new Uint8Array(await webmBlob.arrayBuffer());
             await ffmpeg.writeFile('input.webm', webmData);
             
+            testLog('🔄 Converting... (this may take a while)', 'info');
             onProgress && onProgress('converting', 50);
             
-            // تحويل
-            await ffmpeg.exec(['-i', 'input.webm', '-c:v', 'libx264', '-c:a', 'aac', 'output.mp4']);
+            // تحويل - استخدام copy للسرعة إذا ممكن، وإلا libx264
+            await ffmpeg.exec([
+                '-i', 'input.webm',
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-crf', '23',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                'output.mp4'
+            ]);
             
             // قراءة الناتج
+            onProgress && onProgress('finishing', 90);
             const mp4Data = await ffmpeg.readFile('output.mp4');
             const mp4Blob = new Blob([mp4Data], { type: 'video/mp4' });
+            
+            // تنظيف الذاكرة
+            ffmpeg.terminate();
             
             onProgress && onProgress('done', 100);
             
@@ -1085,6 +1107,7 @@ class SmartVodPlayer {
             
         } catch (error) {
             testLog('❌ Conversion failed: ' + error.message, 'error');
+            testLog('💡 Tip: Try downloading the WebM file instead', 'info');
             throw error;
         }
     }

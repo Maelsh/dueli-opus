@@ -833,8 +833,11 @@
   .min-w-0 {
     min-width: calc(var(--spacing) * 0);
   }
-  .min-w-24 {
-    min-width: calc(var(--spacing) * 24);
+  .min-w-12 {
+    min-width: calc(var(--spacing) * 12);
+  }
+  .min-w-20 {
+    min-width: calc(var(--spacing) * 20);
   }
   .flex-1 {
     flex: 1;
