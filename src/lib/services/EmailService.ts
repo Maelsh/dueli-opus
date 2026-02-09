@@ -1,8 +1,8 @@
 /**
  * Email Service - خدمة البريد الإلكتروني
  * 
- * Handles all email sending functionality using Resend API
- * يتعامل مع جميع وظائف إرسال البريد الإلكتروني باستخدام Resend API
+ * Handles all email sending functionality using your own iFastNet hosting
+ * يتعامل مع جميع وظائف إرسال البريد الإلكتروني باستخدام استضافتك الخاصة
  */
 
 import { translations, getUILanguage, isRTL, Language } from '../../i18n';
@@ -18,38 +18,45 @@ export interface EmailOptions {
 
 /**
  * Email Service Class
- * Encapsulates all email operations with Resend API
+ * Encapsulates all email operations with your iFastNet SMTP endpoint
  */
 export class EmailService {
     private readonly apiKey: string;
-    private readonly apiUrl = 'https://api.resend.com/emails';
-    private readonly fromAddress = 'Dueli <onboarding@resend.dev>';
+    // غيّر هذا الرابط لرابط سكربت PHP على استضافتك
+    private readonly apiUrl: string;
+    private readonly fromName = 'Dueli';
+    // غيّر هذا لإيميلك على الاستضافة
+    private readonly fromEmail: string;
 
-    constructor(apiKey: string) {
+    constructor(apiKey: string, apiUrl?: string, fromEmail?: string) {
         this.apiKey = apiKey;
+        // رابط API على استضافتك - غيّره حسب الدومين الخاص بك
+        this.apiUrl = apiUrl || 'https://your-subdomain.yourdomain.com/send-email.php';
+        this.fromEmail = fromEmail || 'noreply@yourdomain.com';
     }
 
     /**
-     * Send email via Resend API
+     * Send email via your iFastNet SMTP API
      */
     private async send(options: EmailOptions): Promise<any> {
         const response = await fetch(this.apiUrl, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${this.apiKey}`,
+                'X-API-Key': this.apiKey,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                from: this.fromAddress,
-                to: [options.to],
+                to: options.to,
                 subject: options.subject,
-                html: options.html
+                html: options.html,
+                fromName: this.fromName,
+                fromEmail: this.fromEmail
             })
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Resend API Error:', errorText);
+            console.error('Email API Error:', errorText);
             throw new Error(`Failed to send email: ${errorText}`);
         }
 

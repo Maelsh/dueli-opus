@@ -13,7 +13,13 @@
 /** Environment bindings for Cloudflare Workers */
 export type Bindings = {
   DB: D1Database;
-  RESEND_API_KEY: string;
+  // Email Configuration - iFastNet SMTP API
+  EMAIL_API_KEY: string;        // Secret key for your PHP email endpoint
+  EMAIL_API_URL: string;        // URL to your send-email.php script
+  EMAIL_FROM?: string;          // From email address (optional, has default)
+  // Legacy (deprecated, but kept for reference)
+  RESEND_API_KEY?: string;
+  // OAuth Configuration
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   FACEBOOK_CLIENT_ID: string;

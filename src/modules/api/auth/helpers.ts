@@ -13,17 +13,19 @@ import { EmailService } from '../../../lib/services/EmailService';
 export const hashPassword = CryptoUtils.hashPassword.bind(CryptoUtils);
 export const generateState = CryptoUtils.generateState.bind(CryptoUtils);
 
-// Email sending - now uses EmailService class
+// Email sending - now uses EmailService class with iFastNet SMTP
 // These functions are kept for backward compatibility with existing route handlers
 export async function sendVerificationEmail(
   email: string,
   token: string,
   name: string,
   lang: string,
-  resendApiKey: string,
-  origin: string
+  emailApiKey: string,
+  origin: string,
+  emailApiUrl?: string,
+  emailFrom?: string
 ): Promise<any> {
-  const emailService = new EmailService(resendApiKey);
+  const emailService = new EmailService(emailApiKey, emailApiUrl, emailFrom);
   return emailService.sendVerificationEmail(email, token, name, lang, origin);
 }
 
@@ -31,9 +33,11 @@ export async function sendPasswordResetEmail(
   email: string,
   resetCode: string,
   lang: string,
-  resendApiKey: string
+  emailApiKey: string,
+  emailApiUrl?: string,
+  emailFrom?: string
 ): Promise<any> {
-  const emailService = new EmailService(resendApiKey);
+  const emailService = new EmailService(emailApiKey, emailApiUrl, emailFrom);
   return emailService.sendPasswordResetEmail(email, resetCode, lang);
 }
 

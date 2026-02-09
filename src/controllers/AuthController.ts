@@ -23,10 +23,10 @@ export class AuthController extends BaseController {
      */
     async register(c: AppContext) {
         try {
-            const { DB, RESEND_API_KEY } = c.env;
+            const { DB, EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM } = c.env;
 
-            if (!RESEND_API_KEY) {
-                console.error('Missing RESEND_API_KEY');
+            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
+                console.error('Missing EMAIL_API_KEY or EMAIL_API_URL');
                 return this.error(c, 'Server configuration error', 500);
             }
 
@@ -83,7 +83,7 @@ export class AuthController extends BaseController {
 
             // Send verification email
             const origin = c.req.header('origin') || `https://${c.req.header('host')}`;
-            const emailService = new EmailService(RESEND_API_KEY);
+            const emailService = new EmailService(EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM);
             await emailService.sendVerificationEmail(
                 body.email,
                 verificationToken,
@@ -137,9 +137,9 @@ export class AuthController extends BaseController {
      */
     async resendVerification(c: AppContext) {
         try {
-            const { DB, RESEND_API_KEY } = c.env;
+            const { DB, EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM } = c.env;
 
-            if (!RESEND_API_KEY) {
+            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
                 return this.error(c, 'Server configuration error', 500);
             }
 
@@ -162,7 +162,7 @@ export class AuthController extends BaseController {
             await userModel.setVerificationToken(user.id, verificationToken, tokenExpiry);
 
             const origin = c.req.header('origin') || `https://${c.req.header('host')}`;
-            const emailService = new EmailService(RESEND_API_KEY);
+            const emailService = new EmailService(EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM);
             await emailService.sendVerificationEmail(
                 body.email,
                 verificationToken,
@@ -292,9 +292,9 @@ export class AuthController extends BaseController {
      */
     async forgotPassword(c: AppContext) {
         try {
-            const { DB, RESEND_API_KEY } = c.env;
+            const { DB, EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM } = c.env;
 
-            if (!RESEND_API_KEY) {
+            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
                 return this.error(c, 'Server configuration error', 500);
             }
 
@@ -316,7 +316,7 @@ export class AuthController extends BaseController {
 
             await userModel.setResetToken(user.id, resetCode, expiresAt);
 
-            const emailService = new EmailService(RESEND_API_KEY);
+            const emailService = new EmailService(EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM);
             await emailService.sendPasswordResetEmail(
                 body.email,
                 resetCode,

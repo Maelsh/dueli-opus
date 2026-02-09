@@ -88,8 +88,8 @@ export const ICE_SERVERS = [
 export async function fetchIceServers(): Promise<RTCIceServer[]> {
     try {
         const response = await fetch('/api/signaling/ice-servers');
-        const data = await response.json();
-        if (data.success && data.data.iceServers) {
+        const data = await response.json() as { success?: boolean; data?: { iceServers?: RTCIceServer[] } };
+        if (data.success && data.data?.iceServers) {
             return data.data.iceServers;
         }
     } catch (error) {

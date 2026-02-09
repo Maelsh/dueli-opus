@@ -77,22 +77,23 @@ export function getLoginModal(lang: Language): string {
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Outlook</span>
             </button>
 
-            <button onclick="loginWith('facebook')" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <!-- Hidden social buttons - قد تُفعَّل لاحقاً -->
+            <button onclick="loginWith('facebook')" style="display:none;" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <i class="fab fa-facebook text-xl text-[#1877F2]"></i>
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Facebook</span>
             </button>
             
-            <button onclick="loginWith('twitter')" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <button onclick="loginWith('twitter')" style="display:none;" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <i class="fab fa-x-twitter text-xl text-gray-800 dark:text-white"></i>
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">X</span>
             </button>
 
-            <button onclick="loginWith('tiktok')" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <button onclick="loginWith('tiktok')" style="display:none;" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <i class="fab fa-tiktok text-xl text-black dark:text-white"></i>
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">TikTok</span>
             </button>
 
-            <button onclick="loginWith('snapchat')" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <button onclick="loginWith('snapchat')" style="display:none;" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <i class="fab fa-snapchat text-xl text-[#FFFC00] drop-shadow-sm"></i>
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Snapchat</span>
             </button>
