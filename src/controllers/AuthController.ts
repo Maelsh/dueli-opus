@@ -23,19 +23,14 @@ export class AuthController extends BaseController {
      */
     async register(c: AppContext) {
         try {
-            console.log('[Register] Step 1: Getting environment variables');
             const { DB, EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM } = c.env;
-
-            console.log('[Register] EMAIL_API_URL:', EMAIL_API_URL ? 'SET' : 'MISSING');
-            console.log('[Register] EMAIL_API_KEY:', EMAIL_API_KEY ? 'SET' : 'MISSING');
-            console.log('[Register] EMAIL_FROM:', EMAIL_FROM || 'NOT SET');
 
             if (!EMAIL_API_KEY || !EMAIL_API_URL) {
                 console.error('Missing EMAIL_API_KEY or EMAIL_API_URL');
                 return this.error(c, 'Server configuration error', 500);
             }
 
-            console.log('[Register] Step 2: Parsing request body');
+
             const body = await this.getBody<{
                 name: string;
                 email: string;
@@ -44,10 +39,7 @@ export class AuthController extends BaseController {
                 language?: string;
             }>(c);
 
-            console.log('[Register] Received body:', JSON.stringify(body));
-
             if (!body?.name || !body?.email || !body?.password) {
-                console.log('[Register] Validation failed - missing fields');
                 return this.validationError(c, this.t('auth_all_fields_required', c));
             }
 
@@ -55,14 +47,14 @@ export class AuthController extends BaseController {
                 return this.validationError(c, this.t('password_min_length', c));
             }
 
-            console.log('[Register] Step 3: Checking if email exists');
+
             const userModel = new UserModel(DB);
 
             if (await userModel.emailExists(body.email)) {
                 return this.error(c, this.t('auth_email_exists', c));
             }
 
-            console.log('[Register] Step 4: Generating username');
+
             const baseUsername = body.name.toLowerCase().replace(/[^a-z0-9]/g, '');
             let username = baseUsername;
             let counter = 1;
@@ -70,7 +62,7 @@ export class AuthController extends BaseController {
                 username = `${baseUsername}${counter++}`;
             }
 
-            console.log('[Register] Step 5: Creating user');
+
             const passwordHash = await CryptoUtils.hashPassword(body.password);
             const verificationToken = CryptoUtils.generateToken();
             const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -86,9 +78,7 @@ export class AuthController extends BaseController {
                 verification_token_expires: tokenExpiry
             });
 
-            console.log('[Register] Step 6: User created, sending verification email');
             const origin = c.req.header('origin') || `https://${c.req.header('host')}`;
-            console.log('[Register] Origin:', origin);
 
             const emailService = new EmailService(EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM);
 
@@ -100,7 +90,7 @@ export class AuthController extends BaseController {
                     this.getLanguage(c),
                     origin
                 );
-                console.log('[Register] Step 7: Verification email sent successfully');
+
             } catch (emailError) {
                 console.error('[Register] Email sending failed:', emailError);
                 // User was created but email failed - still return success but log error
@@ -115,7 +105,6 @@ export class AuthController extends BaseController {
             }, 201);
         } catch (error) {
             console.error('[Register] Error:', error);
-            console.error('[Register] Error stack:', (error as Error).stack);
             return this.serverError(c, error as Error);
         }
     }

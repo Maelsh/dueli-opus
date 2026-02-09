@@ -70,6 +70,7 @@ export class EmailService {
         const rtl = isRTL(lang);
         const dir = rtl ? 'rtl' : 'ltr';
         const align = rtl ? 'right' : 'left';
+        const logoUrl = 'https://project-8e7c178d.pages.dev/static/dueli-icon.png';
 
         return `
 <!DOCTYPE html>
@@ -94,19 +95,20 @@ export class EmailService {
                     <!-- Header with Gradient -->
                     <tr>
                         <td style="background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #f59e0b 100%); padding: 40px 30px; text-align: center;">
-                            <!-- Logo -->
+                            <!-- Logo Image -->
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                                 <tr>
                                     <td align="center">
-                                        <div style="width: 70px; height: 70px; background-color: rgba(255,255,255,0.2); border-radius: 50%; display: inline-block; line-height: 70px; margin-bottom: 15px;">
-                                            <span style="font-size: 36px; color: #ffffff; font-weight: bold;">D</span>
-                                        </div>
+                                        <img src="${logoUrl}" alt="Dueli Logo" width="80" height="80" style="display: block; border: 0; margin-bottom: 15px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);" />
                                     </td>
                                 </tr>
                                 <tr>
                                     <td align="center">
-                                        <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">DUELI</h1>
-                                        <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px; letter-spacing: 1px;">${rtl ? 'منصة المنافسات والحوارات' : 'Competition & Dialogue Platform'}</p>
+                                        <!-- Gradient Text Effect for Dueli -->
+                                        <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: 3px;">
+                                            <span style="background: linear-gradient(90deg, #c4b5fd 0%, #fcd34d 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">DUELI</span>
+                                        </h1>
+                                        <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.95); font-size: 14px; letter-spacing: 1px; font-weight: 500;">${rtl ? 'منصة المنافسات والحوارات' : 'Competition & Dialogue Platform'}</p>
                                     </td>
                                 </tr>
                             </table>
@@ -123,6 +125,13 @@ export class EmailService {
                     <!-- Footer -->
                     <tr>
                         <td style="background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td align="center" style="padding-bottom: 15px;">
+                                        <img src="${logoUrl}" alt="Dueli" width="40" height="40" style="display: inline-block; border-radius: 8px;" />
+                                    </td>
+                                </tr>
+                            </table>
                             <p style="margin: 0 0 10px 0; color: #9ca3af; font-size: 12px;">
                                 ${rtl ? 'هذه الرسالة تم إرسالها تلقائياً من منصة ديولي' : 'This email was sent automatically from Dueli platform'}
                             </p>
@@ -130,7 +139,7 @@ export class EmailService {
                                 © ${new Date().getFullYear()} Dueli. ${rtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}.
                             </p>
                             <div style="margin-top: 20px;">
-                                <a href="https://project-8e7c178d.pages.dev" style="display: inline-block; padding: 8px 20px; background-color: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                                <a href="https://project-8e7c178d.pages.dev" style="display: inline-block; padding: 10px 25px; background: linear-gradient(135deg, #7c3aed 0%, #f59e0b 100%); color: #ffffff; text-decoration: none; border-radius: 25px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);">
                                     ${rtl ? 'زيارة المنصة' : 'Visit Platform'}
                                 </a>
                             </div>
