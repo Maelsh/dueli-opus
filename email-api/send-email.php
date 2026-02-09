@@ -7,7 +7,7 @@
  */
 
 // رمز سري للتحقق من أن الطلب من تطبيقك فقط
-define('API_SECRET', ''); // غيّر هذا لرمز سري قوي
+define('API_SECRET', '965b6d9ae54ef45a6cf9b8404f9dd904b28d1ce287777dd46360b18be544113e'); // غيّر هذا لرمز سري قوي
 
 // إعدادات CORS للسماح بالطلبات من Cloudflare
 header('Content-Type: application/json; charset=utf-8');
