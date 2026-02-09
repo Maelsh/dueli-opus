@@ -94,7 +94,7 @@ export class EmailService {
                     
                     <!-- Header with Gradient -->
                     <tr>
-                        <td style="background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #f59e0b 100%); padding: 40px 30px; text-align: center;">
+                        <td style="background: linear-gradient(199deg, #3b00d3 0%, #000000, #bb8318 100%); padding: 40px 30px; text-align: center;">
                             <!-- Logo Image -->
                             <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                                 <tr>
@@ -106,7 +106,8 @@ export class EmailService {
                                     <td align="center">
                                         <!-- Gradient Text Effect for Dueli -->
                                         <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: 3px;">
-                                            <span style="background: linear-gradient(90deg, #c4b5fd 0%, #fcd34d 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">DUELI</span>
+                                            <span style="color: transparent;background: linear-gradient(
+90deg, #9810fa 0%, #fe9a00 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">DUELI</span>
                                         </h1>
                                         <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.95); font-size: 14px; letter-spacing: 1px; font-weight: 500;">${rtl ? 'منصة المنافسات والحوارات' : 'Competition & Dialogue Platform'}</p>
                                     </td>
