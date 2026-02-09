@@ -64,15 +64,95 @@ export class EmailService {
     }
 
     /**
-     * Build HTML wrapper with RTL support
+     * Build complete HTML email template with beautiful design
      */
-    private buildHtmlWrapper(content: string, lang: Language): string {
+    private buildEmailTemplate(content: string, lang: Language): string {
         const rtl = isRTL(lang);
+        const dir = rtl ? 'rtl' : 'ltr';
+        const align = rtl ? 'right' : 'left';
+
         return `
-            <div ${rtl ? 'dir="rtl"' : ''} style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                ${content}
-            </div>
-        `;
+<!DOCTYPE html>
+<html lang="${lang}" dir="${dir}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dueli</title>
+    <!--[if mso]>
+    <style type="text/css">
+        table, td, div, p { font-family: Arial, sans-serif !important; }
+    </style>
+    <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6; padding: 40px 20px;">
+        <tr>
+            <td align="center">
+                <!-- Main Container -->
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                    
+                    <!-- Header with Gradient -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #f59e0b 100%); padding: 40px 30px; text-align: center;">
+                            <!-- Logo -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td align="center">
+                                        <div style="width: 70px; height: 70px; background-color: rgba(255,255,255,0.2); border-radius: 50%; display: inline-block; line-height: 70px; margin-bottom: 15px;">
+                                            <span style="font-size: 36px; color: #ffffff; font-weight: bold;">D</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center">
+                                        <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">DUELI</h1>
+                                        <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px; letter-spacing: 1px;">${rtl ? 'منصة المنافسات والحوارات' : 'Competition & Dialogue Platform'}</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px; text-align: ${align};">
+                            ${content}
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9fafb; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0 0 10px 0; color: #9ca3af; font-size: 12px;">
+                                ${rtl ? 'هذه الرسالة تم إرسالها تلقائياً من منصة ديولي' : 'This email was sent automatically from Dueli platform'}
+                            </p>
+                            <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                                © ${new Date().getFullYear()} Dueli. ${rtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}.
+                            </p>
+                            <div style="margin-top: 20px;">
+                                <a href="https://project-8e7c178d.pages.dev" style="display: inline-block; padding: 8px 20px; background-color: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                                    ${rtl ? 'زيارة المنصة' : 'Visit Platform'}
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                </table>
+                
+                <!-- Unsubscribe Text -->
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; margin-top: 20px;">
+                    <tr>
+                        <td align="center" style="color: #9ca3af; font-size: 11px;">
+                            ${rtl ? 'إذا لم تكن أنت من طلب هذا البريد، يمكنك تجاهله بأمان.' : 'If you did not request this email, you can safely ignore it.'}
+                        </td>
+                    </tr>
+                </table>
+                
+            </td>
+        </tr>
+    </table>
+</body>
+</html>`;
     }
 
     /**
@@ -88,29 +168,58 @@ export class EmailService {
         const baseUrl = origin || 'https://project-8e7c178d.pages.dev';
         const verifyUrl = `${baseUrl}/verify?token=${token}&lang=${lang}`;
         const tr = translations[getUILanguage(lang)];
+        const rtl = isRTL(lang);
+        const align = rtl ? 'right' : 'left';
 
         const content = `
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #7c3aed; margin: 0;">${tr.app_title}</h1>
-            </div>
-            <h2 style="color: #1f2937;">${tr.login_welcome.replace('ديولي', '').replace('Dueli', '')} ${name}!</h2>
-            <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
-                ${tr.auth_register_success.split('!')[0]}:
+            <h2 style="margin: 0 0 20px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
+                ${rtl ? `مرحباً ${name}! 👋` : `Hello ${name}! 👋`}
+            </h2>
+            
+            <p style="margin: 0 0 25px 0; color: #4b5563; font-size: 16px; line-height: 1.8;">
+                ${rtl
+                ? 'شكراً لانضمامك إلى منصة ديولي! نحن سعداء بوجودك معنا. لتفعيل حسابك والبدء في المشاركة في المنافسات والحوارات، يرجى الضغط على الزر أدناه:'
+                : 'Thank you for joining Dueli! We\'re excited to have you. To activate your account and start participating in competitions and dialogues, please click the button below:'
+            }
             </p>
-            <div style="text-align: center; margin: 30px 0;">
-                <a href="${verifyUrl}" style="background: linear-gradient(135deg, #7c3aed 0%, #f59e0b 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 50px; font-weight: bold; display: inline-block;">
-                    ${tr.account_verification}
-                </a>
-            </div>
-            <p style="color: #6b7280; font-size: 14px;">
-                <a href="${verifyUrl}" style="color: #7c3aed;">${verifyUrl}</a>
+            
+            <!-- CTA Button -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 35px 0;">
+                <tr>
+                    <td align="center">
+                        <a href="${verifyUrl}" style="display: inline-block; padding: 16px 50px; background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%); color: #ffffff; text-decoration: none; border-radius: 50px; font-size: 16px; font-weight: 700; letter-spacing: 0.5px; box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);">
+                            ${tr.account_verification || (rtl ? 'تفعيل الحساب' : 'Activate Account')} ✨
+                        </a>
+                    </td>
+                </tr>
+            </table>
+            
+            <!-- Divider -->
+            <div style="border-top: 1px solid #e5e7eb; margin: 30px 0;"></div>
+            
+            <!-- Alternative Link -->
+            <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 13px;">
+                ${rtl ? 'أو انسخ هذا الرابط في متصفحك:' : 'Or copy this link to your browser:'}
             </p>
+            <p style="margin: 0; padding: 15px; background-color: #f3f4f6; border-radius: 8px; word-break: break-all;">
+                <a href="${verifyUrl}" style="color: #7c3aed; font-size: 12px; text-decoration: none;">${verifyUrl}</a>
+            </p>
+            
+            <!-- Warning -->
+            <div style="margin-top: 30px; padding: 15px; background-color: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                <p style="margin: 0; color: #92400e; font-size: 13px;">
+                    ⚠️ ${rtl
+                ? 'هذا الرابط صالح لمدة 24 ساعة فقط. إذا انتهت صلاحيته، يمكنك طلب رابط جديد.'
+                : 'This link is valid for 24 hours only. If it expires, you can request a new one.'
+            }
+                </p>
+            </div>
         `;
 
         return this.send({
             to: email,
-            subject: tr.email_activate_subject,
-            html: this.buildHtmlWrapper(content, lang)
+            subject: `${rtl ? '✨ تفعيل حسابك في ديولي' : '✨ Activate Your Dueli Account'}`,
+            html: this.buildEmailTemplate(content, lang)
         });
     }
 
@@ -123,27 +232,60 @@ export class EmailService {
         lang: Language
     ): Promise<any> {
         const tr = translations[getUILanguage(lang)];
+        const rtl = isRTL(lang);
 
         const content = `
-            <div style="text-align: center; margin-bottom: 30px;">
-                <h1 style="color: #7c3aed; margin: 0;">${tr.app_title}</h1>
-            </div>
-            <h2 style="color: #1f2937;">${tr.reset_password_title}</h2>
-            <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
-                ${tr.verification_code_label}:
+            <h2 style="margin: 0 0 20px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
+                ${rtl ? '🔐 إعادة تعيين كلمة المرور' : '🔐 Password Reset'}
+            </h2>
+            
+            <p style="margin: 0 0 25px 0; color: #4b5563; font-size: 16px; line-height: 1.8;">
+                ${rtl
+                ? 'لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك. استخدم الرمز التالي للمتابعة:'
+                : 'We received a request to reset your account password. Use the following code to proceed:'
+            }
             </p>
-            <div style="background: #f3f4f6; padding: 20px; border-radius: 10px; text-align: center; margin: 30px 0;">
-                <div style="font-size: 32px; font-weight: bold; color: #7c3aed; letter-spacing: 8px;">${resetCode}</div>
-            </div>
-            <p style="color: #6b7280; font-size: 14px;">
-                ${tr.password_min_length}
+            
+            <!-- Code Box -->
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 35px 0;">
+                <tr>
+                    <td align="center">
+                        <div style="display: inline-block; padding: 25px 50px; background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); border-radius: 16px; border: 2px dashed #d1d5db;">
+                            <span style="font-size: 40px; font-weight: 800; color: #7c3aed; letter-spacing: 12px; font-family: 'Courier New', monospace;">${resetCode}</span>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+            
+            <p style="margin: 25px 0; color: #6b7280; font-size: 14px; text-align: center;">
+                ${rtl ? 'أدخل هذا الرمز في صفحة إعادة تعيين كلمة المرور' : 'Enter this code on the password reset page'}
             </p>
+            
+            <!-- Warning -->
+            <div style="margin-top: 30px; padding: 15px; background-color: #fee2e2; border-radius: 8px; border-left: 4px solid #ef4444;">
+                <p style="margin: 0; color: #991b1b; font-size: 13px;">
+                    ⏰ ${rtl
+                ? 'هذا الرمز صالح لمدة 15 دقيقة فقط. لا تشاركه مع أي شخص!'
+                : 'This code is valid for 15 minutes only. Do not share it with anyone!'
+            }
+                </p>
+            </div>
+            
+            <!-- Security Notice -->
+            <div style="margin-top: 20px; padding: 15px; background-color: #f3f4f6; border-radius: 8px;">
+                <p style="margin: 0; color: #6b7280; font-size: 13px;">
+                    🛡️ ${rtl
+                ? 'إذا لم تطلب إعادة تعيين كلمة المرور، تجاهل هذا البريد وتأكد من أمان حسابك.'
+                : 'If you didn\'t request a password reset, ignore this email and make sure your account is secure.'
+            }
+                </p>
+            </div>
         `;
 
         return this.send({
             to: email,
-            subject: tr.email_reset_subject,
-            html: this.buildHtmlWrapper(content, lang)
+            subject: `${rtl ? '🔐 رمز إعادة تعيين كلمة المرور - ديولي' : '🔐 Password Reset Code - Dueli'}`,
+            html: this.buildEmailTemplate(content, lang)
         });
     }
 }
