@@ -424,10 +424,6 @@ body.dark .social-btn:hover {
     gap: 6px;
 }
 
-body.dark .badge-live {
-    /*background: rgba(239, 68, 68, 0.2);*/
-    /*color: #f87171;*/
-}
 
 .badge-recorded {
     background: #e5e7eb;
