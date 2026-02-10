@@ -78,12 +78,12 @@ export function getLoginModal(lang: Language): string {
             </button>
 
             <!-- Hidden social buttons - قد تُفعَّل لاحقاً -->
-            <button onclick="loginWith('facebook')" style="display:none;" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <button onclick="loginWith('facebook')" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <i class="fab fa-facebook text-xl text-[#1877F2]"></i>
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Facebook</span>
             </button>
             
-            <button onclick="loginWith('twitter')" style="display:none;" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+            <button onclick="loginWith('twitter')" class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <i class="fab fa-x-twitter text-xl text-gray-800 dark:text-white"></i>
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">X</span>
             </button>
