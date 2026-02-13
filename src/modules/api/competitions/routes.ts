@@ -98,6 +98,12 @@ competitionsRoutes.post('/:id/comments', (c) => controller.addComment(c));
 competitionsRoutes.post('/:id/rate', (c) => controller.rate(c));
 
 /**
+ * Heartbeat - keep alive during live
+ * POST /api/competitions/:id/heartbeat
+ */
+competitionsRoutes.post('/:id/heartbeat', (c) => controller.heartbeat(c));
+
+/**
  * Invite user to competition
  * POST /api/competitions/:id/invite
  */

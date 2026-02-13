@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وثائق منصة Dueli الكاملة</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.8;
+            background: #f5f5f5;
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-right: 4px solid #3498db;
+            padding-right: 15px;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        h4 {
+            color: #666;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+        
+        ul, ol {
+            margin: 15px 0;
+            padding-right: 30px;
+        }
+        
+        li {
+            margin-bottom: 10px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        th {
+            background: #3498db;
+            color: white;
+            padding: 12px;
+            text-align: right;
+            font-weight: bold;
+        }
+        
+        td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: right;
+        }
+        
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 20px 0;
+            direction: ltr;
+            text-align: left;
+        }
+        
+        .nav {
+            position: sticky;
+            top: 20px;
+            background: #34495e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .nav a {
+            color: white;
+            text-decoration: none;
+            display: block;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        
+        .nav a:hover {
+            background: #3498db;
+        }
+        
+        .section {
+            margin-bottom: 50px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        
+        .highlight {
+            background: #fffacd;
+            padding: 15px;
+            border-right: 4px solid #f39c12;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        
+        .badge-success { background: #27ae60; color: white; }
+        .badge-warning { background: #f39c12; color: white; }
+        .badge-danger { background: #e74c3c; color: white; }
+        .badge-info { background: #3498db; color: white; }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            h1 {
+                font-size: 1.5em;
+            }
+            
+            h2 {
+                font-size: 1.3em;
+            }
+            
+            table {
+                font-size: 0.9em;
+            }
+            
+            th, td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="#vision">📍 الرؤية</a>
+            <a href="#goals">🎯 الأهداف</a>
+            <a href="#scenarios">📋 سيناريوهات المستخدمين</a>
+            <a href="#admin">⚙️ سيناريوهات الإدارة</a>
+            <a href="#features">✨ قائمة المميزات</a>
+        </div>
+
+        <!-- VISION SECTION -->
+        <div id="vision" class="section">
+            <h1>📍 رؤية منصة Dueli</h1>
+            
+            <h2>الرؤية الأساسية</h2>
+            <p>منصة عالمية تساهم في حل مشاكل البشرية عن طريق:</p>
+            <ul>
+                <li><strong>حل النزاعات بالحوار</strong> بدلاً من الصراع</li>
+                <li><strong>نقل المناقشات العلمية للساحات العامة</strong> مما يسهم في تثقيف البشرية</li>
+                <li><strong>إبراز المواهب</strong> ووضعها في مكانها الصحيح مما يسهم في العدالة والرضا والارتقاء</li>
+            </ul>
+
+            <div class="highlight">
+                <h3>الشعار</h3>
+                <p style="font-size: 1.3em; font-weight: bold; text-align: center; color: #2c3e50;">
+                    "ارتقِ، تثقَّف، استمتع، واربح"
+                </p>
+            </div>
+
+            <h2>القيم الأربعة</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>القيمة</th>
+                        <th>المعنى</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>ارتقِ</strong></td>
+                        <td>تطور فكرياً وعلمياً</td>
+                    </tr>
+                    <tr>
+                        <td><strong>تَثَقَّف</strong></td>
+                        <td>تعلم من الحوار</td>
+                    </tr>
+                    <tr>
+                        <td><strong>استمتع</strong></td>
+                        <td>التعلم متعة مش إرهاق</td>
+                    </tr>
+                    <tr>
+                        <td><strong>واربح</strong></td>
+                        <td>اكسب معرفة، سمعة، حقك</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>الغايات الكبيرة</h2>
+            
+            <h3>1. ⛔ نهاية الظلم</h3>
+            <ul>
+                <li>نظام تقييم شفاف</li>
+                <li>بيانات ظاهرة للعامة</li>
+                <li>المواهب تظهر بذاتها بدون وساطة</li>
+            </ul>
+
+            <h3>2. 🕊️ حل النزاعات</h3>
+            <ul>
+                <li>تحويل النزاعات من الشوارع إلى منصة مفتوحة</li>
+                <li>الناس تشوف وجهتي النظر</li>
+                <li>الحل بالوعي مش بالعنف</li>
+            </ul>
+
+            <h3>3. 🎓 العلم للعامة</h3>
+            <ul>
+                <li>كل مناقشة علمية تكون مفتوحة</li>
+                <li>العالم يتكلم مع العالم</li>
+                <li>الجمهور يتعلم ويشوف كيف يفكر الخبراء</li>
+            </ul>
+
+            <h3>4. 💎 العدالة في التقييم</h3>
+            <ul>
+                <li>كل إنسان يُقيّم بعمله مش باسمه أو لونه أو بلده</li>
+                <li>شفافية تامة - أي حد يشوف البيانات</li>
+                <li>الحق يظهر للجميع</li>
+            </ul>
+
+            <h2>النتيجة المرجوة</h2>
+            <h3>3 أهداف رئيسية:</h3>
+            <ol>
+                <li><strong>كل بشري ياخد حقه بموضوعية</strong></li>
+                <li><strong>كل موهبة تبان للعالم</strong></li>
+                <li><strong>كل نزاع يتحل بالوعي مش القوة</strong></li>
+            </ol>
+
+            <h3>وهذا سيفتح الطريق لـ:</h3>
+            <ul>
+                <li>عالم أنصف</li>
+                <li>عالم أعلم</li>
+                <li>عالم أهدأ</li>
+                <li>عالم أعقل</li>
+            </ul>
+        </div>
+
+        <!-- GOALS SECTION -->
+        <div id="goals" class="section">
+            <h1>🎯 أهداف منصة Dueli</h1>
+
+            <h2>نموذج الربح الشفاف</h2>
+            <pre>
+إيراد الإعلانات = 100%
+├─ 20% → إدارة + تطوير (Maelsh Pro)
+└─ 80% → المتنافسين
+    └─ حسب نسبة النقاط
+    </pre>
+
+            <h3>الحساب:</h3>
+            <pre>
+نسبة المتنافس = (نقاطه ÷ مجموع النقاط الكلي)
+ربح المتنافس = (نسبته × 80% من الإيراد)
+            </pre>
+
+            <h2>الأهداف الاستراتيجية</h2>
+            
+            <h3>1. إنشاء ساحة حوار عامة</h3>
+            <ul>
+                <li>تحويل النزاعات لحوار مفتوح</li>
+                <li>تحويل العلوم والنظريات الصعبة لثقافة عامة</li>
+                <li>تحويل المنافسة بين الموهوبين إلى توجيه للنفع</li>
+            </ul>
+
+            <h3>2. تحقيق الشفافية المطلقة</h3>
+            <ul>
+                <li>كل شيء معروض علنياً</li>
+                <li>الأدوار والمسؤوليات واضحة</li>
+                <li>الرواتب والدخول معروضة</li>
+            </ul>
+
+            <h2>مؤشرات النجاح (KPIs)</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>المؤشر</th>
+                        <th>6 أشهر</th>
+                        <th>سنة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>المستخدمين المسجلين</td>
+                        <td>50,000</td>
+                        <td>500,000</td>
+                    </tr>
+                    <tr>
+                        <td>المنافسات الشهرية</td>
+                        <td>1,000</td>
+                        <td>10,000</td>
+                    </tr>
+                    <tr>
+                        <td>متوسط المشاهدة</td>
+                        <td>25 دقيقة</td>
+                        <td>40 دقيقة</td>
+                    </tr>
+                    <tr>
+                        <td>نسبة التفاعل</td>
+                        <td>15%</td>
+                        <td>25%</td>
+                    </tr>
+                    <tr>
+                        <td>الإيرادات الشهرية</td>
+                        <td>$5,000</td>
+                        <td>$50,000</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- USER SCENARIOS SECTION -->
+        <div id="scenarios" class="section">
+            <h1>📋 سيناريوهات المستخدمين</h1>
+
+            <h2>السيناريو 1: المستخدم الزائر (غير مسجل)</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>الإمكانية</th>
+                        <th>متاح؟</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>تصفح المنافسات</td>
+                        <td><span class="badge badge-success">✅ نعم</span></td>
+                    </tr>
+                    <tr>
+                        <td>البحث عن منافسات ومستخدمين</td>
+                        <td><span class="badge badge-success">✅ نعم</span></td>
+                    </tr>
+                    <tr>
+                        <td>مشاهدة البث المباشر</td>
+                        <td><span class="badge badge-success">✅ نعم</span></td>
+                    </tr>
+                    <tr>
+                        <td>التعليق والتقييم</td>
+                        <td><span class="badge badge-danger">❌ لا</span></td>
+                    </tr>
+                    <tr>
+                        <td>فتح منافسة</td>
+                        <td><span class="badge badge-danger">❌ لا</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>السيناريو 5: أثناء البث المباشر</h2>
+            
+            <h3>نظام التقييم:</h3>
+            <ul>
+                <li>كل مشاهد له تقييم مستقل</li>
+                <li>المدى: <strong>0-100 نقطة</strong> لكل متنافس</li>
+                <li>كل نجمة = 20 نقطة (5 نجوم = 100)</li>
+                <li>يمكن إعطاء 0 للاثنين أو 100 للاثنين</li>
+                <li>تعديل التقييم متاح طوال البث</li>
+                <li><strong>مؤشر live</strong> يظهر إجمالي النقاط</li>
+            </ul>
+
+            <h2>السيناريو 6: توزيع الأرباح</h2>
+            
+            <div class="highlight">
+                <h4>مثال عملي:</h4>
+                <ul>
+                    <li>إيرادات إعلانات = <strong>$1000</strong></li>
+                    <li>نقاط المتنافس أ = 6000</li>
+                    <li>نقاط المتنافس ب = 4000</li>
+                    <li>المجموع = 10,000</li>
+                </ul>
+                
+                <h4>الحساب:</h4>
+                <ul>
+                    <li>المنصة = <strong>$200</strong> (20%)</li>
+                    <li>المتنافس أ = <strong>$480</strong> (60% من $800)</li>
+                    <li>المتنافس ب = <strong>$320</strong> (40% من $800)</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ADMIN SCENARIOS SECTION -->
+        <div id="admin" class="section">
+            <h1>⚙️ سيناريوهات الإدارة والشفافية</h1>
+
+            <h2>نظام البلاغات الشفاف</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>العنصر</th>
+                        <th>مستوى الشفافية</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>المُبلّغ</td>
+                        <td>معروف للجميع</td>
+                    </tr>
+                    <tr>
+                        <td>المُبلّغ عنه</td>
+                        <td>معروف للجميع</td>
+                    </tr>
+                    <tr>
+                        <td>من استلم البلاغ</td>
+                        <td>اسم المشرف + التاريخ</td>
+                    </tr>
+                    <tr>
+                        <td>الإجراء المتخذ</td>
+                        <td>معروف مع السبب</td>
+                    </tr>
+                    <tr>
+                        <td>حالة البلاغ</td>
+                        <td>معلق، قيد التحقيق، مكتمل</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>الهيكل الإداري الشفاف</h2>
+            
+            <pre>
+Admin (إدارة عليا)
+    ↓
+Supervisor (مشرفين)
+    ↓
+Moderator (مراقبين محتوى)
+    ↓
+Support (دعم فني)
+            </pre>
+
+            <h3>ما يُعرض لكل موظف:</h3>
+            <ul>
+                <li>الاسم الكامل</li>
+                <li>الدور والمسؤوليات</li>
+                <li>الراتب الشهري</li>
+                <li>الدخل الإضافي</li>
+                <li>تاريخ الانضمام</li>
+                <li>سجل الإجراءات الكامل</li>
+                <li>إحصائيات الأداء</li>
+            </ul>
+
+            <h2>طلب المراجعة من فئة أعلى</h2>
+            
+            <h3>من يحق له:</h3>
+            <ul>
+                <li>المُبلّغ (إذا لم يرضَ بالقرار)</li>
+                <li>المُبلّغ عنه (إذا لم يرضَ بالقرار)</li>
+                <li>أي مستخدم يرى ظلم</li>
+            </ul>
+
+            <h2>الشفافية المالية</h2>
+            
+            <h3>صفحة الإعلانات العامة تعرض:</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>المعلومة</th>
+                        <th>التفصيل</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>المعلن</td>
+                        <td>اسم الشركة/الشخص</td>
+                    </tr>
+                    <tr>
+                        <td>المبلغ المدفوع</td>
+                        <td>كم دفع المعلن</td>
+                    </tr>
+                    <tr>
+                        <td>المنافسات المستهدفة</td>
+                        <td>أين ظهر الإعلان</td>
+                    </tr>
+                    <tr>
+                        <td>الإيرادات</td>
+                        <td>المبلغ الإجمالي</td>
+                    </tr>
+                    <tr>
+                        <td>التوزيع</td>
+                        <td>20% للمنصة، 80% للمتنافسين</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- FEATURES SECTION -->
+        <div id="features" class="section">
+            <h1>✨ قائمة المميزات الكاملة</h1>
+
+            <h2>1. نظام المستخدمين</h2>
+            
+            <h3>1.1 التسجيل والدخول</h3>
+            <ul>
+                <li><span class="badge badge-success">✅</span> تسجيل بالبريد الإلكتروني</li>
+                <li><span class="badge badge-success">✅</span> OAuth (Google, Microsoft, Facebook)</li>
+                <li><span class="badge badge-success">✅</span> تفعيل البريد</li>
+                <li><span class="badge badge-success">✅</span> استعادة كلمة المرور</li>
+            </ul>
+
+            <h3>1.2 الملف الشخصي</h3>
+            <ul>
+                <li><span class="badge badge-success">✅</span> المعلومات الأساسية</li>
+                <li><span class="badge badge-success">✅</span> الإحصائيات</li>
+                <li><span class="badge badge-success">✅</span> إعدادات الخصوصية</li>
+                <li><span class="badge badge-success">✅</span> تعديل البيانات</li>
+            </ul>
+
+            <h2>2. نظام المنافسات</h2>
+            
+            <h3>حالات المنافسة:</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>الحالة</th>
+                        <th>الوصف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge badge-warning">Pending</span></td>
+                        <td>معلقة - في انتظار قبول</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-info">Scheduled</span></td>
+                        <td>مجدولة - تم القبول</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-danger">Live</span></td>
+                        <td>حية - البث شغال</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge badge-success">Completed</span></td>
+                        <td>منتهية - البث خلص</td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge">Archived</span></td>
+                        <td>مؤرشفة - متاحة للمشاهدة</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>4. نظام التقييم</h2>
+            
+            <h3>التقييم أثناء البث:</h3>
+            <ul>
+                <li><span class="badge badge-success">✅</span> 0-100 نقطة لكل متنافس</li>
+                <li><span class="badge badge-success">✅</span> 5 نجوم × 20 نقطة</li>
+                <li><span class="badge badge-success">✅</span> تعديل طوال البث</li>
+                <li><span class="badge badge-success">✅</span> مؤشر live للنقاط</li>
+            </ul>
+
+            <h2>7. نظام الإعلانات</h2>
+            
+            <h3>حظر الإعلانات:</h3>
+            <ul>
+                <li><span class="badge badge-success">✅</span> كل متنافس يحظر إعلانات معينة</li>
+                <li><span class="badge badge-success">✅</span> الإعلان يُستبدل تلقائياً</li>
+                <li><span class="badge badge-warning">⚠️</span> لو طرف رفض → الإعلان يُحظر</li>
+            </ul>
+
+            <h2>15. المنصة المفتوحة المصدر</h2>
+            
+            <h3>الترخيص:</h3>
+            <ul>
+                <li><span class="badge badge-success">✅</span> الكود مفتوح المصدر</li>
+                <li><span class="badge badge-success">✅</span> إمكانية المساهمة</li>
+                <li><span class="badge badge-success">✅</span> إمكانية Self-hosting</li>
+                <li><span class="badge badge-warning">⚠️</span> منع الاستخدام التجاري بدون إذن Maelsh Pro</li>
+            </ul>
+
+            <h2>19. الأداء التقني</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>المقياس</th>
+                        <th>الهدف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>التوفر</td>
+                        <td>99.9%</td>
+                    </tr>
+                    <tr>
+                        <td>تحميل الصفحة</td>
+                        <td>&lt; 2 ثانية</td>
+                    </tr>
+                    <tr>
+                        <td>تأخير البث</td>
+                        <td>&lt; 3 ثواني</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 50px; padding: 20px; background: #34495e; color: white; border-radius: 8px; text-align: center;">
+            <p style="margin: 0; font-size: 1.2em;">📄 وثائق منصة Dueli - نسخة HTML كاملة</p>
+            <p style="margin: 10px 0 0 0; opacity: 0.8;">تم إنشاؤها بتاريخ: فبراير 2026</p>
+        </div>
+    </div>
+</body>
+</html>

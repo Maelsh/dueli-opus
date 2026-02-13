@@ -288,10 +288,237 @@ export class AdminController extends BaseController {
             const adModel = new AdvertisementModel(c.env.DB);
             await adModel.delete(adId);
 
+            // Log admin action
+            await this.logAdminAction(c, 'delete_ad', 'advertisement', adId);
+
             return this.success(c, { deleted: true });
         } catch (error) {
             console.error('Admin delete ad error:', error);
             return this.serverError(c, error as Error);
+        }
+    }
+
+    // =====================================
+    // Report Appeals (FR-012)
+    // =====================================
+
+    /**
+     * Get report appeals
+     * GET /api/admin/appeals
+     */
+    async getAppeals(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!await this.isAdmin(c)) return this.forbidden(c);
+
+            const status = this.getQuery(c, 'status') || 'pending';
+            const limit = this.getQueryInt(c, 'limit') || 50;
+            const offset = this.getQueryInt(c, 'offset') || 0;
+
+            const result = await c.env.DB.prepare(`
+                SELECT ra.*, 
+                       r.reason as report_reason, r.target_type, r.target_id, r.status as report_status,
+                       u.username as appellant_username, u.display_name as appellant_name,
+                       rv.username as reviewer_username
+                FROM report_appeals ra
+                JOIN reports r ON ra.report_id = r.id
+                JOIN users u ON ra.appellant_id = u.id
+                LEFT JOIN users rv ON ra.reviewed_by = rv.id
+                WHERE ra.status = ?
+                ORDER BY ra.created_at DESC
+                LIMIT ? OFFSET ?
+            `).bind(status, limit, offset).all();
+
+            return this.success(c, { appeals: result.results || [] });
+        } catch (error) {
+            console.error('Admin get appeals error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Review appeal
+     * PUT /api/admin/appeals/:id
+     */
+    async reviewAppeal(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!await this.isAdmin(c)) return this.forbidden(c);
+
+            const appealId = this.getParamInt(c, 'id');
+            const admin = this.getCurrentUser(c);
+            const body = await this.getBody<{
+                status: 'accepted' | 'rejected';
+                decision_reason?: string;
+            }>(c);
+
+            if (!appealId || !body?.status) {
+                return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+
+            await c.env.DB.prepare(`
+                UPDATE report_appeals 
+                SET status = ?, reviewed_by = ?, reviewed_at = datetime('now'), decision_reason = ?
+                WHERE id = ?
+            `).bind(body.status, admin.id, body.decision_reason || null, appealId).run();
+
+            // If accepted, reverse the original report action
+            if (body.status === 'accepted') {
+                const appeal = await c.env.DB.prepare(`
+                    SELECT report_id FROM report_appeals WHERE id = ?
+                `).bind(appealId).first<{ report_id: number }>();
+
+                if (appeal) {
+                    await c.env.DB.prepare(`
+                        UPDATE reports SET status = 'dismissed', action_taken = 'Reversed on appeal' WHERE id = ?
+                    `).bind(appeal.report_id).run();
+                }
+            }
+
+            await this.logAdminAction(c, 'review_appeal', 'report_appeal', appealId, body.decision_reason);
+
+            return this.success(c, { reviewed: true });
+        } catch (error) {
+            console.error('Admin review appeal error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    // =====================================
+    // Admin Transparency (Public)
+    // =====================================
+
+    /**
+     * Get admin team (PUBLIC endpoint - no auth required)
+     * GET /api/admin/team
+     */
+    async getTeam(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            const result = await c.env.DB.prepare(`
+                SELECT at.*, u.username, u.display_name, u.avatar_url
+                FROM admin_team at
+                JOIN users u ON at.user_id = u.id
+                WHERE at.is_active = 1
+                ORDER BY at.role ASC, at.join_date ASC
+            `).all();
+
+            return this.success(c, { team: result.results || [] });
+        } catch (error) {
+            console.error('Admin get team error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Get admin action log (PUBLIC endpoint - transparency)
+     * GET /api/admin/action-log
+     */
+    async getActionLog(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            const limit = this.getQueryInt(c, 'limit') || 50;
+            const offset = this.getQueryInt(c, 'offset') || 0;
+
+            const result = await c.env.DB.prepare(`
+                SELECT al.*, u.username as admin_username, u.display_name as admin_name
+                FROM admin_action_log al
+                JOIN users u ON al.admin_id = u.id
+                WHERE al.is_public = 1
+                ORDER BY al.created_at DESC
+                LIMIT ? OFFSET ?
+            `).bind(limit, offset).all();
+
+            return this.success(c, { actions: result.results || [] });
+        } catch (error) {
+            console.error('Admin get action log error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    // =====================================
+    // Report Decision Ratings (FR-012)
+    // =====================================
+
+    /**
+     * Rate an admin decision on a report (PUBLIC - authenticated users)
+     * POST /api/reports/:id/rate-decision
+     */
+    async rateDecision(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const reportId = this.getParamInt(c, 'id');
+
+            const body = await this.getBody<{ is_satisfied: boolean }>(c);
+            if (body?.is_satisfied === undefined) {
+                return this.validationError(c, 'is_satisfied is required');
+            }
+
+            await c.env.DB.prepare(`
+                INSERT OR REPLACE INTO report_decision_ratings (report_id, user_id, is_satisfied, created_at)
+                VALUES (?, ?, ?, datetime('now'))
+            `).bind(reportId, user.id, body.is_satisfied ? 1 : 0).run();
+
+            // Return updated stats
+            const stats = await c.env.DB.prepare(`
+                SELECT 
+                    COUNT(*) as total_votes,
+                    SUM(CASE WHEN is_satisfied = 1 THEN 1 ELSE 0 END) as satisfied,
+                    SUM(CASE WHEN is_satisfied = 0 THEN 1 ELSE 0 END) as unsatisfied
+                FROM report_decision_ratings
+                WHERE report_id = ?
+            `).bind(reportId).first();
+
+            return this.success(c, { stats });
+        } catch (error) {
+            console.error('Rate decision error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Get decision rating stats for a report (PUBLIC)
+     * GET /api/reports/:id/decision-rating
+     */
+    async getDecisionRating(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            const reportId = this.getParamInt(c, 'id');
+
+            const stats = await c.env.DB.prepare(`
+                SELECT 
+                    COUNT(*) as total_votes,
+                    SUM(CASE WHEN is_satisfied = 1 THEN 1 ELSE 0 END) as satisfied,
+                    SUM(CASE WHEN is_satisfied = 0 THEN 1 ELSE 0 END) as unsatisfied
+                FROM report_decision_ratings
+                WHERE report_id = ?
+            `).bind(reportId).first();
+
+            return this.success(c, { stats: stats || { total_votes: 0, satisfied: 0, unsatisfied: 0 } });
+        } catch (error) {
+            console.error('Get decision rating error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    // =====================================
+    // Helper: Admin Action Logger
+    // =====================================
+
+    /**
+     * Log an admin action for transparency
+     */
+    private async logAdminAction(
+        c: Context<{ Bindings: Bindings; Variables: Variables }>,
+        actionType: string,
+        targetType?: string,
+        targetId?: number,
+        reason?: string
+    ): Promise<void> {
+        try {
+            const admin = this.getCurrentUser(c);
+            await c.env.DB.prepare(`
+                INSERT INTO admin_action_log (admin_id, action_type, target_type, target_id, reason, is_public, created_at)
+                VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+            `).bind(admin.id, actionType, targetType || null, targetId || null, reason || null).run();
+        } catch (error) {
+            console.error('Failed to log admin action:', error);
         }
     }
 }

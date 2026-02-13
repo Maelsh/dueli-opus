@@ -99,4 +99,44 @@ adminRoutes.delete('/ads/:id', async (c) => {
     return controller.deleteAd(c);
 });
 
+// =====================================
+// Report Appeals (FR-012)
+// =====================================
+
+/**
+ * GET /api/admin/appeals
+ * Get report appeals list
+ */
+adminRoutes.get('/appeals', async (c) => {
+    return controller.getAppeals(c);
+});
+
+/**
+ * PUT /api/admin/appeals/:id
+ * Review an appeal
+ */
+adminRoutes.put('/appeals/:id', async (c) => {
+    return controller.reviewAppeal(c);
+});
+
+// =====================================
+// Admin Transparency (PUBLIC endpoints)
+// =====================================
+
+/**
+ * GET /api/admin/team
+ * Get admin team list (PUBLIC)
+ */
+adminRoutes.get('/team', async (c) => {
+    return controller.getTeam(c);
+});
+
+/**
+ * GET /api/admin/action-log
+ * Get admin action log (PUBLIC)
+ */
+adminRoutes.get('/action-log', async (c) => {
+    return controller.getActionLog(c);
+});
+
 export default adminRoutes;

@@ -11,6 +11,9 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
+import { securityHeaders, csrfProtection, rateLimit } from './middleware/security';
+import { errorHandler } from './middleware/error-handler';
+import { AppError } from './lib/errors/AppError';
 
 // Import API Routes - استيراد مسارات API
 import categoriesRoutes from './modules/api/categories/routes';
@@ -33,6 +36,15 @@ import adminRoutes from './modules/api/admin/routes';
 import settingsRoutes from './modules/api/settings/routes';
 import scheduleRoutes from './modules/api/schedule/routes';
 
+// Import Missing Feature Routes - استيراد مسارات الميزات الناقصة (FR-016, FR-018, FR-020)
+import donationRoutes from './modules/api/donations/routes';
+import paymentRoutes from './modules/api/payments/routes';
+import adBlockRoutes from './modules/api/ad-blocks/routes';
+import blocksRoutes from './modules/api/blocks/routes';
+import recommendationsRoutes from './modules/api/recommendations/routes';
+import leaderboardRoutes from './modules/api/leaderboard/routes';
+import earningsRoutes from './modules/api/earnings/routes';
+
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
 import liveRoutes from './modules/pages/live';
@@ -50,6 +62,15 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // CORS Middleware
 app.use('/api/*', cors());
+
+// Security Headers - ترويسات الأمان
+app.use('*', securityHeaders);
+
+// CSRF Protection - حماية CSRF (API only)
+app.use('/api/*', csrfProtection);
+
+// Rate Limiting - تحديد المعدل
+app.use('/api/*', rateLimit);
 
 // Language Middleware - برنامج اللغة الوسيط
 app.use('*', async (c, next) => {
@@ -92,6 +113,15 @@ app.route('/api', messagesRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/settings', settingsRoutes);
 app.route('/api', scheduleRoutes);
+
+// Mount Missing Feature Routes - تركيب مسارات الميزات الناقصة
+app.route('/api/donations', donationRoutes);
+app.route('/api/payment-methods', paymentRoutes);
+app.route('/api/ad-blocks', adBlockRoutes);
+app.route('/api/blocks', blocksRoutes);
+app.route('/api/recommendations', recommendationsRoutes);
+app.route('/api/leaderboard', leaderboardRoutes);
+app.route('/api/earnings', earningsRoutes);
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);
@@ -262,6 +292,13 @@ app.notFound((c) => {
 });
 
 app.onError((err, c) => {
+  // API routes get structured JSON errors
+  const path = new URL(c.req.url).pathname;
+  if (path.startsWith('/api/')) {
+    return errorHandler(err, c);
+  }
+
+  // Page routes get text error
   console.error(err);
   const lang = c.get('lang') || DEFAULT_LANGUAGE;
   const tr = translations[getUILanguage(lang)];
@@ -269,3 +306,18 @@ app.onError((err, c) => {
 });
 
 export default app;
+
+// ============================================
+// Cron Handler - المهام المجدولة
+// ============================================
+import { handleCron } from './lib/services/CronHandler';
+
+export const scheduled = {
+  async fetch(request: Request, env: any) {
+    // This handles cron triggers from Cloudflare
+    const url = new URL(request.url);
+    const cron = url.searchParams.get('cron') || '* * * * *';
+    await handleCron({ cron }, env);
+    return new Response('OK');
+  }
+};

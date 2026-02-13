@@ -130,6 +130,53 @@ class RatingModel {
         `).bind(competitionId).all();
         return result.results;
     }
+
+    /**
+     * Update existing rating (FR-008: live rating updates)
+     */
+    async updateRating(competitionId: number, userId: number, competitorId: number, rating: number): Promise<boolean> {
+        const result = await this.db.prepare(`
+            UPDATE ratings SET rating = ?, updated_at = datetime('now')
+            WHERE competition_id = ? AND user_id = ? AND competitor_id = ?
+        `).bind(rating, competitionId, userId, competitorId).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Get live totals for both competitors in a competition (FR-008)
+     * Returns total points and voter count for each competitor
+     */
+    async getLiveTotals(competitionId: number): Promise<Record<number, { total_points: number; voter_count: number; percentage: number }>> {
+        const result = await this.db.prepare(`
+            SELECT competitor_id, 
+                   SUM(rating) as total_points,
+                   COUNT(*) as voter_count
+            FROM ratings 
+            WHERE competition_id = ?
+            GROUP BY competitor_id
+        `).bind(competitionId).all();
+
+        const totals: Record<number, { total_points: number; voter_count: number; percentage: number }> = {};
+        let grandTotal = 0;
+
+        for (const row of result.results as any[]) {
+            totals[row.competitor_id] = {
+                total_points: row.total_points || 0,
+                voter_count: row.voter_count || 0,
+                percentage: 0
+            };
+            grandTotal += row.total_points || 0;
+        }
+
+        // Calculate percentages
+        for (const id in totals) {
+            totals[id].percentage = grandTotal > 0
+                ? Math.round((totals[id].total_points / grandTotal) * 10000) / 100  // 2 decimal places
+                : 0;
+        }
+
+        return totals;
+    }
 }
 
 /**
@@ -468,6 +515,7 @@ export class CompetitionController extends BaseController {
     /**
      * Start competition (go live) - supports YouTube and P2P
      * POST /api/competitions/:id/start
+     * FR-010: Streaming time limit (default 120 min / 2 hours)
      */
     async start(c: AppContext) {
         try {
@@ -492,6 +540,11 @@ export class CompetitionController extends BaseController {
                 return this.error(c, 'Cannot start without opponent');
             }
 
+            // Must be in accepted status to start
+            if (competition.status !== 'accepted' && competition.status !== 'pending') {
+                return this.error(c, 'Competition must be accepted before starting');
+            }
+
             const body = await this.getBody<{
                 youtube_live_id?: string;
                 live_url?: string;
@@ -502,7 +555,15 @@ export class CompetitionController extends BaseController {
                 liveUrl: body?.live_url
             });
 
-            return this.success(c, { started: true, status: 'live' });
+            // FR-010: Return max duration so client can enforce the time limit
+            const maxDuration = (competition as any).max_duration_minutes || 120;
+
+            return this.success(c, {
+                started: true,
+                status: 'live',
+                max_duration_minutes: maxDuration,
+                started_at: new Date().toISOString()
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
@@ -586,9 +647,10 @@ export class CompetitionController extends BaseController {
     }
 
     /**
-     * Add comment
-     * POST /api/competitions/:id/comments
-     */
+ * Add comment
+ * POST /api/competitions/:id/comments
+ * Comments are frozen after broadcast ends (FR-011)
+ */
     async addComment(c: AppContext) {
         try {
             if (!this.requireAuth(c)) return this.unauthorized(c);
@@ -600,10 +662,20 @@ export class CompetitionController extends BaseController {
                 return this.validationError(c, this.t('errors.content_required', c));
             }
 
+            // Enforce 500 char limit
+            if (body.content.length > 500) {
+                return this.validationError(c, this.t('errors.comment_too_long', c) || 'Comment must be 500 characters or less');
+            }
+
             const model = new CompetitionModel(c.env.DB);
             const competition = await model.findById(competitionId);
             if (!competition) {
                 return this.notFound(c);
+            }
+
+            // FR-011: Comments freeze after broadcast ends
+            if (competition.status === 'completed' || competition.status === 'cancelled') {
+                return this.error(c, this.t('competition_errors.comments_frozen', c) || 'Comments are frozen after broadcast ends', 403);
             }
 
             const commentModel = new CommentModel(c.env.DB);
@@ -611,7 +683,7 @@ export class CompetitionController extends BaseController {
                 competition_id: competitionId,
                 user_id: user.id,
                 content: body.content,
-                is_live: body.is_live || false
+                is_live: competition.status === 'live'
             });
 
             return this.success(c, comment, 201);
@@ -619,7 +691,6 @@ export class CompetitionController extends BaseController {
             return this.serverError(c, error as Error);
         }
     }
-
     /**
      * Delete comment
      * DELETE /api/competitions/:competitionId/comments/:commentId
@@ -654,9 +725,14 @@ export class CompetitionController extends BaseController {
     }
 
     /**
-     * Rate competitor
-     * POST /api/competitions/:id/rate
-     */
+ * Rate competitor - Live 0-100 scoring system (FR-008)
+ * POST /api/competitions/:id/rate
+ * 
+ * Rating is done DURING live broadcast, not after.
+ * Scale: 0-100 per competitor (5 stars × 20 = 100)
+ * Viewers can update their rating at any time during broadcast.
+ * Rating freezes when broadcast ends.
+ */
     async rate(c: AppContext) {
         try {
             if (!this.requireAuth(c)) return this.unauthorized(c);
@@ -668,40 +744,66 @@ export class CompetitionController extends BaseController {
                 rating: number;
             }>(c);
 
-            if (!body?.competitor_id || !body?.rating) {
+            if (!body?.competitor_id || body?.rating === undefined) {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
 
-            if (body.rating < 1 || body.rating > 5) {
-                return this.validationError(c, this.t('errors.invalid_rating', c));
+            // FR-008: 0-100 rating scale
+            if (body.rating < 0 || body.rating > 100) {
+                return this.validationError(c, this.t('errors.invalid_rating', c) || 'Rating must be between 0 and 100');
             }
 
             const model = new CompetitionModel(c.env.DB);
             const ratingModel = new RatingModel(c.env.DB);
 
             const competition = await model.findById(competitionId);
-            if (!competition || competition.status !== 'completed') {
-                return this.error(c, this.t('competition_errors.not_completed', c));
+            if (!competition) {
+                return this.notFound(c);
             }
 
+            // FR-008: Rating only during live broadcast
+            if (competition.status !== 'live') {
+                return this.error(c, this.t('competition_errors.rating_only_live', c) || 'Rating is only allowed during live broadcast', 403);
+            }
+
+            // Cannot rate yourself
+            if (body.competitor_id === user.id) {
+                return this.validationError(c, this.t('competition_errors.cannot_rate_self', c) || 'You cannot rate yourself');
+            }
+
+            // Check competitor is actually in this competition
+            if (body.competitor_id !== competition.creator_id && body.competitor_id !== competition.opponent_id) {
+                return this.validationError(c, this.t('competition_errors.invalid_competitor', c) || 'Invalid competitor');
+            }
+
+            // FR-008: Allow updating existing rating during live broadcast
             const hasRated = await ratingModel.hasRated(competitionId, user.id, body.competitor_id);
             if (hasRated) {
-                return this.error(c, this.t('competition_errors.already_rated', c));
+                // Update existing rating
+                await ratingModel.updateRating(competitionId, user.id, body.competitor_id, body.rating);
+            } else {
+                // Create new rating
+                await ratingModel.create(
+                    competitionId,
+                    user.id,
+                    body.competitor_id,
+                    body.rating
+                );
             }
 
-            const rating = await ratingModel.create(
-                competitionId,
-                user.id,
-                body.competitor_id,
-                body.rating
-            );
+            // Get live totals for both competitors
+            const totals = await ratingModel.getLiveTotals(competitionId);
 
-            return this.success(c, rating, 201);
+            return this.success(c, {
+                updated: hasRated,
+                competitor_id: body.competitor_id,
+                your_rating: body.rating,
+                live_totals: totals
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
     }
-
     /**
      * Get competition requests
      * GET /api/competitions/:id/requests
@@ -945,6 +1047,47 @@ export class CompetitionController extends BaseController {
         }
 
         return deletedCount;
+    }
+
+    /**
+     * Heartbeat - keep alive signal during live competition
+     * POST /api/competitions/:id/heartbeat
+     * Plan Solution 9: نبضات القلب
+     */
+    async heartbeat(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const competitionId = this.getParamInt(c, 'id');
+
+            const model = new CompetitionModel(c.env.DB);
+            const competition = await model.findById(competitionId);
+
+            if (!competition) {
+                return this.notFound(c);
+            }
+
+            if (competition.status !== 'live') {
+                return this.error(c, 'Competition is not live');
+            }
+
+            // Must be a participant
+            if (competition.creator_id !== user.id && competition.opponent_id !== user.id) {
+                return this.forbidden(c);
+            }
+
+            // Record heartbeat
+            await c.env.DB.prepare(`
+                INSERT INTO competition_heartbeats (competition_id, user_id, last_seen)
+                VALUES (?, ?, datetime('now'))
+                ON CONFLICT(competition_id, user_id) 
+                DO UPDATE SET last_seen = datetime('now')
+            `).bind(competitionId, user.id).run();
+
+            return this.success(c, { heartbeat: true, timestamp: new Date().toISOString() });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
     }
 }
 

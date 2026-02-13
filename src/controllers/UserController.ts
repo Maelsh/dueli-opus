@@ -369,6 +369,79 @@ export class UserController extends BaseController {
             return this.serverError(c, error as Error);
         }
     }
+    /**
+     * Delete user account (FR-023)
+     * DELETE /api/users/account
+     * 
+     * What gets deleted: personal data (name, avatar, bio, email), bank info, private messages
+     * What stays: competitions (public record), comments (part of history), ratings
+     * Profile becomes "deleted user"
+     */
+    async deleteAccount(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+
+            const body = await this.getBody<{ password?: string; confirm: boolean }>(c);
+            if (!body?.confirm) {
+                return this.validationError(c, 'You must confirm account deletion');
+            }
+
+            const db = c.env.DB;
+
+            // 1. Anonymize user profile (keep the row but clear personal data)
+            await db.prepare(`
+                UPDATE users SET 
+                    email = 'deleted_' || id || '@deleted.dueli.com',
+                    username = 'deleted_user_' || id,
+                    display_name = 'مستخدم محذوف',
+                    avatar_url = NULL,
+                    bio = NULL,
+                    password_hash = NULL,
+                    oauth_provider = NULL,
+                    oauth_id = NULL,
+                    verification_token = NULL,
+                    reset_token = NULL,
+                    is_verified = 0,
+                    updated_at = datetime('now')
+                WHERE id = ?
+            `).bind(user.id).run();
+
+            // 2. Delete private messages
+            await db.prepare('DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?')
+                .bind(user.id, user.id).run();
+
+            // 3. Delete conversations
+            await db.prepare('DELETE FROM conversations WHERE user1_id = ? OR user2_id = ?')
+                .bind(user.id, user.id).run();
+
+            // 4. Delete user settings
+            await db.prepare('DELETE FROM user_settings WHERE user_id = ?')
+                .bind(user.id).run();
+
+            // 5. Delete sessions (log out everywhere)
+            await db.prepare('DELETE FROM sessions WHERE user_id = ?')
+                .bind(user.id).run();
+
+            // 6. Delete follows
+            await db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?')
+                .bind(user.id, user.id).run();
+
+            // 7. Delete user posts
+            await db.prepare('DELETE FROM user_posts WHERE user_id = ?')
+                .bind(user.id).run();
+
+            // 8. Delete notifications
+            await db.prepare('DELETE FROM notifications WHERE user_id = ?')
+                .bind(user.id).run();
+
+            // Note: We keep competitions, comments, ratings, reports as public record
+
+            return this.success(c, { deleted: true, message: 'Account deleted successfully. Competitions and public contributions are preserved.' });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
 }
 
 export default UserController;

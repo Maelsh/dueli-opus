@@ -17,8 +17,10 @@
 ├── 06-api-routes-documentation.md ← وكيل 4: API Routes (20+ ملف)
 ├── 07-client-documentation.md       ← وكيل 5: Client (25+ ملف)
 ├── 08-lib-config-documentation.md ← وكيل 6: Lib & Config (25+ ملف)
-└── 09-shared-routes-documentation.md ← وكيل 7: Shared & Routes (15+ ملف)
+├── 09-shared-routes-documentation.md ← وكيل 7: Shared & Routes (15+ ملف)
+└── 10-SRS-Software-Requirements-Specification.md ← مواصفات المتطلبات (SRS)
 ```
+
 
 ---
 
@@ -33,8 +35,10 @@
 | [07-client](07-client-documentation.md) | Giga Potato | 25+ ملف | ✅ مكتمل |
 | [08-lib-config](08-lib-config-documentation.md) | Arcee AI: Trinity | 25+ ملف | ✅ مكتمل |
 | [09-shared-routes](09-shared-routes-documentation.md) | Gemini 3 Flash | 15+ ملف | ✅ مكتمل |
+| [10-SRS](10-SRS-Software-Requirements-Specification.md) | Blackbox | SRS كامل | ✅ مكتمل |
 
-**المجموع:** 7 وثائق | ~132 ملف | **الحالة: مكتملة بالكامل** ✅
+**المجموع:** 8 وثائق | ~132 ملف + SRS | **الحالة: مكتملة بالكامل** ✅
+
 
 ---
 
