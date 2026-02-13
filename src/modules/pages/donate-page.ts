@@ -67,6 +67,20 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     </div>
                 </div>
                 
+                <!-- Message -->
+                <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg mb-8">
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+                        ${tr.leave_message || 'Leave a message (optional)'}
+                    </h2>
+                    <textarea id="donationMessage" rows="2" maxlength="200"
+                        class="w-full px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white resize-none"
+                        placeholder="${tr.donation_message_placeholder || 'Your message to the Dueli team...'}"></textarea>
+                    <div class="mt-4 flex items-center justify-center gap-2">
+                        <input type="checkbox" id="anonymousDonation" class="w-5 h-5 rounded text-purple-600 focus:ring-purple-500">
+                        <label for="anonymousDonation" class="text-gray-700 dark:text-gray-300">${tr.donate_anonymously || 'Donate anonymously'}</label>
+                    </div>
+                </div>
+                
                 <!-- Donate Button -->
                 <button onclick="processDonation()" class="w-full py-4 bg-gradient-to-r from-pink-600 to-red-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg text-lg">
                     <i class="fas fa-heart ${rtl ? 'ml-2' : 'mr-2'}"></i>
@@ -80,8 +94,11 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                         ${tr.top_supporters || 'Top Supporters'}
                     </h2>
                     <div id="supportersList" class="grid md:grid-cols-3 gap-4">
-                        <!-- Will be populated by JavaScript -->
+                        <div class="text-center py-8">
+                            <i class="fas fa-spinner fa-spin text-3xl text-purple-400"></i>
+                        </div>
                     </div>
+                    <div id="totalDonations" class="text-center mt-4 text-gray-600 dark:text-gray-400"></div>
                 </div>
             </div>
         </div>
@@ -104,36 +121,113 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             }
             
             async function loadSupporters() {
-                // Mock data - will be replaced with API call
-                const supporters = [
-                    { name: 'Anonymous', amount: 500, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=1' },
-                    { name: 'Ahmed M.', amount: 200, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=2' },
-                    { name: 'Sarah K.', amount: 150, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=3' }
-                ];
-                
-                document.getElementById('supportersList').innerHTML = supporters.map((s, i) => \`
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-lg flex items-center gap-4">
-                        <div class="relative">
-                            <img src="\${s.avatar}" class="w-12 h-12 rounded-full">
-                            <span class="absolute -top-1 -\${isRTL ? 'left' : 'right'}-1 w-6 h-6 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center font-bold">\${i + 1}</span>
+                try {
+                    const res = await fetch('/api/donations/top-supporters');
+                    const data = await res.json();
+                    
+                    if (data.success && data.supporters.length > 0) {
+                        document.getElementById('supportersList').innerHTML = data.supporters.map((s, i) => \`
+                            <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-lg flex items-center gap-4">
+                                <div class="relative">
+                                    <img src="\${s.avatar}" class="w-12 h-12 rounded-full">
+                                    <span class="absolute -top-1 -\${isRTL ? 'left' : 'right'}-1 w-6 h-6 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center font-bold">\${i + 1}</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-bold text-gray-900 dark:text-white">\${s.name}</p>
+                                    <p class="text-sm text-gray-500">\\$\${s.amount.toFixed(2)}</p>
+                                    \${s.message ? \`<p class="text-xs text-gray-400 mt-1 italic">"\${s.message}"</p>\` : ''}
+                                </div>
+                            </div>
+                        \`).join('');
+                        
+                        if (data.total_donations > 0) {
+                            document.getElementById('totalDonations').innerHTML = 
+                                \`<p class="text-lg">\${tr.total_raised || 'Total raised:'} <span class="font-bold text-purple-600">\\$\${data.total_donations.toFixed(2)}</span></p>\`;
+                        }
+                    } else {
+                        document.getElementById('supportersList').innerHTML = \`
+                            <div class="col-span-3 text-center py-8 text-gray-500">
+                                <i class="fas fa-heart text-4xl mb-4 text-gray-300"></i>
+                                <p>\${tr.no_supporters_yet || 'Be the first to support Dueli!'}</p>
+                            </div>
+                        \`;
+                    }
+                } catch (err) {
+                    console.error('Failed to load supporters:', err);
+                    document.getElementById('supportersList').innerHTML = \`
+                        <div class="col-span-3 text-center py-8 text-gray-500">
+                            <p>\${tr.failed_load_supporters || 'Failed to load supporters'}</p>
                         </div>
-                        <div class="flex-1">
-                            <p class="font-bold text-gray-900 dark:text-white">\${s.name}</p>
-                            <p class="text-sm text-gray-500">$\${s.amount}</p>
-                        </div>
-                    </div>
-                \`).join('');
+                    \`;
+                }
             }
             
             async function processDonation() {
                 const amount = parseInt(document.getElementById('customAmount').value) || selectedAmount;
                 if (amount < 1) {
-                    window.dueli?.toast?.error?.('Please enter a valid amount');
+                    alert(tr.invalid_amount || 'Please enter a valid amount');
                     return;
                 }
                 
-                // TODO: Integrate with payment processor
-                alert(\`Thank you for your donation of $\${amount}! Payment processing will be implemented soon.\`);
+                const message = document.getElementById('donationMessage').value;
+                const isAnonymous = document.getElementById('anonymousDonation').checked;
+                
+                const donateBtn = document.querySelector('button[onclick="processDonation()"]');
+                donateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (tr.processing || 'Processing...');
+                donateBtn.disabled = true;
+                
+                try {
+                    const res = await fetch('/api/donations/create-intent', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || ''),
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            amount: amount,
+                            currency: 'USD',
+                            message: message,
+                            is_anonymous: isAnonymous
+                        })
+                    });
+                    
+                    const data = await res.json();
+                    
+                    if (data.success) {
+                        // Simulate payment confirmation (in production, this would be Stripe checkout)
+                        const confirmRes = await fetch('/api/donations/confirm', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                donation_id: data.donation_id,
+                                payment_intent_id: data.client_secret
+                            })
+                        });
+                        
+                        const confirmData = await confirmRes.json();
+                        
+                        if (confirmData.success) {
+                            alert((tr.thank_you_donation || 'Thank you for your donation!') + '\\n' + 
+                                  (tr.amount || 'Amount:') + ' $' + amount);
+                            document.getElementById('customAmount').value = '';
+                            document.getElementById('donationMessage').value = '';
+                            document.getElementById('anonymousDonation').checked = false;
+                            loadSupporters(); // Refresh supporters list
+                        } else {
+                            alert(tr.payment_failed || 'Payment failed. Please try again.');
+                        }
+                    } else {
+                        alert((tr.donation_failed || 'Failed to create donation:') + ' ' + (data.error || ''));
+                    }
+                } catch (err) {
+                    console.error('Donation error:', err);
+                    alert(tr.donation_error || 'An error occurred. Please try again later.');
+                } finally {
+                    donateBtn.innerHTML = '<i class="fas fa-heart"></i> ' + (tr.donate_now || 'Donate Now');
+                    donateBtn.disabled = false;
+                }
             }
         </script>
     `;

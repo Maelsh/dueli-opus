@@ -147,20 +147,4 @@ competitionsRoutes.delete('/:id/request', (c) => controller.cancelRequest(c));
  */
 competitionsRoutes.delete('/:competitionId/comments/:commentId', (c) => controller.deleteComment(c));
 
-// ============================================
-// Streaming Operations
-// ============================================
-
-/**
- * Start streaming - set user as busy
- * POST /api/competitions/:id/start-stream
- */
-competitionsRoutes.post('/:id/start-stream', (c) => controller.startStreaming(c));
-
-/**
- * End streaming - set user as free
- * POST /api/competitions/:id/end-stream
- */
-competitionsRoutes.post('/:id/end-stream', (c) => controller.endStreaming(c));
-
 export default competitionsRoutes;

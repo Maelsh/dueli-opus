@@ -20,8 +20,3 @@ export { MessageModel, ConversationModel, Message, Conversation, MessageWithSend
 export { AdvertisementModel, EarningsModel, Advertisement, AdImpression, UserEarnings } from './AdvertisementModel';
 export { UserSettingsModel, UserPostModel, UserSettings, UserPost, UserPostWithAuthor } from './UserSettingsModel';
 export { ScheduleModel, CompetitionReminder, ReminderWithDetails } from './ScheduleModel';
-export { CompetitionRequestModel } from './CompetitionRequestModel';
-export { CompetitionInvitationModel } from './CompetitionInvitationModel';
-export { UserBlockModel } from './UserBlockModel';
-export { WatchHistoryModel } from './WatchHistoryModel';
-export { WatchLaterModel } from './WatchLaterModel';

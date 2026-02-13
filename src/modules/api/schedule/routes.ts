@@ -12,14 +12,6 @@ const scheduleRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new ScheduleController();
 
 /**
- * GET /api/cron
- * Cron endpoint (internal use only)
- */
-scheduleRoutes.get('/cron', async (c) => {
-    return controller.handleCron(c);
-});
-
-/**
  * GET /api/schedule
  * Get user's upcoming scheduled competitions
  */

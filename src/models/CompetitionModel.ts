@@ -7,7 +7,6 @@
 
 import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { Competition, CompetitionStatus } from '../config/types';
-import { ConflictError, NotFoundError } from '../lib/errors/AppError';
 
 /**
  * Competition filter options
@@ -350,125 +349,6 @@ export class CompetitionModel extends BaseModel<Competition> {
         await this.db.prepare(
             'UPDATE competitions SET total_views = total_views + 1 WHERE id = ?'
         ).bind(id).run();
-    }
-
-    /**
-     * Check for time conflicts (within 2 hours window)
-     * التحقق من تعارض زمني
-     */
-    async hasTimeConflict(
-        userId: number, 
-        scheduledAt: string, 
-        excludeCompetitionId?: number
-    ): Promise<boolean> {
-        const twoHours = 2 * 60 * 60; // seconds
-        
-        let query = `
-            SELECT 1 FROM competitions 
-            WHERE (creator_id = ? OR opponent_id = ?)
-            AND status IN ('accepted', 'live')
-            AND scheduled_at IS NOT NULL
-            AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < ?
-        `;
-        
-        const params: any[] = [userId, userId, scheduledAt, twoHours];
-        
-        if (excludeCompetitionId) {
-            query += ` AND id != ?`;
-            params.push(excludeCompetitionId);
-        }
-        
-        const result = await this.db.prepare(query).bind(...params).first();
-        return result !== null;
-    }
-
-    /**
-     * Get pending competitions count for user
-     * عدد المنافسات المعلقة
-     */
-    async getPendingCount(userId: number): Promise<number> {
-        const result = await this.db.prepare(`
-            SELECT COUNT(*) as count FROM competitions 
-            WHERE creator_id = ? 
-            AND status = 'pending'
-            AND opponent_id IS NULL
-        `).bind(userId).first<{ count: number }>();
-        
-        return result?.count || 0;
-    }
-
-    /**
-     * Update competition status with state machine validation
-     * تحديث حالة المنافسة
-     */
-    async updateStatus(
-        id: number, 
-        status: CompetitionStatus, 
-        additionalFields?: Partial<Competition>
-    ): Promise<boolean> {
-        const allowedTransitions: Record<CompetitionStatus, CompetitionStatus[]> = {
-            'pending': ['accepted', 'cancelled'],
-            'accepted': ['live', 'cancelled'],
-            'live': ['completed'],
-            'completed': [],
-            'cancelled': []
-        };
-        
-        const current = await this.findById(id);
-        if (!current) throw new NotFoundError('المنافسة');
-        
-        const currentStatus = current.status as CompetitionStatus;
-        if (!allowedTransitions[currentStatus]?.includes(status)) {
-            throw new ConflictError(
-                `لا يمكن التحول من ${currentStatus} إلى ${status}`
-            );
-        }
-        
-        const updates: any = { status, updated_at: new Date().toISOString() };
-        
-        if (status === 'accepted') {
-            updates.accepted_at = new Date().toISOString();
-        } else if (status === 'live') {
-            updates.started_at = new Date().toISOString();
-        } else if (status === 'completed') {
-            updates.ended_at = new Date().toISOString();
-        }
-        
-        Object.assign(updates, additionalFields);
-        
-        const setClause = Object.keys(updates)
-            .map(k => `${k} = ?`)
-            .join(', ');
-        
-        const result = await this.db.prepare(`
-            UPDATE ${this.tableName} SET ${setClause} WHERE id = ?`
-        ).bind(...Object.values(updates), id).run();
-        
-        return result.meta.changes > 0;
-    }
-
-    /**
-     * Delete competition with all related data (cascade)
-     * حذف المنافسة مع كل البيانات المرتبطة
-     */
-    async deleteWithRelations(id: number): Promise<void> {
-        await this.db.batch([
-            this.db.prepare('DELETE FROM competition_requests WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM competition_invitations WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM competition_reminders WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM competition_heartbeats WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM competition_scheduled_tasks WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM notifications WHERE reference_type = ? AND reference_id = ?')
-                .bind('competition', id),
-            this.db.prepare('DELETE FROM comments WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM ratings WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM likes WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM dislikes WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM watch_history WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM watch_later WHERE competition_id = ?').bind(id),
-            this.db.prepare('DELETE FROM user_hidden_competitions WHERE competition_id = ?').bind(id),
-            this.db.prepare(`DELETE FROM ${this.tableName} WHERE id = ?`).bind(id),
-        ]);
     }
 }
 

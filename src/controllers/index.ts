@@ -17,4 +17,3 @@ export { MessageController } from './MessageController';
 export { AdminController } from './AdminController';
 export { SettingsController } from './SettingsController';
 export { ScheduleController } from './ScheduleController';
-export { RecommendationController } from './RecommendationController';
