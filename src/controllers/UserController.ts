@@ -369,6 +369,105 @@ export class UserController extends BaseController {
             return this.serverError(c, error as Error);
         }
     }
+
+    /**
+     * Delete user account
+     * DELETE /api/users/me
+     * 
+     * Permanently deletes the user account and all associated data.
+     * This action cannot be undone.
+     */
+    async deleteAccount(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const currentUser = this.getCurrentUser(c);
+
+            const { DB } = c.env;
+            const userId = currentUser.id;
+
+            // Start transaction-like operations
+            // Note: D1 doesn't support explicit transactions, so we do sequential deletes
+
+            // 1. Delete user's sessions
+            await DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run();
+
+            // 2. Delete user's notifications
+            await DB.prepare('DELETE FROM notifications WHERE user_id = ?').bind(userId).run();
+
+            // 3. Delete user's likes and dislikes
+            await DB.prepare('DELETE FROM likes WHERE user_id = ?').bind(userId).run();
+            await DB.prepare('DELETE FROM dislikes WHERE user_id = ?').bind(userId).run();
+
+            // 4. Delete user's ratings
+            await DB.prepare('DELETE FROM ratings WHERE user_id = ?').bind(userId).run();
+
+            // 5. Delete user's comments (or anonymize)
+            await DB.prepare('DELETE FROM comments WHERE user_id = ?').bind(userId).run();
+
+            // 6. Delete user's competition requests
+            await DB.prepare('DELETE FROM competition_requests WHERE requester_id = ?').bind(userId).run();
+
+            // 7. Delete user's competition reminders
+            await DB.prepare('DELETE FROM competition_reminders WHERE user_id = ?').bind(userId).run();
+
+            // 8. Delete user's messages (both sent and received)
+            await DB.prepare('DELETE FROM messages WHERE sender_id = ?').bind(userId).run();
+            // For conversations, we need to handle both user1 and user2
+            await DB.prepare('DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user1_id = ? OR user2_id = ?)').bind(userId, userId).run();
+            await DB.prepare('DELETE FROM conversations WHERE user1_id = ? OR user2_id = ?').bind(userId, userId).run();
+
+            // 9. Delete user's follows (both as follower and following)
+            await DB.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').bind(userId, userId).run();
+
+            // 10. Delete user's reports
+            await DB.prepare('DELETE FROM reports WHERE reporter_id = ?').bind(userId).run();
+
+            // 11. Delete user's posts
+            await DB.prepare('DELETE FROM user_posts WHERE user_id = ?').bind(userId).run();
+
+            // 12. Delete user's settings
+            await DB.prepare('DELETE FROM user_settings WHERE user_id = ?').bind(userId).run();
+
+            // 13. Delete user's earnings
+            await DB.prepare('DELETE FROM user_earnings WHERE user_id = ?').bind(userId).run();
+
+            // 14. Handle user's competitions
+            // For competitions where user is creator, set status to cancelled if pending
+            await DB.prepare(`
+                UPDATE competitions 
+                SET status = 'cancelled', updated_at = datetime('now')
+                WHERE creator_id = ? AND status = 'pending'
+            `).bind(userId).run();
+
+            // For live competitions, we should not delete but handle gracefully
+            // Set opponent_id to NULL if user was opponent
+            await DB.prepare(`
+                UPDATE competitions 
+                SET opponent_id = NULL, updated_at = datetime('now')
+                WHERE opponent_id = ?
+            `).bind(userId).run();
+
+            // 15. Delete user's ad impressions
+            await DB.prepare('DELETE FROM ad_impressions WHERE user_id = ?').bind(userId).run();
+
+            // 16. Finally, delete the user record
+            const result = await DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+
+            if (result.meta.changes > 0) {
+                // Clear the session cookie by returning a header
+                // The client will handle redirecting to home page
+                return c.json({
+                    success: true,
+                    message: this.t('account_deleted', c) || 'Account deleted successfully'
+                });
+            } else {
+                return this.error(c, this.t('user_errors.delete_failed', c) || 'Failed to delete account');
+            }
+        } catch (error) {
+            console.error('Delete account error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
 }
 
 export default UserController;

@@ -39,12 +39,11 @@ export class AdminController extends BaseController {
             const db = c.env.DB;
 
             // Get counts
-            const [users, competitions, reports, ads, pendingWithdrawals] = await Promise.all([
+            const [users, competitions, reports, ads] = await Promise.all([
                 db.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>(),
                 db.prepare('SELECT COUNT(*) as count FROM competitions').first<{ count: number }>(),
                 db.prepare('SELECT COUNT(*) as count FROM reports WHERE status = ?').bind('pending').first<{ count: number }>(),
-                db.prepare('SELECT COUNT(*) as count FROM advertisements WHERE is_active = 1').first<{ count: number }>(),
-                db.prepare('SELECT COUNT(*) as count FROM withdrawal_requests WHERE status = ?').bind('pending').first<{ count: number }>()
+                db.prepare('SELECT COUNT(*) as count FROM advertisements WHERE is_active = 1').first<{ count: number }>()
             ]);
 
             // Competition status breakdown
@@ -57,24 +56,13 @@ export class AdminController extends BaseController {
                 SELECT SUM(amount) as total FROM user_earnings
             `).first<{ total: number | null }>();
 
-            // Total withdrawal stats
-            const withdrawalStats = await db.prepare(`
-                SELECT 
-                    SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as total_approved,
-                    SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as total_pending
-                FROM withdrawal_requests
-            `).first<{ total_approved: number | null; total_pending: number | null }>();
-
             return this.success(c, {
                 users: users?.count || 0,
                 competitions: competitions?.count || 0,
                 pendingReports: reports?.count || 0,
                 activeAds: ads?.count || 0,
-                pendingWithdrawals: pendingWithdrawals?.count || 0,
                 competitionsByStatus: competitionStats.results || [],
-                totalRevenue: revenueStats?.total || 0,
-                totalWithdrawn: withdrawalStats?.total_approved || 0,
-                totalPendingWithdrawals: withdrawalStats?.total_pending || 0
+                totalRevenue: revenueStats?.total || 0
             });
         } catch (error) {
             console.error('Admin stats error:', error);
@@ -303,164 +291,6 @@ export class AdminController extends BaseController {
             return this.success(c, { deleted: true });
         } catch (error) {
             console.error('Admin delete ad error:', error);
-            return this.serverError(c, error as Error);
-        }
-    }
-
-    // =====================================
-    // Withdrawals - السحوبات
-    // =====================================
-
-    /**
-     * Get pending withdrawals
-     * GET /api/admin/withdrawals/pending
-     */
-    async getPendingWithdrawals(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
-        try {
-            if (!await this.isAdmin(c)) return this.forbidden(c);
-
-            const db = c.env.DB;
-            const limit = this.getQueryInt(c, 'limit') || 50;
-
-            const result = await db.prepare(`
-                SELECT w.*, u.username, u.display_name, u.email
-                FROM withdrawal_requests w
-                JOIN users u ON w.user_id = u.id
-                WHERE w.status = 'pending'
-                ORDER BY w.created_at ASC
-                LIMIT ?
-            `).bind(limit).all();
-
-            return this.success(c, { 
-                pending_withdrawals: result.results || [],
-                count: result.results?.length || 0
-            });
-        } catch (error) {
-            console.error('Admin get pending withdrawals error:', error);
-            return this.serverError(c, error as Error);
-        }
-    }
-
-    /**
-     * Get all withdrawals (with filters)
-     * GET /api/admin/withdrawals
-     */
-    async getAllWithdrawals(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
-        try {
-            if (!await this.isAdmin(c)) return this.forbidden(c);
-
-            const db = c.env.DB;
-            const status = this.getQuery(c, 'status');
-            const limit = this.getQueryInt(c, 'limit') || 50;
-            const offset = this.getQueryInt(c, 'offset') || 0;
-
-            let query = `
-                SELECT w.*, u.username, u.display_name, u.email
-                FROM withdrawal_requests w
-                JOIN users u ON w.user_id = u.id
-            `;
-            const params: any[] = [];
-
-            if (status) {
-                query += ` WHERE w.status = ?`;
-                params.push(status);
-            }
-
-            query += ` ORDER BY w.created_at DESC LIMIT ? OFFSET ?`;
-            params.push(limit, offset);
-
-            const result = await db.prepare(query).bind(...params).all();
-
-            // Get summary stats
-            const stats = await db.prepare(`
-                SELECT 
-                    COUNT(*) as total_count,
-                    SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as total_pending,
-                    SUM(CASE WHEN status = 'approved' THEN amount ELSE 0 END) as total_approved,
-                    SUM(CASE WHEN status = 'rejected' THEN amount ELSE 0 END) as total_rejected
-                FROM withdrawal_requests
-            `).first();
-
-            return this.success(c, { 
-                withdrawals: result.results || [],
-                stats: stats || {
-                    total_count: 0,
-                    total_pending: 0,
-                    total_approved: 0,
-                    total_rejected: 0
-                }
-            });
-        } catch (error) {
-            console.error('Admin get all withdrawals error:', error);
-            return this.serverError(c, error as Error);
-        }
-    }
-
-    /**
-     * Process withdrawal (approve/reject)
-     * POST /api/admin/withdrawals/:id/process
-     */
-    async processWithdrawal(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
-        try {
-            if (!await this.isAdmin(c)) return this.forbidden(c);
-
-            const withdrawalId = this.getParamInt(c, 'id');
-            const user = this.getCurrentUser(c);
-            const body = await this.getBody<{
-                action: 'approved' | 'rejected';
-                notes?: string;
-            }>(c);
-
-            if (!withdrawalId || !body?.action) {
-                return this.validationError(c, this.t('errors.missing_fields', c));
-            }
-
-            const db = c.env.DB;
-
-            // Get the withdrawal request
-            const withdrawal = await db.prepare(`
-                SELECT * FROM withdrawal_requests WHERE id = ?
-            `).bind(withdrawalId).first();
-
-            if (!withdrawal) {
-                return this.notFound(c, 'Withdrawal request not found');
-            }
-
-            if (withdrawal.status !== 'pending') {
-                return this.validationError(c, 'Withdrawal request already processed');
-            }
-
-            // Update status
-            await db.prepare(`
-                UPDATE withdrawal_requests 
-                SET status = ?, processed_by = ?, processed_at = datetime('now'), notes = ?
-                WHERE id = ?
-            `).bind(body.action, user.id, body.notes || null, withdrawalId).run();
-
-            // Notify user
-            const statusMessage = body.action === 'approved' 
-                ? `Your withdrawal request for $${withdrawal.amount} has been approved and is being processed.`
-                : `Your withdrawal request for $${withdrawal.amount} has been rejected. Reason: ${body.notes || 'No reason provided'}`;
-
-            await db.prepare(`
-                INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                VALUES (?, 'system', ?, ?, 'withdrawal', ?, datetime('now'))
-            `).bind(
-                withdrawal.user_id,
-                `Withdrawal ${body.action === 'approved' ? 'Approved' : 'Rejected'}`,
-                statusMessage,
-                withdrawalId
-            ).run();
-
-            return this.success(c, {
-                processed: true,
-                withdrawal_id: withdrawalId,
-                status: body.action,
-                message: `Withdrawal request ${body.action} successfully`
-            });
-
-        } catch (error) {
-            console.error('Admin process withdrawal error:', error);
             return this.serverError(c, error as Error);
         }
     }

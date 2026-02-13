@@ -1,13 +1,7 @@
 /**
  * @file src/models/DonationModel.ts
- * @description نموذج المنح والتبرعات (FR-020)
+ * @description نموذج التبرعات
  * @module models/DonationModel
- * 
- * Types:
- * - user → platform (support the platform)
- * - user → user (direct support)
- * Minimum: $1
- * Transparency: publicly displayed if sender agrees
  */
 
 import { D1Database } from '@cloudflare/workers-types';
@@ -18,28 +12,31 @@ import { BaseModel } from './base/BaseModel';
  */
 export interface Donation {
     id: number;
-    sender_id: number;
-    receiver_id: number | null;  // null = platform donation
+    user_id: number | null;
     amount: number;
     currency: string;
-    message: string | null;
-    is_public: number;  // 1 = publicly visible, 0 = private
-    status: 'pending' | 'completed' | 'failed';
-    payment_method: string | null;
+    payment_method: string;
+    payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
     transaction_id: string | null;
+    donor_name: string | null;
+    donor_email: string | null;
+    message: string | null;
+    is_anonymous: boolean;
     created_at: string;
 }
 
 /**
- * Donation with user details
+ * Create Donation Data
  */
-export interface DonationWithDetails extends Donation {
-    sender_username: string;
-    sender_display_name: string;
-    sender_avatar: string | null;
-    receiver_username?: string;
-    receiver_display_name?: string;
-    receiver_avatar?: string | null;
+export interface CreateDonationData {
+    user_id?: number;
+    amount: number;
+    currency?: string;
+    payment_method: string;
+    donor_name?: string;
+    donor_email?: string;
+    message?: string;
+    is_anonymous?: boolean;
 }
 
 /**
@@ -54,21 +51,24 @@ export class DonationModel extends BaseModel<Donation> {
     }
 
     /**
-     * Create donation
+     * Create - required by BaseModel
      */
     async create(data: Partial<Donation>): Promise<Donation> {
+        const now = new Date().toISOString();
         const result = await this.db.prepare(`
             INSERT INTO ${this.tableName} 
-            (sender_id, receiver_id, amount, currency, message, is_public, status, payment_method, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, datetime('now'))
+            (user_id, amount, currency, payment_method, payment_status, donor_name, donor_email, message, is_anonymous, created_at)
+            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         `).bind(
-            data.sender_id,
-            data.receiver_id || null,
+            data.user_id || null,
             data.amount,
             data.currency || 'USD',
+            data.payment_method,
+            data.donor_name || null,
+            data.donor_email || null,
             data.message || null,
-            data.is_public ?? 1,
-            data.payment_method || null
+            data.is_anonymous ? 1 : 0,
+            now
         ).run();
 
         if (result.success && result.meta.last_row_id) {
@@ -78,15 +78,15 @@ export class DonationModel extends BaseModel<Donation> {
     }
 
     /**
-     * Update donation status
+     * Update - required by BaseModel
      */
     async update(id: number, data: Partial<Donation>): Promise<Donation | null> {
         const updates: string[] = [];
         const values: any[] = [];
 
-        if (data.status !== undefined) {
-            updates.push('status = ?');
-            values.push(data.status);
+        if (data.payment_status !== undefined) {
+            updates.push('payment_status = ?');
+            values.push(data.payment_status);
         }
         if (data.transaction_id !== undefined) {
             updates.push('transaction_id = ?');
@@ -104,64 +104,83 @@ export class DonationModel extends BaseModel<Donation> {
     }
 
     /**
-     * Get public donations (for transparency page)
+     * Create a new donation
      */
-    async getPublicDonations(limit: number = 50, offset: number = 0): Promise<DonationWithDetails[]> {
-        const result = await this.db.prepare(`
-            SELECT d.*,
-                   s.username as sender_username, s.display_name as sender_display_name, s.avatar_url as sender_avatar,
-                   r.username as receiver_username, r.display_name as receiver_display_name, r.avatar_url as receiver_avatar
-            FROM ${this.tableName} d
-            JOIN users s ON d.sender_id = s.id
-            LEFT JOIN users r ON d.receiver_id = r.id
-            WHERE d.is_public = 1 AND d.status = 'completed'
-            ORDER BY d.created_at DESC
-            LIMIT ? OFFSET ?
-        `).bind(limit, offset).all<DonationWithDetails>();
-        return result.results || [];
+    async createDonation(data: CreateDonationData): Promise<Donation> {
+        return this.create({
+            user_id: data.user_id,
+            amount: data.amount,
+            currency: data.currency || 'USD',
+            payment_method: data.payment_method,
+            donor_name: data.donor_name,
+            donor_email: data.donor_email,
+            message: data.message,
+            is_anonymous: data.is_anonymous || false
+        });
     }
 
     /**
-     * Get donations received by a user
+     * Mark donation as completed
      */
-    async getReceivedDonations(userId: number, limit: number = 20, offset: number = 0): Promise<DonationWithDetails[]> {
-        const result = await this.db.prepare(`
-            SELECT d.*,
-                   s.username as sender_username, s.display_name as sender_display_name, s.avatar_url as sender_avatar
-            FROM ${this.tableName} d
-            JOIN users s ON d.sender_id = s.id
-            WHERE d.receiver_id = ? AND d.status = 'completed'
-            ORDER BY d.created_at DESC
-            LIMIT ? OFFSET ?
-        `).bind(userId, limit, offset).all<DonationWithDetails>();
-        return result.results || [];
+    async markCompleted(id: number, transactionId: string): Promise<Donation | null> {
+        return this.update(id, {
+            payment_status: 'completed',
+            transaction_id: transactionId
+        });
     }
 
     /**
-     * Get donations sent by a user
+     * Mark donation as failed
      */
-    async getSentDonations(userId: number, limit: number = 20, offset: number = 0): Promise<DonationWithDetails[]> {
-        const result = await this.db.prepare(`
-            SELECT d.*,
-                   r.username as receiver_username, r.display_name as receiver_display_name, r.avatar_url as receiver_avatar
-            FROM ${this.tableName} d
-            LEFT JOIN users r ON d.receiver_id = r.id
-            WHERE d.sender_id = ? AND d.status = 'completed'
-            ORDER BY d.created_at DESC
-            LIMIT ? OFFSET ?
-        `).bind(userId, limit, offset).all<DonationWithDetails>();
-        return result.results || [];
+    async markFailed(id: number): Promise<Donation | null> {
+        return this.update(id, { payment_status: 'failed' });
     }
 
     /**
-     * Get platform donations total
+     * Get top supporters
      */
-    async getPlatformDonationsTotal(): Promise<number> {
+    async getTopSupporters(limit: number = 10): Promise<{ donor_name: string; total_amount: number; avatar: string }[]> {
         const result = await this.db.prepare(`
-            SELECT COALESCE(SUM(amount), 0) as total
+            SELECT 
+                COALESCE(donor_name, 'Anonymous') as donor_name,
+                SUM(amount) as total_amount
             FROM ${this.tableName}
-            WHERE receiver_id IS NULL AND status = 'completed'
+            WHERE payment_status = 'completed'
+            GROUP BY donor_name
+            ORDER BY total_amount DESC
+            LIMIT ?
+        `).bind(limit).all<{ donor_name: string; total_amount: number }>();
+
+        return (result.results || []).map((r, i) => ({
+            donor_name: r.donor_name,
+            total_amount: r.total_amount,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${r.donor_name || i}`
+        }));
+    }
+
+    /**
+     * Get donations by user
+     */
+    async getDonationsByUser(userId: number, limit: number = 20): Promise<Donation[]> {
+        const result = await this.db.prepare(`
+            SELECT * FROM ${this.tableName}
+            WHERE user_id = ? AND payment_status = 'completed'
+            ORDER BY created_at DESC
+            LIMIT ?
+        `).bind(userId, limit).all<Donation>();
+
+        return result.results || [];
+    }
+
+    /**
+     * Get total donations amount
+     */
+    async getTotalDonations(): Promise<number> {
+        const result = await this.db.prepare(`
+            SELECT SUM(amount) as total FROM ${this.tableName}
+            WHERE payment_status = 'completed'
         `).first<{ total: number }>();
+
         return result?.total || 0;
     }
 }

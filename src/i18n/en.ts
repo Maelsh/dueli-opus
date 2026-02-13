@@ -237,7 +237,19 @@ export const en = {
     user_errors: {
         not_found: 'User not found',
         cannot_follow_self: 'Cannot follow yourself',
+        delete_failed: 'Failed to delete account',
     },
+
+    // Account Deletion
+    confirm_delete_account: 'Are you sure you want to delete your account?',
+    confirm_delete_account_final: 'This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?',
+    account_deleted: 'Your account has been deleted successfully.',
+    delete_account: 'Delete Account',
+    delete_account_warning: 'Deleting your account is permanent and cannot be undone.',
+    danger_zone: 'Danger Zone',
+    settings_saved: 'Settings saved!',
+    email_notifications: 'Email notifications',
+    push_notifications: 'Push notifications',
 
     // Category Messages
     category: {
@@ -487,6 +499,7 @@ export const en = {
     viewers_cannot_close_ads: 'Viewers cannot close ads',
     report_ad_confirm: 'Report this ad as inappropriate?',
     ad_reported: 'Ad reported. Thank you!',
+    report_failed: 'Failed to submit report',
 
     // Navigation (new)
     notifications: 'Notifications',
@@ -510,6 +523,14 @@ export const en = {
     withdraw: 'Withdraw',
     min_withdrawal: 'Minimum withdrawal: $50.00',
     request_withdrawal: 'Request Withdrawal',
+    select_payment_method: 'Select payment method:',
+    enter_payment_details: 'Enter your payment details:',
+    enter_withdrawal_amount: 'Enter withdrawal amount (min $50):',
+    invalid_payment_method: 'Invalid payment method',
+    payment_details_required: 'Payment details are required',
+    insufficient_balance: 'Insufficient available balance',
+    withdrawal_requested: 'Withdrawal request submitted successfully!',
+    withdrawal_failed: 'Failed to request withdrawal',
 
     // Reports Page
     report_type: 'Report Type',
@@ -531,19 +552,12 @@ export const en = {
     custom_amount: 'Or enter a custom amount',
     donate_now: 'Donate Now',
     top_supporters: 'Top Supporters',
-    leave_message: 'Leave a message (optional)',
-    donation_message_placeholder: 'Your message to the Dueli team...',
-    donate_anonymously: 'Donate anonymously',
-    total_raised: 'Total raised:',
-    no_supporters_yet: 'Be the first to support Dueli!',
-    failed_load_supporters: 'Failed to load supporters',
     invalid_amount: 'Please enter a valid amount',
-    processing: 'Processing...',
-    thank_you_donation: 'Thank you for your donation!',
-    amount: 'Amount:',
-    payment_failed: 'Payment failed. Please try again.',
-    donation_failed: 'Failed to create donation:',
-    donation_error: 'An error occurred. Please try again later.',
+    donate_as_yourself: 'Would you like your name to appear in the supporters list?',
+    enter_your_name: 'Enter your name (will be shown publicly):',
+    enter_your_email: 'Enter your email (for receipt, optional):',
+    donation_created: 'Thank you for your donation! You will be redirected to complete payment.',
+    donation_failed: 'Failed to process donation',
 
     // Test Stream Pages
     test_stream: 'Test Stream',

@@ -8,7 +8,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { UserController } from '../../../controllers';
-import deleteAccountRoutes from './delete-account';
+import { authMiddleware } from '../../../middleware/auth';
 
 const usersRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new UserController();
@@ -36,6 +36,17 @@ usersRoutes.get('/:username', (c) => controller.show(c));
 usersRoutes.get('/:id/requests', (c) => controller.getRequests(c));
 
 // ============================================
+// Account Management
+// ============================================
+
+/**
+ * Delete current user's account
+ * DELETE /api/users/me
+ * Requires authentication
+ */
+usersRoutes.delete('/me', authMiddleware, (c) => controller.deleteAccount(c));
+
+// ============================================
 // Preferences
 // ============================================
 
@@ -60,15 +71,5 @@ usersRoutes.post('/:id/follow', (c) => controller.follow(c));
  * DELETE /api/users/:id/follow
  */
 usersRoutes.delete('/:id/follow', (c) => controller.unfollow(c));
-
-// ============================================
-// Account Deletion
-// ============================================
-
-/**
- * Mount delete account routes
- * POST /api/users/delete-account
- */
-usersRoutes.route('/delete-account', deleteAccountRoutes);
 
 export default usersRoutes;

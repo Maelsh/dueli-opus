@@ -218,6 +218,9 @@ declare global {
         VideoCompositor: typeof VideoCompositor;
         ChunkUploader: typeof ChunkUploader;
 
+        // Toast notifications
+        Toast: typeof Toast;
+
         // Note: Test Streaming functions are injected as inline scripts in test pages
     }
 }
@@ -309,6 +312,9 @@ if (typeof window !== 'undefined') {
     window.P2PConnection = P2PConnection;
     window.VideoCompositor = VideoCompositor;
     window.ChunkUploader = ChunkUploader;
+
+    // Bind Toast for notifications
+    window.Toast = Toast;
 
     // Note: Test Streaming functions are injected as inline scripts in test pages
 }

@@ -215,103 +215,37 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             }
             
             async function deleteAccount() {
-                const confirmMsg = tr.confirm_delete_account || 'Are you sure you want to delete your account? This action cannot be undone.';
-                if (!confirm(confirmMsg)) return;
+                if (!confirm(\`\${tr.confirm_delete_account || 'Are you sure you want to delete your account?'}\`)) return;
                 
-                // Step 1: Verify password
-                const passwordPrompt = tr.enter_password_confirm || 'Please enter your password to confirm:';
-                const password = prompt(passwordPrompt);
-                if (!password) return;
+                // Second confirmation for safety
+                if (!confirm(\`\${tr.confirm_delete_account_final || 'This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?'}\`)) return;
                 
                 try {
-                    // Show loading
-                    const deleteBtn = document.querySelector('button[onclick="deleteAccount()"]');
-                    if (deleteBtn) {
-                        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (tr.verifying || 'Verifying...');
-                        deleteBtn.disabled = true;
-                    }
-                    
-                    // Verify password first
-                    const verifyRes = await fetch('/api/users/delete-account/verify', {
-                        method: 'POST',
+                    const res = await fetch('/api/users/me', {
+                        method: 'DELETE',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ password })
-                    });
-                    
-                    const verifyData = await verifyRes.json();
-                    
-                    if (!verifyData.success) {
-                        alert(tr.invalid_password || 'Invalid password. Please try again.');
-                        if (deleteBtn) {
-                            deleteBtn.innerHTML = '<i class="fas fa-trash ' + (isRTL ? 'ml-2' : 'mr-2') + '"></i>' + (tr.delete_account || 'Delete Account');
-                            deleteBtn.disabled = false;
+                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
                         }
-                        return;
-                    }
-                    
-                    // Step 2: Confirm deletion reason
-                    const reasonPrompt = tr.deletion_reason || 'Please tell us why you are leaving (optional):';
-                    const reason = prompt(reasonPrompt);
-                    
-                    // Step 3: Final confirmation
-                    const finalWarning = tr.final_delete_confirm || 'FINAL WARNING: This will permanently delete your account and all associated data. Are you absolutely sure?';
-                    const finalConfirm = confirm(finalWarning);
-                    
-                    if (!finalConfirm) {
-                        if (deleteBtn) {
-                            deleteBtn.innerHTML = '<i class="fas fa-trash ' + (isRTL ? 'ml-2' : 'mr-2') + '"></i>' + (tr.delete_account || 'Delete Account');
-                            deleteBtn.disabled = false;
-                        }
-                        return;
-                    }
-                    
-                    // Proceed with deletion
-                    const res = await fetch('/api/users/delete-account', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ 
-                            confirm: true,
-                            reason: reason || null
-                        })
                     });
                     
                     const data = await res.json();
                     
-                    if (data.success) {
+                    if (res.ok && data.success) {
                         // Clear local storage
-                        localStorage.removeItem('sessionId');
-                        localStorage.removeItem('user');
-                        
-                        // Show success message
-                        alert(tr.account_deleted || 'Your account has been successfully deleted. We are sorry to see you go.');
-                        
-                        // Redirect to home
+                        localStorage.clear();
+                        // Clear session cookie
+                        document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+                        // Show message and redirect
+                        alert(\`\${tr.account_deleted || 'Your account has been deleted successfully.'}\`);
                         window.location.href = '/?lang=' + lang;
                     } else {
-                        alert((tr.delete_failed || 'Failed to delete account:') + ' ' + (data.error || ''));
-                        if (deleteBtn) {
-                            deleteBtn.innerHTML = '<i class="fas fa-trash ' + (isRTL ? 'ml-2' : 'mr-2') + '"></i>' + (tr.delete_account || 'Delete Account');
-                            deleteBtn.disabled = false;
-                        }
+                        alert(\`\${data.error || tr.error_occurred || 'Failed to delete account. Please try again.'}\`);
                     }
                 } catch (err) {
-                    console.error('Account deletion error:', err);
-                    alert(tr.delete_error || 'An error occurred while deleting your account. Please try again later.');
-                    const deleteBtn = document.querySelector('button[onclick="deleteAccount()"]');
-                    if (deleteBtn) {
-                        deleteBtn.innerHTML = '<i class="fas fa-trash ' + (isRTL ? 'ml-2' : 'mr-2') + '"></i>' + (tr.delete_account || 'Delete Account');
-                        deleteBtn.disabled = false;
-                    }
+                    console.error('Delete account error:', err);
+                    alert(\`\${tr.error_occurred || 'An error occurred. Please try again later.'}\`);
                 }
             }
-
-
         </script>
     `;
 

@@ -99,32 +99,4 @@ adminRoutes.delete('/ads/:id', async (c) => {
     return controller.deleteAd(c);
 });
 
-// =====================================
-// Withdrawals - السحوبات
-// =====================================
-
-/**
- * GET /api/admin/withdrawals
- * Get all withdrawals with filters
- */
-adminRoutes.get('/withdrawals', async (c) => {
-    return controller.getAllWithdrawals(c);
-});
-
-/**
- * GET /api/admin/withdrawals/pending
- * Get pending withdrawals
- */
-adminRoutes.get('/withdrawals/pending', async (c) => {
-    return controller.getPendingWithdrawals(c);
-});
-
-/**
- * POST /api/admin/withdrawals/:id/process
- * Process (approve/reject) withdrawal
- */
-adminRoutes.post('/withdrawals/:id/process', async (c) => {
-    return controller.processWithdrawal(c);
-});
-
 export default adminRoutes;

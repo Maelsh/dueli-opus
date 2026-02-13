@@ -12,9 +12,6 @@ import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
 
-// Import Security Middleware
-import { securityHeaders, rateLimit, csrfProtection } from './middleware/security';
-
 // Import API Routes - استيراد مسارات API
 import categoriesRoutes from './modules/api/categories/routes';
 import competitionsRoutes from './modules/api/competitions/routes';
@@ -29,17 +26,14 @@ import chunksRoutes from './modules/api/chunks/routes';
 
 // Import New Feature Routes - استيراد مسارات الميزات الجديدة
 import searchRoutes from './modules/api/search/routes';
-import enhancedSearchRoutes from './modules/api/search/enhanced-routes';
 import likesRoutes from './modules/api/likes/routes';
 import reportsRoutes from './modules/api/reports/routes';
 import messagesRoutes from './modules/api/messages/routes';
 import adminRoutes from './modules/api/admin/routes';
 import settingsRoutes from './modules/api/settings/routes';
 import scheduleRoutes from './modules/api/schedule/routes';
-import withdrawalRoutes from './modules/api/earnings/withdrawal-routes';
-import donationRoutes from './modules/api/donations/routes';
-import adReportRoutes from './modules/api/ad-reports/routes';
-import analyticsRoutes from './modules/api/analytics/routes';
+import earningsRoutes from './modules/api/earnings/routes';
+import donationsRoutes from './modules/api/donations/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -53,34 +47,13 @@ import { generateHTML } from './shared/templates/layout';
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // ============================================
-// Security Middleware - وسيط الأمان
+// Middleware - البرمجيات الوسيطة
 // ============================================
-
-// Apply security headers to all routes
-app.use('*', securityHeaders());
 
 // CORS Middleware
 app.use('/api/*', cors());
 
-// Rate limiting for API routes
-app.use('/api/*', rateLimit({
-    windowMs: 60000,
-    maxRequests: 100
-}));
-
-// Strict rate limiting for auth routes
-app.use('/api/auth/*', rateLimit({
-    windowMs: 900000,
-    maxRequests: 10
-}));
-
-// CSRF protection for state-changing routes
-app.use('/api/*', csrfProtection());
-
-// ============================================
 // Language Middleware - برنامج اللغة الوسيط
-// ============================================
-
 app.use('*', async (c, next) => {
   const langParam = c.req.query('lang');
   const cookieLang = c.req.header('Cookie')?.match(/lang=(\w+)/)?.[1];
@@ -115,17 +88,14 @@ app.route('/api/chunks', chunksRoutes);
 
 // Mount New Feature Routes - تركيب مسارات الميزات الجديدة
 app.route('/api/search', searchRoutes);
-app.route('/api/search/enhanced', enhancedSearchRoutes);
 app.route('/api', likesRoutes);
 app.route('/api/reports', reportsRoutes);
 app.route('/api', messagesRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/settings', settingsRoutes);
 app.route('/api', scheduleRoutes);
-app.route('/api/earnings/withdrawal', withdrawalRoutes);
-app.route('/api/donations', donationRoutes);
-app.route('/api/ad-reports', adReportRoutes);
-app.route('/api/analytics', analyticsRoutes);
+app.route('/api/earnings', earningsRoutes);
+app.route('/api/donations', donationsRoutes);
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);

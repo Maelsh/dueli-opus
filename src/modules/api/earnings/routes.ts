@@ -1,133 +1,156 @@
 /**
- * Earnings API Routes
- * مسارات API للأرباح
- * Plan: Monetization - نظام الأرباح
+ * @file src/modules/api/earnings/routes.ts
+ * @description مسارات الأرباح
+ * @module api/earnings/routes
  */
 
 import { Hono } from 'hono';
-import type { Bindings, Variables } from '../../../config/types';
+import { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
+import { EarningsModel } from '../../../models/EarningsModel';
 
 const earningsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-earningsRoutes.use('*', authMiddleware({ required: true }));
-
 /**
- * Get user's earnings summary
  * GET /api/earnings
+ * Get current user's earnings
  */
-earningsRoutes.get('/', async (c) => {
-    const user = c.get('user') as any;
+earningsRoutes.get('/', authMiddleware, async (c) => {
+    try {
+        const user = c.get('user');
+        if (!user) {
+            return c.json({ success: false, error: { message: 'Unauthorized' } }, 401);
+        }
 
-    const summary = await c.env.DB.prepare(`
-        SELECT 
-            COALESCE(SUM(CASE WHEN status = 'available' THEN amount ELSE 0 END), 0) as available,
-            COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) as pending,
-            COALESCE(SUM(CASE WHEN status = 'withdrawn' THEN amount ELSE 0 END), 0) as withdrawn,
-            COALESCE(SUM(amount), 0) as total
-        FROM user_earnings WHERE user_id = ?
-    `).bind(user.id).first();
+        const earningsModel = new EarningsModel(c.env.DB);
+        const earnings = await earningsModel.getOrCreateForUser(user.id);
 
-    return c.json({ success: true, data: summary });
+        return c.json({
+            success: true,
+            data: {
+                available: earnings.available || 0,
+                pending: earnings.pending || 0,
+                on_hold: earnings.on_hold || 0,
+                total: earnings.total || 0,
+                withdrawn: earnings.withdrawn || 0
+            }
+        });
+    } catch (error) {
+        console.error('Get earnings error:', error);
+        return c.json({
+            success: false,
+            error: { message: 'Failed to get earnings' }
+        }, 500);
+    }
 });
 
 /**
- * Get earnings history
- * GET /api/earnings/history
+ * POST /api/earnings/withdrawal
+ * Request a withdrawal
  */
-earningsRoutes.get('/history', async (c) => {
-    const user = c.get('user') as any;
-    const limit = parseInt(c.req.query('limit') || '20');
-    const offset = parseInt(c.req.query('offset') || '0');
+earningsRoutes.post('/withdrawal', authMiddleware, async (c) => {
+    try {
+        const user = c.get('user');
+        if (!user) {
+            return c.json({ success: false, error: { message: 'Unauthorized' } }, 401);
+        }
 
-    const history = await c.env.DB.prepare(`
-        SELECT e.*, c.title as competition_title
-        FROM user_earnings e
-        LEFT JOIN competitions c ON e.competition_id = c.id
-        WHERE e.user_id = ?
-        ORDER BY e.created_at DESC
-        LIMIT ? OFFSET ?
-    `).bind(user.id, limit, offset).all();
+        const body = await c.req.json();
+        const { amount, payment_method, payment_details } = body;
 
-    return c.json({ success: true, data: history.results });
+        // Validate amount
+        if (!amount || amount < 50) {
+            return c.json({
+                success: false,
+                error: { message: 'Minimum withdrawal amount is $50.00' }
+            }, 400);
+        }
+
+        // Validate payment method
+        if (!payment_method || !['bank_transfer', 'paypal', 'wise'].includes(payment_method)) {
+            return c.json({
+                success: false,
+                error: { message: 'Invalid payment method' }
+            }, 400);
+        }
+
+        // Validate payment details
+        if (!payment_details || payment_details.trim().length < 5) {
+            return c.json({
+                success: false,
+                error: { message: 'Payment details are required' }
+            }, 400);
+        }
+
+        const earningsModel = new EarningsModel(c.env.DB);
+
+        // Check if user has enough available balance
+        const earnings = await earningsModel.getForUser(user.id);
+        if (!earnings || earnings.available < amount) {
+            return c.json({
+                success: false,
+                error: { message: 'Insufficient available balance' }
+            }, 400);
+        }
+
+        // Create withdrawal request
+        const request = await earningsModel.createWithdrawalRequest({
+            user_id: user.id,
+            amount,
+            payment_method,
+            payment_details
+        });
+
+        if (!request) {
+            return c.json({
+                success: false,
+                error: { message: 'Failed to create withdrawal request' }
+            }, 500);
+        }
+
+        return c.json({
+            success: true,
+            data: {
+                request_id: request.id,
+                amount: request.amount,
+                status: request.status,
+                created_at: request.created_at
+            }
+        });
+    } catch (error) {
+        console.error('Withdrawal request error:', error);
+        return c.json({
+            success: false,
+            error: { message: 'Failed to process withdrawal request' }
+        }, 500);
+    }
 });
 
 /**
- * Request withdrawal
- * POST /api/earnings/withdraw
+ * GET /api/earnings/withdrawals
+ * Get user's withdrawal history
  */
-earningsRoutes.post('/withdraw', async (c) => {
-    const user = c.get('user') as any;
-    const { amount, payment_method_id } = await c.req.json();
-
-    if (!amount || amount <= 0) {
-        return c.json({ success: false, error: 'Invalid amount' }, 422);
-    }
-
-    // Check available balance
-    const balance = await c.env.DB.prepare(`
-        SELECT COALESCE(SUM(amount), 0) as available 
-        FROM user_earnings 
-        WHERE user_id = ? AND status = 'available'
-    `).bind(user.id).first() as any;
-
-    if (balance.available < amount) {
-        return c.json({ success: false, error: 'Insufficient balance' }, 400);
-    }
-
-    // Check payment method exists
-    if (payment_method_id) {
-        const method = await c.env.DB.prepare(`
-            SELECT id FROM payment_methods WHERE id = ? AND user_id = ?
-        `).bind(payment_method_id, user.id).first();
-
-        if (!method) {
-            return c.json({ success: false, error: 'Payment method not found' }, 404);
+earningsRoutes.get('/withdrawals', authMiddleware, async (c) => {
+    try {
+        const user = c.get('user');
+        if (!user) {
+            return c.json({ success: false, error: { message: 'Unauthorized' } }, 401);
         }
+
+        const earningsModel = new EarningsModel(c.env.DB);
+        const requests = await earningsModel.getWithdrawalRequests(user.id);
+
+        return c.json({
+            success: true,
+            data: requests
+        });
+    } catch (error) {
+        console.error('Get withdrawals error:', error);
+        return c.json({
+            success: false,
+            error: { message: 'Failed to get withdrawal history' }
+        }, 500);
     }
-
-    // Mark earnings as withdrawn (FIFO)
-    let remaining = amount;
-    const available = await c.env.DB.prepare(`
-        SELECT id, amount FROM user_earnings 
-        WHERE user_id = ? AND status = 'available'
-        ORDER BY created_at ASC
-    `).bind(user.id).all();
-
-    for (const earning of available.results as any[]) {
-        if (remaining <= 0) break;
-
-        if (earning.amount <= remaining) {
-            await c.env.DB.prepare(`
-                UPDATE user_earnings SET status = 'withdrawn', withdrawn_at = datetime('now')
-                WHERE id = ?
-            `).bind(earning.id).run();
-            remaining -= earning.amount;
-        } else {
-            // Split: partially withdraw
-            await c.env.DB.prepare(`
-                UPDATE user_earnings SET amount = ?, status = 'withdrawn', withdrawn_at = datetime('now')
-                WHERE id = ?
-            `).bind(remaining, earning.id).run();
-
-            // Create remainder record
-            await c.env.DB.prepare(`
-                INSERT INTO user_earnings (user_id, competition_id, amount, earning_type, status, created_at)
-                SELECT user_id, competition_id, ?, earning_type, 'available', created_at
-                FROM user_earnings WHERE id = ?
-            `).bind(earning.amount - remaining, earning.id).run();
-
-            remaining = 0;
-        }
-    }
-
-    // Create notification
-    await c.env.DB.prepare(`
-        INSERT INTO notifications (user_id, type, title, message, created_at)
-        VALUES (?, 'system', 'طلب سحب', 'تم استلام طلب سحب بمبلغ ${amount}', datetime('now'))
-    `).bind(user.id).run();
-
-    return c.json({ success: true, data: { withdrawn: amount } });
 });
 
 export default earningsRoutes;
