@@ -163,84 +163,8 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             }
             
             async function requestWithdrawal() {
-                // Get current available balance from API
-                let availableBalance = 0;
-                try {
-                    const res = await fetch('/api/earnings', {
-                        headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
-                        }
-                    });
-                    const data = await res.json();
-                    availableBalance = data.data?.available || 0;
-                } catch (err) {
-                    console.error('Failed to get balance:', err);
-                    alert(tr.error_occurred || 'An error occurred');
-                    return;
-                }
-                
-                if (availableBalance < 50) {
-                    alert(tr.min_withdrawal || 'Minimum withdrawal: $50.00');
-                    return;
-                }
-                
-                const paymentMethod = prompt((tr.select_payment_method || 'Select payment method:') + '\\n1. Bank Transfer\\n2. PayPal\\n3. Wise');
-                if (!paymentMethod) return;
-                
-                let method = '';
-                if (paymentMethod === '1') method = 'bank_transfer';
-                else if (paymentMethod === '2') method = 'paypal';
-                else if (paymentMethod === '3') method = 'wise';
-                else {
-                    alert(tr.invalid_payment_method || 'Invalid payment method');
-                    return;
-                }
-                
-                const paymentDetails = prompt(tr.enter_payment_details || 'Enter your payment details:');
-                if (!paymentDetails || paymentDetails.trim().length < 5) {
-                    alert(tr.payment_details_required || 'Payment details are required');
-                    return;
-                }
-                
-                const amountStr = prompt(tr.enter_withdrawal_amount || 'Enter withdrawal amount (min $50):');
-                const amount = parseFloat(amountStr);
-                
-                if (isNaN(amount) || amount < 50) {
-                    alert(tr.min_withdrawal || 'Minimum withdrawal: $50.00');
-                    return;
-                }
-                
-                if (amount > availableBalance) {
-                    alert(tr.insufficient_balance || 'Insufficient available balance');
-                    return;
-                }
-                
-                try {
-                    const res = await fetch('/api/earnings/withdrawal', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
-                        },
-                        body: JSON.stringify({
-                            amount: amount,
-                            payment_method: method,
-                            payment_details: paymentDetails
-                        })
-                    });
-                    
-                    const data = await res.json();
-                    
-                    if (data.success) {
-                        alert(tr.withdrawal_requested || 'Withdrawal request submitted successfully!');
-                        loadEarnings(); // Reload earnings
-                    } else {
-                        alert(data.error?.message || tr.withdrawal_failed || 'Failed to request withdrawal');
-                    }
-                } catch (err) {
-                    console.error('Withdrawal request error:', err);
-                    alert(tr.withdrawal_failed || 'Failed to request withdrawal');
-                }
+                // TODO: Implement withdrawal request
+                alert('Withdrawal request will be implemented soon.');
             }
         </script>
     `;

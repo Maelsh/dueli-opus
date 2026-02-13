@@ -16,6 +16,7 @@ DELETE FROM conversations;
 DELETE FROM ad_impressions;
 DELETE FROM advertisements;
 DELETE FROM user_earnings;
+DELETE FROM withdrawal_requests;
 DELETE FROM user_settings;
 DELETE FROM user_posts;
 DELETE FROM competitions;

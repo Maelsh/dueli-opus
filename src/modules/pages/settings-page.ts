@@ -217,34 +217,8 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function deleteAccount() {
                 if (!confirm(\`\${tr.confirm_delete_account || 'Are you sure you want to delete your account?'}\`)) return;
                 
-                // Second confirmation for safety
-                if (!confirm(\`\${tr.confirm_delete_account_final || 'This action cannot be undone. All your data will be permanently deleted. Are you absolutely sure?'}\`)) return;
-                
-                try {
-                    const res = await fetch('/api/users/me', {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
-                        }
-                    });
-                    
-                    const data = await res.json();
-                    
-                    if (res.ok && data.success) {
-                        // Clear local storage
-                        localStorage.clear();
-                        // Clear session cookie
-                        document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-                        // Show message and redirect
-                        alert(\`\${tr.account_deleted || 'Your account has been deleted successfully.'}\`);
-                        window.location.href = '/?lang=' + lang;
-                    } else {
-                        alert(\`\${data.error || tr.error_occurred || 'Failed to delete account. Please try again.'}\`);
-                    }
-                } catch (err) {
-                    console.error('Delete account error:', err);
-                    alert(\`\${tr.error_occurred || 'An error occurred. Please try again later.'}\`);
-                }
+                // TODO: Implement account deletion
+                alert('Account deletion will be implemented soon.');
             }
         </script>
     `;

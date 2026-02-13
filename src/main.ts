@@ -33,7 +33,8 @@ import adminRoutes from './modules/api/admin/routes';
 import settingsRoutes from './modules/api/settings/routes';
 import scheduleRoutes from './modules/api/schedule/routes';
 import earningsRoutes from './modules/api/earnings/routes';
-import donationsRoutes from './modules/api/donations/routes';
+import withdrawalsRoutes from './modules/api/withdrawals/routes';
+import advertisementsRoutes from './modules/api/advertisements/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -95,7 +96,8 @@ app.route('/api/admin', adminRoutes);
 app.route('/api/settings', settingsRoutes);
 app.route('/api', scheduleRoutes);
 app.route('/api/earnings', earningsRoutes);
-app.route('/api/donations', donationsRoutes);
+app.route('/api/withdrawals', withdrawalsRoutes);
+app.route('/api/advertisements', advertisementsRoutes);
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);

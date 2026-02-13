@@ -8,7 +8,6 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { UserController } from '../../../controllers';
-import { authMiddleware } from '../../../middleware/auth';
 
 const usersRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new UserController();
@@ -34,17 +33,6 @@ usersRoutes.get('/:username', (c) => controller.show(c));
  * GET /api/users/:id/requests
  */
 usersRoutes.get('/:id/requests', (c) => controller.getRequests(c));
-
-// ============================================
-// Account Management
-// ============================================
-
-/**
- * Delete current user's account
- * DELETE /api/users/me
- * Requires authentication
- */
-usersRoutes.delete('/me', authMiddleware, (c) => controller.deleteAccount(c));
 
 // ============================================
 // Preferences

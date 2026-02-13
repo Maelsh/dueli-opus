@@ -211,19 +211,7 @@ export const ar = {
     user_errors: {
         not_found: 'المستخدم غير موجود',
         cannot_follow_self: 'لا يمكنك متابعة نفسك',
-        delete_failed: 'فشل في حذف الحساب',
     },
-
-    // حذف الحساب
-    confirm_delete_account: 'هل أنت متأكد من حذف حسابك؟',
-    confirm_delete_account_final: 'هذا الإجراء لا يمكن التراجع عنه. سيتم حذف جميع بياناتك نهائياً. هل أنت متأكد تماماً؟',
-    account_deleted: 'تم حذف حسابك بنجاح.',
-    delete_account: 'حذف الحساب',
-    delete_account_warning: 'حذف حسابك نهائي ولا يمكن التراجع عنه.',
-    danger_zone: 'منطقة الخطر',
-    settings_saved: 'تم حفظ الإعدادات!',
-    email_notifications: 'إشعارات البريد الإلكتروني',
-    push_notifications: 'الإشعارات الفورية',
 
     // رسائل الفئة
     category: {
@@ -475,7 +463,6 @@ export const ar = {
     viewers_cannot_close_ads: 'المشاهدون لا يمكنهم إغلاق الإعلانات',
     report_ad_confirm: 'الإبلاغ عن هذا الإعلان كمحتوى غير لائق؟',
     ad_reported: 'تم الإبلاغ عن الإعلان. شكراً لك!',
-    report_failed: 'فشل في إرسال البلاغ',
 
     // التنقل (جديد)
     notifications: 'الإشعارات',
@@ -499,14 +486,6 @@ export const ar = {
     withdraw: 'سحب',
     min_withdrawal: 'الحد الأدنى للسحب: 50 دولار',
     request_withdrawal: 'طلب سحب',
-    select_payment_method: 'اختر طريقة الدفع:',
-    enter_payment_details: 'أدخل تفاصيل الدفع:',
-    enter_withdrawal_amount: 'أدخل مبلغ السحب (الحد الأدنى 50 دولار):',
-    invalid_payment_method: 'طريقة دفع غير صالحة',
-    payment_details_required: 'تفاصيل الدفع مطلوبة',
-    insufficient_balance: 'الرصيد المتاح غير كافٍ',
-    withdrawal_requested: 'تم تقديم طلب السحب بنجاح!',
-    withdrawal_failed: 'فشل في طلب السحب',
 
     // صفحة الشكاوى
     report_type: 'نوع البلاغ',
@@ -528,12 +507,6 @@ export const ar = {
     custom_amount: 'أو أدخل مبلغاً مخصصاً',
     donate_now: 'تبرع الآن',
     top_supporters: 'أبرز الداعمين',
-    invalid_amount: 'يرجى إدخال مبلغ صحيح',
-    donate_as_yourself: 'هل تريد أن يظهر اسمك في قائمة الداعمين؟',
-    enter_your_name: 'أدخل اسمك (سيظهر علناً):',
-    enter_your_email: 'أدخل بريدك الإلكتروني (للإيصال، اختياري):',
-    donation_created: 'شكراً لتبرعك! سيتم توجيهك لإتمام الدفع.',
-    donation_failed: 'فشل في معالجة التبرع',
 
     // صفحات اختبار البث
     test_stream: 'اختبار البث',

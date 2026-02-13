@@ -802,38 +802,12 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             };
             
             // Report Ad
-            window.reportAd = async function() {
-                if (!confirm(tr.report_ad_confirm || 'Report this ad as inappropriate?')) {
-                    return;
-                }
-                
-                try {
-                    const response = await fetch('/api/reports', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
-                        },
-                        body: JSON.stringify({
-                            target_type: 'advertisement',
-                            target_id: ${competitionId},
-                            reason: 'inappropriate_content',
-                            description: 'Ad reported from live room'
-                        })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.success) {
-                        log('Ad reported successfully', 'success');
-                        adBanner.style.display = 'none';
-                        showMessage(tr.ad_reported || 'Ad reported. Thank you!', 'success');
-                    } else {
-                        showMessage(data.error?.message || tr.report_failed || 'Failed to report ad', 'error');
-                    }
-                } catch (err) {
-                    log('Failed to report ad: ' + err.message, 'error');
-                    showMessage(tr.report_failed || 'Failed to report ad', 'error');
+            window.reportAd = function() {
+                if (confirm(tr.report_ad_confirm || 'Report this ad as inappropriate?')) {
+                    // TODO: Send report to server
+                    log('Ad reported', 'info');
+                    adBanner.style.display = 'none';
+                    showMessage(tr.ad_reported || 'Ad reported. Thank you!', 'success');
                 }
             };
             
@@ -983,15 +957,11 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('Comment sent: ' + text, 'info');
             };
             
-            // Show message using Toast
+            // Show message
             function showMessage(msg, type) {
-                if (window.Toast) {
-                    window.Toast.show(msg, type || 'info');
-                } else {
-                    // Fallback to console and alert if Toast not available
-                    console.log('[' + type + ']', msg);
-                    alert(msg);
-                }
+                // TODO: Implement toast notification
+                console.log('[' + type + ']', msg);
+                alert(msg);
             }
             
             // Cleanup on page unload

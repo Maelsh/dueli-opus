@@ -10,7 +10,7 @@ import { BaseModel } from './base/BaseModel';
 /**
  * Report target types
  */
-export type ReportTargetType = 'user' | 'competition' | 'comment' | 'advertisement';
+export type ReportTargetType = 'user' | 'competition' | 'comment';
 
 /**
  * Report status
@@ -61,8 +61,7 @@ export interface CreateReportData {
 export const REPORT_REASONS = {
     user: ['spam', 'harassment', 'fake_account', 'inappropriate_content', 'other'],
     competition: ['spam', 'misleading', 'inappropriate_content', 'copyright', 'other'],
-    comment: ['spam', 'harassment', 'hate_speech', 'inappropriate_content', 'other'],
-    advertisement: ['inappropriate_content', 'misleading', 'offensive', 'spam', 'other']
+    comment: ['spam', 'harassment', 'hate_speech', 'inappropriate_content', 'other']
 } as const;
 
 /**
