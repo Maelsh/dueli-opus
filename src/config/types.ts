@@ -13,6 +13,7 @@
 /** Environment bindings for Cloudflare Workers */
 export type Bindings = {
   DB: D1Database;
+  BASE_URL?: string;          // Base URL for the application (e.g., https://dueli.workers.dev)
   // Email Configuration - iFastNet SMTP API
   EMAIL_API_KEY: string;        // Secret key for your PHP email endpoint
   EMAIL_API_URL: string;        // URL to your send-email.php script
@@ -117,6 +118,11 @@ export interface User extends BaseEntity {
   average_rating?: number;
   total_earnings?: number;
   is_verified?: boolean;
+  is_busy?: boolean;
+  is_banned?: boolean;
+  current_competition_id?: number;
+  busy_since?: string;
+  last_active_at?: string;
 }
 
 /**

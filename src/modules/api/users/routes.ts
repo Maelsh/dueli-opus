@@ -60,14 +60,4 @@ usersRoutes.post('/:id/follow', (c) => controller.follow(c));
  */
 usersRoutes.delete('/:id/follow', (c) => controller.unfollow(c));
 
-// ============================================
-// Account Management
-// ============================================
-
-/**
- * Delete user account (FR-023)
- * DELETE /api/users/account
- */
-usersRoutes.delete('/account', (c) => controller.deleteAccount(c));
-
 export default usersRoutes;

@@ -1,21 +1,17 @@
-/**
- * @file src/middleware/error-handler.ts
- * @description Global error handler middleware
- * @module middleware/error-handler
- * 
- * وسيطة معالجة الأخطاء العامة
- */
-
 import { Context } from 'hono';
 import { AppError } from '../lib/errors/AppError';
 
 /**
- * Global error handler for Hono
- * Catches AppError instances and returns structured JSON responses
+ * Global Error Handler Middleware
+ * معالج الأخطاء العام
  */
 export const errorHandler = (err: Error, c: Context) => {
-    console.error(`[ERROR] ${err.name}: ${err.message}`);
-
+    console.error('Error caught:', {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+    });
+    
     if (err instanceof AppError) {
         return c.json({
             success: false,
@@ -24,17 +20,15 @@ export const errorHandler = (err: Error, c: Context) => {
                 message: err.message,
                 details: err.details
             }
-        }, err.statusCode as any);
+        }, err.statusCode);
     }
-
-    // Unexpected errors - don't leak internal details
+    
+    // Unexpected errors
     return c.json({
         success: false,
         error: {
             code: 'INTERNAL_ERROR',
-            message: 'حدث خطأ غير متوقع / An unexpected error occurred'
+            message: 'حدث خطأ غير متوقع في الخادم'
         }
     }, 500);
 };
-
-export default errorHandler;

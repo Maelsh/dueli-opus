@@ -1,13 +1,6 @@
 /**
- * @file src/lib/errors/AppError.ts
- * @description Application error classes for structured error handling
- * @module lib/errors
- * 
- * فئات أخطاء التطبيق للتعامل المنظم مع الأخطاء
- */
-
-/**
- * Base application error class
+ * Base Application Error Class
+ * فئة الأخطاء الأساسية للتطبيق
  */
 export class AppError extends Error {
     constructor(
@@ -18,19 +11,22 @@ export class AppError extends Error {
     ) {
         super(message);
         this.name = 'AppError';
+        Error.captureStackTrace(this, this.constructor);
     }
 
     toJSON() {
         return {
             code: this.code,
             message: this.message,
-            details: this.details,
+            statusCode: this.statusCode,
+            details: this.details
         };
     }
 }
 
 /**
- * Validation error (422)
+ * Validation Error - 422 Unprocessable Entity
+ * خطأ التحقق من الصحة
  */
 export class ValidationError extends AppError {
     constructor(message: string, details?: any) {
@@ -40,83 +36,78 @@ export class ValidationError extends AppError {
 }
 
 /**
- * Authentication error (401)
+ * Authentication Error - 401 Unauthorized
+ * خطأ المصادقة
  */
 export class AuthenticationError extends AppError {
-    constructor(message: string = 'غير مصرح / Unauthorized') {
+    constructor(message: string = 'غير مصرح - يجب تسجيل الدخول') {
         super('AUTHENTICATION_ERROR', message, 401);
         this.name = 'AuthenticationError';
     }
 }
 
 /**
- * Authorization error (403)
+ * Authorization Error - 403 Forbidden
+ * خطأ الصلاحية
  */
 export class AuthorizationError extends AppError {
-    constructor(message: string = 'غير مسموح / Forbidden') {
+    constructor(message: string = 'غير مسموح - ليس لديك صلاحية') {
         super('AUTHORIZATION_ERROR', message, 403);
         this.name = 'AuthorizationError';
     }
 }
 
 /**
- * Not found error (404)
- */
-export class NotFoundError extends AppError {
-    constructor(resource: string = 'Resource') {
-        super('NOT_FOUND', `${resource} غير موجود / not found`, 404);
-        this.name = 'NotFoundError';
-    }
-}
-
-/**
- * Conflict error (409)
+ * Conflict Error - 409 Conflict
+ * خطأ التعارض
  */
 export class ConflictError extends AppError {
-    constructor(message: string) {
-        super('CONFLICT_ERROR', message, 409);
+    constructor(message: string, details?: any) {
+        super('CONFLICT_ERROR', message, 409, details);
         this.name = 'ConflictError';
     }
 }
 
 /**
- * User busy error (409)
+ * Not Found Error - 404 Not Found
+ * خطأ عدم الوجود
+ */
+export class NotFoundError extends AppError {
+    constructor(resource: string = 'المورد') {
+        super('NOT_FOUND', `${resource} غير موجود`, 404);
+        this.name = 'NotFoundError';
+    }
+}
+
+/**
+ * User Busy Error - 409 Conflict
+ * خطأ المستخدم مشغول
  */
 export class BusyError extends AppError {
-    constructor(message: string = 'المستخدم مشغول في منافسة أخرى / User is busy') {
+    constructor(message: string = 'المستخدم مشغول في منافسة أخرى') {
         super('USER_BUSY', message, 409);
         this.name = 'BusyError';
     }
 }
 
 /**
- * Time conflict error (409)
+ * Time Conflict Error - 409 Conflict
+ * خطأ تعارض المواعيد
  */
 export class TimeConflictError extends AppError {
-    constructor(message: string = 'تعارض في المواعيد / Time conflict') {
+    constructor(message: string = 'تعارض في المواعيد - لديك منافسة في نفس الوقت') {
         super('TIME_CONFLICT', message, 409);
         this.name = 'TimeConflictError';
     }
 }
 
 /**
- * Rate limit error (429)
+ * Rate Limit Error - 429 Too Many Requests
+ * خطأ تجاوز الحد
  */
 export class RateLimitError extends AppError {
-    constructor(message: string = 'طلبات كثيرة جداً / Too many requests') {
-        super('RATE_LIMIT', message, 429);
+    constructor(message: string = 'تجاوزت الحد المسموح من الطلبات') {
+        super('RATE_LIMIT_EXCEEDED', message, 429);
         this.name = 'RateLimitError';
     }
 }
-
-export default {
-    AppError,
-    ValidationError,
-    AuthenticationError,
-    AuthorizationError,
-    NotFoundError,
-    ConflictError,
-    BusyError,
-    TimeConflictError,
-    RateLimitError,
-};

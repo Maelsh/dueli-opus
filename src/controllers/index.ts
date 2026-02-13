@@ -17,7 +17,4 @@ export { MessageController } from './MessageController';
 export { AdminController } from './AdminController';
 export { SettingsController } from './SettingsController';
 export { ScheduleController } from './ScheduleController';
-
-// New Feature Controllers (FR-016, FR-018, FR-020)
-export { DonationController } from './DonationController';
-export { PaymentController } from './PaymentController';
+export { RecommendationController } from './RecommendationController';

@@ -98,12 +98,6 @@ competitionsRoutes.post('/:id/comments', (c) => controller.addComment(c));
 competitionsRoutes.post('/:id/rate', (c) => controller.rate(c));
 
 /**
- * Heartbeat - keep alive during live
- * POST /api/competitions/:id/heartbeat
- */
-competitionsRoutes.post('/:id/heartbeat', (c) => controller.heartbeat(c));
-
-/**
  * Invite user to competition
  * POST /api/competitions/:id/invite
  */
@@ -152,5 +146,21 @@ competitionsRoutes.delete('/:id/request', (c) => controller.cancelRequest(c));
  * DELETE /api/competitions/:competitionId/comments/:commentId
  */
 competitionsRoutes.delete('/:competitionId/comments/:commentId', (c) => controller.deleteComment(c));
+
+// ============================================
+// Streaming Operations
+// ============================================
+
+/**
+ * Start streaming - set user as busy
+ * POST /api/competitions/:id/start-stream
+ */
+competitionsRoutes.post('/:id/start-stream', (c) => controller.startStreaming(c));
+
+/**
+ * End streaming - set user as free
+ * POST /api/competitions/:id/end-stream
+ */
+competitionsRoutes.post('/:id/end-stream', (c) => controller.endStreaming(c));
 
 export default competitionsRoutes;

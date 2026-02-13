@@ -11,9 +11,6 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
-import { securityHeaders, csrfProtection, rateLimit } from './middleware/security';
-import { errorHandler } from './middleware/error-handler';
-import { AppError } from './lib/errors/AppError';
 
 // Import API Routes - استيراد مسارات API
 import categoriesRoutes from './modules/api/categories/routes';
@@ -35,15 +32,7 @@ import messagesRoutes from './modules/api/messages/routes';
 import adminRoutes from './modules/api/admin/routes';
 import settingsRoutes from './modules/api/settings/routes';
 import scheduleRoutes from './modules/api/schedule/routes';
-
-// Import Missing Feature Routes - استيراد مسارات الميزات الناقصة (FR-016, FR-018, FR-020)
-import donationRoutes from './modules/api/donations/routes';
-import paymentRoutes from './modules/api/payments/routes';
-import adBlockRoutes from './modules/api/ad-blocks/routes';
-import blocksRoutes from './modules/api/blocks/routes';
-import recommendationsRoutes from './modules/api/recommendations/routes';
-import leaderboardRoutes from './modules/api/leaderboard/routes';
-import earningsRoutes from './modules/api/earnings/routes';
+import recommendationRoutes from './modules/api/recommendations/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -62,15 +51,6 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // CORS Middleware
 app.use('/api/*', cors());
-
-// Security Headers - ترويسات الأمان
-app.use('*', securityHeaders);
-
-// CSRF Protection - حماية CSRF (API only)
-app.use('/api/*', csrfProtection);
-
-// Rate Limiting - تحديد المعدل
-app.use('/api/*', rateLimit);
 
 // Language Middleware - برنامج اللغة الوسيط
 app.use('*', async (c, next) => {
@@ -113,15 +93,7 @@ app.route('/api', messagesRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/settings', settingsRoutes);
 app.route('/api', scheduleRoutes);
-
-// Mount Missing Feature Routes - تركيب مسارات الميزات الناقصة
-app.route('/api/donations', donationRoutes);
-app.route('/api/payment-methods', paymentRoutes);
-app.route('/api/ad-blocks', adBlockRoutes);
-app.route('/api/blocks', blocksRoutes);
-app.route('/api/recommendations', recommendationsRoutes);
-app.route('/api/leaderboard', leaderboardRoutes);
-app.route('/api/earnings', earningsRoutes);
+app.route('/api/recommendations', recommendationRoutes);
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);
@@ -292,32 +264,42 @@ app.notFound((c) => {
 });
 
 app.onError((err, c) => {
-  // API routes get structured JSON errors
-  const path = new URL(c.req.url).pathname;
-  if (path.startsWith('/api/')) {
-    return errorHandler(err, c);
-  }
-
-  // Page routes get text error
   console.error(err);
   const lang = c.get('lang') || DEFAULT_LANGUAGE;
   const tr = translations[getUILanguage(lang)];
   return c.text(tr.error_occurred || 'Internal Server Error', 500);
 });
 
-export default app;
-
 // ============================================
-// Cron Handler - المهام المجدولة
+// Export with Scheduled Handler
 // ============================================
-import { handleCron } from './lib/services/CronHandler';
-
-export const scheduled = {
-  async fetch(request: Request, env: any) {
-    // This handles cron triggers from Cloudflare
-    const url = new URL(request.url);
-    const cron = url.searchParams.get('cron') || '* * * * *';
-    await handleCron({ cron }, env);
-    return new Response('OK');
+export default {
+  fetch: app.fetch,
+  async scheduled(
+    event: any,
+    env: Bindings,
+    ctx: any
+  ): Promise<void> {
+    const cronType = event.cron;
+    
+    // Map cron pattern to task type
+    if (cronType === '*/5 * * * *') {
+      // Every 5 minutes: cleanup + busy_timeout
+      await Promise.all([
+        fetch(`${env.BASE_URL || 'http://localhost:8787'}/api/cron?type=cleanup`),
+        fetch(`${env.BASE_URL || 'http://localhost:8787'}/api/cron?type=busy_timeout`)
+      ]);
+    } else if (cronType === '*/1 * * * *') {
+      // Every 1 minute: scheduled tasks
+      await fetch(`${env.BASE_URL || 'http://localhost:8787'}/api/cron?type=tasks`);
+    } else if (cronType === '0 0 1 * *') {
+      // Monthly: cleanup notifications
+      await fetch(`${env.BASE_URL || 'http://localhost:8787'}/api/cron?type=notifications`);
+    } else if (cronType === '0 0 1 1 *') {
+      // Yearly: cleanup inactive users
+      await fetch(`${env.BASE_URL || 'http://localhost:8787'}/api/cron?type=users`);
+    }
+    
+    console.log(`Cron executed: ${cronType} at ${new Date().toISOString()}`);
   }
 };
