@@ -609,7 +609,7 @@ If you believe in building technology for social good, help us continue developi
    <img src="https://www.dueli.maelsh.pro/static/dueli-icon.png" width="50" alt="Dueli"><h3>Dueli</h3>
    </div>
 
-**Made with ❤️ by <img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro | صُنع بـ ❤️ بواسطة Maelsh Pro**
+**Made with ❤️ by <img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro | صُنع بـ ❤️ بواسطة <img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro**
 
 *Building Technology for Humanity | بناء التكنولوجيا للإنسانية*
 
