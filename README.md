@@ -1,235 +1,622 @@
-# 🎯 Dueli - منصة المناظرات والحوارات
+<div align="center">
+
+   <div align="center">
+   <img src="https://www.dueli.maelsh.pro/static/dueli-icon.png" width="100" alt="Dueli"><h1>Dueli</h1>
+   </div>
+
+
+### A Platform for Dialogue, Not Conflict
+### منصة للحوار، لا للصراع
+
+<img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> **Developed by Maelsh Pro**
+
+[![Open Source](https://img.shields.io/badge/Open%20Source-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Status](https://img.shields.io/badge/Status-In%20Development-yellow.svg)]()
+[![Non Profit](https://img.shields.io/badge/Mission-Humanitarian-red.svg)]()
+
+**🌐 Live Platform:** [dueli.maelsh.pro](https://dueli.maelsh.pro)  
+**🏢 Developer:** [<img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro](https://maelsh.pro)  
+**📂 Repository:** [github.com/Maelsh/dueli-opus](https://github.com/Maelsh/dueli-opus)
+
+**🌍 Language Note:** This documentation is provided in English and Arabic as they are the primary languages of the developer and initial audience. However, **Dueli is designed as a global platform supporting all languages, countries, and communities worldwide**. The infrastructure is built to accommodate any language with full RTL/LTR support.
+
+---
+
+</div>
+
+## 🌍 The Humanitarian Mission | المهمة الإنسانية
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### English
+
+In a world where disagreements often escalate into conflict, **Dueli** offers a different path: structured dialogue.
+
+We believe that:
+- 🗣️ **Dialogue** can replace confrontation
+- 📚 **Knowledge** should be accessible to everyone
+- ⚖️ **Fair evaluation** should be based on merit, not connections
+- 🌐 **Technology** can bridge divides, not widen them
+
+Dueli provides a platform where people can debate topics openly, where the public can witness and evaluate discussions transparently, and where intellectual exchange can flourish.
+
+**Our goal is simple:** Create spaces for constructive conversation where there might otherwise be destructive conflict.
+
+</td>
+<td width="50%" valign="top" dir="rtl">
+
+### العربية
+
+في عالم غالباً ما تتصاعد فيه الخلافات إلى صراعات، **Dueli** يقدم طريقاً مختلفاً: الحوار المنظم.
+
+نؤمن بأن:
+- 🗣️ **الحوار** يمكن أن يحل محل المواجهة
+- 📚 **المعرفة** يجب أن تكون متاحة للجميع
+- ⚖️ **التقييم العادل** يجب أن يكون على أساس الجدارة، لا العلاقات
+- 🌐 **التكنولوجيا** يمكن أن تسد الفجوات، لا أن توسعها
+
+Dueli توفر منصة حيث يمكن للناس مناقشة المواضيع بشكل مفتوح، حيث يمكن للجمهور مشاهدة وتقييم النقاشات بشفافية، وحيث يمكن للتبادل الفكري أن يزدهر.
+
+**هدفنا بسيط:** إنشاء مساحات للحوار البناء حيث قد يكون هناك صراع مدمر بدلاً من ذلك.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📸 Visual Story | القصة المرئية
 
 <div align="center">
 
-![Dueli Logo](public/static/dueli-icon.png)
+### How Dueli Works | كيف يعمل Dueli
 
-[![License](https://img.shields.io/badge/license-Maelsh%20Pro-blue.svg)](LICENSE.md)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
-[![Hono](https://img.shields.io/badge/Hono-4.0-orange.svg)](https://hono.dev/)
-[![Cloudflare](https://img.shields.io/badge/Cloudflare-Workers-orange.svg)](https://workers.cloudflare.com/)
+<table>
+<tr>
+<td align="center">
+<img src="https://www.dueli.maelsh.pro/static/about/image-1.png" width="200" alt="Debate Creation"><br>
+<b>1. Create a Debate</b><br>
+<small>إنشاء مناظرة</small>
+</td>
+<td align="center">
+<img src="https://www.dueli.maelsh.pro/static/about/image-2.png" width="200" alt="Find Opponent"><br>
+<b>2. Find an Opponent</b><br>
+<small>إيجاد منافس</small>
+</td>
+<td align="center">
+<img src="https://www.dueli.maelsh.pro/static/about/image-3.jpg" width="200" alt="Live Stream"><br>
+<b>3. Stream Live</b><br>
+<small>البث المباشر</small>
+</td>
+</tr>
+<tr>
+<td align="center">
+<img src="https://www.dueli.maelsh.pro/static/about/image-4.jpg" width="200" alt="Public Rating"><br>
+<b>4. Public Rates</b><br>
+<small>التقييم العام</small>
+</td>
+<td align="center">
+<img src="https://www.dueli.maelsh.pro/static/about/image-5.jpg" width="200" alt="Knowledge Shared"><br>
+<b>5. Knowledge Shared</b><br>
+<small>مشاركة المعرفة</small>
+</td>
 
-**منصة عربية-إنجليزية للمناظرات والحوارات الحية**
-
-[🌐 Demo](https://dueli.pages.dev) | [📖 Documentation](DOCUMENTATION.md) | [🔒 Privacy](PRIVACY.md)
+</tr>
+</table>
 
 </div>
 
 ---
 
-## ✨ Features | المميزات
+## 🎯 Real-World Impact | التأثير الواقعي
 
-| Feature | الميزة |
-|---------|--------|
-| 🎤 **Live Debates** | مناظرات حية مباشرة |
-| 🌍 **Bilingual (AR/EN)** | ثنائي اللغة عربي/إنجليزي |
-| 📱 **Responsive Design** | تصميم متجاوب |
-| 🌙 **Dark Mode** | الوضع الليلي |
-| 🔐 **OAuth Login** | تسجيل دخول بـ Google, Facebook, Microsoft |
-| 📊 **Categories** | فئات متعددة (سياسة، رياضة، تقنية...) |
-| 💬 **Live Comments** | تعليقات مباشرة |
-| ⭐ **Rating System** | نظام تقييم |
+<table>
+<tr>
+<td width="50%">
+
+### What Dueli Addresses
+
+**1. Reducing Escalation**
+- Provides alternative outlet for disputes
+- Structured format prevents chaos
+- Public visibility encourages civility
+
+**2. Knowledge Accessibility**
+- Expert discussions made public
+- Educational content preserved
+- Multiple perspectives visible
+
+**3. Fair Recognition**
+- Transparent public evaluation
+- Merit-based assessment
+- No hidden algorithms
+
+**4. Economic Opportunity**
+- Revenue sharing model (80/20 split)
+- Monetization for speakers/debaters
+- Fair compensation structure
+
+</td>
+<td width="50%" dir="rtl">
+
+### ما يعالجه Dueli
+
+**1. تقليل التصعيد**
+- يوفر منفذاً بديلاً للنزاعات
+- التنسيق المنظم يمنع الفوضى
+- الظهور العام يشجع على الاحترام
+
+**2. إمكانية الوصول للمعرفة**
+- نقاشات الخبراء متاحة للجمهور
+- المحتوى التعليمي محفوظ
+- وجهات نظر متعددة مرئية
+
+**3. التقدير العادل**
+- تقييم عام شفاف
+- تقييم قائم على الجدارة
+- لا خوارزميات مخفية
+
+**4. الفرصة الاقتصادية**
+- نموذج مشاركة الإيرادات (80/20)
+- تحقيق الدخل للمتحدثين/المناظرين
+- هيكل تعويض عادل
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 🏗 Architecture | الهيكلة
+## ✨ Core Features | الميزات الأساسية
+
+<table>
+<tr>
+<th width="50%">English</th>
+<th width="50%">العربية</th>
+</tr>
+<tr>
+<td>
+
+### User Features
+- 🎥 **Live Video Debates** - Real-time streaming
+- 🗳️ **Public Rating System** - Transparent 0-100 scoring
+- 💬 **Live Chat** - Discussion during streams
+- 📱 **Mobile Responsive** - Works on all devices
+- 🌍 **Multilingual** - Currently Arabic & English, designed for all languages
+- 🔐 **Secure Authentication** - Multiple login options
+- 📊 **Category System** - Organized by topics
+- 💰 **Fair Revenue Model** - 80% to creators
+
+### Community Features
+- 👥 **User Profiles** - Track history and ratings
+- 🔔 **Notifications** - Stay updated
+- 💬 **Messaging** - Private communication
+- 📝 **Comments** - Engage with content
+- ⭐ **Follow System** - Connect with others
+
+</td>
+<td dir="rtl">
+
+### ميزات المستخدم
+- 🎥 **مناظرات فيديو مباشرة** - بث مباشر حي
+- 🗳️ **نظام تقييم عام** - تقييم شفاف من 0-100
+- 💬 **دردشة حية** - نقاش أثناء البث
+- 📱 **متجاوب مع الجوال** - يعمل على جميع الأجهزة
+- 🌍 **متعدد اللغات** - حالياً العربية والإنجليزية، مصمم لكل اللغات
+- 🔐 **مصادقة آمنة** - خيارات تسجيل دخول متعددة
+- 📊 **نظام التصنيف** - منظم حسب المواضيع
+- 💰 **نموذج إيرادات عادل** - 80% للمنشئين
+
+### ميزات المجتمع
+- 👥 **ملفات المستخدمين** - تتبع التاريخ والتقييمات
+- 🔔 **الإشعارات** - ابقَ على اطلاع
+- 💬 **المراسلة** - تواصل خاص
+- 📝 **التعليقات** - التفاعل مع المحتوى
+- ⭐ **نظام المتابعة** - التواصل مع الآخرين
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🛠️ Technical Overview | نظرة تقنية عامة
+
+<table>
+<tr>
+<td width="50%">
+
+### Built With
+
+**Backend:**
+- Cloudflare Workers (Serverless)
+- Hono.js Framework
+- Cloudflare D1 Database
+
+**Frontend:**
+- TypeScript
+- Tailwind CSS
+- Vanilla JavaScript
+
+**Features:**
+- WebRTC for video streaming
+- OAuth 2.0 authentication
+- RESTful API architecture
+- Progressive Web App ready
+- Multi-language support (RTL & LTR)
+
+</td>
+<td width="50%" dir="rtl">
+
+### مبني باستخدام
+
+**الخلفية:**
+- Cloudflare Workers (بدون خادم)
+- إطار عمل Hono.js
+- قاعدة بيانات Cloudflare D1
+
+**الواجهة:**
+- TypeScript
+- Tailwind CSS
+- JavaScript العادي
+
+**المميزات:**
+- WebRTC لبث الفيديو
+- مصادقة OAuth 2.0
+- معمارية RESTful API
+- جاهز كتطبيق ويب تقدمي
+- دعم متعدد اللغات (من اليمين لليسار ومن اليسار لليمين)
+
+</td>
+</tr>
+</table>
+
+### Architecture Diagram
 
 ```
-📦 dueli/
-├── 📂 src/
-│   ├── 📂 models/        # 🔵 Data Layer (MVC)
-│   ├── 📂 controllers/   # 🟢 Logic Layer (MVC)
-│   ├── 📂 routes/        # 🛣️ API Routes
-│   ├── 📂 modules/       # 📄 Pages & API (Legacy)
-│   ├── 📂 lib/           # 📚 OAuth, Services
-│   ├── 📂 client/        # 💻 Client-side JS
-│   ├── 📂 shared/        # 🔄 Shared Components
-│   ├── 📂 config/        # ⚙️ Types & Config
-│   ├── 📂 i18n/          # 🌐 Translations
-│   └── 📄 main.ts        # 🚀 Entry Point
-├── 📂 public/            # 🖼️ Static Assets
-└── 📂 migrations/        # 🗃️ Database Migrations
+┌─────────────────────────────────────────────────┐
+│            User Interface (Client)              │
+│         TypeScript + Tailwind CSS               │
+└─────────────────┬───────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────┐
+│         API Layer (Hono Framework)              │
+│      Routes → Controllers → Models              │
+└─────────────────┬───────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────┐
+│    Cloudflare Workers (Edge Computing)          │
+│           Global Distribution                    │
+└─────────────────┬───────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────┐
+│        Cloudflare D1 (SQLite)                   │
+│          Distributed Database                    │
+└─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Quick Start | البدء السريع
+## 🚀 Getting Started | البدء
 
-### Prerequisites | المتطلبات
+<table>
+<tr>
+<td width="50%">
 
-- Node.js 18+
-- npm or yarn
-- Cloudflare account
-
-### Installation | التثبيت
+### Quick Setup
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/Maelsh/dueli-opus.git
-cd dueli-opus/webapp
+cd dueli-opus
 
 # Install dependencies
 npm install
 
-# Setup environment
-cp .dev.vars.example .dev.vars
-# Edit .dev.vars with your API keys
+# Setup database
+npm run db:migrate
 
-# Run locally
-npm run dev:sandbox
+# Start development
+npm run dev
 ```
 
-### Environment Variables | متغيرات البيئة
+### Requirements
+- Node.js 18+
+- Cloudflare account
+- Git
 
-```env
-RESEND_API_KEY=your_resend_api_key
-GOOGLE_CLIENT_ID=your_google_id
-GOOGLE_CLIENT_SECRET=your_google_secret
-FACEBOOK_CLIENT_ID=your_facebook_id
-FACEBOOK_CLIENT_SECRET=your_facebook_secret
-MICROSOFT_CLIENT_ID=your_microsoft_id
-MICROSOFT_CLIENT_SECRET=your_microsoft_secret
-MICROSOFT_TENANT_ID=your_microsoft_tenant
-TIKTOK_CLIENT_KEY=your_tiktok_key
-TIKTOK_CLIENT_SECRET=your_tiktok_secret
-```
+</td>
+<td width="50%" dir="rtl">
 
----
-
-## 🛠 Tech Stack | التقنيات
-
-| Category | Technology |
-|----------|------------|
-| **Runtime** | Cloudflare Workers |
-| **Framework** | Hono 4.x |
-| **Database** | Cloudflare D1 (SQLite) |
-| **Styling** | TailwindCSS 4.x |
-| **Language** | TypeScript 5.x |
-| **Build** | Vite |
-| **Email** | Resend API |
-
----
-
-## 📁 Project Structure | هيكل المشروع
-
-### Models (MVC)
-- `UserModel` - إدارة المستخدمين
-- `CompetitionModel` - إدارة المنافسات
-- `CategoryModel` - إدارة الفئات
-- `CommentModel` - إدارة التعليقات
-- `NotificationModel` - إدارة الإشعارات
-- `SessionModel` - إدارة الجلسات
-
-### Controllers (MVC)
-- `AuthController` - المصادقة والتسجيل
-- `CompetitionController` - المنافسات
-- `UserController` - المستخدمين
-- `CategoryController` - الفئات
-
-### Services (OOP)
-- `EmailService` - إرسال البريد
-- `CryptoUtils` - التشفير
-- `BaseOAuthProvider` - مزودي OAuth
-
----
-
-## 🔐 Authentication | المصادقة
-
-Dueli supports multiple authentication methods:
-
-- ✅ Email/Password with verification
-- ✅ Google OAuth
-- ✅ Facebook OAuth
-- ✅ Microsoft OAuth
-- ✅ TikTok OAuth
-
----
-
-## 🌐 Internationalization | التعريب
-
-Dueli is fully bilingual with RTL support:
-
-```typescript
-// Arabic
-t('app_title', 'ar') // "ديولي"
-
-// English
-t('app_title', 'en') // "Dueli"
-```
-
-Supported languages: **Arabic (ar)**, **English (en)**
-
----
-
-## 📜 Scripts | الأوامر
+### الإعداد السريع
 
 ```bash
-# Development
-npm run dev           # Start dev server
-npm run dev:sandbox   # Start with D1 sandbox
+# استنساخ المستودع
+git clone https://github.com/Maelsh/dueli-opus.git
+cd dueli-opus
 
-# Build
-npm run build         # Build for production
-npm run build:css     # Build TailwindCSS
+# تثبيت المكتبات
+npm install
 
-# Database
-npm run db:migrate    # Run migrations
-npm run db:seed       # Seed database
+# إعداد قاعدة البيانات
+npm run db:migrate
+
+# بدء التطوير
+npm run dev
 ```
 
-# Dueli Platform | منصة ديولي
+### المتطلبات
+- Node.js 18+
+- حساب Cloudflare
+- Git
 
-Welcome to the Dueli Platform. This project has been consolidated into definitive, bilingual reports that serve as the single source of truth for all stakeholders and developers.
-
-## 📖 Definitive Documentation | التوثيق الشامل
-
-Please refer to the following documents for everything you need to know about the project:
-
-### 🌟 Project Reference (General Information)
-- **[PROJECT_REFERENCE_EN.md](docs/PROJECT_REFERENCE_EN.md)**: Mission, features, tech stack, and roadmap (English).
-- **[PROJECT_REFERENCE_AR.md](docs/PROJECT_REFERENCE_AR.md)**: المهمة، الميزات، المكونات التقنية، وخريطة الطريق (العربية).
-
-### 🛠️ Developer Handbook (Technical Reference)
-- **[DEVELOPER_HANDBOOK_EN.md](docs/DEVELOPER_HANDBOOK_EN.md)**: Architecture, mandatory principles, incomplete features, and technical warnings (English).
-- **[DEVELOPER_HANDBOOK_AR.md](docs/DEVELOPER_HANDBOOK_AR.md)**: الهندسة البرمجية، المبادئ الإلزامية، المهام المعلقة، والتحذيرات التقنية (العربية).
+</td>
+</tr>
+</table>
 
 ---
 
-## 🚀 Quick Start
-For immediate development setup, refer to the **Developer Handbook** above.
+## 🤝 Open Source & Contribution | مفتوح المصدر والمساهمة
+
+<table>
+<tr>
+<td width="50%">
+
+### We Need Your Help
+
+Dueli is **open source** and **non-profit**. We're building this for the community, not for commercial gain.
+
+**Current Status:**
+- ⚠️ In active development
+- ⚠️ Core features implemented
+- ⚠️ Technical challenges remain
+- ⚠️ Needs funding to complete
+
+**What We Need:**
+- 💰 **Grants** - To complete development
+- 👨‍💻 **Developers** - To solve technical issues
+- 🌍 **Translators** - To expand to more languages globally
+- 📝 **Feedback** - From the community
+- 🤝 **Partners** - Who share our vision
+
+### How to Contribute
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
+
+</td>
+<td width="50%" dir="rtl">
+
+### نحتاج مساعدتك
+
+Dueli **مفتوح المصدر** و**غير ربحي**. نحن نبني هذا للمجتمع، وليس للربح التجاري.
+
+**الحالة الحالية:**
+- ⚠️ قيد التطوير النشط
+- ⚠️ الميزات الأساسية منفذة
+- ⚠️ تحديات تقنية لا تزال قائمة
+- ⚠️ يحتاج تمويلاً للإكمال
+
+**ما نحتاجه:**
+- 💰 **منح** - لإكمال التطوير
+- 👨‍💻 **مطورون** - لحل المشاكل التقنية
+- 🌍 **مترجمون** - للتوسع في لغات أخرى حول العالم
+- 📝 **ملاحظات** - من المجتمع
+- 🤝 **شركاء** - يشاركوننا الرؤية
+
+### كيفية المساهمة
+1. انسخ المستودع (Fork)
+2. أنشئ فرع الميزة الخاص بك
+3. أضف تغييراتك (Commit)
+4. ارفع للفرع (Push)
+5. افتح طلب دمج (Pull Request)
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 🤝 Contributing | المساهمة
+## 💰 Why We Need Funding | لماذا نحتاج التمويل
 
-Contributions are welcome! See [Contributing Guide](CONTRIBUTING.md).
+<table>
+<tr>
+<td width="50%">
+
+### Current Challenges
+
+**Technical Issues:**
+- Server infrastructure costs
+- Video streaming optimization
+- Database scaling
+- Security enhancements
+
+**Development Needs:**
+- Full-time development resources
+- Technical problem solving
+- Quality assurance
+- Documentation
+
+**Community Building:**
+- User support
+- Content moderation
+- Translation efforts
+- Marketing outreach
+
+### Non-Profit Mission
+
+Dueli is **not an investment opportunity**. We're building a public good, not a commercial product.
+
+- ❌ No investors
+- ❌ No profit motive
+- ✅ Community-first
+- ✅ Open source
+- ✅ Transparent operations
+
+</td>
+<td width="50%" dir="rtl">
+
+### التحديات الحالية
+
+**مشاكل تقنية:**
+- تكاليف البنية التحتية للخادم
+- تحسين بث الفيديو
+- توسيع قاعدة البيانات
+- تحسينات أمنية
+
+**احتياجات التطوير:**
+- موارد تطوير بدوام كامل
+- حل المشاكل التقنية
+- ضمان الجودة
+- التوثيق
+
+**بناء المجتمع:**
+- دعم المستخدمين
+- إدارة المحتوى
+- جهود الترجمة
+- التواصل التسويقي
+
+### مهمة غير ربحية
+
+Dueli **ليس فرصة استثمارية**. نحن نبني منفعة عامة، وليس منتجاً تجارياً.
+
+- ❌ لا مستثمرون
+- ❌ لا دافع ربحي
+- ✅ المجتمع أولاً
+- ✅ مفتوح المصدر
+- ✅ عمليات شفافة
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 📄 License | الترخيص
+## 📜 License | الترخيص
 
-This project is **open source** under the **Maelsh Pro License**.
+<table>
+<tr>
+<td width="50%">
 
-- ✅ Free to use and modify
-- ✅ Free to fork and learn from
-- ❌ Commercial use requires permission from Maelsh Pro
-- ❌ Selling or monetizing without permission is prohibited
+### GPL v3 License
 
-See [LICENSE.md](LICENSE.md) for details.
+Dueli is licensed under the **GNU General Public License v3.0**.
+
+**This means:**
+- ✅ Free to use
+- ✅ Free to modify
+- ✅ Free to distribute
+- ✅ Must remain open source
+- ⚠️ Commercial use requires permission
+
+**Why GPL v3?**
+We want Dueli to remain free and open forever. The GPL ensures that any modifications or derivatives must also be open source.
+
+[Read Full License](LICENSE)
+
+</td>
+<td width="50%" dir="rtl">
+
+### ترخيص GPL v3
+
+Dueli مرخص تحت **رخصة GNU العامة الإصدار 3.0**.
+
+**هذا يعني:**
+- ✅ مجاني للاستخدام
+- ✅ مجاني للتعديل
+- ✅ مجاني للتوزيع
+- ✅ يجب أن يظل مفتوح المصدر
+- ⚠️ الاستخدام التجاري يتطلب إذناً
+
+**لماذا GPL v3؟**
+نريد أن يظل Dueli مجانياً ومفتوحاً إلى الأبد. GPL تضمن أن أي تعديلات أو مشتقات يجب أن تكون أيضاً مفتوحة المصدر.
+
+[اقرأ الترخيص الكامل](LICENSE)
+
+</td>
+</tr>
+</table>
 
 ---
 
-## 🏢 About Maelsh Pro
+## 📞 Contact & Support | التواصل والدعم
 
-**Maelsh Pro** is the company behind Dueli, dedicated to building innovative Arabic-first platforms.
+<div align="center">
 
-- 🌐 Website: [maelsh.pro](https://maelsh.pro)
-- 📧 Contact: contact@maelsh.pro
+### Get in Touch | تواصل معنا
+
+<table>
+<tr>
+<td align="center" width="25%">
+
+**🌐 Platform**  
+[dueli.maelsh.pro](https://dueli.maelsh.pro)
+
+</td>
+<td align="center" width="25%">
+
+**🏢 Company**  
+[maelsh.pro](https://maelsh.pro)
+
+</td>
+<td align="center" width="25%">
+
+**📧 Email**  
+[info@maelsh.pro](mailto:info@maelsh.pro)  
+[maelshspro@gmail.com](mailto:maelshspro@gmail.com)
+
+</td>
+<td align="center" width="25%">
+
+**📱 Phone**  
++20 122 454 0690  
++20 103 595 6717
+
+</td>
+</tr>
+</table>
+
+### Repository Links | روابط المستودع
+
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/Maelsh/dueli-opus)
+[![Issues](https://img.shields.io/badge/Issues-Report%20Bug-red?logo=github)](https://github.com/Maelsh/dueli-opus/issues)
+[![Discussions](https://img.shields.io/badge/Discussions-Join-blue?logo=github)](https://github.com/Maelsh/dueli-opus/discussions)
+
+---
+
+### Support This Project | ادعم هذا المشروع
+
+If you believe in building technology for social good, help us continue developing Dueli:
+
+- ⭐ **Star** this repository
+- 🐛 **Report** bugs and issues
+- 💡 **Suggest** new features
+- 🤝 **Contribute** code
+- 💰 **Support** through grants
+- 📢 **Spread** the word
+
+**We're building this for everyone. Join us.**
+
+**نحن نبني هذا للجميع. انضم إلينا.**
+
+---
+
+   <div align="center">
+   <img src="https://www.dueli.maelsh.pro/static/dueli-icon.png" width="50" alt="Dueli"><h3>Dueli</h3>
+   </div>
+
+**Made with ❤️ by <img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro | صُنع بـ ❤️ بواسطة <img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro**
+
+*Building Technology for Humanity | بناء التكنولوجيا للإنسانية*
+
+</div>
 
 ---
 
 <div align="center">
-
-**Made with ❤️ by Maelsh Pro**
-
+<sub>Last Updated: February 14, 2026 | آخر تحديث: ١٤ فبراير ٢٠٢٦</sub>
 </div>
