@@ -1,21 +1,21 @@
 <div align="center">
 
    <div align="center">
-   <img src="https://www.dueli.maelsh.pro/static/dueli-icon.png" width="100" alt="Dueli"><h1>Dueli</h1>
+   <img src="https://www.dueli.maelshpro.com/static/dueli-icon.png" width="100" alt="Dueli"><h1>Dueli</h1>
    </div>
 
 
 ### A Platform for Dialogue, Not Conflict
 ### منصة للحوار، لا للصراع
 
-<img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> **Developed by Maelsh Pro**
+<img src="https://maelshpro.com/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> **Developed by Maelsh Pro**
 
 [![Open Source](https://img.shields.io/badge/Open%20Source-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Status](https://img.shields.io/badge/Status-In%20Development-yellow.svg)]()
 [![Non Profit](https://img.shields.io/badge/Mission-Humanitarian-red.svg)]()
 
-**🌐 Live Platform:** [dueli.maelsh.pro](https://dueli.maelsh.pro)  
-**🏢 Developer:** [<img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro](https://maelsh.pro)  
+**🌐 Live Platform:** [dueli.maelshpro.com](https://dueli.maelshpro.com)  
+**🏢 Developer:** [<img src="https://maelshpro.com/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro](https://maelshpro.com)  
 **📂 Repository:** [github.com/Maelsh/dueli-opus](https://github.com/Maelsh/dueli-opus)
 
 **🌍 Language Note:** This documentation is provided in English and Arabic as they are the primary languages of the developer and initial audience. However, **Dueli is designed as a global platform supporting all languages, countries, and communities worldwide**. The infrastructure is built to accommodate any language with full RTL/LTR support.
@@ -76,29 +76,29 @@ Dueli توفر منصة حيث يمكن للناس مناقشة المواضيع
 <table>
 <tr>
 <td align="center">
-<img src="https://www.dueli.maelsh.pro/static/about/image-1.png" width="200" alt="Debate Creation"><br>
+<img src="https://www.dueli.maelshpro.com/static/about/image-1.png" width="200" alt="Debate Creation"><br>
 <b>1. Create a Debate</b><br>
 <small>إنشاء مناظرة</small>
 </td>
 <td align="center">
-<img src="https://www.dueli.maelsh.pro/static/about/image-2.png" width="200" alt="Find Opponent"><br>
+<img src="https://www.dueli.maelshpro.com/static/about/image-2.png" width="200" alt="Find Opponent"><br>
 <b>2. Find an Opponent</b><br>
 <small>إيجاد منافس</small>
 </td>
 <td align="center">
-<img src="https://www.dueli.maelsh.pro/static/about/image-3.jpg" width="200" alt="Live Stream"><br>
+<img src="https://www.dueli.maelshpro.com/static/about/image-3.jpg" width="200" alt="Live Stream"><br>
 <b>3. Stream Live</b><br>
 <small>البث المباشر</small>
 </td>
 </tr>
 <tr>
 <td align="center">
-<img src="https://www.dueli.maelsh.pro/static/about/image-4.jpg" width="200" alt="Public Rating"><br>
+<img src="https://www.dueli.maelshpro.com/static/about/image-4.jpg" width="200" alt="Public Rating"><br>
 <b>4. Public Rates</b><br>
 <small>التقييم العام</small>
 </td>
 <td align="center">
-<img src="https://www.dueli.maelsh.pro/static/about/image-5.jpg" width="200" alt="Knowledge Shared"><br>
+<img src="https://www.dueli.maelshpro.com/static/about/image-5.jpg" width="200" alt="Knowledge Shared"><br>
 <b>5. Knowledge Shared</b><br>
 <small>مشاركة المعرفة</small>
 </td>
@@ -554,19 +554,19 @@ Dueli مرخص تحت **رخصة GNU العامة الإصدار 3.0**.
 <td align="center" width="25%">
 
 **🌐 Platform**  
-[dueli.maelsh.pro](https://dueli.maelsh.pro)
+[dueli.maelshpro.com](https://dueli.maelshpro.com)
 
 </td>
 <td align="center" width="25%">
 
 **🏢 Company**  
-[maelsh.pro](https://maelsh.pro)
+[maelshpro.com](https://maelshpro.com)
 
 </td>
 <td align="center" width="25%">
 
 **📧 Email**  
-[info@maelsh.pro](mailto:info@maelsh.pro)  
+[info@maelshpro.com](mailto:info@maelshpro.com)  
 [maelshspro@gmail.com](mailto:maelshspro@gmail.com)
 
 </td>
@@ -606,10 +606,10 @@ If you believe in building technology for social good, help us continue developi
 ---
 
    <div align="center">
-   <img src="https://www.dueli.maelsh.pro/static/dueli-icon.png" width="50" alt="Dueli"><h3>Dueli</h3>
+   <img src="https://www.dueli.maelshpro.com/static/dueli-icon.png" width="50" alt="Dueli"><h3>Dueli</h3>
    </div>
 
-**Made with ❤️ by <img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro | صُنع بـ ❤️ بواسطة <img src="https://maelsh.pro/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro**
+**Made with ❤️ by <img src="https://maelshpro.com/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro | صُنع بـ ❤️ بواسطة <img src="https://maelshpro.com/resources/whitelogo.ico" width="15" alt="Maelsh Pro"> Maelsh Pro**
 
 *Building Technology for Humanity | بناء التكنولوجيا للإنسانية*
 

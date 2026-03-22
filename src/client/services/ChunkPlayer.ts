@@ -43,7 +43,7 @@ export class ChunkPlayer {
 
     constructor(config: ChunkPlayerConfig) {
         this.config = {
-            serverUrl: 'https://maelsh.pro/ffmpeg',
+            serverUrl: 'https://maelshpro.com/ffmpeg',
             mode: 'live',
             ...config
         };

@@ -99,7 +99,7 @@ You have the right to:
 - **Portability**: Export your data
 - **Opt-out**: Unsubscribe from marketing emails
 
-To exercise these rights, contact: **privacy@maelsh.pro**
+To exercise these rights, contact: **privacy@maelshpro.com**
 
 ---
 
@@ -142,9 +142,9 @@ We may update this Privacy Policy periodically. We will notify you of significan
 
 For privacy-related inquiries:
 
-- **Email**: privacy@maelsh.pro
+- **Email**: privacy@maelshpro.com
 - **Company**: Maelsh Pro
-- **Website**: https://maelsh.pro
+- **Website**: https://maelshpro.com
 
 ---
 
@@ -288,9 +288,9 @@ We may modify these terms at any time. Continued use after changes constitutes a
 
 For questions about these terms:
 
-- **Email**: legal@maelsh.pro
+- **Email**: legal@maelshpro.com
 - **Company**: Maelsh Pro
-- **Website**: https://maelsh.pro
+- **Website**: https://maelshpro.com
 
 ---
 

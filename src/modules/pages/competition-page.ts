@@ -377,7 +377,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           return;
         }
         
-        const streamServerUrl = 'https://maelsh.pro/ffmpeg';
+        const streamServerUrl = 'https://maelshpro.com/ffmpeg';
         const liveUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
         
         try {
@@ -653,7 +653,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       let localVideoVisible = true;
       let isScreenSharing = false;
       let currentFacingMode = 'user';
-      const streamServerUrl = 'https://maelsh.pro/ffmpeg';
+      const streamServerUrl = 'https://maelshpro.com/ffmpeg';
       
       function log(msg, type = 'info') {
         console.log('[LiveStream]', type === 'error' ? '❌' : '📡', msg);

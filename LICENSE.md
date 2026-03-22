@@ -43,8 +43,8 @@ For commercial use, including:
 - Generating revenue from the software
 
 Please contact Maelsh Pro for a commercial license:
-- Email: **license@maelsh.pro**
-- Website: **https://maelsh.pro/licensing**
+- Email: **license@maelshpro.com**
+- Website: **https://maelshpro.com/licensing**
 
 ## Attribution Requirements
 
@@ -92,5 +92,5 @@ This license is governed by the laws of the jurisdiction in which Maelsh Pro ope
 **Maelsh Pro**
 Building the Future of Arabic Technology
 
-Contact: legal@maelsh.pro
-Website: https://maelsh.pro
+Contact: legal@maelshpro.com
+Website: https://maelshpro.com

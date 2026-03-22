@@ -2,7 +2,7 @@
  * Signaling Routes for WebRTC P2P
  * مسارات الإشارات لاتصال WebRTC
  * 
- * WebSocket-only mode via stream.maelsh.pro
+ * WebSocket-only mode via stream.maelshpro.com
  * وضع WebSocket فقط عبر سيرفر البث
  */
 
@@ -47,7 +47,7 @@ async function generateTurnCredentials(secret: string, userId: string = 'dueli-u
  * يُرجع إعدادات خوادم TURN/STUN مع بيانات اعتماد ديناميكية
  */
 signalingRoutes.get('/ice-servers', async (c) => {
-    const turnUrl = c.env.TURN_URL || 'turn:maelsh.pro:3000';
+    const turnUrl = c.env.TURN_URL || 'turn:maelshpro.com:3000';
     const turnSecret = c.env.TURN_SECRET;
 
     const iceServers: any[] = [

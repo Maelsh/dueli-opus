@@ -4,7 +4,7 @@
  * يُحقن في كل صفحة عبر main.ts
  */
 
-const FFMPEG_URL = 'https://maelsh.pro/ffmpeg';
+const FFMPEG_URL = 'https://maelshpro.com/ffmpeg';
 
 /**
  * Get Client Shared Script - توليد الـ JavaScript المشترك

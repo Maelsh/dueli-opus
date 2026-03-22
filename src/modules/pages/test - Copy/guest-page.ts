@@ -6,7 +6,7 @@
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 
-const streamServerUrl = 'https://stream.maelsh.pro';
+const streamServerUrl = 'https://stream.maelshpro.com';
 const testRoomId = 'test_room_001';
 
 export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
@@ -541,12 +541,12 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                     { urls: 'stun:stun1.l.google.com:19302' },
                     // Dueli TURN server
                     {
-                        urls: 'turn:maelsh.pro:3000?transport=tcp',
+                        urls: 'turn:maelshpro.com:3000?transport=tcp',
                         username: 'dueli',
                         credential: 'dueli-turn-secret-2024'
                     },
                     {
-                        urls: 'turn:maelsh.pro:3000',
+                        urls: 'turn:maelshpro.com:3000',
                         username: 'dueli',
                         credential: 'dueli-turn-secret-2024'
                     }

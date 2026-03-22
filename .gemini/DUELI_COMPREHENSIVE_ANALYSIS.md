@@ -175,7 +175,7 @@
 - لا يوجد تحقق من سلامة الملف (checksum)
 
 #### GAP-STREAM-03: عنوان سيرفر البث ثابت
-**الوصف:** `DEFAULT_STREAMING_URL` في `config/defaults` يشير إلى `stream.maelsh.pro`. لا يوجد fallback إذا كان السيرفر غير متاح.
+**الوصف:** `DEFAULT_STREAMING_URL` في `config/defaults` يشير إلى `stream.maelshpro.com`. لا يوجد fallback إذا كان السيرفر غير متاح.
 
 ### 2.5 نظام الإيرادات والإعلانات (Revenue & Ads)
 

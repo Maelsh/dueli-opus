@@ -54,7 +54,7 @@ export class VideoCompositor {
     constructor(config: VideoCompositorConfig) {
         this.config = {
             chunkDuration: 5000, // ⭐ 5s بدلاً من 10s (تقليل latency)
-            serverUrl: 'https://maelsh.pro/ffmpeg',
+            serverUrl: 'https://maelshpro.com/ffmpeg',
             ...config
         };
 

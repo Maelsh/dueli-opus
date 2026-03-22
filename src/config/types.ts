@@ -31,11 +31,11 @@ export type Bindings = {
   TIKTOK_CLIENT_SECRET: string;
   CLOUDFLARE_API_TOKEN?: string;
   // Streaming Services
-  STREAMING_URL: string;      // https://stream.maelsh.pro
-  UPLOAD_URL: string;         // https://maelsh.pro/ffmpeg
-  TURN_URL: string;           // turn:maelsh.pro:3000
+  STREAMING_URL: string;      // https://stream.maelshpro.com
+  UPLOAD_URL: string;         // https://maelshpro.com/ffmpeg
+  TURN_URL: string;           // turn:maelshpro.com:3000
   TURN_SECRET: string;        // Shared secret with Coturn
-  UPLOAD_SERVER_ORIGINS?: string; // Allowed origins for chunk APIs, comma-separated (e.g., "https://maelsh.pro,https://stream.maelsh.pro")
+  UPLOAD_SERVER_ORIGINS?: string; // Allowed origins for chunk APIs, comma-separated (e.g., "https://maelshpro.com,https://stream.maelshpro.com")
 }
 
 /** Language code type (supports all country languages) */

@@ -15,13 +15,13 @@
 // ============================================
 
 /** Default streaming server URL */
-export const DEFAULT_STREAMING_URL = 'https://stream.maelsh.pro';
+export const DEFAULT_STREAMING_URL = 'https://stream.maelshpro.com';
 
 /** Default upload server URL */
-export const DEFAULT_UPLOAD_URL = 'https://maelsh.pro/ffmpeg';
+export const DEFAULT_UPLOAD_URL = 'https://maelshpro.com/ffmpeg';
 
 /** Default TURN server URL */
-export const DEFAULT_TURN_URL = 'turn:maelsh.pro:3000';
+export const DEFAULT_TURN_URL = 'turn:maelshpro.com:3000';
 
 /**
  * Origins allowed to access chunk APIs (verify/delete)
@@ -30,7 +30,7 @@ export const DEFAULT_TURN_URL = 'turn:maelsh.pro:3000';
  * المواقع المسموح لها بالوصول لـ APIs القطع
  * قائمة مفصولة بفواصل
  */
-export const DEFAULT_UPLOAD_SERVER_ORIGINS = 'https://maelsh.pro,https://stream.maelsh.pro,https://dueli.maelsh.pro,https://www.dueli.maelsh.pro';
+export const DEFAULT_UPLOAD_SERVER_ORIGINS = 'https://maelshpro.com,https://stream.maelshpro.com,https://dueli.maelshpro.com,https://www.dueli.maelshpro.com';
 
 // ============================================
 // Platform URLs
@@ -41,11 +41,11 @@ export const DEFAULT_UPLOAD_SERVER_ORIGINS = 'https://maelsh.pro,https://stream.
  * Current platform URL (Custom Domain - Active!)
  * رابط المنصة الحالي (النطاق المخصص - نشط!)
  */
-export const DEFAULT_PLATFORM_URL = 'https://dueli.maelsh.pro';
+export const DEFAULT_PLATFORM_URL = 'https://dueli.maelshpro.com';
 
 /**
  * Alternative platform URLs
  * روابط المنصة البديلة
  */
 export const CLOUDFLARE_PAGES_URL = 'https://project-8e7c178d.pages.dev';
-export const WWW_PLATFORM_URL = 'https://www.dueli.maelsh.pro';
+export const WWW_PLATFORM_URL = 'https://www.dueli.maelshpro.com';

@@ -486,8 +486,8 @@
 
 **Maelsh Pro**
 
-- 🌐 الموقع: [maelsh.pro](https://maelsh.pro)
-- 📧 البريد: contact@maelsh.pro
+- 🌐 الموقع: [maelshpro.com](https://maelshpro.com)
+- 📧 البريد: contact@maelshpro.com
 - 📍 الموقع: المملكة العربية السعودية
 
 ### قنوات الدعم

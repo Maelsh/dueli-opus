@@ -90,7 +90,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
         const { ChunkManager, LiveSequentialPlayer, VodMsePlayer, testLog: log, updateStatus, setMode } = window;
         
         // Setup (من الأصلي - السطر 1235-1248)
-        const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
+        const ffmpegUrl = 'https://maelshpro.com/ffmpeg';
         const videoPlayers = [
             document.getElementById('videoPlayer1'),
             document.getElementById('videoPlayer2')

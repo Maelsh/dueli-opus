@@ -486,8 +486,8 @@ Talent showcases and competitions.
 
 **Maelsh Pro**
 
-- 🌐 Website: [maelsh.pro](https://maelsh.pro)
-- 📧 Email: contact@maelsh.pro
+- 🌐 Website: [maelshpro.com](https://maelshpro.com)
+- 📧 Email: contact@maelshpro.com
 - 📍 Location: Saudi Arabia
 
 ### Support Channels

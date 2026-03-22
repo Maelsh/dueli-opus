@@ -48,8 +48,8 @@ export interface DeviceCapabilities {
 
 // ===== Constants =====
 
-export const STREAM_SERVER_URL = 'https://stream.maelsh.pro';
-export const FFMPEG_URL = 'https://maelsh.pro/ffmpeg';
+export const STREAM_SERVER_URL = 'https://stream.maelshpro.com';
+export const FFMPEG_URL = 'https://maelshpro.com/ffmpeg';
 export const TEST_ROOM_ID = 'test_room_001';
 
 // ===== Quality Presets =====
@@ -68,12 +68,12 @@ export const ICE_SERVERS = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     {
-        urls: 'turn:maelsh.pro:3000?transport=tcp',
+        urls: 'turn:maelshpro.com:3000?transport=tcp',
         username: 'dueli',
         credential: 'dueli-turn-secret-2024'
     },
     {
-        urls: 'turn:maelsh.pro:3000',
+        urls: 'turn:maelshpro.com:3000',
         username: 'dueli',
         credential: 'dueli-turn-secret-2024'
     }

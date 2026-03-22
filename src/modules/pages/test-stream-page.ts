@@ -6,7 +6,7 @@
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
 
-const streamServerUrl = 'https://stream.maelsh.pro';
+const streamServerUrl = 'https://stream.maelshpro.com';
 const testRoomId = 'test_room_001';
 
 /**
@@ -115,7 +115,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
             history.replaceState(null, '', window.location.pathname + '?comp=' + competitionId);
         }
         
-        const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
+        const ffmpegUrl = 'https://maelshpro.com/ffmpeg';
         
         // Logging
         function log(msg, type = 'info') {
@@ -228,12 +228,12 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     { urls: 'stun:stun1.l.google.com:19302' },
                     // Dueli TURN server
                     {
-                        urls: 'turn:maelsh.pro:3000?transport=tcp',
+                        urls: 'turn:maelshpro.com:3000?transport=tcp',
                         username: 'dueli',
                         credential: 'dueli-turn-secret-2024'
                     },
                     {
-                        urls: 'turn:maelsh.pro:3000',
+                        urls: 'turn:maelshpro.com:3000',
                         username: 'dueli',
                         credential: 'dueli-turn-secret-2024'
                     }
@@ -985,12 +985,12 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
                     { urls: 'stun:stun1.l.google.com:19302' },
                     // Dueli TURN server
                     {
-                        urls: 'turn:maelsh.pro:3000?transport=tcp',
+                        urls: 'turn:maelshpro.com:3000?transport=tcp',
                         username: 'dueli',
                         credential: 'dueli-turn-secret-2024'
                     },
                     {
-                        urls: 'turn:maelsh.pro:3000',
+                        urls: 'turn:maelshpro.com:3000',
                         username: 'dueli',
                         credential: 'dueli-turn-secret-2024'
                     }
@@ -1232,7 +1232,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
     
     <script>
     // ===== إعدادات =====
-    const ffmpegUrl = 'https://maelsh.pro/ffmpeg';
+    const ffmpegUrl = 'https://maelshpro.com/ffmpeg';
     const videoPlayers = [
         document.getElementById('videoPlayer1'),
         document.getElementById('videoPlayer2')
@@ -1282,7 +1282,7 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
     class ChunkPlayer {
         constructor(config) {
             this.config = {
-                serverUrl: 'https://maelsh.pro/ffmpeg',
+                serverUrl: 'https://maelshpro.com/ffmpeg',
                 mode: 'live',
                 ...config
             };

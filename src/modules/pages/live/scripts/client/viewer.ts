@@ -16,7 +16,7 @@ export function getViewerScript(lang: Language): string {
         (function() {
         // ===== Viewer Page Script =====
         const { ChunkManager, LiveSequentialPlayer, SmartVodPlayer, testLog: log, updateStatus, setMode } = window;
-        const FFMPEG_URL = 'https://maelsh.pro/ffmpeg';
+        const FFMPEG_URL = 'https://maelshpro.com/ffmpeg';
         
         // Elements
         const videoPlayers = [

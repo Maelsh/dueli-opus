@@ -33,7 +33,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
     }
 
     // Server URL for streaming
-    const streamServerUrl = 'https://maelsh.pro/ffmpeg';
+    const streamServerUrl = 'https://maelshpro.com/ffmpeg';
 
     const content = `
         ${getNavigation(lang)}

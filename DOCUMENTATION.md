@@ -617,9 +617,9 @@ TIKTOK_CLIENT_KEY=your_tiktok_key
 TIKTOK_CLIENT_SECRET=your_tiktok_secret
 
 # Streaming
-STREAMING_URL=https://stream.maelsh.pro
-UPLOAD_URL=https://maelsh.pro/ffmpeg
-TURN_URL=turn:maelsh.pro:3000
+STREAMING_URL=https://stream.maelshpro.com
+UPLOAD_URL=https://maelshpro.com/ffmpeg
+TURN_URL=turn:maelshpro.com:3000
 TURN_SECRET=your_turn_secret
 ```
 

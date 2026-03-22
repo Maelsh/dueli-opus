@@ -152,7 +152,7 @@ export class UploadQueue {
     private competitionId: string;
     private droppedChunks: number = 0;
     private corruptedChunks: number = 0;
-    private ffmpegUrl: string = 'https://maelsh.pro/ffmpeg';
+    private ffmpegUrl: string = 'https://maelshpro.com/ffmpeg';
     private onProgress?: (uploaded: number, total: number) => void;
 
     constructor(competitionId: string, onProgress?: (uploaded: number, total: number) => void) {
@@ -280,7 +280,7 @@ export class ChunkManager {
     constructor(competitionId: string, extension: 'mp4' | 'webm' = 'webm') {
         this.competitionId = competitionId;
         this.extension = extension;
-        this.basePath = `https://maelsh.pro/ffmpeg/stream.php?path=live/match_${competitionId}`;
+        this.basePath = `https://maelshpro.com/ffmpeg/stream.php?path=live/match_${competitionId}`;
     }
 
     getUrl(index: number): string {
@@ -328,7 +328,7 @@ export class ChunkManager {
     }
 
     async loadPlaylist(): Promise<PlaylistData> {
-        const url = `https://maelsh.pro/ffmpeg/playlist.php?id=${this.competitionId}`;
+        const url = `https://maelshpro.com/ffmpeg/playlist.php?id=${this.competitionId}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to load playlist');
         return await res.json();

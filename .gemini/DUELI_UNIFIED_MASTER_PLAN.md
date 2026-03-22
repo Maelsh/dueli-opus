@@ -482,7 +482,7 @@ AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < 7200
 │   └── يدير غرف المؤتمر
 ├── P2P Connection (P2PConnection.ts)
 │   └── يدير WebRTC peers
-└── سيرفر البث الخارجي (stream.maelsh.pro)
+└── سيرفر البث الخارجي (stream.maelshpro.com)
     └── يستقبل القطع ويدمجها
 ```
 
