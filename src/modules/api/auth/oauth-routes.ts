@@ -112,7 +112,7 @@ oauthRoutes.get('/:provider/callback', async (c) => {
         UPDATE users 
         SET oauth_provider = ?, oauth_id = ?, avatar_url = COALESCE(avatar_url, ?)
         WHERE id = ?
-      `).bind(provider, oauthUser.id, oauthUser.picture, (user as any).id).run();
+      `).bind(provider, oauthUser.id ?? null, oauthUser.picture ?? null, (user as any).id).run();
     } else {
       // Create new user
       const password = crypto.randomUUID();
@@ -131,11 +131,15 @@ oauthRoutes.get('/:provider/callback', async (c) => {
         DEFAULT_COUNTRY,
         lang,
         provider,
-        oauthUser.id,
+        oauthUser.id ?? null,
         oauthUser.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
       ).run();
 
-      user = await DB.prepare('SELECT * FROM users WHERE id = ?').bind(result.meta.last_row_id).first();
+      user = await DB.prepare('SELECT * FROM users WHERE id = ?').bind(result.meta.last_row_id ?? 0).first();
+    }
+
+    if (!user) {
+      throw new Error('Failed to find or create user after OAuth');
     }
 
     // Create session
