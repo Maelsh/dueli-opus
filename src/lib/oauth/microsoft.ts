@@ -63,7 +63,7 @@ export class MicrosoftOAuth extends BaseOAuthProvider {
         if (!tokenResponse.ok) {
             const errorText = await tokenResponse.text();
             console.error(`[${this.providerName} OAuth] Token request failed:`, errorText);
-            throw new Error(`Failed to get ${this.providerName} token`);
+            throw new Error(`Failed to get ${this.providerName} token: ${errorText}`);
         }
 
         const tokenData = await tokenResponse.json() as any;
