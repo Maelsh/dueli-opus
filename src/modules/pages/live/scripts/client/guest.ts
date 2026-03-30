@@ -232,7 +232,7 @@ export function getGuestScript(lang: Language): string {
             setTimeout(function() { if (ms.localStream) window.joinRoom(); }, 1000);
         }
         
-        window.disconnect = function() {
+        window.disconnect = async function() {
             log('${tr.disconnect}...');
             if (signalingManager) signalingManager.disconnect();
             if (ms.pc) ms.pc.close();
@@ -245,6 +245,29 @@ export function getGuestScript(lang: Language): string {
             updateStatus('${tr.disconnect}', 'gray');
             log('${tr.disconnect} ✓', 'success');
             updateConnectionButtons(false);
+            
+            // إنهاء المنافسة في قاعدة البيانات (الضيف ينهي البث)
+            const compId = urlCompId || (document.getElementById('compIdInput') ? document.getElementById('compIdInput').value.trim() : null);
+            const lang = urlParams.get('lang') || 'en';
+            if (compId) {
+                try {
+                    const res = await fetch('/api/competitions/' + compId + '/end', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        log('✅ Competition ended', 'success');
+                    }
+                } catch (e) {
+                    log('⚠️ Could not update competition status', 'warn');
+                }
+                // توجيه لصفحة المنافسة
+                setTimeout(function() {
+                    window.location.href = '/competition/' + compId + '?lang=' + lang;
+                }, 1500);
+            }
         }
         
         // Init

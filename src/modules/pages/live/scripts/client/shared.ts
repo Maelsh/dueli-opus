@@ -543,6 +543,32 @@ class ChunkManager {
 
         return chunks;
     }
+
+    /**
+     * الانتقال لآخر chunk موجود حالياً (للبث المباشر)
+     * skip to the latest available chunk via playlist endpoint
+     */
+    async skipToLatest() {
+        try {
+            const playlistUrl = '${FFMPEG_URL}/playlist.php?id=' + this.competitionId;
+            const res = await fetch(playlistUrl);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.chunks && data.chunks.length > 1) {
+                    // نبدأ من آخر chunk كاملة (ما قبل الأخيرة لضمان اكتمالها)
+                    const latestIndex = data.chunks.length - 2;
+                    if (latestIndex > 0) {
+                        this.currentIndex = latestIndex;
+                        testLog('⏭️ Skipping to chunk ' + (latestIndex + 1) + '/' + data.chunks.length, 'info');
+                        return latestIndex;
+                    }
+                }
+            }
+        } catch (e) {
+            testLog('⚠️ Could not skip to latest, starting from beginning', 'warn');
+        }
+        return 0;
+    }
 }
 
 window.ChunkManager = ChunkManager;
@@ -563,12 +589,19 @@ class LiveSequentialPlayer {
         this.preloadedChunks = new Map();
     }
 
-    async start() {
+    async start(options) {
+        options = options || {};
         this.isRunning = true;
         this.onStatus && this.onStatus('Starting live stream...');
 
+        // إذا طُلب البدء من آخر chunk (للعرض المباشر للزوار)
+        if (options.startFromLatest) {
+            this.onStatus && this.onStatus('Finding latest chunk...');
+            await this.chunkManager.skipToLatest();
+        }
+
         const firstChunk = await this.chunkManager.waitForNextChunk();
-        this.onStatus && this.onStatus('Found first chunk: ' + firstChunk);
+        this.onStatus && this.onStatus('Found chunk: ' + (firstChunk + 1));
 
         await this.playChunk(firstChunk);
         this.runLoop();

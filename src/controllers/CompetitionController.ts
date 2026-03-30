@@ -525,7 +525,8 @@ export class CompetitionController extends BaseController {
                 return this.notFound(c);
             }
 
-            if (competition.creator_id !== user.id) {
+            // Allow both creator and opponent to end the competition
+            if (competition.creator_id !== user.id && competition.opponent_id !== user.id) {
                 return this.forbidden(c);
             }
 

@@ -229,6 +229,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           <input type="range" id="embeddedSeekbar" min="0" max="100" value="0"
                                  class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500"
                                  title="Seek" />
+                          <button id="embeddedDownloadBtn" onclick="embeddedDownload()"
+                                  class="hidden w-9 h-9 flex items-center justify-center bg-green-600 text-white rounded-full hover:bg-green-700 flex-shrink-0"
+                                  title="${tr.download || '\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0641\u064a\u062f\u064a\u0648'}">
+                            <i class="fas fa-download text-sm"></i>
+                          </button>
                           <button onclick="embeddedToggleFullscreen()"
                                   class="w-9 h-9 flex items-center justify-center bg-gray-700 text-white rounded-full hover:bg-gray-600 flex-shrink-0">
                             <i class="fas fa-expand text-sm"></i>
@@ -742,7 +747,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 showStatusOverlay(tr.stream_not_available || 'Stream not available');
               }
             });
-            await embeddedCurrentPlayer.start();
+            // يبدأ من آخر قطعة متاحة حالياً لعدم التأخر عن البث
+            await embeddedCurrentPlayer.start({ startFromLatest: true });
             
           } else if (isCompletedComp) {
             // === VOD: Use SmartVodPlayer ===
@@ -781,6 +787,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 const vodControls = document.getElementById('embeddedVodControls');
                 if (vodControls) vodControls.classList.remove('hidden');
                 embeddedSetupVodControls(videoPlayers[0], info.totalDuration);
+                // إظهار زر التحميل بعد أن يكون المشغل جاهزاً
+                const dlBtn = document.getElementById('embeddedDownloadBtn');
+                if (dlBtn) dlBtn.classList.remove('hidden');
               },
               onError: function(err) {
                 log('VOD error: ' + err.message, 'error');
@@ -873,6 +882,21 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const icon = document.getElementById('embeddedFsIcon');
         if (icon) icon.className = document.fullscreenElement ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
       });
+      
+      // Download VOD recording (merge all chunks in browser memory)
+      window.embeddedDownload = async function() {
+        if (!embeddedCurrentPlayer || !embeddedCurrentPlayer.downloadVideo) return;
+        const btn = document.getElementById('embeddedDownloadBtn');
+        const originalHtml = btn ? btn.innerHTML : '';
+        try {
+          if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-sm"></i>'; }
+          await embeddedCurrentPlayer.downloadVideo('competition_' + competitionId);
+        } catch (e) {
+          log('Download failed: ' + e.message, 'error');
+        } finally {
+          if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+        }
+      };
       
       // Control Functions
       window.toggleFullscreen = function() {
