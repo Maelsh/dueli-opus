@@ -13,6 +13,21 @@ export class UserBlockModel extends BaseModel<UserBlock> {
     protected readonly tableName = 'user_blocks';
 
     /**
+     * Create - required by BaseModel
+     */
+    async create(data: Partial<UserBlock>): Promise<UserBlock> {
+        const result = await this.block(data.blocker_id!, data.blocked_id!, data.reason);
+        return (await this.findById(result.id))!;
+    }
+
+    /**
+     * Update - required by BaseModel (UserBlock records are not updated)
+     */
+    async update(id: number, _data: Partial<UserBlock>): Promise<UserBlock | null> {
+        return this.findById(id);
+    }
+
+    /**
      * Block a user
      * حظر مستخدم
      */

@@ -20,7 +20,7 @@ export const errorHandler = (err: Error, c: Context) => {
                 message: err.message,
                 details: err.details
             }
-        }, err.statusCode);
+        }, err.statusCode as any);
     }
     
     // Unexpected errors

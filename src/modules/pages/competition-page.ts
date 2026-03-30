@@ -8,6 +8,8 @@ import type { Bindings, Variables } from '../../config/types';
 import { translations, getUILanguage, isRTL, getCategoryName } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
+import { getClientSharedScript } from './live/scripts/client/shared';
+import { getViewerScript } from './live/scripts/client/viewer';
 
 export async function competitionPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
@@ -28,8 +30,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     
     ${getFooter(lang)}
     
-    <!-- HLS.js for viewer mode -->
+    <!-- HLS.js & Shared streaming scripts -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <!-- Shared Streaming Classes (ChunkManager, LiveSequentialPlayer, SmartVodPlayer...) -->
+    <script>
+      ${getClientSharedScript()}
+    </script>
     
     <script>
       const lang = '${lang}';
@@ -131,123 +138,110 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div class="lg:col-span-2 space-y-6">
-                <div class="bg-gradient-to-br \${bgColor} rounded-2xl overflow-hidden shadow-xl aspect-video flex items-center justify-center relative">
-                  \${isLive && comp.live_url ? \`
-                    <!-- Embedded P2P Live Stream -->
-                    <div id="embeddedLiveStream" class="absolute inset-0">
-                      <!-- Remote Video (fullscreen background) -->
-                      <video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video>
-                      
-                      <!-- Waiting Overlay -->
-                      <div id="waitingOverlay" class="absolute inset-0 flex items-center justify-center bg-gray-900/80">
-                        <div class="text-center text-white">
-                          <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
-                          <p class="text-lg">\${tr.waiting_opponent || 'Connecting...'}</p>
+                <!-- Video Player Area -->
+                <div class="rounded-2xl overflow-hidden shadow-xl relative" id="videoPlayerArea">
+                  
+                  <!-- ===== للمنافسين (host/guest): توجيه لصفحة البث المخصصة ===== -->
+                  \${(isCreator || isOpponent) && comp.opponent_id && isLive ? \`
+                    <div class="bg-gradient-to-br \${bgColor} aspect-video flex items-center justify-center relative">
+                      <div class="text-center text-white">
+                        <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <i class="fas fa-broadcast-tower text-3xl text-red-400 animate-pulse"></i>
                         </div>
+                        <p class="text-lg font-bold mb-2">\${tr.status_live || 'البث مباشر'}</p>
+                        <p class="text-sm opacity-75 mb-4">\${isCreator ? (tr.you_are_host || 'أنت المضيف') : (tr.you_are_guest || 'أنت الضيف')}</p>
+                        <a href="/live/\${isCreator ? 'host' : 'guest'}?comp=\${competitionId}&lang=\${lang}" 
+                           class="px-6 py-3 bg-red-600 rounded-full font-bold hover:bg-red-700 transition-all inline-flex items-center gap-2">
+                          <i class="fas fa-video"></i>
+                          \${tr.join_stream || 'انضم للبث'}
+                        </a>
                       </div>
-                      
-                      <!-- Local Video (small in corner) -->
-                      <div id="localVideoWrapper" class="absolute \${isRTL ? 'left-4' : 'right-4'} top-4 z-20">
-                        <div class="relative w-24 h-16 md:w-32 md:h-24 rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500 cursor-pointer hover:scale-105 transition-transform" onclick="swapVideos()">
-                          <video id="localVideo" class="w-full h-full object-cover" autoplay muted playsinline></video>
-                          <div class="absolute top-1 \${isRTL ? 'left-1' : 'right-1'} bg-black/60 p-1 rounded text-white text-xs">
-                            <i class="fas fa-arrows-alt"></i>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <!-- Stream Controls (overlay at bottom) -->
-                      <div id="streamControls" class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-30">
-                        <div class="flex items-center justify-center gap-2 flex-wrap">
-                          <!-- Fullscreen -->
-                          <button onclick="toggleFullscreen()" id="fullscreenBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.fullscreen || 'Fullscreen'}">
-                            <i class="fas fa-expand"></i>
-                          </button>
-                          
-                          <!-- Swap Videos -->
-                          <button onclick="swapVideos()" id="swapBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.swap_videos || 'Swap'}">
-                            <i class="fas fa-exchange-alt"></i>
-                          </button>
-                          
-                          <!-- Comments Toggle -->
-                          <button onclick="toggleComments()" id="commentsBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_comments || 'Comments'}">
-                            <i class="fas fa-comment"></i>
-                          </button>
-                          
-                          <!-- Competitor-only controls -->
-                          <div id="competitorControls" class="flex items-center gap-2">
-                            <!-- Hide Local Video -->
-                            <button onclick="toggleLocalVideo()" id="localVideoBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_my_video || 'My Video'}">
-                              <i class="fas fa-user-circle"></i>
-                            </button>
-                            
-                            <!-- Switch Camera -->
-                            <button onclick="switchCamera()" id="switchCamBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.switch_camera || 'Switch Camera'}">
-                              <i class="fas fa-sync-alt"></i>
-                            </button>
-                            
-                            <!-- Screen Share -->
-                            <button onclick="shareScreen()" id="screenBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.share_screen || 'Screen Share'}">
-                              <i class="fas fa-desktop"></i>
-                            </button>
-                            
-                            <!-- Microphone -->
-                            <button onclick="toggleAudio()" id="audioBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_mic || 'Microphone'}">
-                              <i class="fas fa-microphone"></i>
-                            </button>
-                            
-                            <!-- Camera -->
-                            <button onclick="toggleVideo()" id="videoBtn" class="p-2 rounded-lg bg-white/20 backdrop-blur text-white hover:bg-white/30 transition-colors" title="\${tr.toggle_camera || 'Camera'}">
-                              <i class="fas fa-video"></i>
-                            </button>
-                            
-                            <!-- End Stream -->
-                            <button onclick="endStream()" id="endBtn" class="px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center gap-1" title="\${tr.end_stream || 'End'}">
-                              <i class="fas fa-stop-circle"></i>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <!-- Comments Overlay (from viewers) -->
-                      <div id="commentsOverlay" class="absolute bottom-20 left-4 z-20 max-w-sm max-h-32 overflow-hidden pointer-events-none">
-                        <div id="commentsContainer" class="space-y-1 overflow-y-auto text-sm">
-                          <!-- Comments will appear here -->
-                        </div>
-                      </div>
-                      
-                      <!-- Connection Status -->
-                      <div id="connectionStatus" class="absolute top-4 \${isRTL ? 'right-4' : 'left-4'} px-3 py-1 rounded-full text-sm hidden z-30 bg-yellow-600 text-white">
-                        <i class="fas fa-wifi mr-2"></i>
-                        <span>Connecting...</span>
-                      </div>
-                      
-                      <!-- Canvas for recording (hidden) -->
-                      <canvas id="compositeCanvas" class="hidden" width="1280" height="720"></canvas>
                     </div>
-                  \` : comp.youtube_live_id && isLive ? \`
-                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_live_id}?autoplay=1" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
-                  \` : comp.vod_url ? \`
-                    <!-- P2P VOD Player -->
-                    <video id="vodPlayer" controls class="absolute inset-0 w-full h-full" poster="">
-                      <source src="\${comp.vod_url}" type="video/mp4">
-                    </video>
-                  \` : comp.youtube_video_url ? \`
-                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_video_url.split('v=')[1] || comp.youtube_video_url}" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
+                    
                   \` : (isCreator || isOpponent) && comp.opponent_id && (isPending || comp.status === 'accepted') ? \`
                     <!-- Ready to Go Live -->
-                    <div class="text-center text-white">
-                      <i class="fas fa-video text-6xl opacity-80 mb-4"></i>
-                      <p class="mb-4">\${tr.competitors} \${tr.status_accepted}</p>
-                      <button onclick="goLive()" class="px-6 py-3 bg-green-600 rounded-full font-bold hover:bg-green-700 transition-all inline-flex items-center gap-2">
-                        <i class="fas fa-broadcast-tower"></i>
-                        \${tr.status_live || 'Go Live'}
-                      </button>
+                    <div class="bg-gradient-to-br \${bgColor} aspect-video flex items-center justify-center">
+                      <div class="text-center text-white">
+                        <i class="fas fa-video text-6xl opacity-80 mb-4"></i>
+                        <p class="mb-4">\${tr.competitors} \${tr.status_accepted}</p>
+                        <button onclick="goLive()" class="px-6 py-3 bg-green-600 rounded-full font-bold hover:bg-green-700 transition-all inline-flex items-center gap-2">
+                          <i class="fas fa-broadcast-tower"></i>
+                          \${tr.status_live || 'Go Live'}
+                        </button>
+                      </div>
                     </div>
+
+                  \` : comp.youtube_live_id && isLive ? \`
+                    <!-- YouTube Live -->
+                    <div class="aspect-video">
+                      <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_live_id}?autoplay=1" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
+                    </div>
+
+                  \` : comp.youtube_video_url ? \`
+                    <!-- YouTube VOD -->
+                    <div class="aspect-video">
+                      <iframe width="100%" height="100%" src="https://www.youtube.com/embed/\${comp.youtube_video_url.split('v=')[1] || comp.youtube_video_url}" frameborder="0" allowfullscreen class="absolute inset-0"></iframe>
+                    </div>
+
+                  \` : (isLive || isCompleted) ? \`
+                    <!-- ===== مشاهد البث المدمج (Chunk-Based) ===== -->
+                    <div class="bg-black relative" id="embeddedViewerSection">
+                      <!-- Video Container with double buffering -->
+                      <div class="aspect-video relative bg-black" id="embeddedVideoContainer">
+                        <div id="embeddedModeBadge" class="hidden absolute top-3 right-3 z-10 px-3 py-1 rounded-full text-xs font-bold text-white"></div>
+                        <video id="embeddedVideoPlayer1" autoplay playsinline 
+                               style="position:absolute;width:100%;height:100%;transition:opacity 0.3s;opacity:1;z-index:2;background:#000;"></video>
+                        <video id="embeddedVideoPlayer2" autoplay playsinline 
+                               style="position:absolute;width:100%;height:100%;transition:opacity 0.3s;opacity:0;z-index:1;background:#000;"></video>
+                        
+                        <!-- Status overlay -->
+                        <div id="embeddedStatusOverlay" class="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
+                          <div class="text-center text-white">
+                            <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                            <p class="text-sm" id="embeddedStatusText">\${isLive ? (tr.connecting_to_stream || 'جاري الاتصال بالبث...') : (tr.loading_video || 'جاري تحميل الفيديو...')}</p>
+                          </div>
+                        </div>
+                        
+                        <!-- Fullscreen button -->
+                        <button onclick="embeddedToggleFullscreen()" 
+                                class="absolute bottom-3 right-3 z-30 w-9 h-9 bg-black/50 backdrop-blur text-white rounded-lg hover:bg-black/70 transition flex items-center justify-center"
+                                title="\${tr.fullscreen || 'ملء الشاشة'}">
+                          <i id="embeddedFsIcon" class="fas fa-expand text-sm"></i>
+                        </button>
+
+                        <!-- Stream info bar -->
+                        <div class="absolute bottom-3 left-3 z-30 flex items-center gap-2">
+                          \${isLive ? '<span class="flex items-center gap-1 bg-red-600 text-white text-xs px-2 py-1 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>' + (tr.status_live || 'مباشر') + '</span>' : ''}
+                          <span id="embeddedChunkInfo" class="text-xs text-white/70 bg-black/40 px-2 py-1 rounded-full hidden"></span>
+                        </div>
+                      </div>
+                      
+                      <!-- VOD Controls (hidden by default, shown for recorded) -->
+                      <div id="embeddedVodControls" class="hidden bg-gray-900 p-3">
+                        <div class="flex items-center gap-3">
+                          <button id="embeddedPlayPauseBtn" onclick="embeddedTogglePlayPause()" 
+                                  class="w-9 h-9 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700 flex-shrink-0">
+                            <i id="embeddedPlayPauseIcon" class="fas fa-play text-sm"></i>
+                          </button>
+                          <span id="embeddedTimeDisplay" class="text-xs font-mono text-gray-300 w-20 flex-shrink-0">0:00 / 0:00</span>
+                          <input type="range" id="embeddedSeekbar" min="0" max="100" value="0"
+                                 class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500"
+                                 title="Seek" />
+                          <button onclick="embeddedToggleFullscreen()"
+                                  class="w-9 h-9 flex items-center justify-center bg-gray-700 text-white rounded-full hover:bg-gray-600 flex-shrink-0">
+                            <i class="fas fa-expand text-sm"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                   \` : \`
-                    <div class="text-center text-white">
-                      <i class="fas fa-video text-6xl opacity-50 mb-4"></i>
-                      <p>\${isPending ? tr.status_pending : tr.stream_not_available}</p>
+                    <!-- No stream yet -->
+                    <div class="bg-gradient-to-br \${bgColor} aspect-video flex items-center justify-center">
+                      <div class="text-center text-white">
+                        <i class="fas fa-video text-6xl opacity-50 mb-4"></i>
+                        <p>\${isPending ? tr.status_pending : tr.stream_not_available}</p>
+                      </div>
                     </div>
                   \`}
                 </div>
@@ -659,173 +653,205 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         console.log('[LiveStream]', type === 'error' ? '❌' : '📡', msg);
       }
       
-      // Initialize embedded streaming when competition is live
-      async function initEmbeddedStream() {
-        const embeddedLiveStream = document.getElementById('embeddedLiveStream');
-        if (!embeddedLiveStream || !window.currentUser) return;
-        
-        // Wait for streaming services
-        try {
-          await waitForBundle();
-        } catch (err) {
-          log('Bundle load failed: ' + err.message, 'error');
-          return;
-        }
-        
-        // Determine user role
-        const userId = window.currentUser.id;
-        const comp = competitionData;
-        
-        if (userId === comp.creator_id) {
-          userRole = 'host';
-        } else if (userId === comp.opponent_id) {
-          userRole = 'opponent';
-        } else {
-          userRole = 'viewer';
-        }
-        
-        log('User role: ' + userRole);
-        setupViewerRestrictions();
-        
-        if (userRole === 'viewer') {
-          initViewerMode();
-        } else {
-          initCompetitorMode();
-        }
-      }
+      // ===== Embedded Viewer: Auto-Start =====
       
-      function waitForBundle() {
-        return new Promise((resolve, reject) => {
-          if (window.P2PConnection && window.VideoCompositor && window.ChunkUploader) {
-            resolve();
-            return;
+      async function initEmbeddedViewer() {
+        const viewerSection = document.getElementById('embeddedViewerSection');
+        if (!viewerSection) return; // not shown (competitor or no stream)
+        
+        const videoPlayers = [
+          document.getElementById('embeddedVideoPlayer1'),
+          document.getElementById('embeddedVideoPlayer2')
+        ];
+        
+        const isLiveComp = competitionData && (competitionData.status === 'live' || competitionData.stream_status === 'live');
+        const isCompletedComp = competitionData && (competitionData.status === 'completed' || competitionData.stream_status === 'ready');
+        
+        function setEmbeddedStatus(text) {
+          const el = document.getElementById('embeddedStatusText');
+          if (el) el.textContent = text;
+        }
+        
+        function hideStatusOverlay() {
+          const overlay = document.getElementById('embeddedStatusOverlay');
+          if (overlay) overlay.classList.add('hidden');
+        }
+        
+        function showStatusOverlay(text) {
+          const overlay = document.getElementById('embeddedStatusOverlay');
+          const el = document.getElementById('embeddedStatusText');
+          if (el) el.textContent = text;
+          if (overlay) overlay.classList.remove('hidden');
+        }
+        
+        function updateEmbeddedMode(mode) {
+          const badge = document.getElementById('embeddedModeBadge');
+          if (!badge) return;
+          badge.classList.remove('hidden', 'bg-red-600', 'bg-amber-500', 'bg-green-600');
+          if (mode === 'live') {
+            badge.classList.add('bg-red-600');
+            badge.innerHTML = '<i class="fas fa-circle animate-pulse mr-1"></i>LIVE';
+          } else if (mode === 'vod') {
+            badge.classList.add('bg-amber-500');
+            badge.innerHTML = '<i class="fas fa-film mr-1"></i>VOD';
+          } else {
+            badge.classList.add('hidden');
           }
-          let attempts = 0;
-          const interval = setInterval(() => {
-            attempts++;
-            if (window.P2PConnection && window.VideoCompositor && window.ChunkUploader) {
-              clearInterval(interval);
-              resolve();
-            } else if (attempts >= 100) {
-              clearInterval(interval);
-              reject(new Error('Streaming services not loaded'));
-            }
-          }, 100);
-        });
-      }
-      
-      function setupViewerRestrictions() {
-        const competitorControls = document.getElementById('competitorControls');
-        if (userRole === 'viewer' && competitorControls) {
-          competitorControls.style.display = 'none';
-        }
-      }
-      
-      async function initViewerMode() {
-        const hlsPlayer = document.getElementById('remoteVideo');
-        const waitingOverlay = document.getElementById('waitingOverlay');
-        const hlsUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
-        
-        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-          const hls = new Hls({ liveSyncDuration: 3, liveMaxLatencyDuration: 10 });
-          hls.loadSource(hlsUrl);
-          hls.attachMedia(hlsPlayer);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            hlsPlayer.play().catch(() => {});
-            if (waitingOverlay) waitingOverlay.classList.add('hidden');
-          });
-        } else if (hlsPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-          hlsPlayer.src = hlsUrl;
-          hlsPlayer.addEventListener('loadedmetadata', () => {
-            hlsPlayer.play().catch(() => {});
-            if (waitingOverlay) waitingOverlay.classList.add('hidden');
-          });
-        }
-      }
-      
-      async function initCompetitorMode() {
-        const roomId = 'comp_' + competitionId;
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
-        const waitingOverlay = document.getElementById('waitingOverlay');
-        
-        log('Initializing competitor mode. Room: ' + roomId);
-        
-        // Create room if host
-        if (userRole === 'host') {
-          await fetch('/api/signaling/room/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              competition_id: competitionId,
-              user_id: window.currentUser.id
-            })
-          });
         }
         
-        // Initialize P2P
-        p2p = new window.P2PConnection({
-          roomId: roomId,
-          role: userRole,
-          userId: window.currentUser.id,
-          onRemoteStream: (stream) => {
-            log('Remote stream received');
-            remoteVideo.srcObject = stream;
-            if (waitingOverlay) waitingOverlay.classList.add('hidden');
+        try {
+          if (isLiveComp) {
+            // === LIVE: Use ChunkManager + LiveSequentialPlayer ===
+            setEmbeddedStatus(tr.connecting_to_stream || '\u062c\u0627\u0631\u064a \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0627\u0644\u0628\u062b...');
+            updateEmbeddedMode('live');
             
-            if (userRole === 'host' && compositor) {
-              setTimeout(() => startRecording(), 1000);
+            if (!window.ChunkManager || !window.LiveSequentialPlayer) {
+              showStatusOverlay(tr.streaming_unavailable || '\u062e\u062f\u0645\u0629 \u0627\u0644\u0628\u062b \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629');
+              return;
             }
-          },
-          onConnectionStateChange: (state) => {
-            log('Connection: ' + state);
-            updateConnectionStatus(state);
-          }
-        });
-        
-        // Get local media
-        try {
-          const stream = await p2p.initLocalStream();
-          localVideo.srcObject = stream;
-          log('Local stream ready');
-          
-          // Initialize compositor for host
-          if (userRole === 'host') {
-            compositor = new window.VideoCompositor({
-              localVideo: localVideo,
-              remoteVideo: remoteVideo,
-              canvas: document.getElementById('compositeCanvas'),
-              onProgress: (chunks) => {
-                if (document.getElementById('streamStats')) {
-                  document.getElementById('streamStats').innerHTML = '<span class="text-green-400">' + chunks + ' chunks</span>';
-                }
+            
+            const chunkManager = new window.ChunkManager(competitionId, 'mp4');
+            embeddedCurrentPlayer = new window.LiveSequentialPlayer({
+              videoPlayers: videoPlayers,
+              chunkManager: chunkManager,
+              onChunkChange: function(index) {
+                const info = document.getElementById('embeddedChunkInfo');
+                if (info) { info.textContent = '\u0642\u0637\u0639\u0629 ' + (index + 1); info.classList.remove('hidden'); }
+                hideStatusOverlay();
+              },
+              onStatus: function(status) { log(status); },
+              onError: function(err) {
+                log('Viewer error: ' + err.message, 'error');
+                showStatusOverlay(tr.stream_not_available || '\u0627\u0644\u0628\u062b \u063a\u064a\u0631 \u0645\u062a\u0627\u062d');
               }
             });
+            await embeddedCurrentPlayer.start();
+            
+          } else if (isCompletedComp) {
+            // === VOD: Use SmartVodPlayer ===
+            setEmbeddedStatus(tr.loading_video || '\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0641\u064a\u062f\u064a\u0648...');
+            updateEmbeddedMode('vod');
+            
+            if (!window.SmartVodPlayer) {
+              showStatusOverlay(tr.streaming_unavailable || '\u062e\u062f\u0645\u0629 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629');
+              return;
+            }
+            
+            // Try to load playlist for VOD
+            const playlistRes = await fetch(streamServerUrl + '/playlist.php?id=' + competitionId).catch(() => null);
+            if (!playlistRes || !playlistRes.ok) {
+              showStatusOverlay(tr.recording_not_ready || '\u0627\u0644\u062a\u0633\u062c\u064a\u0644 \u063a\u064a\u0631 \u0645\u062a\u0627\u062d \u0628\u0639\u062f');
+              return;
+            }
+            const playlistData = await playlistRes.json();
+            
+            embeddedCurrentPlayer = new window.SmartVodPlayer({
+              videoElement: videoPlayers[0],
+              competitionId: competitionId,
+              playlistData: playlistData,
+              onProgress: function(current, total) {
+                const info = document.getElementById('embeddedChunkInfo');
+                if (info) { info.textContent = current + '/' + total; info.classList.remove('hidden'); }
+              },
+              onChunkLoaded: function(index, loaded) {
+                // Update seekbar loading info
+              },
+              onReady: function(info) {
+                hideStatusOverlay();
+                // Show VOD controls
+                const vodControls = document.getElementById('embeddedVodControls');
+                if (vodControls) vodControls.classList.remove('hidden');
+                // Setup seekbar
+                embeddedSetupVodControls(videoPlayers[0], info.totalDuration);
+              },
+              onError: function(err) {
+                log('VOD error: ' + err.message, 'error');
+                showStatusOverlay(tr.recording_not_ready || '\u0627\u0644\u062a\u0633\u062c\u064a\u0644 \u063a\u064a\u0631 \u0645\u062a\u0627\u062d');
+              }
+            });
+            await embeddedCurrentPlayer.start();
           }
           
-          // Connect P2P
-          await p2p.connect();
         } catch (err) {
-          log('Failed: ' + err.message, 'error');
-          alert(tr.camera_error || 'Camera access failed. Try screen share.');
+          log('Embedded viewer error: ' + err.message, 'error');
+          showStatusOverlay(tr.error_occurred || '\u062d\u062f\u062b \u062e\u0637\u0623');
         }
       }
       
-      function startRecording() {
-        if (!compositor || !p2p) return;
-        log('Starting recording');
-        compositor.startRecording();
+      // ===== VOD Seekbar Controls =====
+      function embeddedSetupVodControls(videoEl, totalDuration) {
+        const seekbar = document.getElementById('embeddedSeekbar');
+        const timeDisplay = document.getElementById('embeddedTimeDisplay');
+        
+        function formatTime(s) {
+          s = Math.floor(s);
+          const m = Math.floor(s / 60);
+          const sec = s % 60;
+          return m + ':' + (sec < 10 ? '0' : '') + sec;
+        }
+        
+        if (videoEl) {
+          videoEl.addEventListener('timeupdate', function() {
+            const cur = videoEl.currentTime;
+            const total = videoEl.duration || totalDuration || 0;
+            if (seekbar) seekbar.value = total > 0 ? (cur / total * 100) : 0;
+            if (timeDisplay) timeDisplay.textContent = formatTime(cur) + ' / ' + formatTime(total);
+            // Update play/pause icon
+            const icon = document.getElementById('embeddedPlayPauseIcon');
+            if (icon) icon.className = videoEl.paused ? 'fas fa-play text-sm' : 'fas fa-pause text-sm';
+          });
+          videoEl.addEventListener('play', function() {
+            const icon = document.getElementById('embeddedPlayPauseIcon');
+            if (icon) icon.className = 'fas fa-pause text-sm';
+          });
+          videoEl.addEventListener('pause', function() {
+            const icon = document.getElementById('embeddedPlayPauseIcon');
+            if (icon) icon.className = 'fas fa-play text-sm';
+          });
+        }
+        
+        if (seekbar) {
+          seekbar.addEventListener('input', function() {
+            if (!embeddedCurrentPlayer || !videoEl) return;
+            const percent = parseFloat(seekbar.value);
+            const dur = videoEl.duration || totalDuration || 0;
+            const targetTime = (percent / 100) * dur;
+            if (embeddedCurrentPlayer.seekTo) {
+              embeddedCurrentPlayer.seekTo(targetTime);
+            } else {
+              videoEl.currentTime = targetTime;
+            }
+          });
+        }
       }
       
-      function updateConnectionStatus(state) {
-        const el = document.getElementById('connectionStatus');
-        if (!el) return;
-        el.classList.remove('hidden');
-        el.className = 'absolute top-4 ' + (isRTL ? 'right-4' : 'left-4') + ' px-3 py-1 rounded-full text-sm z-30 text-white ' +
-          (state === 'connected' ? 'bg-green-600' : state === 'failed' ? 'bg-red-600' : 'bg-yellow-600');
-        el.innerHTML = '<i class="fas fa-wifi mr-2"></i>' + state;
-        if (state === 'connected') setTimeout(() => el.classList.add('hidden'), 3000);
-      }
+      // ===== Embedded Viewer Controls =====
+      window.embeddedTogglePlayPause = function() {
+        const v = document.getElementById('embeddedVideoPlayer1');
+        if (!v) return;
+        v.paused ? v.play() : v.pause();
+      };
+      
+      window.embeddedToggleFullscreen = function() {
+        const container = document.getElementById('embeddedVideoContainer');
+        if (!container) return;
+        if (!document.fullscreenElement) {
+          container.requestFullscreen && container.requestFullscreen();
+          container.webkitRequestFullscreen && container.webkitRequestFullscreen();
+          embeddedFullscreen = true;
+        } else {
+          document.exitFullscreen && document.exitFullscreen();
+          document.webkitExitFullscreen && document.webkitExitFullscreen();
+          embeddedFullscreen = false;
+        }
+        const icon = document.getElementById('embeddedFsIcon');
+        if (icon) icon.className = embeddedFullscreen ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
+      };
+      
+      document.addEventListener('fullscreenchange', function() {
+        const icon = document.getElementById('embeddedFsIcon');
+        if (icon) icon.className = document.fullscreenElement ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
+      });
       
       // Control Functions
       window.toggleFullscreen = function() {
@@ -1013,11 +1039,16 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       };
       
-      // Check if competition is live and initialize streaming
-      // This runs after renderCompetition
+      // Check if competition needs embedded viewer and start it
       function checkAndInitStream() {
-        if (competitionData && competitionData.status === 'live' && competitionData.live_url) {
-          initEmbeddedStream();
+        if (!competitionData) return;
+        const status = competitionData.status;
+        const isUserCreator = window.currentUser && window.currentUser.id === competitionData.creator_id;
+        const isUserOpponent = window.currentUser && window.currentUser.id === competitionData.opponent_id;
+        
+        // Competitors go to dedicated pages - viewers use embedded player
+        if (!isUserCreator && !isUserOpponent && (status === 'live' || status === 'completed')) {
+          initEmbeddedViewer();
         }
       }
       
@@ -1025,7 +1056,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       const originalRenderCompetition = renderCompetition;
       renderCompetition = function(comp) {
         originalRenderCompetition(comp);
-        setTimeout(checkAndInitStream, 100);
+        setTimeout(checkAndInitStream, 200);
       };
     </script>
   `;

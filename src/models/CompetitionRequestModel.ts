@@ -16,10 +16,37 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
     protected readonly tableName = 'competition_requests';
 
     /**
+     * Create - required by BaseModel
+     */
+    async create(data: Partial<CompetitionRequest>): Promise<CompetitionRequest> {
+        const result = await this.createRequest({
+            competition_id: data.competition_id!,
+            requester_id: data.requester_id!,
+            message: data.message
+        });
+        return (await this.findById(result.id))!;
+    }
+
+    /**
+     * Update - required by BaseModel
+     */
+    async update(id: number, data: Partial<CompetitionRequest>): Promise<CompetitionRequest | null> {
+        const updates: string[] = [];
+        const values: any[] = [];
+        if (data.status !== undefined) { updates.push('status = ?'); values.push(data.status); }
+        if (updates.length === 0) return this.findById(id);
+        values.push(id);
+        await this.db.prepare(
+            `UPDATE ${this.tableName} SET ${updates.join(', ')}, updated_at = datetime('now') WHERE id = ?`
+        ).bind(...values).run();
+        return this.findById(id);
+    }
+
+    /**
      * Create a new competition request
      * إنشاء طلب انضمام جديد
      */
-    async create(data: {
+    async createRequest(data: {
         competition_id: number;
         requester_id: number;
         message?: string;

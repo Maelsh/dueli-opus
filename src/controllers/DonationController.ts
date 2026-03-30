@@ -23,12 +23,13 @@ export class DonationController extends BaseController {
             const user = this.getCurrentUser(c);
 
             const body = await this.getBody<{
-                receiver_id?: number;
                 amount: number;
                 currency?: string;
                 message?: string;
-                is_public?: boolean;
+                is_anonymous?: boolean;
                 payment_method?: string;
+                donor_name?: string;
+                donor_email?: string;
             }>(c);
 
             if (!body?.amount) {
@@ -40,20 +41,16 @@ export class DonationController extends BaseController {
                 return this.validationError(c, 'Minimum donation is $1');
             }
 
-            // Cannot donate to yourself
-            if (body.receiver_id && body.receiver_id === user.id) {
-                return this.validationError(c, 'Cannot donate to yourself');
-            }
-
             const donationModel = new DonationModel(c.env.DB);
-            const donation = await donationModel.create({
-                sender_id: user.id,
-                receiver_id: body.receiver_id || null,
+            const donation = await donationModel.createDonation({
+                user_id: user.id,
                 amount: body.amount,
                 currency: body.currency || 'USD',
                 message: body.message,
-                is_public: body.is_public !== false ? 1 : 0,
-                payment_method: body.payment_method
+                is_anonymous: body.is_anonymous,
+                payment_method: body.payment_method || 'card',
+                donor_name: body.donor_name,
+                donor_email: body.donor_email
             });
 
             return this.success(c, { donation }, 201);
@@ -63,20 +60,19 @@ export class DonationController extends BaseController {
     }
 
     /**
-     * Get public donations (transparency)
+     * Get public donations / top supporters
      * GET /api/donations/public
      */
     async getPublic(c: AppContext) {
         try {
             const limit = this.getQueryInt(c, 'limit') || 50;
-            const offset = this.getQueryInt(c, 'offset') || 0;
 
             const donationModel = new DonationModel(c.env.DB);
-            const donations = await donationModel.getPublicDonations(limit, offset);
-            const platformTotal = await donationModel.getPlatformDonationsTotal();
+            const topSupporters = await donationModel.getTopSupporters(limit);
+            const platformTotal = await donationModel.getTotalDonations();
 
             return this.success(c, {
-                items: donations,
+                items: topSupporters,
                 platform_total: platformTotal
             });
         } catch (error) {
@@ -94,10 +90,9 @@ export class DonationController extends BaseController {
             const user = this.getCurrentUser(c);
 
             const limit = this.getQueryInt(c, 'limit') || 20;
-            const offset = this.getQueryInt(c, 'offset') || 0;
 
             const donationModel = new DonationModel(c.env.DB);
-            const donations = await donationModel.getSentDonations(user.id, limit, offset);
+            const donations = await donationModel.getDonationsByUser(user.id, limit);
 
             return this.success(c, { items: donations });
         } catch (error) {
@@ -106,7 +101,7 @@ export class DonationController extends BaseController {
     }
 
     /**
-     * Get my donations (received)
+     * Get my donations (received) - same as sent since model uses user_id
      * GET /api/donations/received
      */
     async getMyReceived(c: AppContext) {
@@ -115,10 +110,9 @@ export class DonationController extends BaseController {
             const user = this.getCurrentUser(c);
 
             const limit = this.getQueryInt(c, 'limit') || 20;
-            const offset = this.getQueryInt(c, 'offset') || 0;
 
             const donationModel = new DonationModel(c.env.DB);
-            const donations = await donationModel.getReceivedDonations(user.id, limit, offset);
+            const donations = await donationModel.getDonationsByUser(user.id, limit);
 
             return this.success(c, { items: donations });
         } catch (error) {
