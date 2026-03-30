@@ -670,9 +670,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           document.getElementById('embeddedVideoPlayer2')
         ];
         
-        const isLiveComp = competitionData && (competitionData.status === 'live' || competitionData.stream_status === 'live');
-        const isCompletedComp = competitionData && (competitionData.status === 'completed' || competitionData.stream_status === 'ready');
-        
         function setEmbeddedStatus(text) {
           const el = document.getElementById('embeddedStatusText');
           if (el) el.textContent = text;
@@ -693,7 +690,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         function updateEmbeddedMode(mode) {
           const badge = document.getElementById('embeddedModeBadge');
           if (!badge) return;
-          badge.classList.remove('hidden', 'bg-red-600', 'bg-amber-500', 'bg-green-600');
+          badge.classList.remove('hidden', 'bg-red-600', 'bg-amber-500');
           if (mode === 'live') {
             badge.classList.add('bg-red-600');
             badge.innerHTML = '<i class="fas fa-circle animate-pulse mr-1"></i>LIVE';
@@ -706,13 +703,27 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
         
         try {
+          // Re-fetch fresh competition data from API to get latest status
+          setEmbeddedStatus(tr.loading || 'Loading...');
+          const freshRes = await fetch('/api/competitions/' + competitionId);
+          if (!freshRes.ok) { showStatusOverlay(tr.stream_not_available || 'Stream not available'); return; }
+          const freshData = await freshRes.json();
+          const comp = freshData.data || freshData;
+          
+          // Determine mode from both status and stream_status fields
+          const dbStatus = comp.status;            // 'live' | 'completed' | 'pending' | 'accepted'
+          const streamSt = comp.stream_status;    // 'live' | 'ready' | 'idle' | undefined
+          
+          const isLiveComp = (dbStatus === 'live') || (streamSt === 'live');
+          const isCompletedComp = (dbStatus === 'completed') || (streamSt === 'ready');
+          
           if (isLiveComp) {
             // === LIVE: Use ChunkManager + LiveSequentialPlayer ===
-            setEmbeddedStatus(tr.connecting_to_stream || '\u062c\u0627\u0631\u064a \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0627\u0644\u0628\u062b...');
+            setEmbeddedStatus(tr.connecting_to_stream || 'Connecting to stream...');
             updateEmbeddedMode('live');
             
             if (!window.ChunkManager || !window.LiveSequentialPlayer) {
-              showStatusOverlay(tr.streaming_unavailable || '\u062e\u062f\u0645\u0629 \u0627\u0644\u0628\u062b \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629');
+              showStatusOverlay(tr.streaming_unavailable || 'Streaming service unavailable');
               return;
             }
             
@@ -722,34 +733,39 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               chunkManager: chunkManager,
               onChunkChange: function(index) {
                 const info = document.getElementById('embeddedChunkInfo');
-                if (info) { info.textContent = '\u0642\u0637\u0639\u0629 ' + (index + 1); info.classList.remove('hidden'); }
+                if (info) { info.textContent = (tr.chunk || 'Chunk') + ' ' + (index + 1); info.classList.remove('hidden'); }
                 hideStatusOverlay();
               },
               onStatus: function(status) { log(status); },
               onError: function(err) {
                 log('Viewer error: ' + err.message, 'error');
-                showStatusOverlay(tr.stream_not_available || '\u0627\u0644\u0628\u062b \u063a\u064a\u0631 \u0645\u062a\u0627\u062d');
+                showStatusOverlay(tr.stream_not_available || 'Stream not available');
               }
             });
             await embeddedCurrentPlayer.start();
             
           } else if (isCompletedComp) {
             // === VOD: Use SmartVodPlayer ===
-            setEmbeddedStatus(tr.loading_video || '\u062c\u0627\u0631\u064a \u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0641\u064a\u062f\u064a\u0648...');
+            setEmbeddedStatus(tr.loading_video || 'Loading video...');
             updateEmbeddedMode('vod');
             
             if (!window.SmartVodPlayer) {
-              showStatusOverlay(tr.streaming_unavailable || '\u062e\u062f\u0645\u0629 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629');
+              showStatusOverlay(tr.streaming_unavailable || 'Video service unavailable');
               return;
             }
             
-            // Try to load playlist for VOD
-            const playlistRes = await fetch(streamServerUrl + '/playlist.php?id=' + competitionId).catch(() => null);
-            if (!playlistRes || !playlistRes.ok) {
-              showStatusOverlay(tr.recording_not_ready || '\u0627\u0644\u062a\u0633\u062c\u064a\u0644 \u063a\u064a\u0631 \u0645\u062a\u0627\u062d \u0628\u0639\u062f');
+            // Fetch playlist from ffmpeg server
+            const playlistRes = await fetch(streamServerUrl + '/playlist.php?id=' + competitionId);
+            if (!playlistRes.ok) {
+              showStatusOverlay(tr.recording_not_ready || 'Recording not ready yet');
               return;
             }
             const playlistData = await playlistRes.json();
+            
+            if (!playlistData.chunks || playlistData.chunks.length === 0) {
+              showStatusOverlay(tr.recording_not_ready || 'Recording not ready yet');
+              return;
+            }
             
             embeddedCurrentPlayer = new window.SmartVodPlayer({
               videoElement: videoPlayers[0],
@@ -759,28 +775,27 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 const info = document.getElementById('embeddedChunkInfo');
                 if (info) { info.textContent = current + '/' + total; info.classList.remove('hidden'); }
               },
-              onChunkLoaded: function(index, loaded) {
-                // Update seekbar loading info
-              },
+              onChunkLoaded: function(index, loaded) {},
               onReady: function(info) {
                 hideStatusOverlay();
-                // Show VOD controls
                 const vodControls = document.getElementById('embeddedVodControls');
                 if (vodControls) vodControls.classList.remove('hidden');
-                // Setup seekbar
                 embeddedSetupVodControls(videoPlayers[0], info.totalDuration);
               },
               onError: function(err) {
                 log('VOD error: ' + err.message, 'error');
-                showStatusOverlay(tr.recording_not_ready || '\u0627\u0644\u062a\u0633\u062c\u064a\u0644 \u063a\u064a\u0631 \u0645\u062a\u0627\u062d');
+                showStatusOverlay(tr.recording_not_ready || 'Recording not available');
               }
             });
             await embeddedCurrentPlayer.start();
+          } else {
+            // Status is not live or completed  
+            showStatusOverlay(tr.stream_not_available || 'Stream not available yet');
           }
           
         } catch (err) {
           log('Embedded viewer error: ' + err.message, 'error');
-          showStatusOverlay(tr.error_occurred || '\u062d\u062f\u062b \u062e\u0637\u0623');
+          showStatusOverlay(tr.error_occurred || 'An error occurred');
         }
       }
       
@@ -1008,35 +1023,26 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             p2p = null;
           }
           
-          // Send finalize to server
+          // End competition via the correct API endpoint
+          const endRes = await fetch('/api/competitions/' + competitionId + '/end', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+          });
+          const endData = await endRes.json();
+          if (!endData.success) {
+            log('Warning: ' + (endData.error || 'Could not update status'), 'warn');
+          }
+          
+          // Also notify the ffmpeg server to finalize
           await fetch(streamServerUrl + '/finalize.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               competition_id: competitionId,
-              user_id: window.currentUser.id
+              user_id: window.currentUser ? window.currentUser.id : null
             })
-          });
-          
-          // Update competition status
-          await fetch('/api/competitions/' + competitionId, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
-            },
-            body: JSON.stringify({ status: 'completed' })
-          });
-          
-          // Leave signaling room
-          await fetch('/api/signaling/room/leave', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              competition_id: competitionId,
-              user_id: window.currentUser.id
-            })
-          });
+          }).catch(function() {}); // not critical
           
           alert(tr.stream_ended || 'Stream ended successfully');
           location.reload();
@@ -1049,11 +1055,15 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       function checkAndInitStream() {
         if (!competitionData) return;
         const status = competitionData.status;
+        const streamStatus = competitionData.stream_status;
         const isUserCreator = window.currentUser && window.currentUser.id === competitionData.creator_id;
         const isUserOpponent = window.currentUser && window.currentUser.id === competitionData.opponent_id;
         
-        // Competitors go to dedicated pages - viewers use embedded player
-        if (!isUserCreator && !isUserOpponent && (status === 'live' || status === 'completed')) {
+        // Competitors go to dedicated pages. Viewers (anyone else) use embedded player.
+        if (isUserCreator || isUserOpponent) return;
+        
+        // Show embedded viewer for live or completed competitions
+        if (status === 'live' || status === 'completed' || streamStatus === 'live' || streamStatus === 'ready') {
           initEmbeddedViewer();
         }
       }
@@ -1062,7 +1072,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       const originalRenderCompetition = renderCompetition;
       renderCompetition = function(comp) {
         originalRenderCompetition(comp);
-        setTimeout(checkAndInitStream, 200);
+        setTimeout(checkAndInitStream, 300);
       };
     </script>
   `;
