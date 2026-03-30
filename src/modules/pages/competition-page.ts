@@ -35,7 +35,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     
     <!-- Shared Streaming Classes (ChunkManager, LiveSequentialPlayer, SmartVodPlayer...) -->
     <script>
+      (function() {
       ${getClientSharedScript()}
+      })();
     </script>
     
     <script>
@@ -648,6 +650,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       let isScreenSharing = false;
       let currentFacingMode = 'user';
       const streamServerUrl = 'https://maelshpro.com/ffmpeg';
+      
+      // ===== Embedded Viewer State =====
+      let embeddedCurrentPlayer = null;
+      let embeddedFullscreen = false;
       
       function log(msg, type = 'info') {
         console.log('[LiveStream]', type === 'error' ? '❌' : '📡', msg);
