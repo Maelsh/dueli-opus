@@ -35,7 +35,7 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <link href="/static/styles.css" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
     
     <!-- Load client bundle in head with defer so it's ready when DOMContentLoaded fires -->
     <script src="/static/app.js" defer></script>

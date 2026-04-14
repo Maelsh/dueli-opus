@@ -1,0 +1,135 @@
+[
+  {
+    "id": "TC001",
+    "title": "Homepage loads and displays competition cards",
+    "description": "Verifies that the homepage loads its primary competition browsing content.",
+    "category": "View Competitions",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Scroll through competition cards"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a list of competition cards is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Open competition details from a card",
+    "description": "Verifies that a user can open a competition’s details and see key information.",
+    "category": "View Competitions",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Scroll through competition cards"
+      },
+      {
+        "type": "action",
+        "description": "Click a competition card to see details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify competition details are displayed including status and participants"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Competition list remains usable after extensive scrolling",
+    "description": "Verifies that scrolling does not break the ability to browse and open details.",
+    "category": "View Competitions",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Scroll to the bottom of the competition list"
+      },
+      {
+        "type": "action",
+        "description": "Scroll back up within the competition list"
+      },
+      {
+        "type": "action",
+        "description": "Click a competition card to see details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify competition details are displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Competition details can be opened from different cards",
+    "description": "Verifies that selecting different competitions shows different detail content.",
+    "category": "View Competitions",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Scroll through competition cards"
+      },
+      {
+        "type": "action",
+        "description": "Click a competition card to see details"
+      },
+      {
+        "type": "action",
+        "description": "Note the displayed participant names in the details panel"
+      },
+      {
+        "type": "action",
+        "description": "Scroll through competition cards"
+      },
+      {
+        "type": "action",
+        "description": "Click a different competition card to see details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the participant names shown in the details are different from the previously noted names"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Error or empty state is shown when competitions cannot be loaded",
+    "description": "Verifies that the homepage shows an error or empty state with a retry prompt when competitions fail to load.",
+    "category": "View Competitions",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Wait for the competition list area to finish attempting to load"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an error or empty state is displayed prompting the user to retry"
+      }
+    ]
+  }
+]

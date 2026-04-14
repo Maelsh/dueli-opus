@@ -1,0 +1,263 @@
+=== TABLE: ad_blocks ===
+Interface: AdBlock
+id: number;
+    user_id: number;
+    ad_id: number;
+    created_at: string;
+
+=== TABLE: advertisements ===
+Interface: Advertisement
+id: number;
+    title: string;
+    image_url: string | null;
+    link_url: string | null;
+    is_active: number;
+    views_count: number;
+    clicks_count: number;
+    revenue_per_view: number;
+    created_by: number;
+    created_at: string;
+
+Interface: AdImpression
+id: number;
+    ad_id: number;
+    competition_id: number;
+    user_id: number | null;
+    created_at: string;
+
+Interface: UserEarnings
+id: number;
+    user_id: number;
+    competition_id: number;
+    amount: number;
+    status: 'pending' | 'paid';
+    created_at: string;
+
+=== TABLE: competition_invitations ===
+Interface: CompetitionInvitation
+id: number;
+    competition_id: number;
+    inviter_id: number;
+    invitee_id: number;
+    status: 'pending' | 'accepted' | 'rejected' | 'expired';
+    expires_at: string;
+    created_at: string;
+    updated_at: string;
+
+=== TABLE: competitions ===
+Interface: CompetitionFilters
+status?: CompetitionStatus | 'recorded' | 'upcoming';
+    category?: string | number;
+    subcategory?: string;
+    country?: string;
+    language?: string;
+    creatorId?: number;
+    userId?: number; // جلب منافسات المستخدم كـ creator أو opponent
+    search?: string;
+    limit?: number;
+    offset?: number;
+
+Interface: CreateCompetitionData
+title: string;
+    description?: string;
+    rules: string;
+    category_id: number;
+    subcategory_id?: number;
+    creator_id: number;
+    language: string;
+    country?: string;
+    scheduled_at?: string;
+
+=== TABLE: competition_requests ===
+Interface: CompetitionRequest
+id: number;
+    competition_id: number;
+    requester_id: number;
+    message?: string;
+    status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
+    expires_at: string;
+    created_at: string;
+    updated_at: string;
+
+=== TABLE: donations ===
+Interface: Donation
+id: number;
+    user_id: number | null;
+    amount: number;
+    currency: string;
+    payment_method: string;
+    payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
+    transaction_id: string | null;
+    donor_name: string | null;
+    donor_email: string | null;
+    message: string | null;
+    is_anonymous: boolean;
+    created_at: string;
+
+Interface: CreateDonationData
+user_id?: number;
+    amount: number;
+    currency?: string;
+    payment_method: string;
+    donor_name?: string;
+    donor_email?: string;
+    message?: string;
+    is_anonymous?: boolean;
+
+=== TABLE: user_earnings ===
+Interface: Earnings
+id: number;
+    user_id: number;
+    available: number;
+    pending: number;
+    on_hold: number;
+    total: number;
+    withdrawn: number;
+    updated_at: string;
+
+Interface: WithdrawalRequest
+id: number;
+    user_id: number;
+    amount: number;
+    status: 'pending' | 'processing' | 'completed' | 'rejected';
+    payment_method: string;
+    payment_details: string;
+    created_at: string;
+    processed_at: string | null;
+    transaction_id: string | null;
+
+Interface: CreateWithdrawalRequest
+user_id: number;
+    amount: number;
+    payment_method: string;
+    payment_details: string;
+
+=== TABLE: likes ===
+Interface: Like
+id: number;
+    user_id: number;
+    competition_id: number;
+    created_at: string;
+
+=== TABLE: messages ===
+Interface: Conversation
+id: number;
+    user1_id: number;
+    user2_id: number;
+    last_message_at: string | null;
+    created_at: string;
+
+Interface: Message
+id: number;
+    conversation_id: number;
+    sender_id: number;
+    content: string;
+    read_at: string | null;
+    created_at: string;
+
+=== TABLE: notifications ===
+Interface: CreateNotificationData
+user_id: number;
+    type: NotificationType;
+    title: string;
+    message: string;
+    reference_type?: string;
+    reference_id?: number;
+
+=== TABLE: payment_methods ===
+Interface: PaymentMethod
+id: number;
+    user_id: number;
+    type: PaymentMethodType;
+    is_default: number;
+    // Bank Account
+    bank_name: string | null;
+    iban: string | null;
+    swift_code: string | null;
+    account_holder: string | null;
+    // PayPal / Wise
+    email: string | null;
+    // Metadata
+    is_verified: number;
+    created_at: string;
+    updated_at: string;
+
+=== TABLE: reports ===
+Interface: Report
+id: number;
+    reporter_id: number;
+    target_type: ReportTargetType;
+    target_id: number;
+    reason: string;
+    description: string | null;
+    status: ReportStatus;
+    reviewed_by: number | null;
+    reviewed_at: string | null;
+    action_taken: string | null;
+    created_at: string;
+
+Interface: CreateReportData
+reporter_id: number;
+    target_type: ReportTargetType;
+    target_id: number;
+    reason: string;
+    description?: string;
+
+=== TABLE: competition_reminders ===
+Interface: CompetitionReminder
+id: number;
+    competition_id: number;
+    user_id: number;
+    remind_at: string;
+    sent: number;
+    created_at: string;
+
+=== TABLE: user_blocks ===
+Interface: UserBlock
+id: number;
+    blocker_id: number;
+    blocked_id: number;
+    reason?: string;
+    created_at: string;
+
+=== TABLE: users ===
+Interface: CreateUserData
+email: string;
+    username: string;
+    display_name: string;
+    password_hash?: string;
+    avatar_url?: string;
+    country?: string;
+    language?: string;
+    verification_token?: string;
+    verification_token_expires?: string;
+    oauth_provider?: string;
+    oauth_id?: string;
+
+Interface: UpdateUserData
+display_name?: string;
+    avatar_url?: string;
+    bio?: string;
+    country?: string;
+    language?: string;
+    is_verified?: boolean;
+
+=== TABLE: user_settings ===
+Interface: UserSettings
+id: number;
+    user_id: number;
+    default_language: string;
+    default_country: string;
+    notifications_enabled: number;
+    email_notifications: number;
+    privacy_level: 'public' | 'followers' | 'private';
+    created_at: string;
+    updated_at: string;
+
+Interface: UserPost
+id: number;
+    user_id: number;
+    content: string;
+    image_url: string | null;
+    created_at: string;
+

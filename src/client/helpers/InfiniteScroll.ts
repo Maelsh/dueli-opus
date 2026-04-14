@@ -1,7 +1,11 @@
 /**
  * @file src/client/helpers/InfiniteScroll.ts
- * @description مساعد التمرير اللانهائي
+ * @description Infinite scroll with graceful degradation
  * @module client/helpers/InfiniteScroll
+ *
+ * Task 7: Graceful Degradation
+ * When exact matches run out, progressively queries less relevant content
+ * so the user never hits a hard "0 results" wall unless the DB is empty.
  */
 
 import { ApiClient } from '../core/ApiClient';
@@ -15,11 +19,13 @@ interface InfiniteScrollOptions {
     emptyMessage?: string;
     loadingHTML?: string;
     params?: Record<string, string>;
+    degradeMessage?: string;
 }
 
 /**
  * InfiniteScroll Class
- * التمرير اللانهائي لتحميل البيانات تدريجياً
+ * Graceful degradation: when primary results are exhausted,
+ * continues loading progressively less relevant content
  */
 export class InfiniteScroll {
     private container: HTMLElement | null;
@@ -33,8 +39,12 @@ export class InfiniteScroll {
     private emptyMessage: string;
     private loadingHTML: string;
     private params: Record<string, string>;
+    private degradeMessage: string;
     private observer: IntersectionObserver | null = null;
     private sentinel: HTMLElement | null = null;
+    private loadedIds: Set<number> = new Set();
+    private isDegraded: boolean = false;
+    private totalLoaded: number = 0;
 
     constructor(options: InfiniteScrollOptions) {
         this.container = typeof options.container === 'string'
@@ -47,22 +57,18 @@ export class InfiniteScroll {
         this.emptyMessage = options.emptyMessage || 'No items found';
         this.loadingHTML = options.loadingHTML || '<div class="col-span-full text-center py-8"><i class="fas fa-spinner fa-spin text-3xl text-purple-400"></i></div>';
         this.params = options.params || {};
+        this.degradeMessage = options.degradeMessage || '';
 
         this.init();
     }
 
-    /**
-     * Initialize infinite scroll
-     */
     private init(): void {
         if (!this.container) return;
 
-        // Create sentinel element for intersection observer
         this.sentinel = document.createElement('div');
         this.sentinel.className = 'infinite-scroll-sentinel h-10';
         this.container.appendChild(this.sentinel);
 
-        // Setup intersection observer
         this.observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting && !this.loading && this.hasMore) {
@@ -73,14 +79,9 @@ export class InfiniteScroll {
         );
 
         this.observer.observe(this.sentinel);
-
-        // Load initial data
         this.loadMore();
     }
 
-    /**
-     * Load more items
-     */
     async loadMore(): Promise<void> {
         if (this.loading || !this.hasMore || !this.container) return;
 
@@ -96,24 +97,42 @@ export class InfiniteScroll {
 
             const response = await ApiClient.get(`${this.endpoint}?${queryParams}`);
 
-            if (response.success && Array.isArray(response.data)) {
-                const items = response.data;
+            if (response.success) {
+                const items = response.data?.competitions || response.data || [];
 
-                if (items.length < this.limit) {
+                const newItems = items.filter((item: any) => {
+                    if (this.loadedIds.has(item.id)) return false;
+                    this.loadedIds.add(item.id);
+                    return true;
+                });
+
+                if (response.data?.hasMore === false) {
+                    this.hasMore = false;
+                } else if (newItems.length < this.limit) {
                     this.hasMore = false;
                 }
 
-                if (this.offset === 0 && items.length === 0) {
+                if (this.offset === 0 && newItems.length === 0) {
                     this.showEmpty();
                 } else {
                     this.hideLoading();
-                    items.forEach((item: any) => {
-                        const html = this.renderItem(item);
-                        if (this.sentinel) {
-                            this.sentinel.insertAdjacentHTML('beforebegin', html);
+
+                    if (newItems.length > 0) {
+                        if (!this.isDegraded && this.degradeMessage && newItems[0]?.match_phase && newItems[0].match_phase > 1) {
+                            this.isDegraded = true;
+                            this.showDegradedNotice();
                         }
-                    });
-                    this.offset += items.length;
+
+                        newItems.forEach((item: any) => {
+                            const html = this.renderItem(item);
+                            if (this.sentinel) {
+                                this.sentinel.insertAdjacentHTML('beforebegin', html);
+                            }
+                        });
+                        this.totalLoaded += newItems.length;
+                    }
+
+                    this.offset += items.length || this.limit;
                 }
             }
         } catch (error) {
@@ -125,27 +144,18 @@ export class InfiniteScroll {
         }
     }
 
-    /**
-     * Show loading indicator
-     */
     private showLoading(): void {
         if (this.sentinel) {
             this.sentinel.innerHTML = this.loadingHTML;
         }
     }
 
-    /**
-     * Hide loading indicator
-     */
     private hideLoading(): void {
         if (this.sentinel) {
             this.sentinel.innerHTML = '';
         }
     }
 
-    /**
-     * Show empty message
-     */
     private showEmpty(): void {
         if (this.container && this.sentinel) {
             this.sentinel.innerHTML = `
@@ -157,31 +167,32 @@ export class InfiniteScroll {
         }
     }
 
-    /**
-     * Reset and reload
-     */
+    private showDegradedNotice(): void {
+        if (!this.degradeMessage || !this.sentinel) return;
+        const notice = document.createElement('div');
+        notice.className = 'col-span-full text-center py-3 px-4 mb-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl';
+        notice.innerHTML = `<p class="text-sm text-yellow-700 dark:text-yellow-400"><i class="fas fa-info-circle mr-1"></i>${this.degradeMessage}</p>`;
+        this.sentinel.insertAdjacentElement('beforebegin', notice);
+    }
+
     reset(): void {
         this.offset = 0;
         this.hasMore = true;
+        this.loadedIds.clear();
+        this.isDegraded = false;
+        this.totalLoaded = 0;
         if (this.container && this.sentinel) {
-            // Remove all items except sentinel
             const items = this.container.querySelectorAll(':scope > *:not(.infinite-scroll-sentinel)');
             items.forEach(item => item.remove());
         }
         this.loadMore();
     }
 
-    /**
-     * Update params and reload
-     */
     updateParams(newParams: Record<string, string>): void {
         this.params = { ...this.params, ...newParams };
         this.reset();
     }
 
-    /**
-     * Destroy observer
-     */
     destroy(): void {
         if (this.observer) {
             this.observer.disconnect();
@@ -190,7 +201,6 @@ export class InfiniteScroll {
     }
 }
 
-// Make available globally
 if (typeof window !== 'undefined') {
     (window as any).InfiniteScroll = InfiniteScroll;
 }

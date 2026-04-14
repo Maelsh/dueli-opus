@@ -272,6 +272,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           <i class="fas fa-question text-3xl text-gray-400"></i>
                         </div>
                         <h4 class="font-bold text-gray-400">\${tr.awaiting_opponent}</h4>
+                        \${isCreator ? \`
+                          <button onclick="window.toggleInvitePanel && window.toggleInvitePanel(\${comp.id})" class="mt-3 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-sm font-bold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95">
+                            <i class="fas fa-user-plus mr-1"></i>
+                            \${tr.matchmaking?.invite_opponent_btn || tr.invite || 'Invite Opponent'}
+                          </button>
+                        \` : ''}
                         \${window.currentUser && !isCreator && !hasRequested ? \`
                           <button onclick="requestJoin()" class="join-btn mt-3">
                             <i class="fas fa-hand-paper"></i>
@@ -708,6 +714,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
         
         try {
+          // إلغاء أي استطلاع قديم عند إعادة التشغيل
+          if (window._statusPollInterval) { clearInterval(window._statusPollInterval); window._statusPollInterval = null; }
+          
           // Re-fetch fresh competition data from API to get latest status
           setEmbeddedStatus(tr.loading || 'Loading...');
           const freshRes = await fetch('/api/competitions/' + competitionId);
@@ -745,10 +754,49 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               onError: function(err) {
                 log('Viewer error: ' + err.message, 'error');
                 showStatusOverlay(tr.stream_not_available || 'Stream not available');
+              },
+              // عند انتهاء البث: تحقق من الحالة وانتقل لـ VOD إن كانت مكتملة
+              onStreamEnd: async function() {
+                log('Stream ended - checking competition status...', 'info');
+                showStatusOverlay(tr.stream_ended || 'انتهى البث، جاري التحقق...');
+                // انتظر قليلاً ثم تحقق من قاعدة البيانات
+                await new Promise(function(r) { setTimeout(r, 3000); });
+                try {
+                  const statusRes = await fetch('/api/competitions/' + competitionId);
+                  const statusData = await statusRes.json();
+                  const latestComp = statusData.data || statusData;
+                  if (latestComp.status === 'completed') {
+                    // المنافسة انتهت - أعد تشغيل العارض كـ VOD
+                    log('Competition completed - switching to VOD', 'success');
+                    await initEmbeddedViewer();
+                  } else {
+                    showStatusOverlay(tr.stream_not_available || 'Stream ended');
+                  }
+                } catch(e) {
+                  showStatusOverlay(tr.stream_not_available || 'Stream ended');
+                }
               }
             });
             // يبدأ من آخر قطعة متاحة حالياً لعدم التأخر عن البث
             await embeddedCurrentPlayer.start({ startFromLatest: true });
+            
+            // استطلاع حالة المنافسة كل 30 ثانية لاكتشاف نهاية البث فوراً
+            window._statusPollInterval = setInterval(async function() {
+              try {
+                const pollRes = await fetch('/api/competitions/' + competitionId);
+                const pollData = await pollRes.json();
+                const pollComp = pollData.data || pollData;
+                if (pollComp.status === 'completed') {
+                  clearInterval(window._statusPollInterval);
+                  if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
+                  log('🏁 Competition completed - switching to VOD', 'success');
+                  // تحديث شارة الحالة في واجهة المنافسة
+                  const liveSpan = document.querySelector('.bg-red-600.text-white.text-xs');
+                  if (liveSpan) liveSpan.remove();
+                  await initEmbeddedViewer();
+                }
+              } catch(e) { /* تجاهل أخطاء الاستطلاع */ }
+            }, 30000);
             
           } else if (isCompletedComp) {
             // === VOD: Use SmartVodPlayer ===

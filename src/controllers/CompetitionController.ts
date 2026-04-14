@@ -13,6 +13,7 @@ import {
     NotificationModel,
     UserModel
 } from '../models';
+import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 
 /**
  * Competition Request Model (inline - should be in separate file)
@@ -189,11 +190,14 @@ export class CompetitionController extends BaseController {
             const requests = await requestModel.findByCompetition(id);
             const ratings = await ratingModel.findByCompetition(id);
 
+            const timer = ScheduledTaskService.getTimerDeadline(competition as any);
+
             return this.success(c, {
                 ...competition,
                 comments,
                 requests,
-                ratings
+                ratings,
+                timer
             });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -218,6 +222,7 @@ export class CompetitionController extends BaseController {
                 language?: string;
                 country?: string;
                 scheduled_at?: string;
+                competition_type?: 'instant' | 'scheduled';
             }>(c);
 
             if (!body?.title || !body?.rules || !body?.category_id) {
@@ -230,6 +235,17 @@ export class CompetitionController extends BaseController {
                 creator_id: user.id,
                 language: body.language || this.getLanguage(c)
             });
+
+            const taskService = new ScheduledTaskService(c.env.DB);
+
+            if (body.competition_type === 'instant' || !body.competition_type) {
+                const deleteAt = new Date(Date.now() + 60 * 60 * 1000);
+                await taskService.schedule(competition.id!, 'auto_delete_if_not_live', deleteAt);
+            } else if (body.competition_type === 'scheduled' && body.scheduled_at) {
+                const scheduledTime = new Date(body.scheduled_at).getTime();
+                const deleteAt = new Date(scheduledTime + 60 * 60 * 1000);
+                await taskService.schedule(competition.id!, 'auto_delete_if_not_live', deleteAt);
+            }
 
             return this.success(c, competition, 201);
         } catch (error) {
@@ -501,6 +517,14 @@ export class CompetitionController extends BaseController {
                 youtubeLiveId: body?.youtube_live_id,
                 liveUrl: body?.live_url
             });
+
+            // Rule C: Schedule auto-end after 2 hours
+            const taskService = new ScheduledTaskService(c.env.DB);
+            const autoEndAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+            await taskService.schedule(id, 'auto_end_live', autoEndAt);
+
+            // Cancel the auto_delete task since it's now live
+            await taskService.cancel(id, 'auto_delete_if_not_live');
 
             return this.success(c, { started: true, status: 'live' });
         } catch (error) {

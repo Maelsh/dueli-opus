@@ -134,6 +134,7 @@ export interface Competition extends TimestampedEntity {
   status: CompetitionStatus;
   language: Language;
   country?: string;
+  competition_type?: 'instant' | 'scheduled';
   scheduled_at?: string;
   started_at?: string;
   ended_at?: string;
@@ -157,6 +158,12 @@ export interface Competition extends TimestampedEntity {
   opponent_name?: string;
   opponent_username?: string;
   opponent_avatar?: string;
+  // Revenue / Rating Data
+  creator_rating?: number;
+  opponent_rating?: number;
+  creator_earnings?: number;
+  opponent_earnings?: number;
+  ad_revenue?: number;
 }
 
 /**

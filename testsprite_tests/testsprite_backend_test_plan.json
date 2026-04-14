@@ -1,0 +1,7 @@
+[
+  {
+    "id": "TC001",
+    "title": "get competitions api should return list of competitions",
+    "description": "Verify that the GET /api/competitions endpoint returns a list of active and offline competitions with correct details including status and participants."
+  }
+]

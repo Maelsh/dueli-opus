@@ -6,5 +6,6 @@
 export {
     authMiddleware,
     adminMiddleware,
-    adminAuthMiddleware
+    adminAuthMiddleware,
+    adminRoleGuard
 } from './auth';

@@ -35,6 +35,11 @@ import scheduleRoutes from './modules/api/schedule/routes';
 import earningsRoutes from './modules/api/earnings/routes';
 import withdrawalsRoutes from './modules/api/withdrawals/routes';
 import advertisementsRoutes from './modules/api/advertisements/routes';
+import transparencyRoutes from './modules/api/transparency/routes';
+import advertiserRoutes from './modules/api/advertiser/routes';
+import complaintsRoutes from './modules/api/complaints/routes';
+import matchmakingRoutes from './modules/api/matchmaking/routes';
+import sseRoutes from './modules/api/sse/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -98,6 +103,11 @@ app.route('/api', scheduleRoutes);
 app.route('/api/earnings', earningsRoutes);
 app.route('/api/withdrawals', withdrawalsRoutes);
 app.route('/api/advertisements', advertisementsRoutes);
+app.route('/api/transparency', transparencyRoutes);
+app.route('/api/advertiser', advertiserRoutes);
+app.route('/api/complaints', complaintsRoutes);
+app.route('/api/matchmaking', matchmakingRoutes);
+app.route('/api/sse', sseRoutes);          // Task 9: Central SSE event stream
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);
@@ -223,7 +233,7 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage } from './modules/pages';
+import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
@@ -241,6 +251,11 @@ app.get('/live/:id', liveRoomPage);
 app.get('/earnings', earningsPage);
 app.get('/reports', reportsPage);
 app.get('/donate', donatePage);
+app.get('/transparency', transparencyPage);
+app.get('/advertiser', advertiserPortalPage);
+app.get('/admin', adminDashboardPage);
+app.get('/complaints', complaintTrackingPage);
+app.get('/live/:id/finance', liveFinanceDashboardPage);
 
 // ============================================
 // Error Handling - معالجة الأخطاء

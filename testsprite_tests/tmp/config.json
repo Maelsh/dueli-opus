@@ -1,0 +1,20 @@
+{
+  "status": "init",
+  "type": "backend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:5173/",
+  "serverPort": 27349,
+  "executionArgs": {
+    "projectName": "webapp",
+    "projectPath": "d:\\projects\\opus-dueli\\webapp",
+    "testIds": [
+      "ab0e97b3-7eb9-4435-b0e6-c2846a9ea12c"
+    ],
+    "additionalInstruction": "Please update the assertion for TC001 get competitions api to NOT look for the 'participants' array. The actual API returns the competitors' data at the root of each competition loop using the 'creator_name', 'creator_username', 'opponent_name', and 'opponent_username' fields. Assert those fields exist instead.",
+    "serverMode": "development",
+    "envs": {
+      "API_KEY": "sk-user-y_WCZwkQc41q_pWkgcn7NCh7ay3tKTD618sf3Ct7WVsxLg5w51-t9rAFSZN9n-ZmekEzIlK4OFBauCDjAhHPilbiWVTOIlt8G18y8r8-ze7Ys1Nu9RuFYmy7yo3yMbFMPZY"
+    }
+  },
+  "proxy": "http://9f9b63d3-fc61-4669-a953-3b77407c194e:IUAHQ9cgdCg4QV6E7H0fHlBqHVUeu6aB@tun.testsprite.com:8080"
+}

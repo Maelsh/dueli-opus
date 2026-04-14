@@ -19,4 +19,8 @@ export class CompetitionService {
 
         return ApiClient.get(`/api/competitions?${queryParams.toString()}`);
     }
+
+    static async getById(id: number): Promise<{ success: boolean; data: Competition & { timer?: { type: string; deadline: string; labelKey: string } | null } }> {
+        return ApiClient.get(`/api/competitions/${id}`);
+    }
 }

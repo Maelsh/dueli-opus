@@ -21,6 +21,12 @@ export interface Advertisement {
     revenue_per_view: number;
     created_by: number;
     created_at: string;
+    advertiser_id: number | null;
+    budget: number;
+    budget_remaining: number;
+    target_language: string | null;
+    target_country: string | null;
+    campaign_status: 'active' | 'paused' | 'depleted' | 'archived';
 }
 
 /**

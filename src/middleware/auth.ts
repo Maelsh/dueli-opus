@@ -8,7 +8,7 @@
 
 import { Context, Next } from 'hono';
 import type { Bindings, Variables, Language } from '../config/types';
-import { SessionModel } from '../models';
+import { SessionModel, AdminRoleModel, AdminRoleType } from '../models';
 import { t } from '../i18n';
 
 type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>;
@@ -131,3 +131,34 @@ export function adminAuthMiddleware() {
 }
 
 export default authMiddleware;
+
+export function adminRoleGuard(allowedRoles: AdminRoleType[]) {
+    return async (c: AppContext, next: Next) => {
+        const user = c.get('user');
+
+        if (!user) {
+            const lang = (c.get('lang') || 'en') as Language;
+            return c.json({ success: false, error: t('login_required', lang) }, 401);
+        }
+
+        if (!user.is_admin) {
+            const lang = (c.get('lang') || 'en') as Language;
+            return c.json({ success: false, error: t('forbidden', lang) }, 403);
+        }
+
+        try {
+            const adminRoleModel = new AdminRoleModel(c.env.DB);
+            const role = await adminRoleModel.findByUserId(user.id);
+
+            if (!role || !allowedRoles.includes(role.role)) {
+                const lang = (c.get('lang') || 'en') as Language;
+                return c.json({ success: false, error: t('forbidden', lang) }, 403);
+            }
+
+            return next();
+        } catch (error) {
+            console.error('[AdminRoleGuard] Error:', error);
+            return c.json({ success: false, error: 'Authorization error' }, 500);
+        }
+    };
+}

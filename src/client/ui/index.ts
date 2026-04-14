@@ -12,5 +12,8 @@ export { MessagingUI } from './MessagingUI';
 export { SettingsUI } from './SettingsUI';
 export { InteractionsUI } from './InteractionsUI';
 export { ScheduleUI } from './ScheduleUI';
+export { InvitePanel } from './InvitePanel';
+export { RecommendationCarousel, CompetitorsMiniStatsCard } from './RecommendationCarousel';
+export { CountdownTimer } from './CountdownTimer';
 
 // Note: Competition card rendering uses shared/components/competition-card.ts (MVC View layer)

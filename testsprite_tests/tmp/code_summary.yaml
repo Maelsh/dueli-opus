@@ -1,0 +1,30 @@
+version: "2"
+type: frontend
+tech_stack:
+  - TypeScript
+  - Vite
+  - Tailwind CSS
+  - Vanilla JS
+routes:
+  - path: /
+    file: src/modules/pages/home/index.html
+    auth_required: false
+    description: Homepage showing active competitions
+  - path: /live
+    file: src/modules/pages/live/index.html
+    auth_required: true
+    description: Live streaming competition room
+features:
+  - name: View Competitions
+    description: View and browse competitions on the homepage
+    files:
+      - src/modules/pages/home/index.html
+    entry_route: /
+    user_interactions:
+      - Scroll through competition cards
+      - Click to see details
+    api_calls:
+      - method: GET
+        endpoint: /api/competitions
+    auth_required: false
+known_limitations: []

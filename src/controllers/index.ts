@@ -15,5 +15,8 @@ export { SearchController } from './SearchController';
 export { InteractionController } from './InteractionController';
 export { MessageController } from './MessageController';
 export { AdminController } from './AdminController';
+export { AdvertiserController, ComplaintController } from './AdvertiserController';
 export { SettingsController } from './SettingsController';
 export { ScheduleController } from './ScheduleController';
+export { MatchmakingController } from './MatchmakingController';
+export { RecommendationController } from './RecommendationController';

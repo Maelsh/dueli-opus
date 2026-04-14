@@ -17,6 +17,8 @@ export type ReportTargetType = 'user' | 'competition' | 'comment';
  */
 export type ReportStatus = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
 
+export type ArbitrationStatus = 'submitted' | 'under_review' | 'investigation' | 'resolved' | 'rejected';
+
 /**
  * Report Interface
  */
@@ -32,6 +34,11 @@ export interface Report {
     reviewed_at: string | null;
     action_taken: string | null;
     created_at: string;
+    assigned_admin_id: number | null;
+    arbitration_status: ArbitrationStatus;
+    arbitration_notes: string | null;
+    resolved_at: string | null;
+    resolution_reason: string | null;
 }
 
 /**

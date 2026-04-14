@@ -33,6 +33,9 @@ import { Modal } from './ui/Modal';
 import { Menu } from './ui/Menu';
 import { NotificationsUI } from './ui/NotificationsUI';
 import { MessagesUI } from './ui/MessagesUI';
+import { InvitePanel } from './ui/InvitePanel';
+import { RecommendationCarousel, CompetitorsMiniStatsCard } from './ui/RecommendationCarousel';
+import { CountdownTimer } from './ui/CountdownTimer';
 
 // Shared Components (View layer - single source of truth)
 import { getCompetitionCard, type CompetitionCardProps } from '../shared/components/competition-card';
@@ -217,6 +220,11 @@ declare global {
         P2PConnection: typeof P2PConnection;
         VideoCompositor: typeof VideoCompositor;
         ChunkUploader: typeof ChunkUploader;
+
+        // Invite Panel (Task 10)
+        openInvitePanel: (competitionId: number) => void;
+        closeInvitePanel: () => void;
+        toggleInvitePanel: (competitionId: number) => void;
 
         // Note: Test Streaming functions are injected as inline scripts in test pages
     }

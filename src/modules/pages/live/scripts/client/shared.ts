@@ -487,7 +487,7 @@ window.UploadQueue = UploadQueue;
  */
 class ChunkManager {
     constructor(competitionId, extension = 'webm') {
-        this.currentIndex = 0;
+        this.currentIndex = -1;  // -1 so waitForNextChunk() finds chunk_0001 (index 0) first
         this.misses = 0;
         this.competitionId = competitionId;
         this.extension = extension;
@@ -510,8 +510,10 @@ class ChunkManager {
         }
     }
 
-    async waitForNextChunk() {
+    async waitForNextChunk(maxMisses) {
         const targetIndex = this.currentIndex + 1;
+        maxMisses = maxMisses || 0; // 0 = wait forever (for live), >0 = stop after N misses
+        let localMisses = 0;
 
         while (true) {
             const exists = await this.exists(targetIndex);
@@ -521,8 +523,15 @@ class ChunkManager {
                 return targetIndex;
             }
 
-            this.misses++;
-            const delay = Math.min(1000 + this.misses * 500, 5000);
+            localMisses++;
+            this.misses = localMisses;
+            
+            // إذا وصلت المحاولات للحد الأقصى → انتهى البث
+            if (maxMisses > 0 && localMisses >= maxMisses) {
+                throw new Error('STREAM_ENDED');
+            }
+            
+            const delay = Math.min(1000 + localMisses * 500, 5000);
             await new Promise(function(r) { setTimeout(r, delay); });
         }
     }
@@ -583,10 +592,12 @@ class LiveSequentialPlayer {
         this.onChunkChange = options.onChunkChange;
         this.onStatus = options.onStatus;
         this.onError = options.onError;
+        this.onStreamEnd = options.onStreamEnd; // يُستدعى عند انتهاء البث
 
         this.activePlayerIndex = 0;
         this.isRunning = false;
         this.preloadedChunks = new Map();
+        this.MAX_MISSES = 25; // ~25 * متوسط 3ث = ~75ث بدون قطعة جديدة = انتهى البث
     }
 
     async start(options) {
@@ -610,9 +621,15 @@ class LiveSequentialPlayer {
     async runLoop() {
         while (this.isRunning) {
             try {
-                const nextIndex = await this.chunkManager.waitForNextChunk();
+                const nextIndex = await this.chunkManager.waitForNextChunk(this.MAX_MISSES);
                 await this.playChunk(nextIndex);
             } catch (error) {
+                if (error.message === 'STREAM_ENDED') {
+                    this.isRunning = false;
+                    this.onStatus && this.onStatus('Stream ended');
+                    this.onStreamEnd && this.onStreamEnd();
+                    break;
+                }
                 this.onError && this.onError(error);
                 await new Promise(function(r) { setTimeout(r, 2000); });
             }

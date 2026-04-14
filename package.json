@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run build:css && npm run build:client && vite",
-    "dev:sandbox": "npm run build:css && npm run build:client && wrangler pages dev dist --d1=dueli-db --local --ip 0.0.0.0 --port 3000",
+    "dev:sandbox": "npm run build:css && npm run build:client && wrangler pages dev dist --d1=dueli-db --local --ip 0.0.0.0 --port 5173",
     "build": "npm run build:css && npm run build:client && vite build",
     "build:client": "npx esbuild src/client/index.ts --bundle --outfile=dist/static/app.js --format=iife --minify --sourcemap",
     "build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./public/static/styles.css",
@@ -14,7 +14,7 @@
     "deploy:prod": "npm run build && wrangler pages deploy dist --project-name dueli",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "db:migrate:local": "wrangler d1 migrations apply dueli-db --local",
-    "db:seed": "wrangler d1 execute dueli-db --local --file=./seed.sql",
+    "db:seed": "wrangler d1 execute dueli-db --local --file=./db/seed.sql",
     "db:reset": "powershell -Command \"Remove-Item -Recurse -Force .wrangler/state/v3/d1 -ErrorAction SilentlyContinue\" && npm run db:migrate:local && npm run db:seed"
   },
   "dependencies": {
@@ -38,6 +38,6 @@
     "platform",
     "debate"
   ],
-  "author": "",
+  "author": "Maelsh Pro",
   "license": "MIT"
 }

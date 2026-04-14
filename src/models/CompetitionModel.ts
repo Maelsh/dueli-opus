@@ -57,6 +57,7 @@ export interface CreateCompetitionData {
     language: string;
     country?: string;
     scheduled_at?: string;
+    competition_type?: 'instant' | 'scheduled';
 }
 
 /**
@@ -219,8 +220,8 @@ export class CompetitionModel extends BaseModel<Competition> {
         const result = await this.db.prepare(`
             INSERT INTO competitions (
                 title, description, rules, category_id, subcategory_id,
-                creator_id, language, country, scheduled_at, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
+                creator_id, language, country, scheduled_at, competition_type, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
         `).bind(
             data.title,
             data.description || null,
@@ -230,7 +231,8 @@ export class CompetitionModel extends BaseModel<Competition> {
             data.creator_id,
             data.language,
             data.country || null,
-            data.scheduled_at || null
+            data.scheduled_at || null,
+            data.competition_type || 'instant'
         ).run();
 
         return (await this.findById(result.meta.last_row_id as number))!;

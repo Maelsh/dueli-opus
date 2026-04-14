@@ -1,8 +1,7 @@
--- Dueli Database Schema
--- منصة المنافسات والحوارات
+-- Master Schema (Remote + Missing from Code)
 
--- جدول المستخدمين
-CREATE TABLE IF NOT EXISTS users (
+
+CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
     username TEXT UNIQUE NOT NULL,
@@ -15,8 +14,6 @@ CREATE TABLE IF NOT EXISTS users (
     youtube_channel_id TEXT,
     youtube_access_token TEXT,
     youtube_refresh_token TEXT,
-    oauth_provider TEXT,
-    oauth_id TEXT,
     total_competitions INTEGER DEFAULT 0,
     total_wins INTEGER DEFAULT 0,
     total_views INTEGER DEFAULT 0,
@@ -24,13 +21,11 @@ CREATE TABLE IF NOT EXISTS users (
     total_earnings REAL DEFAULT 0,
     is_verified INTEGER DEFAULT 0,
     is_admin INTEGER DEFAULT 0,
-    is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+, oauth_provider TEXT, oauth_id TEXT, is_active INTEGER DEFAULT 1, email_verified INTEGER DEFAULT 0, verification_token TEXT, verification_expires DATETIME, reset_token TEXT, reset_expires DATETIME, reset_token_expires DATETIME, verification_token_expires DATETIME, is_fake INTEGER DEFAULT 1);
 
--- جدول الأقسام الرئيسية
-CREATE TABLE IF NOT EXISTS categories (
+CREATE TABLE categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     slug TEXT UNIQUE NOT NULL,
     name_ar TEXT NOT NULL,
@@ -42,12 +37,11 @@ CREATE TABLE IF NOT EXISTS categories (
     parent_id INTEGER,
     sort_order INTEGER DEFAULT 0,
     is_active INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, name_key TEXT,
     FOREIGN KEY (parent_id) REFERENCES categories(id)
 );
 
--- جدول المنافسات
-CREATE TABLE IF NOT EXISTS competitions (
+CREATE TABLE competitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     description TEXT,
@@ -56,7 +50,7 @@ CREATE TABLE IF NOT EXISTS competitions (
     subcategory_id INTEGER,
     creator_id INTEGER NOT NULL,
     opponent_id INTEGER,
-    status TEXT DEFAULT 'pending', -- pending, accepted, live, completed, cancelled
+    status TEXT DEFAULT 'pending', 
     language TEXT DEFAULT 'ar',
     country TEXT,
     scheduled_at DATETIME,
@@ -73,20 +67,19 @@ CREATE TABLE IF NOT EXISTS competitions (
     ad_revenue REAL DEFAULT 0,
     is_featured INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, competition_type TEXT DEFAULT 'instant' CHECK (competition_type IN ('instant', 'scheduled')), likes_count INTEGER DEFAULT 0, dislikes_count INTEGER DEFAULT 0, live_url TEXT, vod_url TEXT, stream_status TEXT DEFAULT 'idle', stream_started_at TEXT, stream_ended_at TEXT, auto_deleted_reason TEXT, is_fake INTEGER DEFAULT 1,
     FOREIGN KEY (category_id) REFERENCES categories(id),
     FOREIGN KEY (subcategory_id) REFERENCES categories(id),
     FOREIGN KEY (creator_id) REFERENCES users(id),
     FOREIGN KEY (opponent_id) REFERENCES users(id)
 );
 
--- جدول دعوات المنافسة
-CREATE TABLE IF NOT EXISTS competition_invites (
+CREATE TABLE competition_invites (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     competition_id INTEGER NOT NULL,
     inviter_id INTEGER NOT NULL,
     invitee_id INTEGER NOT NULL,
-    status TEXT DEFAULT 'pending', -- pending, accepted, declined
+    status TEXT DEFAULT 'pending', 
     message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     responded_at DATETIME,
@@ -95,12 +88,11 @@ CREATE TABLE IF NOT EXISTS competition_invites (
     FOREIGN KEY (invitee_id) REFERENCES users(id)
 );
 
--- جدول طلبات المشاركة في المنافسة
-CREATE TABLE IF NOT EXISTS competition_requests (
+CREATE TABLE competition_requests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     competition_id INTEGER NOT NULL,
     requester_id INTEGER NOT NULL,
-    status TEXT DEFAULT 'pending', -- pending, accepted, declined
+    status TEXT DEFAULT 'pending', 
     message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     responded_at DATETIME,
@@ -108,8 +100,7 @@ CREATE TABLE IF NOT EXISTS competition_requests (
     FOREIGN KEY (requester_id) REFERENCES users(id)
 );
 
--- جدول التقييمات
-CREATE TABLE IF NOT EXISTS ratings (
+CREATE TABLE ratings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     competition_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
@@ -122,8 +113,7 @@ CREATE TABLE IF NOT EXISTS ratings (
     UNIQUE(competition_id, user_id, competitor_id)
 );
 
--- جدول التعليقات
-CREATE TABLE IF NOT EXISTS comments (
+CREATE TABLE comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     competition_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
@@ -137,8 +127,7 @@ CREATE TABLE IF NOT EXISTS comments (
     FOREIGN KEY (parent_id) REFERENCES comments(id)
 );
 
--- جدول المتابعات
-CREATE TABLE IF NOT EXISTS follows (
+CREATE TABLE follows (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     follower_id INTEGER NOT NULL,
     following_id INTEGER NOT NULL,
@@ -148,22 +137,20 @@ CREATE TABLE IF NOT EXISTS follows (
     UNIQUE(follower_id, following_id)
 );
 
--- جدول الإشعارات
-CREATE TABLE IF NOT EXISTS notifications (
+CREATE TABLE notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    type TEXT NOT NULL, -- invite, request, follow, comment, rating, competition_start
+    type TEXT NOT NULL, 
     title TEXT NOT NULL,
     message TEXT,
-    reference_type TEXT, -- competition, user, comment
+    reference_type TEXT, 
     reference_id INTEGER,
     is_read INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, is_starred INTEGER DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- جدول المنشورات (Posts)
-CREATE TABLE IF NOT EXISTS posts (
+CREATE TABLE posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     content TEXT NOT NULL,
@@ -174,8 +161,7 @@ CREATE TABLE IF NOT EXISTS posts (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- جدول إعجابات المنشورات
-CREATE TABLE IF NOT EXISTS post_likes (
+CREATE TABLE post_likes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id INTEGER NOT NULL,
     user_id INTEGER NOT NULL,
@@ -185,8 +171,7 @@ CREATE TABLE IF NOT EXISTS post_likes (
     UNIQUE(post_id, user_id)
 );
 
--- جدول الرسائل الخاصة
-CREATE TABLE IF NOT EXISTS messages (
+CREATE TABLE messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sender_id INTEGER NOT NULL,
     receiver_id INTEGER NOT NULL,
@@ -197,8 +182,7 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (receiver_id) REFERENCES users(id)
 );
 
--- جدول جدول المنافسات القادمة
-CREATE TABLE IF NOT EXISTS scheduled_competitions (
+CREATE TABLE scheduled_competitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     competition_id INTEGER NOT NULL,
@@ -209,16 +193,14 @@ CREATE TABLE IF NOT EXISTS scheduled_competitions (
     FOREIGN KEY (competition_id) REFERENCES competitions(id)
 );
 
--- جدول الدول
-CREATE TABLE IF NOT EXISTS countries (
+CREATE TABLE countries (
     code TEXT PRIMARY KEY,
     name_ar TEXT NOT NULL,
     name_en TEXT NOT NULL,
     flag_emoji TEXT
 );
 
--- جدول جلسات المستخدمين
-CREATE TABLE IF NOT EXISTS sessions (
+CREATE TABLE sessions (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
     expires_at DATETIME NOT NULL,
@@ -226,23 +208,268 @@ CREATE TABLE IF NOT EXISTS sessions (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
--- الفهارس
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-CREATE INDEX IF NOT EXISTS idx_users_country ON users(country);
-CREATE INDEX IF NOT EXISTS idx_users_language ON users(language);
-CREATE INDEX IF NOT EXISTS idx_users_oauth ON users(oauth_provider, oauth_id);
+CREATE TABLE likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    competition_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+    UNIQUE(user_id, competition_id)
+);
 
-CREATE INDEX IF NOT EXISTS idx_competitions_status ON competitions(status);
-CREATE INDEX IF NOT EXISTS idx_competitions_category ON competitions(category_id);
-CREATE INDEX IF NOT EXISTS idx_competitions_creator ON competitions(creator_id);
-CREATE INDEX IF NOT EXISTS idx_competitions_language ON competitions(language);
-CREATE INDEX IF NOT EXISTS idx_competitions_country ON competitions(country);
-CREATE INDEX IF NOT EXISTS idx_competitions_scheduled ON competitions(scheduled_at);
+CREATE TABLE reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id INTEGER NOT NULL,
+    target_type TEXT NOT NULL CHECK (target_type IN ('user', 'competition', 'comment')),
+    target_id INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved', 'dismissed')),
+    reviewed_by INTEGER,
+    reviewed_at TEXT,
+    action_taken TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+);
 
-CREATE INDEX IF NOT EXISTS idx_comments_competition ON comments(competition_id);
-CREATE INDEX IF NOT EXISTS idx_ratings_competition ON ratings(competition_id);
-CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
-CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id);
+CREATE TABLE conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user1_id INTEGER NOT NULL,
+    user2_id INTEGER NOT NULL,
+    last_message_at TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user1_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (user2_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user1_id, user2_id)
+);
+
+CREATE TABLE advertisements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    image_url TEXT,
+    link_url TEXT,
+    is_active INTEGER DEFAULT 1,
+    views_count INTEGER DEFAULT 0,
+    clicks_count INTEGER DEFAULT 0,
+    revenue_per_view REAL DEFAULT 0.001,
+    created_by INTEGER NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE ad_impressions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ad_id INTEGER NOT NULL,
+    competition_id INTEGER NOT NULL,
+    user_id INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ad_id) REFERENCES advertisements(id) ON DELETE CASCADE,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE user_earnings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL UNIQUE,
+    available REAL DEFAULT 0,
+    pending REAL DEFAULT 0,
+    on_hold REAL DEFAULT 0,
+    total REAL DEFAULT 0,
+    withdrawn REAL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE user_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE NOT NULL,
+    default_language TEXT DEFAULT 'en',
+    default_country TEXT DEFAULT 'US',
+    notifications_enabled INTEGER DEFAULT 1,
+    email_notifications INTEGER DEFAULT 1,
+    privacy_level TEXT DEFAULT 'public' CHECK (privacy_level IN ('public', 'followers', 'private')),
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE user_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    image_url TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE competition_reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    competition_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    remind_at TEXT NOT NULL,
+    sent INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(competition_id, user_id)
+);
+
+CREATE TABLE dislikes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    competition_id INTEGER NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+    UNIQUE(user_id, competition_id)
+);
+
+CREATE TABLE competition_invitations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    competition_id INTEGER NOT NULL,
+    inviter_id INTEGER NOT NULL,
+    invitee_id INTEGER NOT NULL,
+    message TEXT,
+    status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined', 'expired')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    responded_at DATETIME,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+    FOREIGN KEY (inviter_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (invitee_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE signaling_rooms (
+    id TEXT PRIMARY KEY,
+    competition_id INTEGER NOT NULL,
+    host_user_id INTEGER,
+    host_joined_at TEXT,
+    opponent_user_id INTEGER,
+    opponent_joined_at TEXT,
+    viewer_count INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE signaling_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL,
+    target_role TEXT NOT NULL CHECK(target_role IN ('host', 'opponent')),
+    signal_type TEXT NOT NULL CHECK(signal_type IN ('offer', 'answer', 'ice-candidate')),
+    signal_data TEXT NOT NULL,
+    consumed INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (room_id) REFERENCES signaling_rooms(id) ON DELETE CASCADE
+);
+
+CREATE TABLE chunk_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    competition_id INTEGER NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    chunk_key TEXT NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (competition_id) REFERENCES competitions(id)
+);
+
+
+
+-- Missing tables added from code dependencies
+
+CREATE TABLE ad_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    ad_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (ad_id) REFERENCES advertisements(id) ON DELETE CASCADE
+);
+
+CREATE TABLE donations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    amount REAL NOT NULL,
+    currency TEXT DEFAULT 'USD',
+    payment_method TEXT NOT NULL,
+    payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
+    transaction_id TEXT,
+    donor_name TEXT,
+    donor_email TEXT,
+    message TEXT,
+    is_anonymous INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE withdrawal_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    amount REAL NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'rejected')),
+    payment_method TEXT NOT NULL,
+    payment_details TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME,
+    transaction_id TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE payment_methods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    is_default INTEGER DEFAULT 0,
+    bank_name TEXT,
+    iban TEXT,
+    swift_code TEXT,
+    account_holder TEXT,
+    email TEXT,
+    is_verified INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE user_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    blocker_id INTEGER NOT NULL,
+    blocked_id INTEGER NOT NULL,
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (blocker_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (blocked_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(blocker_id, blocked_id)
+);
+
+CREATE TABLE watch_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    competition_id INTEGER NOT NULL,
+    watch_duration_seconds INTEGER DEFAULT 0,
+    completed INTEGER DEFAULT 0,
+    watched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+    UNIQUE(user_id, competition_id)
+);
+
+CREATE TABLE user_keywords (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    keyword TEXT NOT NULL,
+    weight REAL DEFAULT 1.0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, keyword)
+);
+
+CREATE TABLE watch_later (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    competition_id INTEGER NOT NULL,
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (competition_id) REFERENCES competitions(id) ON DELETE CASCADE,
+    UNIQUE(user_id, competition_id)
+);
