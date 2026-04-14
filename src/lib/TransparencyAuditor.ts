@@ -100,15 +100,15 @@ const EPSILON = 0.001; // $0.001 — negligible float artefact
  */
 export class TransparencyAuditor {
     // Private model dependencies
-    readonly #financialModel: PlatformFinancialLogModel;
-    readonly #donationsModel: PlatformDonationsLedgerModel;
-    readonly #db: D1Database;
+    private readonly financialModel: PlatformFinancialLogModel;
+    private readonly donationsModel: PlatformDonationsLedgerModel;
+    private readonly db: D1Database;
 
     /** Use the factory method — do not call directly */
     private constructor(db: D1Database) {
-        this.#db             = db;
-        this.#financialModel = new PlatformFinancialLogModel(db);
-        this.#donationsModel = new PlatformDonationsLedgerModel(db);
+        this.db             = db;
+        this.financialModel = new PlatformFinancialLogModel(db);
+        this.donationsModel = new PlatformDonationsLedgerModel(db);
     }
 
     /**
@@ -133,7 +133,7 @@ export class TransparencyAuditor {
      * @param totals   — aggregated financial totals from the DB
      * @param donStats — aggregated donation stats from the ledger
      */
-    #verify(totals: PlatformFinancialTotals, donStats: DonationLedgerStats): AuditResult {
+    private verify(totals: PlatformFinancialTotals, donStats: DonationLedgerStats): AuditResult {
         const {
             total_ad_revenue,
             total_competitor_payouts,
@@ -176,7 +176,7 @@ export class TransparencyAuditor {
      * Map admin role (is_admin flag + action type heuristics) to a role label.
      * We deliberately do NOT expose the admin_id or username.
      */
-    #buildRoleLabel(action_type: string): string {
+    private buildRoleLabel(action_type: string): string {
         if (action_type.includes('ban') || action_type.includes('delete_user')) {
             return 'SuperAdmin';
         }
@@ -190,7 +190,7 @@ export class TransparencyAuditor {
      * Fetch anonymized admin interventions from admin_audit_logs.
      * Strips all admin_id references; replaces with generic role labels.
      */
-    async #getAnonymizedAdminActions(limit = 20): Promise<AnonymizedAdminAction[]> {
+    private async getAnonymizedAdminActions(limit = 20): Promise<AnonymizedAdminAction[]> {
         type RawRow = {
             id: number;
             action_type: string;
@@ -200,7 +200,7 @@ export class TransparencyAuditor {
             created_at: string;
         };
 
-        const result = await this.#db.prepare(`
+        const result = await this.db.prepare(`
             SELECT id, action_type, target_entity, target_id, details, created_at
             FROM admin_audit_logs
             ORDER BY created_at DESC
@@ -217,7 +217,7 @@ export class TransparencyAuditor {
             }
 
             // Build a sanitized summary from structured data
-            const roleLabel    = this.#buildRoleLabel(row.action_type);
+            const roleLabel    = this.buildRoleLabel(row.action_type);
             const targetLabel  = row.target_entity ?? 'entity';
             const targetRef    = row.target_id     != null ? `#${row.target_id}` : '';
             const actionHuman  = row.action_type.replace(/_/g, ' ');
@@ -259,19 +259,19 @@ export class TransparencyAuditor {
             topDonors,
             adminInterventions,
         ] = await Promise.all([
-            this.#financialModel.getTotals(),
-            this.#financialModel.getTodaySummary(),
-            this.#donationsModel.getStats(),
-            this.#financialModel.getPublicFeed(20),
-            this.#donationsModel.getPublicFeed(20),
-            this.#financialModel.getDailySummaries(30),
-            this.#financialModel.getPayrollSummary(),
-            this.#donationsModel.getTopDonors(10),
-            this.#getAnonymizedAdminActions(20),
+            this.financialModel.getTotals(),
+            this.financialModel.getTodaySummary(),
+            this.donationsModel.getStats(),
+            this.financialModel.getPublicFeed(20),
+            this.donationsModel.getPublicFeed(20),
+            this.financialModel.getDailySummaries(30),
+            this.financialModel.getPayrollSummary(),
+            this.donationsModel.getTopDonors(10),
+            this.getAnonymizedAdminActions(20),
         ]);
 
         // Verify the accounting invariant
-        const audit = this.#verify(totals, donationStats);
+        const audit = this.verify(totals, donationStats);
 
         return {
             audit,
@@ -292,10 +292,10 @@ export class TransparencyAuditor {
      */
     async runAudit(): Promise<AuditResult> {
         const [totals, donationStats] = await Promise.all([
-            this.#financialModel.getTotals(),
-            this.#donationsModel.getStats(),
+            this.financialModel.getTotals(),
+            this.donationsModel.getStats(),
         ]);
-        return this.#verify(totals, donationStats);
+        return this.verify(totals, donationStats);
     }
 }
 
