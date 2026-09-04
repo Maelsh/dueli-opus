@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file src/controllers/MessageController.ts
  * @description متحكم الرسائل
  * @module controllers/MessageController
@@ -7,6 +7,7 @@
 import { Context } from 'hono';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
+import { Sanitize } from '../lib/services/Sanitize';
 import { MessageModel, ConversationModel } from '../models/MessageModel';
 import { NotificationModel } from '../models/NotificationModel';
 import { UserModel } from '../models/UserModel';
@@ -107,7 +108,7 @@ export class MessageController extends BaseController {
             const message = await messageModel.create({
                 conversation_id: conversationId,
                 sender_id: user.id,
-                content: body.content.trim()
+                content: Sanitize.cleanText(body.content)
             });
 
             // Get conversation to find recipient
@@ -171,7 +172,7 @@ export class MessageController extends BaseController {
             const message = await messageModel.create({
                 conversation_id: conversation.id,
                 sender_id: user.id,
-                content: body.content.trim()
+                content: Sanitize.cleanText(body.content)
             });
 
             // Create notification

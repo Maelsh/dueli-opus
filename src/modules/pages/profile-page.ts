@@ -279,20 +279,44 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
             async function loadUserPosts() {
                 const container = document.getElementById('postsContainer');
                 if (!container || !profileUserId) return;
-                
+
                 try {
                     const res = await fetch(\`/api/settings/users/\${profileUserId}/posts\`);
                     const data = await res.json();
-                    
-                    if (data.success && data.data?.length > 0) {
-                        container.innerHTML = data.data.map(post => \`
+
+                    // T3.2 FIX: server returns { data: { posts: [...] } } — the old
+                    // client checked data.data.length which is undefined → always "No posts".
+                    const posts = data.data?.posts || [];
+
+                    const isOwner = window.currentUser && window.currentUser.id === profileUserId;
+
+                    // T3.2: composer for the profile owner
+                    const composerHtml = isOwner ? \`
+                        <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-md mb-4">
+                            <textarea id="postComposer" rows="3" maxlength="1000"
+                                placeholder="\${tr.post_placeholder || 'Share a thought with your audience...'}"
+                                class="w-full border-0 focus:ring-0 resize-none bg-transparent text-gray-900 dark:text-white text-sm"
+                                aria-label="\${tr.post_publish || 'Publish'}"></textarea>
+                            <div class="flex justify-end mt-2">
+                                <button onclick="publishPost()" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full text-sm font-bold transition-colors disabled:opacity-50">
+                                    <i class="fas fa-paper-plane mr-1"></i>\${tr.post_publish || 'Publish'}
+                                </button>
+                            </div>
+                        </div>
+                    \` : '';
+
+                    if (posts.length > 0) {
+                        container.innerHTML = composerHtml + posts.map(post => \`
                             <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-md">
-                                <p class="text-gray-900 dark:text-white">\${post.content}</p>
-                                <p class="text-sm text-gray-400 mt-2">\${new Date(post.created_at).toLocaleDateString()}</p>
+                                <p class="text-gray-900 dark:text-white whitespace-pre-wrap">\${post.content}</p>
+                                <div class="flex items-center justify-between mt-2">
+                                    <p class="text-sm text-gray-400">\${new Date(post.created_at).toLocaleDateString()}</p>
+                                    \${isOwner ? \`<button onclick="deletePost(\${post.id})" class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="Delete"><i class="fas fa-trash"></i></button>\` : ''}
+                                </div>
                             </div>
                         \`).join('');
                     } else {
-                        container.innerHTML = \`
+                        container.innerHTML = composerHtml + \`
                             <div class="text-center py-16">
                                 <i class="fas fa-stream text-4xl text-gray-300 mb-4"></i>
                                 <p class="text-gray-500">\${tr.no_posts || 'No posts yet'}</p>
@@ -303,6 +327,43 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     console.error('Failed to load posts:', err);
                 }
             }
+
+            // T3.2: publish a post from the profile composer
+            window.publishPost = async function() {
+                const ta = document.getElementById('postComposer');
+                const content = ta ? ta.value.trim() : '';
+                if (!content || !window.currentUser) return;
+                try {
+                    const res = await fetch('/api/settings/posts?lang=' + (window.lang || 'ar'), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '')
+                        },
+                        body: JSON.stringify({ content })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadUserPosts();
+                    } else {
+                        alert(data.error || 'Failed to publish');
+                    }
+                } catch (err) { console.error(err); }
+            };
+
+            // T3.2: delete own post
+            window.deletePost = async function(postId) {
+                if (!confirm(tr.confirm_delete_post || 'Delete this post?')) return;
+                try {
+                    const res = await fetch('/api/settings/posts/' + postId + '?lang=' + (window.lang || 'ar'), {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '') }
+                    });
+                    const data = await res.json();
+                    if (data.success) loadUserPosts();
+                    else alert(data.error || 'Failed to delete');
+                } catch (err) { console.error(err); }
+            };
         </script>
     `;
 

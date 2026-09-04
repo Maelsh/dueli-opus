@@ -159,7 +159,8 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           
           const data = await res.json();
           if (data.success) {
-            window.location.href = '/competition/' + data.data.id + '?lang=' + lang;
+            // T2.1: redirect with invite=1 so the invite panel auto-opens
+            window.location.href = '/competition/' + data.data.id + '?lang=' + lang + '&invite=1';
           } else {
             alert(data.error || tr.error_occurred || 'Error creating competition');
           }

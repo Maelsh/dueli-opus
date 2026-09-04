@@ -103,14 +103,16 @@ export function csrfProtection() {
             }
         }
 
-        // Check CSRF token for state-changing requests
+        // Beyond this point, Origin/Referer matched Host (or neither was sent, e.g. same-origin
+        // fetch/cURL). That check alone is the real CSRF defense here: browsers refuse to spoof
+        // Origin, so a cross-site form/fetch cannot forge a matching Origin header. We still
+        // require *some* proof of same-origin intent (Origin, Referer, or an explicit CSRF
+        // token) rather than silently allowing requests that sent none of the three.
         const csrfToken = c.req.header('X-CSRF-Token');
         const sessionToken = c.req.header('X-Session-Token');
 
-        if (!csrfToken && !sessionToken) {
-            // In production, require CSRF token
-            // For now, we allow requests with session token
-            console.warn('CSRF token missing for', c.req.method, c.req.url);
+        if (!origin && !referer && !csrfToken && !sessionToken) {
+            return c.json({ success: false, error: 'Missing CSRF proof (Origin/Referer/X-CSRF-Token)' }, 403);
         }
 
         await next();

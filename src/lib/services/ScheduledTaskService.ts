@@ -13,6 +13,66 @@ export class ScheduledTaskService {
     constructor(private db: D1Database) { }
 
     /**
+     * T1.5: Finalize a completed competition:
+     * aggregate viewer ratings → winner_id → ELO → automatic payouts.
+     * Idempotent-safe via revenue log finalization flag.
+     */
+    async finalizeCompetition(competitionId: number): Promise<{ winnerId: number | null }> {
+        const { LivePayoutEngine } = await import('./LivePayoutEngine');
+        const { EloRatingService } = await import('./EloRatingService');
+
+        const competition = await this.db.prepare(`
+            SELECT id, creator_id, opponent_id, status FROM competitions WHERE id = ?
+        `).bind(competitionId).first<any>();
+
+        if (!competition || competition.status !== 'completed') {
+            return { winnerId: null };
+        }
+
+        // 1) Aggregate viewer ratings (1–5) per competitor
+        const agg = await this.db.prepare(`
+            SELECT
+                AVG(CASE WHEN competitor_id = ? THEN rating END) as creator_avg,
+                AVG(CASE WHEN competitor_id = ? THEN rating END) as opponent_avg
+            FROM ratings WHERE competition_id = ?
+        `).bind(competition.creator_id, competition.opponent_id ?? -1, competitionId).first<any>();
+
+        const creatorAvg = agg?.creator_avg || 0;
+        const opponentAvg = agg?.opponent_avg || 0;
+        const parts = (creatorAvg > 0 ? 1 : 0) + (opponentAvg > 0 ? 1 : 0);
+        const overallAvg = parts > 0 ? (creatorAvg + opponentAvg) / parts : 0;
+
+        // 2) Winner by average rating (null on tie / no opponent / no votes)
+        let winnerId: number | null = null;
+        if (competition.opponent_id && (creatorAvg > 0 || opponentAvg > 0)) {
+            if (creatorAvg > opponentAvg) winnerId = competition.creator_id;
+            else if (opponentAvg > creatorAvg) winnerId = competition.opponent_id;
+        }
+
+        await this.db.prepare(`
+            UPDATE competitions
+            SET creator_rating = ?, opponent_rating = ?, average_rating = ?, winner_id = ?
+            WHERE id = ?
+        `).bind(creatorAvg, opponentAvg, overallAvg, winnerId, competitionId).run();
+
+        // 3) ELO update
+        try {
+            await new EloRatingService(this.db).updateRatings(competitionId, winnerId);
+        } catch (e) {
+            console.error(`[Finalize] ELO failed for #${competitionId}:`, e);
+        }
+
+        // 4) Automatic payouts split by ratings
+        try {
+            await new LivePayoutEngine(this.db).finalizePayouts(competitionId);
+        } catch (e) {
+            console.error(`[Finalize] Payout failed for #${competitionId}:`, e);
+        }
+
+        return { winnerId };
+    }
+
+    /**
      * Schedule a new task
      */
     async schedule(
@@ -92,7 +152,9 @@ export class ScheduledTaskService {
                 await this.handleReminder(task);
                 break;
             case 'distribute_earnings':
-                await this.handleEarnings(task);
+            case 'finalize_payouts':
+                // T1.5: ratings-based automatic distribution (replaces blind 35/35/30)
+                await this.finalizeCompetition(task.competition_id);
                 break;
             case 'check_disconnection':
                 await this.handleDisconnectionCheck(task);
@@ -356,44 +418,54 @@ export class ScheduledTaskService {
     }
 
     /**
-     * Distribute earnings after competition ends
+     * T1.5: Recompute aggregates/winner/ELO/payout-split after each new vote
+     * (lightweight — does NOT credit earnings; that happens once via finalize_payouts)
      */
-    private async handleEarnings(task: any): Promise<void> {
+    async updateAggregatesAfterVote(competitionId: number): Promise<void> {
+        const { LivePayoutEngine } = await import('./LivePayoutEngine');
+        const { EloRatingService } = await import('./EloRatingService');
+
         const competition = await this.db.prepare(`
-            SELECT total_ad_revenue FROM competitions WHERE id = ?
-        `).bind(task.competition_id).first() as any;
+            SELECT id, creator_id, opponent_id, status FROM competitions WHERE id = ?
+        `).bind(competitionId).first<any>();
 
-        if (!competition || !competition.total_ad_revenue) return;
+        if (!competition || competition.status !== 'completed') return;
 
-        const totalRevenue = competition.total_ad_revenue;
-        const platformShare = totalRevenue * 0.3;
-        const creatorShare = totalRevenue * 0.35;
-        const opponentShare = totalRevenue * 0.35;
+        const agg = await this.db.prepare(`
+            SELECT
+                AVG(CASE WHEN competitor_id = ? THEN rating END) as creator_avg,
+                AVG(CASE WHEN competitor_id = ? THEN rating END) as opponent_avg
+            FROM ratings WHERE competition_id = ?
+        `).bind(competition.creator_id, competition.opponent_id ?? -1, competitionId).first<any>();
 
-        await this.db.prepare(`
-            INSERT INTO platform_earnings (competition_id, amount, earning_type, description, created_at)
-            VALUES (?, ?, 'commission', 'Platform commission (30%)', datetime('now'))
-        `).bind(task.competition_id, platformShare).run();
+        const creatorAvg = agg?.creator_avg || 0;
+        const opponentAvg = agg?.opponent_avg || 0;
+        const parts = (creatorAvg > 0 ? 1 : 0) + (opponentAvg > 0 ? 1 : 0);
+        const overallAvg = parts > 0 ? (creatorAvg + opponentAvg) / parts : 0;
 
-        if (task.creator_id) {
-            await this.db.prepare(`
-                INSERT INTO user_earnings (user_id, competition_id, amount, earning_type, status, created_at)
-                VALUES (?, ?, ?, 'competition', 'available', datetime('now'))
-            `).bind(task.creator_id, task.competition_id, creatorShare).run();
-        }
-
-        if (task.opponent_id) {
-            await this.db.prepare(`
-                INSERT INTO user_earnings (user_id, competition_id, amount, earning_type, status, created_at)
-                VALUES (?, ?, ?, 'competition', 'available', datetime('now'))
-            `).bind(task.opponent_id, task.competition_id, opponentShare).run();
+        let winnerId: number | null = null;
+        if (competition.opponent_id && (creatorAvg > 0 || opponentAvg > 0)) {
+            if (creatorAvg > opponentAvg) winnerId = competition.creator_id;
+            else if (opponentAvg > creatorAvg) winnerId = competition.opponent_id;
         }
 
         await this.db.prepare(`
             UPDATE competitions
-            SET creator_earnings = ?, opponent_earnings = ?, platform_earnings = ?
+            SET creator_rating = ?, opponent_rating = ?, average_rating = ?, winner_id = ?
             WHERE id = ?
-        `).bind(creatorShare, opponentShare, platformShare, task.competition_id).run();
+        `).bind(creatorAvg, opponentAvg, overallAvg, winnerId, competitionId).run();
+
+        try {
+            await new EloRatingService(this.db).updateRatings(competitionId, winnerId);
+        } catch (e) {
+            console.error(`[Vote] ELO failed for #${competitionId}:`, e);
+        }
+
+        try {
+            await new LivePayoutEngine(this.db).recalculatePayouts(competitionId);
+        } catch (e) {
+            console.error(`[Vote] Payout recalc failed for #${competitionId}:`, e);
+        }
     }
 
     /**

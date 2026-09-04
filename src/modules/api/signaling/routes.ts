@@ -1,9 +1,13 @@
 /**
  * Signaling Routes for WebRTC P2P
  * مسارات الإشارات لاتصال WebRTC
- * 
- * WebSocket-only mode via stream.maelshpro.com
- * وضع WebSocket فقط عبر سيرفر البث
+ *
+ * Room create/verify are handled here by the platform. The actual
+ * join/signal/poll/leave exchange happens directly between the browser and
+ * the dedicated signaling server (HTTP polling via a Cloudflare Worker +
+ * Durable Object per competition room) at the URL in STREAMING_URL /
+ * DEFAULT_STREAMING_URL — see src/modules/pages/live/scripts/client/shared.ts
+ * (SignalingManager class) for the client-side polling implementation.
  */
 
 import { Hono } from 'hono';
@@ -14,31 +18,75 @@ import { t } from '../../../i18n';
 const signalingRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 /**
- * Generate TURN credentials using HMAC-SHA1
- * توليد بيانات اعتماد TURN باستخدام HMAC-SHA1
- * 
- * TURN REST API format:
- * - username: unix_timestamp:user_id
- * - password: base64(hmac-sha1(secret, username))
+ * Fetch short-lived Cloudflare Calls TURN/STUN credentials.
+ * تجلب بيانات اعتماد TURN/STUN قصيرة العمر من Cloudflare Calls
+ *
+ * Endpoint: POST /v1/turn/keys/{TURN_TOKEN_ID}/credentials/generate-ice-servers
+ * The API token is a secret stored in env; the result is cached in the
+ * Cloudflare Cache API for ~6h to avoid hammering the API on every request.
  */
-async function generateTurnCredentials(secret: string, userId: string = 'dueli-user'): Promise<{ username: string, credential: string }> {
-    // Expire after 2 hours (max competition duration)
-    const expiresAt = Math.floor(Date.now() / 1000) + 7200;
-    const username = `${expiresAt}:${userId}`;
+async function fetchCloudflareIceServers(env: {
+    TURN_TOKEN_ID?: string;
+    TURN_API_TOKEN?: string;
+}): Promise<{ iceServers: RTCIceServer[] }> {
+    const tokenId = env.TURN_TOKEN_ID;
+    const apiToken = env.TURN_API_TOKEN;
 
-    // Generate HMAC-SHA1 signature
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(secret),
-        { name: 'HMAC', hash: 'SHA-1' },
-        false,
-        ['sign']
+    if (!tokenId || !apiToken) {
+        return { iceServers: [] };
+    }
+
+    const cacheKey = new Request(`https://rtc.live.cloudflare.com/turn-key/${tokenId}`);
+    // NOTE: tsconfig's "DOM" lib shadows @cloudflare/workers-types' CacheStorage.default
+    // typing, so `caches` is cast to any here — this still runs against the real Workers
+    // Cache API at runtime (Pages/Workers only, unrelated to the DOM lib's browser types).
+    const workerCaches: any = caches;
+
+    // Serve from cache when available
+    try {
+        const cached = await workerCaches.default.match(cacheKey);
+        if (cached) {
+            const body = await cached.json() as { iceServers: RTCIceServer[] };
+            if (body && Array.isArray(body.iceServers)) {
+                return body;
+            }
+        }
+    } catch {
+        // Cache read failed - fall through to fetch
+    }
+
+    const res = await fetch(
+        `https://rtc.live.cloudflare.com/v1/turn/keys/${tokenId}/credentials/generate-ice-servers`,
+        {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ ttl: 86400 })
+        }
     );
-    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(username));
-    const credential = btoa(String.fromCharCode(...new Uint8Array(signature)));
 
-    return { username, credential };
+    if (!res.ok) {
+        console.error('Cloudflare TURN API error:', res.status, await res.text());
+        return { iceServers: [] };
+    }
+
+    const body = await res.json<{ iceServers: RTCIceServer[] }>();
+
+    // Cache for ~6h (credential TTL is 24h, so this stays valid with margin)
+    try {
+        await workerCaches.default.put(
+            cacheKey,
+            new Response(JSON.stringify(body), {
+                headers: { 'Cache-Control': 'public, max-age=21600' }
+            })
+        );
+    } catch {
+        // Caching is best-effort
+    }
+
+    return body;
 }
 
 /**
@@ -47,32 +95,18 @@ async function generateTurnCredentials(secret: string, userId: string = 'dueli-u
  * يُرجع إعدادات خوادم TURN/STUN مع بيانات اعتماد ديناميكية
  */
 signalingRoutes.get('/ice-servers', async (c) => {
-    const turnUrl = c.env.TURN_URL || 'turn:maelshpro.com:3000';
-    const turnSecret = c.env.TURN_SECRET;
+    const { iceServers } = await fetchCloudflareIceServers(c.env);
 
-    const iceServers: any[] = [
-        // Free STUN servers
+    // If Cloudflare Calls is not configured, fall back to STUN-only servers
+    const result: RTCIceServer[] = iceServers.length > 0 ? iceServers : [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun.cloudflare.com:3478' },
+        { urls: 'stun:stun.cloudflare.com:3478' }
     ];
-
-    // Add TURN with dynamic credentials if secret is configured
-    if (turnSecret) {
-        try {
-            const { username, credential } = await generateTurnCredentials(turnSecret);
-            iceServers.push(
-                { urls: turnUrl, username, credential },
-                { urls: `${turnUrl}?transport=tcp`, username, credential }
-            );
-        } catch (error) {
-            console.error('Error generating TURN credentials:', error);
-        }
-    }
 
     return c.json({
         success: true,
-        data: { iceServers }
+        data: { iceServers: result }
     });
 });
 
@@ -80,21 +114,25 @@ signalingRoutes.get('/ice-servers', async (c) => {
  * GET /api/signaling/config
  * Returns signaling configuration for clients
  * يُرجع إعدادات الإشارات للعملاء
+ *
+ * NOTE: not currently called by the host/guest client scripts (they build
+ * signalingUrl/roomId themselves from STREAM_SERVER_URL + TEST_ROOM_ID /
+ * competition id — see scripts/client/host.ts + guest.ts). Kept for any
+ * external/future client that wants to discover signaling config via API.
  */
 signalingRoutes.get('/config', async (c) => {
     const competition_id = c.req.query('competition_id');
     const room_id = c.req.query('room_id') || `comp_${competition_id}`;
 
-    // Get streaming server URL from env or defaults
+    // Get signaling server URL from env or defaults (HTTP-polling Worker)
     const streamingUrl = c.env.STREAMING_URL || DEFAULT_STREAMING_URL;
-    const wsUrl = streamingUrl.replace('https://', 'wss://').replace('http://', 'ws://');
 
     return c.json({
         success: true,
         data: {
             room_id,
-            mode: 'websocket',
-            signaling_url: `${wsUrl}/signaling?room=${room_id}`,
+            mode: 'http-polling',
+            signaling_url: streamingUrl,
             ice_servers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },

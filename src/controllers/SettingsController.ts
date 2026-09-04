@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file src/controllers/SettingsController.ts
  * @description متحكم الإعدادات والمنشورات
  * @module controllers/SettingsController
@@ -7,6 +7,7 @@
 import { Context } from 'hono';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
+import { Sanitize } from '../lib/services/Sanitize';
 import { UserSettingsModel } from '../models/UserSettingsModel';
 import { UserPostModel } from '../models/UserSettingsModel';
 
@@ -93,7 +94,7 @@ export class SettingsController extends BaseController {
             const postModel = new UserPostModel(c.env.DB);
             const post = await postModel.create({
                 user_id: user.id,
-                content: body.content.trim(),
+                content: Sanitize.cleanText(body.content),
                 image_url: body.image_url
             });
 

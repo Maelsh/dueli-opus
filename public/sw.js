@@ -5,9 +5,10 @@
  * Handles caching and offline functionality
  */
 
-const CACHE_NAME = 'dueli-v1';
-const STATIC_CACHE = 'dueli-static-v1';
-const DYNAMIC_CACHE = 'dueli-dynamic-v1';
+const CACHE_NAME = 'dueli-v2';
+const STATIC_CACHE = 'dueli-static-v2';
+const DYNAMIC_CACHE = 'dueli-dynamic-v2';
+const DYNAMIC_CACHE_LIMIT = 60; // T5.3: cap dynamic entries to avoid unbounded growth
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -97,6 +98,13 @@ self.addEventListener('fetch', (event) => {
                     const clone = response.clone();
                     caches.open(DYNAMIC_CACHE).then(cache => {
                         cache.put(request, clone);
+                        // T5.3: trim oldest entries beyond the limit
+                        cache.keys().then(keys => {
+                            if (keys.length > DYNAMIC_CACHE_LIMIT) {
+                                keys.slice(0, keys.length - DYNAMIC_CACHE_LIMIT)
+                                    .forEach(k => cache.delete(k));
+                            }
+                        });
                     });
                 }
                 return response;

@@ -16,6 +16,24 @@ export interface CronEnv {
 }
 
 /**
+ * T1.5: Run all minute-level maintenance tasks.
+ * Used by the Workers `scheduled` event AND by the secured HTTP trigger
+ * (/api/cron/run) since Cloudflare Pages has no native cron support.
+ */
+export async function runMinuteMaintenance(env: CronEnv): Promise<{
+    processed: number;
+    errors: number;
+}> {
+    const taskService = new ScheduledTaskService(env.DB);
+    const taskResult = await taskService.processPendingTasks();
+    console.log(`[CRON] Processed ${taskResult.processed} tasks, ${taskResult.errors} errors`);
+
+    await handleLifecycleTimers(env);
+
+    return taskResult;
+}
+
+/**
  * Main cron handler - dispatched from worker's scheduled event
  */
 export async function handleCron(event: { cron: string }, env: CronEnv): Promise<void> {
@@ -26,10 +44,7 @@ export async function handleCron(event: { cron: string }, env: CronEnv): Promise
     try {
         switch (event.cron) {
             case '* * * * *':
-                const taskResult = await taskService.processPendingTasks();
-                console.log(`[CRON] Processed ${taskResult.processed} tasks, ${taskResult.errors} errors`);
-
-                await handleLifecycleTimers(env);
+                await runMinuteMaintenance(env);
                 break;
 
             case '*/5 * * * *':

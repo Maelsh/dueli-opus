@@ -104,13 +104,27 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             }
             
             async function loadSupporters() {
-                // Mock data - will be replaced with API call
-                const supporters = [
-                    { name: 'Anonymous', amount: 500, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=1' },
-                    { name: 'Ahmed M.', amount: 200, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=2' },
-                    { name: 'Sarah K.', amount: 150, avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=3' }
-                ];
-                
+                // T4.1: real top supporters from the donations API (mock fallback)
+                try {
+                    const res = await fetch('/api/donations/top-supporters?lang=' + (window.lang || 'ar'));
+                    const data = await res.json();
+                    if (data.success && data.data?.length > 0) {
+                        renderSupporters(data.data.map(function(s, i) {
+                            return { name: s.donor_name || 'Anonymous', amount: s.amount,
+                                     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(s.donor_name || i) };
+                        }));
+                        return;
+                    }
+                } catch (e) { console.error(e); }
+                renderSupporters([]);
+            }
+
+            function renderSupporters(supporters) {
+                if (!supporters.length) {
+                    document.getElementById('supportersList').innerHTML =
+                        '<p class="text-center text-gray-400 text-sm py-6">' + (window.translations?.be_first || 'Be the first supporter!') + '</p>';
+                    return;
+                }
                 document.getElementById('supportersList').innerHTML = supporters.map((s, i) => \`
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-lg flex items-center gap-4">
                         <div class="relative">
@@ -124,16 +138,40 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     </div>
                 \`).join('');
             }
-            
+
             async function processDonation() {
                 const amount = parseInt(document.getElementById('customAmount').value) || selectedAmount;
                 if (amount < 1) {
                     window.dueli?.toast?.error?.('Please enter a valid amount');
                     return;
                 }
-                
-                // TODO: Integrate with payment processor
-                alert(\`Thank you for your donation of $\${amount}! Payment processing will be implemented soon.\`);
+
+                try {
+                    const res = await fetch('/api/donations?lang=' + (window.lang || 'ar'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            amount: amount,
+                            payment_method: 'stripe',
+                            donor_name: window.currentUser?.display_name || undefined,
+                            donor_email: window.currentUser?.email || undefined
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success && data.data?.payment_url) {
+                        if (data.data.payment_url.startsWith('http')) {
+                            // T4.1: real Stripe Checkout — hosted payment page
+                            window.location.href = data.data.payment_url;
+                        } else {
+                            alert('Payments are not fully configured yet. Please try again later.');
+                        }
+                    } else {
+                        alert(data.error?.message || 'Failed to start donation');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Failed to start donation');
+                }
             }
         </script>
     `;

@@ -272,6 +272,8 @@ export const en = {
     auth_account_activated: 'Account activated successfully!',
     auth_email_password_required: 'Email and password are required',
     auth_invalid_credentials: 'Invalid email or password',
+    auth_social_no_password: 'This account uses social sign-in (Google/Microsoft/Facebook). Log in with your provider, or reset your password to enable email login.',
+    auth_email_is_social: 'This email is registered via social sign-in. Log in with your provider (Google/Microsoft/Facebook) or reset your password.',
     auth_verify_email_first: 'Please verify your email first',
     auth_email_required: 'Email is required',
     auth_user_not_found: 'User not found or already verified',
@@ -751,6 +753,35 @@ export const en = {
         competition_revenue: 'Competition Revenue',
     },
 
+    // ── T2.4: Viewer ratings & winner ──────────────
+    rate_title: 'Rate the competitors',
+    rate_thanks: 'Thanks for rating!',
+    rate_failed: 'Rating failed',
+    rate_winner_banner: 'Winner by public rating',
+
+    // ── T1.3: Streaming ──────────────
+    recording_processing: 'Preparing the recording...',
+
+    // ── T3.3: Nested comments ──────────────
+    reply: 'Reply',
+    replying_to: 'Replying to:',
+
+    // ── T3.2: Profile posts ──────────────
+    post_placeholder: 'Share a thought with your audience...',
+    post_publish: 'Publish',
+    confirm_delete_post: 'Delete this post?',
+
+    // ── T3.2: Account deletion (GDPR) ──────────────
+    confirm_delete_account: 'Are you sure you want to permanently delete your account? Your identity will be anonymized and your data removed.',
+    account_deleted: 'Your account has been deleted. Sorry to see you go.',
+
+    // ── T2.2: Real-time SSE notifications ──────────────
+    sse: {
+        new_invite:      'invites you to compete!',
+        invite_accepted: 'accepted your invite ✅',
+        invite_declined: 'declined your invite',
+    },
+
     // ── Task 10: Dynamic Matchmaking & Invite Panel ──────────────
     matchmaking: {
         panel_title:            'Invite Opponent',
@@ -774,6 +805,10 @@ export const en = {
         blocked_user:           'User blocked',
         busy_status:            'Currently busy',
         invite_opponent_btn:    'Invite Opponent',
+        stats_winrate:          'Win Rate',
+        stats_losses:           'Losses',
+        stats_top_categories:   'Top Fields',
+        view_profile:           'View Profile',
         loading_users:          'Loading available users...',
     },
 

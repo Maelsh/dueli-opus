@@ -5,6 +5,7 @@
  */
 
 export { AuthService } from './AuthService';
+export { SseService } from './SseService';
 export { ThemeService } from './ThemeService';
 export { CompetitionService } from './CompetitionService';
 export { SearchService } from './SearchService';

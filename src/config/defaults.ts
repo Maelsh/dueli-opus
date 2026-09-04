@@ -14,14 +14,26 @@
 // خوادم البث والرفع
 // ============================================
 
-/** Default streaming server URL */
-export const DEFAULT_STREAMING_URL = 'https://stream.maelshpro.com';
+/**
+ * Default signaling/streaming server URL.
+ * Used for: WebRTC signaling (HTTP-polling room/create/join/signal/poll/leave —
+ * see src/modules/api/signaling/routes.ts and scripts/client/shared.ts SignalingManager).
+ *
+ * Migrated 2026-09-05 from the old Node signaling server (stream.maelshpro.com) to a
+ * Cloudflare Worker + Durable Object (source: D:\projects\opus-dueli\signaling-server,
+ * a separate repo/Worker, not part of this Pages project). Override via STREAMING_URL
+ * in .dev.vars / Cloudflare Pages env if the Worker is ever redeployed under a new URL
+ * or a custom domain is attached to it.
+ */
+export const DEFAULT_STREAMING_URL = 'https://signaling-server.maelshspro.workers.dev';
 
 /** Default upload server URL */
 export const DEFAULT_UPLOAD_URL = 'https://maelshpro.com/ffmpeg';
 
-/** Default TURN server URL */
-export const DEFAULT_TURN_URL = 'turn:maelshpro.com:3000';
+// NOTE: DEFAULT_TURN_URL (self-hosted coturn, turn:maelshpro.com:3000) removed —
+// migrated to Cloudflare Calls TURN (rtc.live.cloudflare.com), see
+// src/modules/api/signaling/routes.ts fetchCloudflareIceServers(). No default needed:
+// without TURN_TOKEN_ID/TURN_API_TOKEN, /api/signaling/ice-servers falls back to STUN-only.
 
 /**
  * Origins allowed to access chunk APIs (verify/delete)

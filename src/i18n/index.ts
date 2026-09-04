@@ -6,6 +6,8 @@
 // Import language translations
 import { ar } from './ar';
 import { en } from './en';
+import { LANGUAGES, getLanguageMeta } from './languages';
+export { LANGUAGES, getLanguageMeta, type LanguageMeta } from './languages';
 
 // Languages with available translations (can be extended)
 export const TRANSLATED_LANGUAGES = ['ar', 'en'] as const;
@@ -17,7 +19,24 @@ export type Language = string;
 export const DEFAULT_LANGUAGE: TranslatedLanguage = 'en'; // English as global fallback
 
 // Combined translations object
-export const translations = { ar, en };
+// T3.1: typed as Record so new languages can be registered at runtime
+export const translations: Record<string, any> = { ar, en };
+
+/**
+ * T3.1: Register a translation pack at runtime (used when adding languages).
+ * registerLanguage('fr', fr) — then getUILanguage/t/isRTL work immediately.
+ */
+export function registerLanguage(code: string, pack: Record<string, any>): void {
+    translations[code] = pack;
+}
+
+/**
+ * T3.1: Languages available in the switcher =
+ * enabled in the registry AND having a loaded translation pack.
+ */
+export function getAvailableLanguages() {
+    return LANGUAGES.filter(l => l.enabled && translations[l.code]);
+}
 
 // Re-export countries from countries.ts
 export { countries, getCountriesList, getCountry, getCountriesByLanguage, getLocale, DEFAULT_COUNTRY, type Country } from '../countries';
@@ -68,15 +87,18 @@ export function t(key: string, lang: Language): string {
     return typeof value === 'string' ? value : key;
 }
 
-// RTL languages list - includes all RTL languages from countries
-const RTL_LANGUAGES: string[] = ['ar', 'fa', 'he', 'ur'];
+// RTL detection — T3.1: derived from the central registry (dir field),
+// with a static fallback list for languages not yet in the registry.
+const RTL_FALLBACK: string[] = ['fa', 'he', 'ur', 'ps', 'sd', 'ug', 'yi'];
 
 export function isRTL(lang: Language): boolean {
-    return RTL_LANGUAGES.includes(lang);
+    const meta = getLanguageMeta(lang);
+    if (meta) return meta.dir === 'rtl';
+    return RTL_FALLBACK.includes(lang);
 }
 
 export function getDir(lang: Language): 'rtl' | 'ltr' {
-    return RTL_LANGUAGES.includes(lang) ? 'rtl' : 'ltr';
+    return isRTL(lang) ? 'rtl' : 'ltr';
 }
 
 /**

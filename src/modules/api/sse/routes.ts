@@ -56,7 +56,7 @@ sseRoutes.get('/', async (c) => {
 
     const lastEventIdHeader = c.req.header('Last-Event-Id');
     const lastEventId       = lastEventIdHeader ? parseInt(lastEventIdHeader, 10) : 0;
-    const pusher            = new EventPusher(c.env.DB);
+    const pusher            = new EventPusher(c.env.DB, c.env);
     const HEARTBEAT_MS      = 25_000; // 25 seconds
 
     // Cloudflare Workers ReadableStream SSE pattern

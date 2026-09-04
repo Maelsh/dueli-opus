@@ -57,10 +57,13 @@ deleteAccountRoutes.post('/', async (c) => {
         await db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').bind(user.id, user.id).run();
 
         // 3. Anonymize user's competitions
+        // T3.2 FIX: creator_id is NOT NULL — keep pointing at the anonymized
+        // users row and flag it instead of nulling.
         await db.prepare(`
             UPDATE competitions 
             SET 
-                creator_id = NULL,
+                title = '[deleted]',
+                description = NULL,
                 creator_anonymized = 1
             WHERE creator_id = ? AND status = 'completed'
         `).bind(user.id).run();
@@ -72,10 +75,11 @@ deleteAccountRoutes.post('/', async (c) => {
         `).bind(user.id).run();
 
         // 4. Anonymize comments
+        // T3.2 FIX: comments.user_id is NOT NULL in the schema — we keep the id
+        // pointing at the now-anonymized user row and scrub the content instead.
         await db.prepare(`
             UPDATE comments 
             SET 
-                user_id = NULL,
                 user_anonymized = 1,
                 content = '[deleted]'
             WHERE user_id = ?
@@ -87,16 +91,18 @@ deleteAccountRoutes.post('/', async (c) => {
             WHERE sender_id = ?
         `).bind(user.id).run();
 
-        // 6. Delete from conversations
+        // T3.2 FIX: there is no conversation_participants table —
+        // conversations use user1_id/user2_id columns.
         await db.prepare(`
-            DELETE FROM conversation_participants 
-            WHERE user_id = ?
-        `).bind(user.id).run();
+            DELETE FROM conversations 
+            WHERE user1_id = ? OR user2_id = ?
+        `).bind(user.id, user.id).run();
 
-        // 7. Anonymize ratings
+        // 7. Ratings: rows are kept for integrity; rater identity lives in the
+        // anonymized users row (user_id is NOT NULL so it cannot be nulled).
         await db.prepare(`
             UPDATE ratings 
-            SET user_id = NULL 
+            SET rating = rating 
             WHERE user_id = ?
         `).bind(user.id).run();
 

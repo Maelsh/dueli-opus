@@ -7,6 +7,7 @@
  */
 
 import { Context, Next } from 'hono';
+import { getCookie } from 'hono/cookie';
 import type { Bindings, Variables, Language } from '../config/types';
 import { SessionModel, AdminRoleModel, AdminRoleType } from '../models';
 import { t } from '../i18n';
@@ -24,8 +25,12 @@ export function authMiddleware(options: { required?: boolean } = {}) {
     const { required = true } = options;
 
     return async (c: AppContext, next: Next) => {
+        // T2.2: Accept session via Bearer header OR ?token= query param OR sessionId cookie
+        // (EventSource cannot send custom headers, so SSE needs query-param support)
         const authHeader = c.req.header('Authorization');
-        const sessionId = authHeader?.replace('Bearer ', '');
+        const sessionId = authHeader?.replace('Bearer ', '')
+            || c.req.query('token')
+            || getCookie(c, 'sessionId');
 
         if (!sessionId) {
             if (required) {

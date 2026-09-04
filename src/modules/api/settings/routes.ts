@@ -7,9 +7,11 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { SettingsController } from '../../../controllers/SettingsController';
-
+import { authMiddleware } from '../../../middleware/auth';
 const settingsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new SettingsController();
+// T3.4 FIX: controllers read c.get('user') — mount optional auth so requireAuth works
+settingsRoutes.use('*', authMiddleware({ required: false }));
 
 // =====================================
 // Settings - الإعدادات

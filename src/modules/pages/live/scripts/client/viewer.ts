@@ -75,8 +75,8 @@ export function getViewerScript(lang: Language): string {
                 } else if (competition.status === 'completed' || competition.stream_status === 'ready') {
                     log('📼 Recorded video', 'success');
                     
-                    // 2. جلب playlist من سيرفر البث للحصول على chunks
-                    const playlistRes = await fetch(FFMPEG_URL + '/playlist.php?id=' + competitionId);
+                    // 2. جلب playlist عبر وكيل السيرفر (T1.3: CORS-safe)
+                    const playlistRes = await fetch('/api/chunks/playlist/' + competitionId);
                     if (!playlistRes.ok) {
                         throw new Error('Video not available');
                     }

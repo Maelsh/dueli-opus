@@ -40,15 +40,24 @@ export class CommentModel extends BaseModel<Comment> {
     /**
      * Create comment
      */
-    async create(data: Partial<Comment>): Promise<Comment> {
+    async create(data: Partial<Comment> & { parent_id?: number | null }): Promise<Comment> {
+        // T3.3: nested replies — validate the parent belongs to the same competition
+        if (data.parent_id) {
+            const parent = await this.findById(data.parent_id);
+            if (!parent || (parent as any).competition_id !== data.competition_id) {
+                throw new Error('Invalid parent comment');
+            }
+        }
+
         const result = await this.db.prepare(`
-            INSERT INTO comments (competition_id, user_id, content, is_live, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
+            INSERT INTO comments (competition_id, user_id, content, is_live, parent_id, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
         `).bind(
             data.competition_id,
             data.user_id,
             data.content,
-            data.is_live ? 1 : 0
+            data.is_live ? 1 : 0,
+            data.parent_id ?? null
         ).run();
 
         // Update competition comment count
@@ -57,6 +66,16 @@ export class CommentModel extends BaseModel<Comment> {
         ).bind(data.competition_id).run();
 
         return (await this.findById(result.meta.last_row_id as number))!;
+    }
+
+    /**
+     * T3.3: Count of top-level comments for pagination sanity
+     */
+    async countTopLevel(competitionId: number): Promise<number> {
+        const row = await this.db.prepare(
+            'SELECT COUNT(*) AS n FROM comments WHERE competition_id = ? AND parent_id IS NULL'
+        ).bind(competitionId).first<{ n: number }>();
+        return row?.n || 0;
     }
 
     /**

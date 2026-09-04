@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Competition Controller
  * متحكم المنافسات
  * 
@@ -14,6 +14,8 @@ import {
     UserModel
 } from '../models';
 import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
+import { EventPusher } from '../lib/services/EventPusher';
+import { Sanitize } from '../lib/services/Sanitize';
 
 /**
  * Competition Request Model (inline - should be in separate file)
@@ -228,6 +230,11 @@ export class CompetitionController extends BaseController {
             if (!body?.title || !body?.rules || !body?.category_id) {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
+
+            // T1.4: Sanitize user text against stored XSS
+            body.title = Sanitize.cleanTitle(body.title);
+            if (body.description) body.description = Sanitize.cleanText(body.description);
+            body.rules = Sanitize.cleanText(body.rules);
 
             const model = new CompetitionModel(c.env.DB);
             const competition = await model.create({
@@ -554,6 +561,11 @@ export class CompetitionController extends BaseController {
                 return this.forbidden(c);
             }
 
+            // T1.5: Idempotency guard — a completed competition is never re-finalized
+            if (competition.status === 'completed') {
+                return this.success(c, { ended: true, status: 'completed', already_completed: true });
+            }
+
             const body = await this.getBody<{
                 youtube_video_url?: string;
                 vod_url?: string;
@@ -564,11 +576,21 @@ export class CompetitionController extends BaseController {
                 vodUrl: body?.vod_url
             });
 
-            // Delete chunk keys when competition ends (live → completed)
+            // Delete chunk keys when competition ends (live â†’ completed)
             // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة
             await c.env.DB.prepare(
                 'DELETE FROM chunk_keys WHERE competition_id = ?'
             ).bind(id).run();
+
+            // T1.5: Finalization is DEFERRED — viewers rate AFTER completion (rate endpoint),
+            // so a scheduled task finalizes winner/payouts 24h after end.
+            try {
+                const taskService = new ScheduledTaskService(c.env.DB);
+                const finalizeAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+                await taskService.schedule(id, 'finalize_payouts', finalizeAt);
+            } catch (scheduleError) {
+                console.error(`[End] Failed to schedule finalize_payouts for ${id}:`, scheduleError);
+            }
 
             return this.success(c, { ended: true, status: 'completed' });
         } catch (error) {
@@ -620,7 +642,7 @@ export class CompetitionController extends BaseController {
             const user = this.getCurrentUser(c);
             const competitionId = this.getParamInt(c, 'id');
 
-            const body = await this.getBody<{ content: string; is_live?: boolean }>(c);
+            const body = await this.getBody<{ content: string; is_live?: boolean; parent_id?: number }>(c);
             if (!body?.content) {
                 return this.validationError(c, this.t('errors.content_required', c));
             }
@@ -635,8 +657,9 @@ export class CompetitionController extends BaseController {
             const comment = await commentModel.create({
                 competition_id: competitionId,
                 user_id: user.id,
-                content: body.content,
-                is_live: body.is_live || false
+                content: Sanitize.cleanText(body.content),
+                is_live: body.is_live || false,
+                parent_id: body.parent_id ?? null
             });
 
             return this.success(c, comment, 201);
@@ -721,6 +744,14 @@ export class CompetitionController extends BaseController {
                 body.rating
             );
 
+            // T1.5: Recompute averages/winner/ELO/payout-split after each vote
+            try {
+                const taskService = new ScheduledTaskService(c.env.DB);
+                await taskService.updateAggregatesAfterVote(competitionId);
+            } catch (voteError) {
+                console.error(`[Rate] Aggregate update failed for competition ${competitionId}:`, voteError);
+            }
+
             return this.success(c, rating, 201);
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -788,6 +819,18 @@ export class CompetitionController extends BaseController {
                 reference_id: competitionId
             });
 
+            // T2.2: Push real-time SSE event so invitee gets instant toast (no refresh)
+            try {
+                const pusher = new EventPusher(c.env.DB, c.env);
+                await pusher.publishInvite(body.invitee_id, {
+                    competition_id: competitionId,
+                    inviter_username: user.display_name || user.username,
+                    message: body.message || undefined
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishInvite failed:', pushError);
+            }
+
             return this.success(c, { id: result.meta.last_row_id, invited: true });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -854,6 +897,18 @@ export class CompetitionController extends BaseController {
                 reference_id: competitionId
             });
 
+            // T2.2: Real-time push to creator (accepted)
+            try {
+                const pusher = new EventPusher(c.env.DB, c.env);
+                await pusher.publishInviteResponse(competition.creator_id, {
+                    competition_id: competitionId,
+                    invitee_username: user.display_name || user.username,
+                    accepted: true
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishInviteResponse failed:', pushError);
+            }
+
             return this.success(c, { accepted: true, autoDeleted: deletedCount });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -870,14 +925,36 @@ export class CompetitionController extends BaseController {
             const user = this.getCurrentUser(c);
             const competitionId = this.getParamInt(c, 'id');
 
+            // Fetch invitation + inviter info BEFORE updating (needed for real-time push)
+            const invitation = await c.env.DB.prepare(`
+                SELECT ci.id, ci.inviter_id, c.title
+                FROM competition_invitations ci
+                JOIN competitions c ON c.id = ci.competition_id
+                WHERE ci.competition_id = ? AND ci.invitee_id = ? AND ci.status = 'pending'
+            `).bind(competitionId, user.id).first<any>();
+
+            if (!invitation) return this.error(c, 'No pending invitation found');
+
             const result = await c.env.DB.prepare(`
                 UPDATE competition_invitations 
                 SET status = 'declined', responded_at = datetime('now')
-                WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
-            `).bind(competitionId, user.id).run();
+                WHERE id = ?
+            `).bind(invitation.id).run();
 
             if (result.meta.changes === 0) {
                 return this.error(c, 'No pending invitation found');
+            }
+
+            // T2.2: Real-time push to creator (declined)
+            try {
+                const pusher = new EventPusher(c.env.DB, c.env);
+                await pusher.publishInviteResponse(invitation.inviter_id, {
+                    competition_id: competitionId,
+                    invitee_username: user.display_name || user.username,
+                    accepted: false
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishInviteResponse failed:', pushError);
             }
 
             return this.success(c, { declined: true });

@@ -189,6 +189,16 @@ export class UserModel extends BaseModel<User> {
     }
 
     /**
+     * T1.4: Update stored password hash (used for transparent legacy-hash upgrades)
+     */
+    async updatePasswordHash(id: number, passwordHash: string): Promise<boolean> {
+        const result = await this.db.prepare(
+            'UPDATE users SET password_hash = ?, updated_at = datetime("now") WHERE id = ?'
+        ).bind(passwordHash, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
      * Set verification token (for resend)
      */
     async setVerificationToken(id: number, token: string, expiresAt: string): Promise<boolean> {
@@ -226,8 +236,8 @@ export class UserModel extends BaseModel<User> {
             SELECT u.*,
                    (SELECT COUNT(*) FROM competitions WHERE creator_id = u.id) as total_competitions,
                    (SELECT COUNT(*) FROM competitions WHERE (creator_id = u.id OR opponent_id = u.id) AND status = 'completed') as total_completed,
-                   (SELECT COUNT(*) FROM user_follows WHERE following_id = u.id) as followers_count,
-                   (SELECT COUNT(*) FROM user_follows WHERE follower_id = u.id) as following_count
+                   (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
+                   (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count
             FROM users u
             WHERE u.username = ?
         `, username.toLowerCase());

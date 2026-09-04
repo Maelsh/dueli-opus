@@ -1,0 +1,19 @@
+name = "dueli-realtime"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# T5.1: Durable Objects require a paid Workers plan (standard).
+# Deploy: cd workers/dueli-realtime && wrangler deploy
+# Then set secrets:
+#   wrangler secret put PAGES_API_URL          # https://dueli.maelshpro.com
+#   wrangler secret put REALTIME_PUBLISH_SECRET
+# And in the Pages project env add:
+#   REALTIME_WS_URL = wss://dueli-realtime.<account>.workers.dev/ws
+
+[[durable_objects.bindings]]
+name = "REALTIME_ROOM"
+class_name = "RealtimeRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RealtimeRoom"]

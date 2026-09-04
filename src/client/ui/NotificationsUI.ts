@@ -18,6 +18,8 @@ interface Notification {
     is_read: boolean;
     created_at: string;
     data?: any;
+    reference_type?: string;
+    reference_id?: number;
 }
 
 /**
@@ -109,7 +111,7 @@ export class NotificationsUI {
 
         container.innerHTML = this.notifications.slice(0, 10).map(notification => `
             <div class="p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${!notification.is_read ? 'bg-purple-50 dark:bg-purple-900/20' : ''}"
-                 onclick="NotificationsUI.markAsRead(${notification.id})">
+                 onclick="NotificationsUI.handleNotificationClick(${notification.id})">
                 <div class="flex items-start gap-3">
                     <div class="w-10 h-10 rounded-full ${this.getNotificationColor(notification.type)} flex items-center justify-center">
                         <i class="fas ${this.getNotificationIcon(notification.type)}"></i>
@@ -186,6 +188,26 @@ export class NotificationsUI {
         if (minutes < 60) return State.lang === 'ar' ? `منذ ${minutes} دقيقة` : `${minutes}m ago`;
         if (hours < 24) return State.lang === 'ar' ? `منذ ${hours} ساعة` : `${hours}h ago`;
         return State.lang === 'ar' ? `منذ ${days} يوم` : `${days}d ago`;
+    }
+
+    /**
+     * T2.2: Handle clicking a notification — mark read + navigate to target
+     * (invitation/request notifications go directly to the competition page)
+     */
+    static handleNotificationClick(id: number): void {
+        const notification = this.notifications.find(n => n.id === id);
+        // Mark as read (fire and forget)
+        if (notification && !notification.is_read) {
+            this.markAsRead(id);
+        }
+        // Navigate to the referenced competition when applicable
+        const refType = notification?.reference_type || notification?.data?.reference_type;
+        const refId = notification?.reference_id ?? notification?.data?.reference_id;
+        if ((refType === 'competition' || notification?.type === 'invitation') && refId) {
+            window.location.href = `/competition/${refId}?lang=${State.lang}`;
+        } else {
+            this.renderList();
+        }
     }
 
     /**

@@ -328,7 +328,8 @@ export class ChunkManager {
     }
 
     async loadPlaylist(): Promise<PlaylistData> {
-        const url = `https://maelshpro.com/ffmpeg/playlist.php?id=${this.competitionId}`;
+        // T1.3: CORS-safe proxy
+        const url = `/api/chunks/playlist/${this.competitionId}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error('Failed to load playlist');
         return await res.json();

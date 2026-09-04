@@ -6,7 +6,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
-import { DEFAULT_UPLOAD_SERVER_ORIGINS } from '../../../config/defaults';
+import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../config/defaults';
 
 const chunksRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -152,6 +152,52 @@ chunksRoutes.delete('/:key', verifyUploadServerOrigin, async (c) => {
     } catch (error: any) {
         console.error('Delete chunk error:', error);
         return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+/**
+ * GET /api/chunks/playlist/:id
+ * T1.3: Server-side proxy for the streaming server playlist.
+ *
+ * The remote playlist.php sends NO CORS headers, so browsers on
+ * dueli.maelshpro.com could never call it directly — viewers were unable to
+ * discover chunks for live skip-to-latest and VOD playback. This proxy fetches
+ * server-side (no CORS restriction) and normalizes the response.
+ */
+chunksRoutes.get('/playlist/:id', async (c) => {
+    const id = c.req.param('id');
+
+    if (!/^\d+$/.test(id)) {
+        return c.json({ success: false, error: 'Invalid competition id' }, 400);
+    }
+
+    const base = (c.env.FFMPEG_SERVER_URL || DEFAULT_UPLOAD_URL).replace(/\/+$/, '');
+
+    try {
+        const res = await fetch(`${base}/playlist.php?id=${id}`, {
+            signal: AbortSignal.timeout(10_000)
+        });
+        const text = await res.text();
+
+        // The PHP endpoint may answer 200 with an EMPTY body — treat as "no chunks yet"
+        let data: any = { chunks: [] };
+        if (text && text.trim()) {
+            try {
+                data = JSON.parse(text);
+            } catch {
+                data = { chunks: [] };
+            }
+        }
+
+        return c.json({
+            success: true,
+            id: Number(id),
+            chunks: Array.isArray(data.chunks) ? data.chunks : []
+        });
+    } catch (error: any) {
+        console.error('[chunks/playlist] upstream error:', error);
+        // Graceful degradation: empty playlist, never a hard failure
+        return c.json({ success: true, id: Number(id), chunks: [] });
     }
 });
 

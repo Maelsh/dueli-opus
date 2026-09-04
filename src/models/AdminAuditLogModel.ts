@@ -26,7 +26,7 @@ export class AdminAuditLogModel extends BaseModel<AdminAuditLog> {
 
     async create(data: Partial<AdminAuditLog>): Promise<AdminAuditLog> {
         const result = await this.db.prepare(`
-            INSERT INTO ${this.tableName} (admin_id, action_type, target_entity, target_id, details, timestamp)
+            INSERT INTO ${this.tableName} (admin_id, action_type, target_entity, target_id, details, created_at)
             VALUES (?, ?, ?, ?, ?, datetime('now'))
         `).bind(
             data.admin_id,
@@ -89,7 +89,7 @@ export class AdminAuditLogModel extends BaseModel<AdminAuditLog> {
             JOIN users u ON l.admin_id = u.id
             LEFT JOIN admin_roles ar ON l.admin_id = ar.user_id
             ${whereClause}
-            ORDER BY l.timestamp DESC
+            ORDER BY l.created_at DESC
             LIMIT ? OFFSET ?
         `).bind(...params, limit, offset).all<AdminAuditLogWithAdmin>();
 

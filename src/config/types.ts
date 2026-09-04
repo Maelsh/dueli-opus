@@ -33,9 +33,19 @@ export type Bindings = {
   // Streaming Services
   STREAMING_URL: string;      // https://stream.maelshpro.com
   UPLOAD_URL: string;         // https://maelshpro.com/ffmpeg
-  TURN_URL: string;           // turn:maelshpro.com:3000
-  TURN_SECRET: string;        // Shared secret with Coturn
+  // Cloudflare Calls TURN (rtc.live.cloudflare.com) — used by
+  // src/modules/api/signaling/routes.ts fetchCloudflareIceServers().
+  // TURN_TOKEN_ID is not secret; TURN_API_TOKEN is a secret. Both optional here
+  // (not `string`) because the code treats them as optional and falls back to
+  // STUN-only ICE servers when either is missing.
+  TURN_TOKEN_ID?: string;
+  TURN_API_TOKEN?: string;
   UPLOAD_SERVER_ORIGINS?: string; // Allowed origins for chunk APIs, comma-separated (e.g., "https://maelshpro.com,https://stream.maelshpro.com")
+  FFMPEG_SERVER_URL?: string; // Optional override for the ffmpeg/upload server used by chunks routes (falls back to DEFAULT_UPLOAD_URL)
+  CRON_SECRET?: string;       // Shared secret required to trigger /api/cron/* via HTTP (T1.5)
+  // Payments
+  STRIPE_SECRET_KEY?: string;      // Used by src/modules/api/donations/routes.ts
+  STRIPE_WEBHOOK_SECRET?: string;  // Used by src/modules/api/donations/routes.ts webhook handler
 }
 
 /** Language code type (supports all country languages) */
@@ -117,6 +127,11 @@ export interface User extends BaseEntity {
   average_rating?: number;
   total_earnings?: number;
   is_verified?: boolean;
+  // NOTE: `users.email_verified` exists in the DB schema (0001_initial_schema.sql) but is
+  // dead — nothing in the codebase reads or writes it. `is_verified` above is the column
+  // actually used for verification status. Kept in the DB (not dropped) because SQLite/D1
+  // requires a full table rebuild to drop a column, which is unnecessary risk for a
+  // pre-launch platform. Do not use email_verified for new code.
 }
 
 /**

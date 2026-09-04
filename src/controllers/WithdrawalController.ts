@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file src/controllers/WithdrawalController.ts
  * @description MVC Controller for withdrawal requests (Task 6)
  *              متحكم طلبات السحب - للمستخدم والإداري
@@ -205,7 +205,7 @@ export class WithdrawalController extends BaseController {
             );
 
             // Real-time notification to the user
-            const pusher = new EventPusher(c.env.DB);
+            const pusher = new EventPusher(c.env.DB, c.env);
             await pusher.publishWithdrawalStatus(result.user_id, id, 'completed', body.note);
 
             return this.success(c, { request: result });
@@ -245,7 +245,7 @@ export class WithdrawalController extends BaseController {
             );
 
             // Real-time notification to the user
-            const pusher = new EventPusher(c.env.DB);
+            const pusher = new EventPusher(c.env.DB, c.env);
             await pusher.publishWithdrawalStatus(result.user_id, id, 'rejected', body.reason);
 
             return this.success(c, { request: result });

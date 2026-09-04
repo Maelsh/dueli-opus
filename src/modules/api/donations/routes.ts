@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file src/modules/api/donations/routes.ts
  * @description مسارات التبرعات
  * @module api/donations/routes
@@ -96,9 +96,31 @@ donationsRoutes.post('/', async (c) => {
             is_anonymous
         });
 
-        // In a real implementation, you would integrate with Stripe/PayPal here
-        // For now, we'll return a mock payment URL
-        const paymentUrl = `#payment-${donation.id}`;
+        // T4.1: Real Stripe Checkout when configured; mock URL otherwise (dev)
+        let paymentUrl = `#payment-${donation.id}`;
+        const stripeKey = c.env.STRIPE_SECRET_KEY;
+        if ((payment_method === 'stripe' || payment_method === 'card') && stripeKey) {
+            try {
+                const { StripeService } = await import('../../../lib/services/StripeService');
+                const origin = c.req.header('origin') || 'https://dueli.maelshpro.com';
+                const session = await StripeService.createCheckoutSession(stripeKey, {
+                    amount,
+                    donationId: donation.id,
+                    donorEmail: donor_email || null,
+                    donorName: is_anonymous ? null : (donor_name || null),
+                    message: message || null,
+                    successUrl: `${origin}/donate?paid=1&session_id={CHECKOUT_SESSION_ID}`,
+                    cancelUrl: `${origin}/donate?cancelled=1`
+                });
+                paymentUrl = session.url;
+            } catch (stripeError: any) {
+                console.error('[Donations] Stripe checkout failed:', stripeError);
+                return c.json({
+                    success: false,
+                    error: { message: 'Payment initialization failed: ' + (stripeError?.message || 'unknown') }
+                }, 502);
+            }
+        }
 
         return c.json({
             success: true,
@@ -156,6 +178,50 @@ donationsRoutes.post('/:id/complete', async (c) => {
             success: false,
             error: { message: 'Failed to complete donation' }
         }, 500);
+    }
+});
+
+/**
+ * POST /api/donations/webhook
+ * T4.1: Stripe webhook — verifies the Stripe-Signature (HMAC-SHA256) then
+ * marks the donation completed on checkout.session.completed.
+ * Configure in Stripe Dashboard with STRIPE_WEBHOOK_SECRET env var.
+ */
+donationsRoutes.post('/webhook', async (c) => {
+    try {
+        const secret = c.env.STRIPE_WEBHOOK_SECRET;
+        if (!secret) {
+            return c.json({ success: false, error: { message: 'Webhook not configured' } }, 503);
+        }
+
+        const rawBody = await c.req.text();
+        const sigHeader = c.req.header('Stripe-Signature') || '';
+
+        const { StripeService } = await import('../../../lib/services/StripeService');
+        const check = await StripeService.verifyWebhookSignature(rawBody, sigHeader, secret);
+        if (!check.valid) {
+            console.error('[Donations] Webhook signature invalid:', check.reason);
+            return c.json({ success: false, error: { message: 'Invalid signature' } }, 400);
+        }
+
+        const event = JSON.parse(rawBody);
+        if (event.type === 'checkout.session.completed') {
+            const session = event.data?.object;
+            const donationId = parseInt(
+                session?.metadata?.donation_id || session?.client_reference_id || '0',
+                10
+            );
+            if (donationId > 0) {
+                const donationModel = new DonationModel(c.env.DB);
+                await donationModel.markCompleted(donationId, session.payment_intent || session.id);
+                console.log(`[Donations] Donation ${donationId} completed via Stripe webhook`);
+            }
+        }
+
+        return c.json({ received: true });
+    } catch (error) {
+        console.error('Stripe webhook error:', error);
+        return c.json({ success: false, error: { message: 'Webhook processing failed' } }, 500);
     }
 });
 

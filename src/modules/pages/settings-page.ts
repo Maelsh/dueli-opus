@@ -216,9 +216,31 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             async function deleteAccount() {
                 if (!confirm(\`\${tr.confirm_delete_account || 'Are you sure you want to delete your account?'}\`)) return;
-                
-                // TODO: Implement account deletion
-                alert('Account deletion will be implemented soon.');
+                try {
+                    const session = localStorage.getItem('sessionId') || '';
+                    const res = await fetch('/api/users/delete-account?lang=' + (window.lang || 'ar'), {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + session
+                        },
+                        body: JSON.stringify({ confirm: true })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        // GDPR deletion done server-side — clear local state and leave
+                        localStorage.removeItem('user');
+                        localStorage.removeItem('sessionId');
+                        document.cookie = 'sessionId=; Max-Age=0; path=/';
+                        alert(tr.account_deleted || 'Your account has been deleted.');
+                        window.location.href = '/?lang=' + (window.lang || 'ar');
+                    } else {
+                        alert(data.error || 'Failed to delete account');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Failed to delete account');
+                }
             }
         </script>
     `;

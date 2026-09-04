@@ -208,7 +208,7 @@ export class UserPostModel extends BaseModel<UserPost> {
             FROM ${this.tableName} p
             JOIN users u ON p.user_id = u.id
             WHERE p.user_id IN (
-                SELECT following_id FROM user_follows WHERE follower_id = ?
+                SELECT following_id FROM follows WHERE follower_id = ?
             ) OR p.user_id = ?
             ORDER BY p.created_at DESC
             LIMIT ? OFFSET ?

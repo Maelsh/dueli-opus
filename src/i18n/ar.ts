@@ -248,6 +248,8 @@ export const ar = {
     auth_account_activated: 'تم تفعيل حسابك بنجاح!',
     auth_email_password_required: 'البريد الإلكتروني وكلمة المرور مطلوبان',
     auth_invalid_credentials: 'البريد الإلكتروني أو كلمة المرور غير صحيحة',
+    auth_social_no_password: 'هذا الحساب مسجل عبر المصادقة الاجتماعية (Google/Microsoft/Facebook). سجّل الدخول عبر مزوّدك، أو أعد تعيين كلمة المرور لتتمكن من الدخول بالبريد.',
+    auth_email_is_social: 'هذا البريد مسجل عبر المصادقة الاجتماعية. سجّل الدخول عبر مزوّدك (Google/Microsoft/Facebook) أو أعد تعيين كلمة المرور.',
     auth_verify_email_first: 'يرجى تفعيل حسابك أولاً',
     auth_email_required: 'البريد الإلكتروني مطلوب',
     auth_user_not_found: 'المستخدم غير موجود أو تم تفعيله بالفعل',
@@ -727,6 +729,35 @@ export const ar = {
         competition_revenue: 'إيرادات المنافسة',
     },
 
+    // ── T2.4: تقييم المشاهدين والفائز ──────────────
+    rate_title: 'قيّم المنافسين',
+    rate_thanks: 'شكراً لتقييمك!',
+    rate_failed: 'فشل إرسال التقييم',
+    rate_winner_banner: 'الفائز بتقييم الجمهور',
+
+    // ── T1.3: البث ──────────────
+    recording_processing: 'جاري تجهيز التسجيل...',
+
+    // ── T3.3: التعليقات المتداخلة ──────────────
+    reply: 'رد',
+    replying_to: 'ترد على:',
+
+    // ── T3.2: منشورات البروفايل ──────────────
+    post_placeholder: 'شارب جمهورك فكرة...',
+    post_publish: 'نشر',
+    confirm_delete_post: 'حذف هذا المنشور؟',
+
+    // ── T3.2: حذف الحساب (GDPR) ──────────────
+    confirm_delete_account: 'هل أنت متأكد من حذف حسابك نهائياً؟ سيتم إخفاء هويتك وحذف بياناتك.',
+    account_deleted: 'تم حذف حسابك. نأسف لرحيلك.',
+
+    // ── T2.2: الإشعارات الفورية عبر SSE ──────────────
+    sse: {
+        new_invite:      'يدعوك للمنافسة!',
+        invite_accepted: 'قبل الدعوة ✅',
+        invite_declined: 'رفض الدعوة',
+    },
+
     // ── المهمة 10: المطابقة الديناميكية ولوحة الدعوات ──────────────
     matchmaking: {
         panel_title:            'دعوة خصم',
@@ -750,6 +781,10 @@ export const ar = {
         blocked_user:           'مستخدم محظور',
         busy_status:            'مشغول حالياً',
         invite_opponent_btn:    'دعوة خصم',
+        stats_winrate:          'نسبة الفوز',
+        stats_losses:           'خسائر',
+        stats_top_categories:   'أبرز المجالات',
+        view_profile:           'عرض الملف',
         loading_users:          'جاري تحميل المستخدمين المتاحين...',
     },
 

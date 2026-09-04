@@ -1,0 +1,46 @@
+# Dueli — Local Environment Variables (example)
+# انسخ هذا الملف إلى .dev.vars واملأ القيم الحقيقية. لا تضع القيم الحقيقية في هذا الملف أبداً — .dev.vars مُستثنى من git.
+
+# --- Email (iFastNet SMTP API) ---
+EMAIL_API_URL="https://example.com/dueli-email-api/send-email.php"
+EMAIL_API_KEY="replace-me"
+EMAIL_FROM="dueli@example.com"
+
+# --- Legacy / deprecated, kept for reference only ---
+RESEND_API_KEY=""
+
+# --- OAuth Providers ---
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+FACEBOOK_CLIENT_ID=""
+FACEBOOK_CLIENT_SECRET=""
+MICROSOFT_CLIENT_ID=""
+MICROSOFT_CLIENT_SECRET=""
+MICROSOFT_TENANT_ID=""
+TIKTOK_CLIENT_KEY=""
+TIKTOK_CLIENT_SECRET=""
+
+# --- Cloudflare ---
+CLOUDFLARE_API_TOKEN=""
+
+# --- Streaming / WebRTC ---
+STREAMING_URL="https://signaling-server.maelshspro.workers.dev"   # signaling server (HTTP-polling Worker + Durable Object)
+UPLOAD_URL="https://example.com/ffmpeg"
+FFMPEG_SERVER_URL=""              # optional override for UPLOAD_URL used by /api/chunks
+
+# TURN — Cloudflare Calls (rtc.live.cloudflare.com). Get these from the Cloudflare
+# dashboard > Calls > TURN. If unset, /api/signaling/ice-servers falls back to STUN-only.
+TURN_TOKEN_ID=""                  # not secret
+TURN_API_TOKEN=""                 # SECRET — never commit a real value here
+
+# --- Payments (confirm exact var names against src/modules/api/donations & payments) ---
+STRIPE_SECRET_KEY=""
+STRIPE_WEBHOOK_SECRET=""
+
+# --- Cron ---
+CRON_SECRET="replace-me"          # required to trigger /api/cron/* over HTTP; requests are
+                                   # rejected with 503 if this is unset
+
+# --- Web Push (not yet implemented) ---
+VAPID_PUBLIC_KEY=""
+VAPID_PRIVATE_KEY=""

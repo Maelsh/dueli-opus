@@ -35,6 +35,18 @@ function testLog(msg, type = 'info') {
 
 window.testLog = testLog;
 
+/**
+ * debugLog - console.log مشروط بوضع التصحيح فقط
+ * فُعّل بتشغيل: localStorage.setItem('dueli_debug', '1') من الـ devtools console
+ */
+window.DUELI_DEBUG = (typeof localStorage !== 'undefined' && localStorage.getItem('dueli_debug') === '1');
+function debugLog() {
+    if (window.DUELI_DEBUG) {
+        console.log.apply(console, arguments);
+    }
+}
+window.debugLog = debugLog;
+
 // ===== Session & Authentication =====
 
 /**
@@ -491,6 +503,14 @@ class ChunkManager {
         this.misses = 0;
         this.competitionId = competitionId;
         this.extension = extension;
+        // T1.3 FIX: host may record webm OR mp4 depending on browser support.
+        // Try candidates in order and lock onto whichever actually exists,
+        // otherwise viewers request chunk_0001.mp4 while the host uploads .webm (endless 404).
+        if (extension === 'mp4') {
+            this.candidates = ['mp4', 'webm'];
+        } else {
+            this.candidates = ['webm', 'mp4'];
+        }
         this.basePath = '${FFMPEG_URL}/stream.php?path=live/match_' + competitionId;
     }
 
@@ -501,13 +521,27 @@ class ChunkManager {
     }
 
     async exists(index) {
-        try {
-            const url = this.getUrl(index);
-            const res = await fetch(url, { method: 'HEAD' });
-            return res.ok;
-        } catch (e) {
-            return false;
+        // T1.3: probe candidate extensions until one answers
+        for (const ext of this.candidates) {
+            if (!ext) continue;
+            try {
+                const chunkNumber = index + 1;
+                const paddedIndex = String(chunkNumber).padStart(4, '0');
+                const url = this.basePath + '/chunk_' + paddedIndex + '.' + ext;
+                const res = await fetch(url, { method: 'HEAD' });
+                if (res.ok) {
+                    if (ext !== this.extension) {
+                        testLog('🔎 Format detected: .' + ext + ' (was looking for .' + this.extension + ')', 'info');
+                        this.extension = ext;
+                    }
+                    return true;
+                }
+                // 404 for this extension — try next candidate
+            } catch (e) {
+                // network error — treat as missing and continue probing
+            }
         }
+        return false;
     }
 
     async waitForNextChunk(maxMisses) {
@@ -559,7 +593,8 @@ class ChunkManager {
      */
     async skipToLatest() {
         try {
-            const playlistUrl = '${FFMPEG_URL}/playlist.php?id=' + this.competitionId;
+            // T1.3: CORS-safe proxy (remote playlist.php blocks browsers)
+            const playlistUrl = '/api/chunks/playlist/' + this.competitionId;
             const res = await fetch(playlistUrl);
             if (res.ok) {
                 const data = await res.json();
@@ -795,7 +830,8 @@ class SmartVodPlayer {
                 this.playlist = this.playlistData;
             } else {
                 testLog('📥 Loading playlist...', 'info');
-                const playlistUrl = this.ffmpegUrl + '/playlist.php?id=' + this.competitionId;
+                // T1.3: CORS-safe proxy
+                const playlistUrl = '/api/chunks/playlist/' + this.competitionId;
                 const res = await fetch(playlistUrl);
                 if (!res.ok) throw new Error('Failed to load playlist');
                 this.playlist = await res.json();
@@ -1517,8 +1553,8 @@ window.shareScreen = async function() {
             audio: true
         });
         
-        console.log('[DEBUG] shareScreen - localStream assigned:', localStream);
-        console.log('[DEBUG] shareScreen - window.mediaState.localStream:', window.mediaState.localStream);
+        debugLog('[DEBUG] shareScreen - localStream assigned:', localStream);
+        debugLog('[DEBUG] shareScreen - window.mediaState.localStream:', window.mediaState.localStream);
         
         const localVideo = document.getElementById('localVideo');
         if (localVideo) localVideo.srcObject = localStream;
@@ -1584,7 +1620,7 @@ window.useCamera = async function(facingMode) {
  * تعمل مع كلا الـ host (connectBtn) و guest (joinBtn)
  */
 function updateConnectionButtons(connected) {
-    console.log('[DEBUG] updateConnectionButtons called with:', connected);
+    debugLog('[DEBUG] updateConnectionButtons called with:', connected);
     isConnected = connected;
     
     // Host uses connectBtn, Guest uses joinBtn
@@ -1593,7 +1629,7 @@ function updateConnectionButtons(connected) {
     const reconnectBtn = document.getElementById('reconnectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
     
-    console.log('[DEBUG] Buttons found:', {
+    debugLog('[DEBUG] Buttons found:', {
         connectBtn: !!connectBtn,
         joinBtn: !!joinBtn,
         reconnectBtn: !!reconnectBtn,
@@ -1602,19 +1638,19 @@ function updateConnectionButtons(connected) {
     
     if (connectBtn) {
         connectBtn.classList.toggle('hidden', connected);
-        console.log('[DEBUG] connectBtn hidden:', connected);
+        debugLog('[DEBUG] connectBtn hidden:', connected);
     }
     if (joinBtn) {
         joinBtn.classList.toggle('hidden', connected);
-        console.log('[DEBUG] joinBtn hidden:', connected);
+        debugLog('[DEBUG] joinBtn hidden:', connected);
     }
     if (reconnectBtn) {
         reconnectBtn.classList.toggle('hidden', !connected);
-        console.log('[DEBUG] reconnectBtn hidden:', !connected);
+        debugLog('[DEBUG] reconnectBtn hidden:', !connected);
     }
     if (disconnectBtn) {
         disconnectBtn.classList.toggle('hidden', !connected);
-        console.log('[DEBUG] disconnectBtn hidden:', !connected);
+        debugLog('[DEBUG] disconnectBtn hidden:', !connected);
     }
 }
 window.updateConnectionButtons = updateConnectionButtons;

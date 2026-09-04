@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
+import { rateLimit, csrfProtection, securityHeaders } from './middleware/security';
 
 // Import API Routes - استيراد مسارات API
 import categoriesRoutes from './modules/api/categories/routes';
@@ -40,6 +41,16 @@ import advertiserRoutes from './modules/api/advertiser/routes';
 import complaintsRoutes from './modules/api/complaints/routes';
 import matchmakingRoutes from './modules/api/matchmaking/routes';
 import sseRoutes from './modules/api/sse/routes';
+import recommendationsRoutes from './modules/api/recommendations/routes';
+import leaderboardRoutes from './modules/api/leaderboard/routes';
+import analyticsRoutes from './modules/api/analytics/routes';
+import cronRoutes from './modules/api/cron/routes';
+import deleteAccountRoutes from './modules/api/users/delete-account';
+import donationsRoutes from './modules/api/donations/routes';
+import paymentRoutes from './modules/api/payments/routes';
+import adBlockRoutes from './modules/api/ad-blocks/routes';
+import adReportRoutes from './modules/api/ad-reports/routes';
+import blocksRoutes from './modules/api/blocks/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -58,6 +69,18 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // CORS Middleware
 app.use('/api/*', cors());
+
+// Security headers on every response (CSP, X-Frame-Options, HSTS-ready, etc.)
+app.use('*', securityHeaders());
+
+// General API rate limit: 100 requests/minute per IP
+app.use('/api/*', rateLimit({ windowMs: 60000, maxRequests: 100 }));
+
+// Stricter rate limit for auth endpoints (login/register/oauth): 10 requests/15min per IP
+app.use('/api/auth/*', rateLimit({ windowMs: 900000, maxRequests: 10 }));
+
+// CSRF protection on all state-changing API requests (GET/HEAD/OPTIONS are skipped internally)
+app.use('/api/*', csrfProtection());
 
 // Language Middleware - برنامج اللغة الوسيط
 app.use('*', async (c, next) => {
@@ -108,6 +131,16 @@ app.route('/api/advertiser', advertiserRoutes);
 app.route('/api/complaints', complaintsRoutes);
 app.route('/api/matchmaking', matchmakingRoutes);
 app.route('/api/sse', sseRoutes);          // Task 9: Central SSE event stream
+app.route('/api/recommendations', recommendationsRoutes);   // T1.2: was orphaned (404)
+app.route('/api/leaderboard', leaderboardRoutes);           // T1.2: was orphaned (404)
+app.route('/api/analytics', analyticsRoutes);               // T1.2: was orphaned (404)
+app.route('/api/cron', cronRoutes);                         // T1.5: HTTP cron trigger (secured by CRON_SECRET)
+app.route('/api/users/delete-account', deleteAccountRoutes); // T3.2: GDPR account deletion (was orphaned)
+app.route('/api/donations', donationsRoutes);               // T4.1: donations + Stripe webhook (was orphaned)
+app.route('/api/payment-methods', paymentRoutes);           // T4.2: payout methods for withdrawals (was orphaned)
+app.route('/api/ad-blocks', adBlockRoutes);                 // T4.3: ad blocking (was orphaned)
+app.route('/api/ad-reports', adReportRoutes);               // T4.3: ad reporting (was orphaned)
+app.route('/api/blocks', blocksRoutes);                     // blocking users (T3.x: user Blocks APIs)
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);

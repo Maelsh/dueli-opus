@@ -228,7 +228,8 @@ export function getHostScript(lang: Language): string {
         // ===== Get Last Chunk Index =====
         async function getLastChunkIndex() {
             try {
-                const res = await fetch(ffmpegUrl + '/playlist.php?id=' + competitionId);
+                // T1.3: CORS-safe proxy
+                const res = await fetch('/api/chunks/playlist/' + competitionId);
                 if (res.ok) {
                     const data = await res.json();
                     if (data.chunks && data.chunks.length > 0) {
@@ -277,15 +278,15 @@ export function getHostScript(lang: Language): string {
 
         window.connect = async function() {
             if (isConnecting) {
-                console.log('[DEBUG] Already connecting, ignoring click');
+                debugLog('[DEBUG] Already connecting, ignoring click');
                 return;
             }
-            console.log('[DEBUG] window.connect called');
-            console.log('[DEBUG] ms.localStream:', ms.localStream);
+            debugLog('[DEBUG] window.connect called');
+            debugLog('[DEBUG] ms.localStream:', ms.localStream);
             
             if (!ms.localStream) {
                 log('${tr.share_screen}!', 'warn');
-                console.log('[DEBUG] No localStream - exiting connect');
+                debugLog('[DEBUG] No localStream - exiting connect');
                 return;
             }
             
@@ -345,17 +346,17 @@ export function getHostScript(lang: Language): string {
             ms.pc = new RTCPeerConnection({
                 iceServers: dynamicIceServers
             });
-            console.log('[DEBUG] pc created:', ms.pc);
+            debugLog('[DEBUG] pc created:', ms.pc);
             
             // Add tracks from ms.localStream
             ms.localStream.getTracks().forEach(function(track) { 
                 ms.pc.addTrack(track, ms.localStream); 
-                console.log('[DEBUG] Added track:', track.kind);
+                debugLog('[DEBUG] Added track:', track.kind);
             });
             
             // Handle remote tracks
             ms.pc.ontrack = function(event) {
-                console.log('[DEBUG] ontrack:', event.track.kind);
+                debugLog('[DEBUG] ontrack:', event.track.kind);
                 if (!remoteStream.getTracks().find(function(t) { return t.id === event.track.id; })) {
                     remoteStream.addTrack(event.track);
                     log('✅ Received remote ' + event.track.kind + ' track', 'success');
@@ -374,17 +375,17 @@ export function getHostScript(lang: Language): string {
             
             // Connection state changes
             ms.pc.onconnectionstatechange = function() {
-                console.log('[DEBUG] onconnectionstatechange:', ms.pc.connectionState);
+                debugLog('[DEBUG] onconnectionstatechange:', ms.pc.connectionState);
                 log('📡 ' + ms.pc.connectionState, ms.pc.connectionState === 'connected' ? 'success' : 'info');
                 
                 if (ms.pc.connectionState === 'connected') {
-                    console.log('[DEBUG] Connection successful!');
+                    debugLog('[DEBUG] Connection successful!');
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
                     startRecording();
                     isConnecting = false; // Allow future re-connections
                 } else if (ms.pc.connectionState === 'failed') {
-                    console.log('[DEBUG] Connection failed!');
+                    debugLog('[DEBUG] Connection failed!');
                     updateStatus('${tr.error}', 'red');
                     updateConnectionButtons(false);
                     isConnecting = false;
@@ -394,14 +395,14 @@ export function getHostScript(lang: Language): string {
             };
             
             ms.pc.oniceconnectionstatechange = function() {
-                console.log('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
+                debugLog('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
             };
             
-            // Setup WebSocket signaling (will send offer after connected)
+            // Setup signaling (HTTP polling; will send offer after connected)
             setupSignaling(roomCreated);
         }
         
-        // ===== Signaling (WebSocket) =====
+        // ===== Signaling (HTTP Polling) =====
         function sendSignal(type, data) {
             if (signalingManager) {
                 signalingManager.sendSignal(type, data);
@@ -410,6 +411,9 @@ export function getHostScript(lang: Language): string {
         
         function setupSignaling(roomData) {
             signalingManager = new window.SignalingManager({
+                // Signaling URL is server-injected from STREAMING_URL env / DEFAULT_STREAMING_URL
+                // (see src/modules/pages/live/scripts/server/core.ts) — single source of truth,
+                // do not hardcode a literal URL here.
                 signalingUrl: streamServerUrl,
                 roomId: roomData.roomId,
                 role: 'host',
@@ -417,24 +421,24 @@ export function getHostScript(lang: Language): string {
                 onSignal: async function(data) {
                     try {
                         if (data.signalType === 'answer') {
-                            console.log('[DEBUG] Processing ANSWER signal');
+                            debugLog('[DEBUG] Processing ANSWER signal');
                             await ms.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
                             hasRemoteDescription = true;
                             // معالجة ICE candidates المعلقة
                             while (pendingIceCandidates.length > 0) {
                                 const ice = pendingIceCandidates.shift();
                                 await ms.pc.addIceCandidate(new RTCIceCandidate(ice));
-                                console.log('[DEBUG] Added pending ICE candidate');
+                                debugLog('[DEBUG] Added pending ICE candidate');
                             }
                         } else if (data.signalType === 'ice') {
                             if (hasRemoteDescription) {
                                 await ms.pc.addIceCandidate(new RTCIceCandidate(data.signalData));
                             } else {
                                 pendingIceCandidates.push(data.signalData);
-                                console.log('[DEBUG] Queued ICE candidate (waiting for answer)');
+                                debugLog('[DEBUG] Queued ICE candidate (waiting for answer)');
                             }
                         } else if (data.signalType === 'request_offer') {
-                            console.log('[DEBUG] Guest requested offer - Renegotiating...');
+                            debugLog('[DEBUG] Guest requested offer - Renegotiating...');
                             const offer = await ms.pc.createOffer();
                             await ms.pc.setLocalDescription(offer);
                             sendSignal('offer', offer);
@@ -455,10 +459,10 @@ export function getHostScript(lang: Language): string {
                 onConnected: async function() {
                     // إرسال Offer بعد اكتمال الاتصال
                     const offer = await ms.pc.createOffer();
-                    console.log('[DEBUG] Offer created');
+                    debugLog('[DEBUG] Offer created');
                     await ms.pc.setLocalDescription(offer);
                     sendSignal('offer', offer);
-                    console.log('[DEBUG] Offer sent');
+                    debugLog('[DEBUG] Offer sent');
                 }
             });
             

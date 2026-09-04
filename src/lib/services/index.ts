@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Services Module Exports
  * تصدير وحدة الخدمات
  */
@@ -9,5 +9,7 @@ export { AdCampaignManager } from './AdCampaignManager';
 export { ArbitrationService } from './ArbitrationService';
 export { LivePayoutEngine } from './LivePayoutEngine';
 export { EventPusher } from './EventPusher';
+export { Sanitize } from './Sanitize';
 export { ScheduledTaskService } from './ScheduledTaskService';
 export { RecommendationEngine } from './RecommendationEngine';
+

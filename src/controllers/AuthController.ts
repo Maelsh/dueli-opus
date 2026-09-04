@@ -50,6 +50,12 @@ export class AuthController extends BaseController {
 
             const userModel = new UserModel(DB);
 
+            // T-AUTH: If the email belongs to a social-login account, guide the user
+            const existingSocial = await userModel.findByEmail(body.email);
+            if (existingSocial && (existingSocial as any).oauth_provider) {
+                return this.error(c, this.t('auth_email_is_social', c));
+            }
+
             if (await userModel.emailExists(body.email)) {
                 return this.error(c, this.t('auth_email_exists', c));
             }
@@ -209,10 +215,24 @@ export class AuthController extends BaseController {
                 return this.error(c, this.t('auth_invalid_credentials', c), 401);
             }
 
-            // Check password
-            const passwordHash = await CryptoUtils.hashPassword(body.password);
-            if (passwordHash !== (user as any).password_hash) {
+            // Check password (T1.4: PBKDF2 + timing-safe verify with legacy fallback)
+            if (!(await CryptoUtils.verifyPassword(body.password, (user as any).password_hash))) {
+                // T-AUTH: Social-login account without a known password →
+                // direct the user to their provider or to password reset
+                if ((user as any).oauth_provider) {
+                    return this.error(c, this.t('auth_social_no_password', c), 401);
+                }
                 return this.error(c, this.t('auth_invalid_credentials', c), 401);
+            }
+
+            // T1.4: Transparently upgrade legacy SHA-256 hashes to PBKDF2
+            if (CryptoUtils.isLegacyHash((user as any).password_hash)) {
+                try {
+                    const upgraded = await CryptoUtils.hashPassword(body.password);
+                    await userModel.updatePasswordHash(user.id, upgraded);
+                } catch (upgradeError) {
+                    console.error('[Login] Legacy hash upgrade failed:', upgradeError);
+                }
             }
 
             // Check verified
@@ -411,6 +431,11 @@ export class AuthController extends BaseController {
 
             const passwordHash = await CryptoUtils.hashPassword(body.newPassword);
             await userModel.updatePassword(user.id, passwordHash);
+
+            // T1.4 FIX (BUG-05): destroy all existing sessions so a potential
+            // attacker holding an old session is logged out immediately
+            const sessionModel = new SessionModel(DB);
+            await sessionModel.deleteByUser(user.id);
 
             return this.success(c, { message: this.t('auth_password_changed', c) });
         } catch (error) {

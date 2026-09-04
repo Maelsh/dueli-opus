@@ -88,7 +88,7 @@ export class HomePage {
                 const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'upcoming';
 
                 const [recommendedRes, dialogueRes, scienceRes, talentsRes] = await Promise.all([
-                    CompetitionService.list({ status: statusParam, limit: 15 }),
+                    this.fetchRecommended(statusParam),
                     CompetitionService.list({ status: statusParam, category: 'dialogue', limit: 15 }),
                     CompetitionService.list({ status: statusParam, category: 'science', limit: 15 }),
                     CompetitionService.list({ status: statusParam, category: 'talents', limit: 15 })
@@ -129,8 +129,28 @@ export class HomePage {
         }
     }
 
-    static setMainTab(tab: 'live' | 'upcoming' | 'recorded') {
-        // Prevent accessing upcoming tab if not logged in
+    /**
+     * T2.3: Suggested section powered by the Recommendation Engine
+     * (language > country > followed > newest > most viewed > top rated),
+     * with graceful fallback to the plain list on any failure.
+     */
+    private static async fetchRecommended(statusParam: string): Promise<any> {
+        try {
+            const headers: Record<string, string> = {};
+            if (State.sessionId) headers['Authorization'] = 'Bearer ' + State.sessionId;
+            const res = await fetch(`/api/recommendations?limit=15&lang=${State.lang}`, { headers });
+            const data: any = await res.json();
+            if (data.success && data.data?.competitions?.length > 0) {
+                return { success: true, data: data.data.competitions };
+            }
+        } catch (err) {
+            console.error('[HomePage] recommendations failed, falling back:', err);
+        }
+        // Graceful degradation: plain list keeps the section non-empty
+        return CompetitionService.list({ status: statusParam, limit: 15 });
+    }
+
+    static setMainTab(tab: 'live' | 'upcoming' | 'recorded') {        // Prevent accessing upcoming tab if not logged in
         if (tab === 'upcoming' && !State.currentUser) {
             tab = 'live'; // Fallback to live tab
         }

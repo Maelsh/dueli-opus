@@ -44,12 +44,19 @@ export class SessionModel {
 
         if (!result) return null;
 
+        // T1.4: Banned users (is_active = 0) lose their sessions immediately
         const user = await this.queryOne(
-            'SELECT * FROM users WHERE id = ?',
+            'SELECT * FROM users WHERE id = ? AND is_active = 1',
             result.user_id
         );
 
-        return user ? { session: result, user } : null;
+        if (!user) {
+            // Clean up the orphaned session of a banned/deleted user
+            await this.deleteBySessionId(sessionId);
+            return null;
+        }
+
+        return { session: result, user };
     }
 
     /**

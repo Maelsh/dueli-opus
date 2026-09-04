@@ -80,7 +80,8 @@ export class ChunkPlayer {
      * تحميل playlist من السيرفر
      */
     private async loadPlaylist(): Promise<void> {
-        const url = `${this.config.serverUrl}/playlist.php?id=${this.config.competitionId}`;
+        // T1.3: use our CORS-safe proxy instead of the remote playlist.php
+        const url = `/api/chunks/playlist/${this.config.competitionId}`;
         const res = await fetch(url);
 
         if (!res.ok) {

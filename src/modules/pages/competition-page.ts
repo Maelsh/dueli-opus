@@ -90,6 +90,32 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           
           competitionData = data.data;
           renderCompetition(competitionData);
+
+          // T3.2: universal lifecycle countdown (join window / start window / live limit)
+          if (competitionData.timer && competitionData.timer.deadline && typeof window.createCountdownTimer === 'function') {
+            const timerHost = document.getElementById('countdownTimerHost');
+            if (timerHost) {
+              timerHost.innerHTML = '';
+              window.createCountdownTimer({
+                competitionId: competitionId,
+                deadline: competitionData.timer.deadline,
+                type: competitionData.timer.type,
+                labelKey: competitionData.timer.labelKey
+              });
+            }
+          }
+          
+          // T2.1: Auto-open invite panel when arriving from creation (?invite=1)
+          // Only if current user is creator, competition still pending without opponent
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('invite') === '1'
+              && window.currentUser
+              && window.currentUser.id === competitionData.creator_id
+              && !competitionData.opponent_id
+              && competitionData.status === 'pending'
+              && window.openInvitePanel) {
+            setTimeout(() => window.openInvitePanel(competitionId), 400);
+          }
         } catch (err) {
           console.error(err);
         }
@@ -135,6 +161,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   </span>
                 </div>
                 <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">\${comp.title}</h1>
+                <!-- T3.2: lifecycle countdown host (join/start/live-limit) -->
+                <div id="countdownTimerHost" class="mt-3"></div>
               </div>
             </div>
             
@@ -298,6 +326,62 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     </div>
                   </div>
                 </div>
+
+                \${isCompleted && comp.winner_id ? \`
+                  <!-- T2.4: Winner banner (decided by viewer ratings) -->
+                  <div class="card p-5 border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/10">
+                    <div class="flex items-center justify-center gap-3 text-center">
+                      <i class="fas fa-trophy text-3xl text-amber-500"></i>
+                      <div>
+                        <p class="text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">\${tr.rate_winner_banner || 'Winner by public rating'}</p>
+                        <p class="text-lg font-black text-gray-900 dark:text-white">
+                          \${comp.winner_id === comp.creator_id ? comp.creator_name : (comp.opponent_name || '')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                \` : ''}
+
+                \${isCompleted && window.currentUser && !isCreator && !isOpponent ? \`
+                  <!-- T2.4: Viewer rating card -->
+                  <div class="card p-6" id="rateCard">
+                    <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">
+                      <i class="fas fa-star text-amber-400 ml-1"></i>
+                      \${tr.rate_title || 'Rate the competitors'}
+                    </h3>
+                    <div class="space-y-4">
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <img src="\${comp.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.creator_name}" class="w-9 h-9 rounded-full" alt="">
+                          <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.creator_name}</span>
+                        </div>
+                        <div class="flex gap-1" dir="ltr">
+                          \${[1,2,3,4,5].map(v => \`
+                            <button onclick="submitRating(\${comp.creator_id}, \${v}, this)" data-val="\${v}"
+                              class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
+                              aria-label="\${v}/5"><i class="fas fa-star"></i></button>
+                          \`).join('')}
+                        </div>
+                      </div>
+                      \${comp.opponent_id ? \`
+                      <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <img src="\${comp.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.opponent_name}" class="w-9 h-9 rounded-full" alt="">
+                          <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.opponent_name}</span>
+                        </div>
+                        <div class="flex gap-1" dir="ltr">
+                          \${[1,2,3,4,5].map(v => \`
+                            <button onclick="submitRating(\${comp.opponent_id}, \${v}, this)" data-val="\${v}"
+                              class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
+                              aria-label="\${v}/5"><i class="fas fa-star"></i></button>
+                          \`).join('')}
+                        </div>
+                      </div>
+                      \` : ''}
+                    </div>
+                    <p id="rateMsg" class="hidden mt-3 text-sm text-green-600 dark:text-green-400 font-semibold"></p>
+                  </div>
+                \` : ''}
                 
                 <div class="card p-6">
                   <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">\${tr.competition_rules}</h3>
@@ -341,15 +425,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     <h3 class="font-bold text-gray-900 dark:text-white">\${tr.live_chat}</h3>
                   </div>
                   <div class="h-80 overflow-y-auto p-4 space-y-3" id="chatMessages">
-                    \${comp.comments?.length ? comp.comments.map(cm => \`
-                      <div class="flex gap-2 animate-fade-in">
-                        <img src="\${cm.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + cm.username}" class="w-8 h-8 rounded-full">
-                        <div>
-                          <p class="text-sm"><span class="font-semibold text-purple-600">\${cm.display_name}</span></p>
-                          <p class="text-sm text-gray-600 dark:text-gray-300">\${cm.content}</p>
-                        </div>
-                      </div>
-                    \`).join('') : '<p class="text-center text-gray-400">' + tr.no_comments_yet + '</p>'}
+                    \${comp.comments?.length ? renderCommentsTree(comp.comments) : '<p class="text-center text-gray-400">' + tr.no_comments_yet + '</p>'}
                   </div>
                   <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                     \${window.currentUser ? \`
@@ -441,7 +517,97 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           loadCompetition();
         } catch (err) { console.error(err); }
       }
-      
+
+      // T2.4: Submit a viewer rating for a competitor (1-5 stars)
+      window.submitRating = async function(competitorId, value, btn) {
+        if (!window.currentUser) { showLoginModal(); return; }
+        const starRow = btn.parentElement;
+        const stars = starRow.querySelectorAll('.rate-star');
+        // Highlight up to the chosen star
+        stars.forEach(s => {
+          const on = parseInt(s.dataset.val) <= value;
+          s.classList.toggle('text-amber-400', on);
+          s.classList.toggle('text-gray-300', !on);
+          s.classList.toggle('dark:text-gray-600', !on);
+        });
+        try {
+          btn.disabled = true;
+          const res = await fetch('/api/competitions/' + competitionId + '/rate?lang=' + (window.lang || 'ar'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '')
+            },
+            body: JSON.stringify({ competitor_id: competitorId, rating: value })
+          });
+          const data = await res.json();
+          if (data.success) {
+            // Lock this row's stars
+            stars.forEach(s => { s.disabled = true; s.classList.remove('hover:text-amber-400'); });
+            const msg = document.getElementById('rateMsg');
+            if (msg) { msg.textContent = tr.rate_thanks || 'Thanks for rating!'; msg.classList.remove('hidden'); }
+            showToast(tr.rate_thanks || 'Thanks for rating!', 'success');
+          } else {
+            showToast(data.error || 'Rating failed', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast(tr.rate_failed || 'Rating failed', 'error');
+        }
+      };
+
+      // T3.3: nested replies state
+      let replyToComment = null;
+
+      // T3.3: render comments as a tree — top-level posts with indented replies
+      function commentHTML(cm) {
+        return \`
+          <div class="flex gap-2 animate-fade-in">
+            <img src="\${cm.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + cm.username}" class="w-8 h-8 rounded-full flex-shrink-0" alt="">
+            <div class="min-w-0">
+              <p class="text-sm"><span class="font-semibold text-purple-600">\${cm.display_name}</span></p>
+              <p class="text-sm text-gray-600 dark:text-gray-300 break-words">\${cm.content}</p>
+              \${window.currentUser ? \`
+                <span class="inline-flex items-center gap-3 mt-0.5">
+                  <button onclick="setReplyTo(\${cm.id}, '\${(cm.display_name || '').replace(/'/g, '')}')" class="text-xs text-gray-400 hover:text-purple-500 transition-colors">
+                    <i class="fas fa-reply mr-1"></i>\${tr.reply || 'Reply'}
+                  </button>
+                  <button onclick="showReportModal('comment', \${cm.id})" class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="\${tr.report || 'Report'}">
+                    <i class="fas fa-flag"></i>
+                  </button>
+                </span>
+              \` : ''}
+            </div>
+          </div>
+        \`;
+      }
+
+      function renderCommentsTree(comments) {
+        const tops = comments.filter(function(c){ return !c.parent_id; });
+        const byParent = {};
+        comments.forEach(function(c){
+          if (c.parent_id) {
+            if (!byParent[c.parent_id]) byParent[c.parent_id] = [];
+            byParent[c.parent_id].push(c);
+          }
+        });
+        return tops.map(function(cm){
+          const replies = (byParent[cm.id] || []).map(function(r){
+            return '<div class="ms-7 ps-2 border-s-2 border-purple-100 dark:border-purple-900">' + commentHTML(r) + '</div>';
+          }).join('');
+          return commentHTML(cm) + replies;
+        }).join('');
+      }
+
+      window.setReplyTo = function(commentId, authorName) {
+        replyToComment = commentId;
+        const input = document.getElementById('commentInput');
+        if (input) {
+          input.placeholder = tr.replying_to ? (tr.replying_to + ' ' + authorName) : ('Reply to ' + authorName);
+          input.focus();
+        }
+      };
+
       async function sendComment(e) {
         e.preventDefault();
         if (!window.currentUser) return;
@@ -455,10 +621,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             body: JSON.stringify({
               user_id: window.currentUser.id,
               content: content,
-              is_live: competitionData?.status === 'live'
+              is_live: competitionData?.status === 'live',
+              parent_id: replyToComment || null
             })
           });
           input.value = '';
+          input.placeholder = tr.add_comment + '...';
+          replyToComment = null;
           loadCompetition();
         } catch (err) { console.error(err); }
       }
@@ -522,9 +691,36 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } catch (err) { console.error(err); }
       }
       
-      function showReportModal() {
+      // T3.3: report modal now supports any target (competition | comment | user)
+      const REPORT_REASONS = {
+        competition: ['spam', 'misleading', 'inappropriate_content', 'copyright', 'other'],
+        comment: ['spam', 'harassment', 'hate_speech', 'inappropriate_content', 'other'],
+        user: ['spam', 'harassment', 'fake_account', 'inappropriate_content', 'other']
+      };
+      const REPORT_REASON_LABELS = {
+        spam: () => tr.report_spam || 'Spam',
+        harassment: () => tr.report_harassment || 'Harassment or bullying',
+        hate_speech: () => tr.report_hate || 'Hate speech',
+        inappropriate_content: () => tr.report_inappropriate || 'Inappropriate content',
+        copyright: () => tr.report_copyright || 'Copyright violation',
+        misleading: () => tr.report_misleading || 'Misleading',
+        fake_account: () => tr.report_fake || 'Fake account',
+        other: () => tr.other || 'Other'
+      };
+
+      function showReportModal(targetType, targetId) {
         if (!window.currentUser) { showLoginModal(); return; }
-        
+        targetType = targetType || 'competition';
+        targetId = targetId || competitionId;
+        window._reportTarget = { type: targetType, id: targetId };
+        const reasonOptions = (REPORT_REASONS[targetType] || REPORT_REASONS.competition)
+          .map(r => \`
+            <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
+              <input type="radio" name="reason" value="\${r}" class="text-red-600">
+              <span>\${(REPORT_REASON_LABELS[r] || (() => r))()}</span>
+            </label>
+          \`).join('');
+
         // Create report modal
         const modal = document.createElement('div');
         modal.id = 'reportModal';
@@ -536,22 +732,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               \${tr.report || 'Report'}
             </h3>
             <div class="space-y-3 mb-6">
-              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                <input type="radio" name="reason" value="inappropriate" class="text-red-600">
-                <span>\${tr.report_inappropriate || 'Inappropriate content'}</span>
-              </label>
-              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                <input type="radio" name="reason" value="spam" class="text-red-600">
-                <span>\${tr.report_spam || 'Spam or misleading'}</span>
-              </label>
-              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                <input type="radio" name="reason" value="harassment" class="text-red-600">
-                <span>\${tr.report_harassment || 'Harassment or bullying'}</span>
-              </label>
-              <label class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                <input type="radio" name="reason" value="other" class="text-red-600">
-                <span>\${tr.other || 'Other'}</span>
-              </label>
+              \${reasonOptions}
             </div>
             <div class="flex gap-3">
               <button onclick="closeReportModal()" class="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
@@ -578,7 +759,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           showToast(tr.select_reason || 'Please select a reason', 'error');
           return;
         }
-        
+        const target = window._reportTarget || { type: 'competition', id: competitionId };
+
         try {
           const res = await fetch('/api/reports', {
             method: 'POST',
@@ -587,8 +769,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              target_type: 'competition',
-              target_id: competitionId,
+              target_type: target.type,
+              target_id: target.id,
               reason: reason
             })
           });
@@ -713,6 +895,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         }
         
+        // T1.3 FIX: VOD not ready → poll every 15s (up to 5 min) while
+        // the ffmpeg server finalizes the merged recording.
+        function handleVodNotReady() {
+          showStatusOverlay(tr.recording_processing || 'جاري تجهيز التسجيل...');
+          if (!window._vodRetryCount) window._vodRetryCount = 0;
+          if (window._vodRetryCount < 20) {
+            window._vodRetryCount++;
+            setTimeout(function() { initEmbeddedViewer(); }, 15000);
+          } else {
+            showStatusOverlay(tr.recording_not_ready || 'Recording not available');
+          }
+        }
+        
         try {
           // إلغاء أي استطلاع قديم عند إعادة التشغيل
           if (window._statusPollInterval) { clearInterval(window._statusPollInterval); window._statusPollInterval = null; }
@@ -808,17 +1003,21 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               return;
             }
             
-            // Fetch playlist from ffmpeg server
-            const playlistRes = await fetch(streamServerUrl + '/playlist.php?id=' + competitionId);
+            // Fetch playlist via our server-side proxy (T1.3: remote playlist.php
+            // sends no CORS headers — direct browser calls were blocked)
+            const playlistRes = await fetch('/api/chunks/playlist/' + competitionId);
+            
+            // T1.3 FIX: playlist may not be ready right after the stream ends
+            // (ffmpeg merge takes time) — poll instead of dead-ending.
             if (!playlistRes.ok) {
-              showStatusOverlay(tr.recording_not_ready || 'Recording not ready yet');
-              return;
+                handleVodNotReady();
+                return;
             }
             const playlistData = await playlistRes.json();
             
             if (!playlistData.chunks || playlistData.chunks.length === 0) {
-              showStatusOverlay(tr.recording_not_ready || 'Recording not ready yet');
-              return;
+                handleVodNotReady();
+                return;
             }
             
             embeddedCurrentPlayer = new window.SmartVodPlayer({
@@ -832,6 +1031,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               onChunkLoaded: function(index, loaded) {},
               onReady: function(info) {
                 hideStatusOverlay();
+                window._vodRetryCount = 0; // T1.3: reset poll counter on success
                 const vodControls = document.getElementById('embeddedVodControls');
                 if (vodControls) vodControls.classList.remove('hidden');
                 embeddedSetupVodControls(videoPlayers[0], info.totalDuration);

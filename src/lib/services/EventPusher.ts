@@ -24,9 +24,11 @@ import { SseEventLogModel, SseEventType } from '../../models/SseEventLogModel';
 
 export class EventPusher {
     private readonly eventLog: SseEventLogModel;
+    private readonly env: any;
 
-    constructor(private readonly db: D1Database) {
+    constructor(private readonly db: D1Database, env?: unknown) {
         this.eventLog = new SseEventLogModel(db);
+        this.env = env;
     }
 
     // ----------------------------------------------------------
@@ -36,6 +38,10 @@ export class EventPusher {
     /**
      * Persist an event to D1 and format it as an SSE message string.
      * Controllers call this, then inject into an active SSE stream.
+     *
+     * T5.1: also forwards to the Durable Objects realtime worker when
+     * REALTIME_WS_URL + REALTIME_PUBLISH_SECRET are configured. Fire-and-forget:
+     * SSE/D1 delivery is never blocked by the worker.
      */
     async publish(
         channel: string,
@@ -43,6 +49,25 @@ export class EventPusher {
         payload: Record<string, unknown>
     ): Promise<{ id: number; sseMessage: string }> {
         const log = await this.eventLog.publish(channel, eventType, payload);
+
+        // Best-effort push to the realtime DO worker
+        const wsUrl = (this.env as any).REALTIME_WS_URL;
+        const publishSecret = (this.env as any).REALTIME_PUBLISH_SECRET;
+        if (wsUrl && publishSecret) {
+            try {
+                const base = new URL(wsUrl);
+                await fetch(`${base.protocol}//${base.host}/publish`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Publish-Secret': publishSecret
+                    },
+                    body: JSON.stringify({ channel, event: eventType, payload, id: log.id })
+                });
+            } catch (e) {
+                console.error('[EventPusher] realtime worker forward failed:', e);
+            }
+        }
 
         return {
             id: log.id,

@@ -253,7 +253,7 @@ export class SearchModel {
             FROM users u
             WHERE u.id != ?
             AND u.id NOT IN (
-                SELECT following_id FROM user_follows WHERE follower_id = ?
+                SELECT following_id FROM follows WHERE follower_id = ?
             )
             ORDER BY 
                 relevance_score DESC,

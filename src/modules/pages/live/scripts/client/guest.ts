@@ -50,8 +50,8 @@ export function getGuestScript(lang: Language): string {
         window.joinRoom = async function() {
             if (isJoining) return;
             
-            console.log('[DEBUG] window.joinRoom called');
-            console.log('[DEBUG] ms.localStream:', ms.localStream);
+            debugLog('[DEBUG] window.joinRoom called');
+            debugLog('[DEBUG] ms.localStream:', ms.localStream);
             
             const compIdInput = document.getElementById('compIdInput');
             const competitionId = compIdInput.value.trim();
@@ -64,7 +64,7 @@ export function getGuestScript(lang: Language): string {
             
             if (!ms.localStream) {
                 log('${tr.share_screen}!', 'warn');
-                console.log('[DEBUG] No localStream - exiting joinRoom');
+                debugLog('[DEBUG] No localStream - exiting joinRoom');
                 return;
             }
             
@@ -91,17 +91,17 @@ export function getGuestScript(lang: Language): string {
             ms.pc = new RTCPeerConnection({
                 iceServers: dynamicIceServers
             });
-            console.log('[DEBUG] pc created:', ms.pc);
+            debugLog('[DEBUG] pc created:', ms.pc);
             
             // Add local tracks
             ms.localStream.getTracks().forEach(function(track) { 
                 ms.pc.addTrack(track, ms.localStream); 
-                console.log('[DEBUG] Added track:', track.kind);
+                debugLog('[DEBUG] Added track:', track.kind);
             });
             
             // Handle remote track
             ms.pc.ontrack = function(event) {
-                console.log('[DEBUG] ontrack:', event.track.kind);
+                debugLog('[DEBUG] ontrack:', event.track.kind);
                 if (event.streams[0]) {
                     document.getElementById('remoteVideo').srcObject = event.streams[0];
                     updateStatus('${tr.live} ✓', 'green');
@@ -118,16 +118,16 @@ export function getGuestScript(lang: Language): string {
             
             // Connection state
             ms.pc.onconnectionstatechange = function() {
-                console.log('[DEBUG] guest onconnectionstatechange:', ms.pc.connectionState);
+                debugLog('[DEBUG] guest onconnectionstatechange:', ms.pc.connectionState);
                 log('📡 ' + ms.pc.connectionState, ms.pc.connectionState === 'connected' ? 'success' : 'info');
                 
                 if (ms.pc.connectionState === 'connected') {
-                    console.log('[DEBUG] Guest connection successful!');
+                    debugLog('[DEBUG] Guest connection successful!');
                     updateStatus('${tr.live} ✓', 'green');
                     updateConnectionButtons(true);
                     isJoining = false; // Allow future re-joins
                 } else if (ms.pc.connectionState === 'failed') {
-                    console.log('[DEBUG] Guest connection failed!');
+                    debugLog('[DEBUG] Guest connection failed!');
                     updateStatus('${tr.error}', 'red');
                     updateConnectionButtons(false);
                     isJoining = false;
@@ -138,11 +138,14 @@ export function getGuestScript(lang: Language): string {
             };
             
             ms.pc.oniceconnectionstatechange = function() {
-                console.log('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
+                debugLog('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
             };
             
-            // Setup WebSocket signaling
+            // Setup signaling (HTTP polling)
             signalingManager = new window.SignalingManager({
+                // Signaling URL is server-injected from STREAMING_URL env / DEFAULT_STREAMING_URL
+                // (see src/modules/pages/live/scripts/server/core.ts) — single source of truth,
+                // do not hardcode a literal URL here.
                 signalingUrl: streamServerUrl,
                 roomId: actualRoom,
                 role: 'opponent',
@@ -150,7 +153,7 @@ export function getGuestScript(lang: Language): string {
                 onSignal: async function(data) {
                     try {
                         if (data.signalType === 'offer') {
-                            console.log('[DEBUG] Processing OFFER signal');
+                            debugLog('[DEBUG] Processing OFFER signal');
                             await ms.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
                             hasRemoteDescription = true;
                             
@@ -158,20 +161,20 @@ export function getGuestScript(lang: Language): string {
                             while (pendingIceCandidates.length > 0) {
                                 const ice = pendingIceCandidates.shift();
                                 await ms.pc.addIceCandidate(new RTCIceCandidate(ice));
-                                console.log('[DEBUG] Added pending ICE candidate');
+                                debugLog('[DEBUG] Added pending ICE candidate');
                             }
                             
                             const answer = await ms.pc.createAnswer();
                             await ms.pc.setLocalDescription(answer);
                             sendSignal('answer', answer);
-                            console.log('[DEBUG] Sent ANSWER');
+                            debugLog('[DEBUG] Sent ANSWER');
                         } else if (data.signalType === 'ice') {
                             if (hasRemoteDescription) {
                                 await ms.pc.addIceCandidate(new RTCIceCandidate(data.signalData));
                             } else {
                                 // تخزين ICE حتى يتم setRemoteDescription
                                 pendingIceCandidates.push(data.signalData);
-                                console.log('[DEBUG] Queued ICE candidate (waiting for offer)');
+                                debugLog('[DEBUG] Queued ICE candidate (waiting for offer)');
                             }
                         }
                     } catch (err) {
@@ -189,7 +192,7 @@ export function getGuestScript(lang: Language): string {
                 },
                 onConnected: function() {
                     // طلب Offer من المضيف بعد اكتمال الاتصال
-                    console.log('[DEBUG] Connected - requesting offer from host');
+                    debugLog('[DEBUG] Connected - requesting offer from host');
                     sendSignal('request_offer', {});
                 }
             });

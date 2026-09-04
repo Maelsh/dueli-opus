@@ -10,6 +10,7 @@ import { Toast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
 import { NotificationsUI } from '../ui/NotificationsUI';
 import { MessagesUI } from '../ui/MessagesUI';
+import { SseService } from './SseService';
 import { t } from '../../i18n';
 
 /**
@@ -93,6 +94,8 @@ export class AuthService {
         CookieUtils.delete('sessionId');
         State.currentUser = null;
         State.sessionId = null;
+        // T2.2: Close the real-time channel on logout
+        SseService.disconnect();
     }
 
     /**
@@ -133,6 +136,8 @@ export class AuthService {
             // Initialize notifications and messages
             NotificationsUI.init();
             MessagesUI.init();
+            // T2.2: Open the real-time SSE channel for this user
+            SseService.connect();
         } else {
             // User is not logged in
             if (authSection) authSection.classList.remove('hidden');

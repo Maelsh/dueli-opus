@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file src/client/ui/InvitePanel.ts
  * @description Dynamic floating Invite Opponent panel (Task 10)
  * لوحة دعوة الخصم العائمة الديناميكية
@@ -53,6 +53,9 @@ export class InvitePanel {
     private static users: OnlineUser[] = [];
     private static total: number = 0;
     private static isLoading: boolean = false;
+    // T2.1: hover profile cards
+    private static statsCache: Map<number, any> = new Map();
+    private static hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * Open the invite panel for a specific competition
@@ -232,7 +235,7 @@ export class InvitePanel {
      * Get compatibility bar width %
      */
     private static getCompatibilityPercent(score: number): number {
-        // Max possible score ≈ 100 (30+25+20+15+10+5), normalize to percentage
+        // Max possible score â‰ˆ 100 (30+25+20+15+10+5), normalize to percentage
         return Math.min(Math.round((score / 100) * 100), 100);
     }
 
@@ -362,8 +365,11 @@ export class InvitePanel {
             const rating = user.average_rating ? user.average_rating.toFixed(1) : '—';
 
             return `
-                <div class="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all animate-fade-in-card" style="animation-delay: ${index * 50}ms">
-                    <div class="flex items-center gap-3">
+                <div class="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all animate-fade-in-card relative"
+                     style="animation-delay: ${index * 50}ms"
+                     onmouseenter="window._invitePanelHover(${user.id}, this)"
+                     onmouseleave="window._invitePanelHoverEnd()">
+                <div class="flex items-center gap-3">
                         <!-- Avatar + Status -->
                         <div class="relative flex-shrink-0">
                             <img 
@@ -387,10 +393,10 @@ export class InvitePanel {
                             </div>
                             <div class="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                                 <span>${this.getStatusText(user)}</span>
-                                <span>·</span>
-                                <span>⭐ ${rating}</span>
-                                <span>·</span>
-                                <span>🏆 ${user.total_wins || 0}</span>
+                                <span>آ·</span>
+                                <span>â­گ ${rating}</span>
+                                <span>آ·</span>
+                                <span>ًںڈ† ${user.total_wins || 0}</span>
                             </div>
                             <!-- Compatibility Bar -->
                             <div class="flex items-center gap-2 mt-1.5">
@@ -426,9 +432,119 @@ export class InvitePanel {
         if (statusEl) {
             statusEl.innerHTML = `
                 <i class="fas fa-circle text-green-500 text-[6px] mr-1 animate-pulse"></i>
-                ${this.total} ${t('users', State.lang)} · ${t('matchmaking.auto_updating', State.lang)}
+                ${this.total} ${t('users', State.lang)} آ· ${t('matchmaking.auto_updating', State.lang)}
             `;
         }
+    }
+
+    /**
+     * T2.1: Show detailed hover card with competitor stats (delayed to avoid flicker)
+     */
+    static showHoverCard(userId: number, anchorEl: HTMLElement): void {
+        this.hideHoverCard();
+        this.hoverTimer = setTimeout(() => { void this.renderHoverCard(userId, anchorEl); }, 350);
+    }
+
+    /**
+     * T2.1: Hide the hover card
+     */
+    static hideHoverCard(): void {
+        if (this.hoverTimer) {
+            clearTimeout(this.hoverTimer);
+            this.hoverTimer = null;
+        }
+        document.getElementById('inviteHoverCard')?.remove();
+    }
+
+    private static async renderHoverCard(userId: number, anchorEl: HTMLElement): Promise<void> {
+        const user = this.users.find(u => u.id === userId);
+        if (!user) return;
+
+        let stats: any = this.statsCache.get(userId);
+        if (!stats) {
+            try {
+                const res = await ApiClient.get<any>(`/api/recommendations/competitor-stats/${userId}`);
+                stats = res?.data || { wins: 0, losses: 0, top_categories: [] };
+                this.statsCache.set(userId, stats);
+            } catch {
+                stats = { wins: 0, losses: 0, top_categories: [] };
+            }
+        }
+
+        const lang = State.lang;
+        const isRtl = lang === 'ar';
+        const rect = anchorEl.getBoundingClientRect();
+        const cardWidth = 280;
+        // RTL: card goes left of cursor; LTR: right (flip when near edge)
+        let left = isRtl ? rect.left - cardWidth - 12 : rect.right + 12;
+        if (!isRtl && left + cardWidth > window.innerWidth - 8) left = rect.left - cardWidth - 12;
+        if (isRtl && left < 8) left = rect.right + 12;
+        const top = Math.min(Math.max(8, rect.top - 20), window.innerHeight - 320);
+
+        const total = (stats.wins || 0) + (stats.losses || 0);
+        const winRate = total > 0 ? Math.round(((stats.wins || 0) / total) * 100) : null;
+        const cats = (stats.top_categories || []).slice(0, 3);
+
+        const card = document.createElement('div');
+        card.id = 'inviteHoverCard';
+        card.dir = isRtl ? 'rtl' : 'ltr';
+        card.style.cssText = `position:fixed; top:${top}px; left:${left}px; width:${cardWidth}px; z-index:70;`;
+        card.className = 'bg-white dark:bg-[#1a1a2e] rounded-2xl shadow-2xl border border-gray-200 dark:border-purple-900/40 p-4 animate-fade-in-card pointer-events-auto';
+        card.onmouseleave = () => this.hideHoverCard();
+
+        card.innerHTML = `
+            <div class="flex items-center gap-3 mb-3">
+                <img src="${user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.display_name || user.username)}&background=7c3aed&color=fff&size=80`}"
+                     class="w-12 h-12 rounded-full object-cover border-2 ${user.is_online ? 'border-green-400' : 'border-gray-300 dark:border-gray-600'}" alt="">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1">
+                        <span class="font-bold text-sm text-gray-900 dark:text-white truncate">${user.display_name || user.username}</span>
+                        ${user.is_verified ? '<i class="fas fa-check-circle text-blue-500 text-xs"></i>' : ''}
+                    </div>
+                    <span class="text-xs text-gray-400">@${user.username}</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center mb-3">
+                <div class="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-2">
+                    <div class="text-lg font-black text-purple-600 dark:text-purple-400">${user.average_rating ? user.average_rating.toFixed(1) : '—'}</div>
+                    <div class="text-[10px] text-gray-500">â­گ ${t('matchmaking.rating_label', lang)}</div>
+                </div>
+                <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-2">
+                    <div class="text-lg font-black text-blue-600 dark:text-blue-400">${user.total_competitions ?? total}</div>
+                    <div class="text-[10px] text-gray-500">ًںژ¯ ${t('matchmaking.competitions_label', lang)}</div>
+                </div>
+                <div class="bg-green-50 dark:bg-green-900/20 rounded-xl p-2">
+                    <div class="text-lg font-black text-green-600 dark:text-green-400">${winRate !== null ? winRate + '%' : '—'}</div>
+                    <div class="text-[10px] text-gray-500">ًںڈ† ${t('matchmaking.stats_winrate', lang)}</div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3 px-1">
+                <span>âœ… ${stats.wins || 0} ${t('matchmaking.wins_label', lang)}</span>
+                <span>â‌Œ ${stats.losses || 0} ${t('matchmaking.stats_losses', lang)}</span>
+            </div>
+
+            ${cats.length ? `
+            <div class="mb-3">
+                <p class="text-[10px] font-bold text-gray-400 uppercase mb-1.5">${t('matchmaking.stats_top_categories', lang)}</p>
+                <div class="flex flex-wrap gap-1.5">
+                    ${cats.map((c: any) => `
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-white" style="background:${c.color || '#7c3aed'}">
+                            <i class="fas ${c.icon || 'fa-star'}"></i>${lang === 'ar' ? c.name_ar : c.name_en}
+                        </span>
+                    `).join('')}
+                </div>
+            </div>` : ''}
+
+            <a href="/profile/${user.username}?lang=${lang}"
+               onclick="window._invitePanelClose()"
+               class="block text-center py-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-xs font-bold text-purple-600 dark:text-purple-400 transition-colors">
+                ${t('matchmaking.view_profile', lang)} <i class="fas fa-arrow-${isRtl ? 'left' : 'right'} ml-1"></i>
+            </a>
+        `;
+
+        document.body.appendChild(card);
     }
 
     /**
@@ -439,6 +555,9 @@ export class InvitePanel {
         (window as any)._invitePanelRefresh = () => InvitePanel.fetchUsers();
         (window as any)._invitePanelSearch = (q: string) => InvitePanel.handleSearch(q);
         (window as any)._invitePanelSendInvite = (userId: number) => InvitePanel.sendInvite(userId);
+        // T2.1: hover card globals
+        (window as any)._invitePanelHover = (userId: number, el: HTMLElement) => InvitePanel.showHoverCard(userId, el);
+        (window as any)._invitePanelHoverEnd = () => InvitePanel.hideHoverCard();
         (window as any).openInvitePanel = (competitionId: number) => InvitePanel.open(competitionId);
         (window as any).closeInvitePanel = () => InvitePanel.close();
         (window as any).toggleInvitePanel = (competitionId: number) => InvitePanel.toggle(competitionId);

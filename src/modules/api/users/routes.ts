@@ -8,9 +8,11 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { UserController } from '../../../controllers';
-
+import { authMiddleware } from '../../../middleware/auth';
 const usersRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new UserController();
+// T3.4 FIX: controllers read c.get('user') — mount optional auth so requireAuth works
+usersRoutes.use('*', authMiddleware({ required: false }));
 
 // ============================================
 // User Profile Routes

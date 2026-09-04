@@ -7,9 +7,11 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { ScheduleController } from '../../../controllers/ScheduleController';
-
+import { authMiddleware } from '../../../middleware/auth';
 const scheduleRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new ScheduleController();
+// T3.4 FIX: controllers read c.get('user') — mount optional auth so requireAuth works
+scheduleRoutes.use('*', authMiddleware({ required: false }));
 
 /**
  * GET /api/schedule

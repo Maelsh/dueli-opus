@@ -7,9 +7,11 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { InteractionController } from '../../../controllers/InteractionController';
-
+import { authMiddleware } from '../../../middleware/auth';
 const likesRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new InteractionController();
+// T3.4 FIX: controllers read c.get('user') — mount optional auth so requireAuth works
+likesRoutes.use('*', authMiddleware({ required: false }));
 
 /**
  * POST /api/competitions/:id/like

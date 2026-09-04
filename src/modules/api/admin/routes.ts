@@ -1,8 +1,11 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { AdminController } from '../../../controllers/AdminController';
-
+import { authMiddleware } from '../../../middleware/auth';
 const adminRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+// T3.4 FIX: isAdmin() reads c.get('user') which only authMiddleware sets —
+// without this the entire admin API returned 403 for everyone.
+adminRoutes.use('*', authMiddleware({ required: false }));
 const controller = new AdminController();
 
 // =====================================

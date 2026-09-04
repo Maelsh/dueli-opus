@@ -134,6 +134,11 @@ export class MatchmakingController extends BaseController {
                     SELECT invitee_id FROM competition_invitations 
                     WHERE competition_id = ? AND status = 'pending'
                 )
+                -- T2.1: exclude users who closed incoming competition requests
+                AND NOT EXISTS (
+                    SELECT 1 FROM user_settings us
+                    WHERE us.user_id = u.id AND us.allow_requests = 0
+                )
                 ${searchClause}
                 ORDER BY 
                     u.is_online DESC,
@@ -173,6 +178,10 @@ export class MatchmakingController extends BaseController {
                 AND u.id NOT IN (
                     SELECT invitee_id FROM competition_invitations 
                     WHERE competition_id = ? AND status = 'pending'
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM user_settings us
+                    WHERE us.user_id = u.id AND us.allow_requests = 0
                 )
                 ${searchClause ? 'AND (u.display_name LIKE ? OR u.username LIKE ?)' : ''}
             `;

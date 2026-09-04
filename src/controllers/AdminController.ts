@@ -6,6 +6,7 @@ import { CompetitionModel } from '../models/CompetitionModel';
 import { ReportModel } from '../models/ReportModel';
 import { AdvertisementModel, EarningsModel } from '../models/AdvertisementModel';
 import { AdminRoleModel, AdminRoleType } from '../models/AdminRoleModel';
+import { SessionModel } from '../models/SessionModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
 import { PlatformSettingsModel } from '../models/PlatformSettingsModel';
 import { PlatformFinancialLogModel } from '../models/PlatformFinancialLogModel';
@@ -94,6 +95,7 @@ export class AdminController extends BaseController {
         try {
             if (!await this.isAdmin(c)) return this.forbidden(c);
 
+            const admin = this.getCurrentUser(c);
             const userId = this.getParamInt(c, 'id');
             const body = await this.getBody<{ banned: boolean }>(c);
 
@@ -101,11 +103,30 @@ export class AdminController extends BaseController {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
 
+            // T1.4: Prevent self-ban and banning other admins
+            if (admin && userId === admin.id) {
+                return this.error(c, 'Cannot ban yourself');
+            }
+
+            const target = await c.env.DB.prepare(
+                'SELECT id, is_admin FROM users WHERE id = ?'
+            ).bind(userId).first<any>();
+            if (!target) return this.notFound(c);
+            if (target.is_admin) return this.error(c, 'Cannot ban an admin');
+
+            // T1.4 FIX (BUG-12): ban alters account status, not the verification badge
             await c.env.DB.prepare(`
-                UPDATE users SET is_verified = ? WHERE id = ?
+                UPDATE users SET is_active = ? WHERE id = ?
             `).bind(body.banned ? 0 : 1, userId).run();
 
-            return this.success(c, { banned: body.banned });
+            // T1.4: When banning, destroy all sessions so the user is logged out everywhere
+            let killedSessions = 0;
+            if (body.banned) {
+                const sessionModel = new SessionModel(c.env.DB);
+                killedSessions = await sessionModel.deleteByUser(userId);
+            }
+
+            return this.success(c, { banned: body.banned, sessions_destroyed: killedSessions });
         } catch (error) {
             console.error('Admin toggle ban error:', error);
             return this.serverError(c, error as Error);
@@ -145,10 +166,110 @@ export class AdminController extends BaseController {
             const reportModel = new ReportModel(c.env.DB);
             await reportModel.reviewReport(reportId, user.id, body.status as any, body.action_taken);
 
-            return this.success(c, { reviewed: true });
+            // T3.4 FIX (BUG-13): actually EXECUTE the moderation action
+            // instead of only storing its name as text.
+            let actionExecuted: string | null = null;
+            if (body.status === 'resolved' && body.action_taken) {
+                try {
+                    actionExecuted = await this.executeModerationAction(
+                        c, reportId, body.action_taken, user.id
+                    );
+                } catch (actionError) {
+                    console.error('Moderation action failed:', actionError);
+                    return this.error(c, `Report saved but action failed: ${(actionError as Error).message}`);
+                }
+            }
+
+            // T3.4: Audit trail for every executed moderation decision
+            if (actionExecuted) {
+                try {
+                    const auditModel = new AdminAuditLogModel(c.env.DB);
+                    const report = await c.env.DB.prepare(
+                        'SELECT target_type, target_id FROM reports WHERE id = ?'
+                    ).bind(reportId).first<any>();
+                    await auditModel.log(
+                        user.id,
+                        'report_action:' + body.action_taken,
+                        report?.target_type || 'unknown',
+                        report?.target_id || 0,
+                        `Report #${reportId} resolved with action "${body.action_taken}"`
+                    );
+                } catch (auditError) {
+                    console.error('Audit log failed:', auditError);
+                }
+            }
+
+            return this.success(c, { reviewed: true, action_executed: actionExecuted });
         } catch (error) {
             console.error('Admin review report error:', error);
             return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * T3.4: Execute a moderation action against the report target.
+     * Supported actions: ban_user | delete_comment | delete_competition | warn (record-only)
+     */
+    private async executeModerationAction(
+        c: Context<{ Bindings: Bindings; Variables: Variables }>,
+        reportId: number,
+        action: string,
+        adminId: number
+    ): Promise<string | null> {
+        const db = c.env.DB;
+        const report = await db.prepare(
+            'SELECT id, target_type, target_id FROM reports WHERE id = ?'
+        ).bind(reportId).first<any>();
+
+        if (!report) throw new Error('Report not found');
+        const { target_type, target_id } = report;
+
+        switch (action) {
+            case 'ban_user': {
+                // Resolve the offending user: direct target, or author of the content
+                let userId: number | null = null;
+                if (target_type === 'user') {
+                    userId = target_id;
+                } else if (target_type === 'comment') {
+                    const row = await db.prepare('SELECT user_id FROM comments WHERE id = ?')
+                        .bind(target_id).first<any>();
+                    userId = row?.user_id ?? null;
+                } else if (target_type === 'competition') {
+                    const row = await db.prepare('SELECT creator_id FROM competitions WHERE id = ?')
+                        .bind(target_id).first<any>();
+                    userId = row?.creator_id ?? null;
+                }
+                if (!userId) throw new Error('Could not resolve user to ban');
+
+                const target = await db.prepare('SELECT is_admin FROM users WHERE id = ?')
+                    .bind(userId).first<any>();
+                if (target?.is_admin) throw new Error('Cannot ban an admin');
+
+                await db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').bind(userId).run();
+                const sessionModel = new SessionModel(db);
+                await sessionModel.deleteByUser(userId);
+                return `banned_user:${userId}`;
+            }
+
+            case 'delete_comment': {
+                if (target_type !== 'comment') throw new Error('Target is not a comment');
+                await db.prepare('DELETE FROM comments WHERE id = ?').bind(target_id).run();
+                return `deleted_comment:${target_id}`;
+            }
+
+            case 'delete_competition': {
+                if (target_type !== 'competition') throw new Error('Target is not a competition');
+                await db.prepare('DELETE FROM competition_requests WHERE competition_id = ?').bind(target_id).run();
+                await db.prepare('DELETE FROM competition_invitations WHERE competition_id = ?').bind(target_id).run();
+                await db.prepare('DELETE FROM ratings WHERE competition_id = ?').bind(target_id).run();
+                await db.prepare('DELETE FROM chunk_keys WHERE competition_id = ?').bind(target_id).run();
+                await db.prepare('DELETE FROM competitions WHERE id = ?').bind(target_id).run();
+                return `deleted_competition:${target_id}`;
+            }
+
+            default:
+                // warn / no_action / unknown â†’ record-only
+                return null;
         }
     }
 
@@ -567,7 +688,7 @@ export class AdminController extends BaseController {
      *  1. NEVER delete the competition from the DB.
      *  2. Change status to 'suspended' (retains full history).
      *  3. Mark with a tombstone reason viewable publicly in the archive.
-     *  4. Log: admin name, role, timestamp, explicit reason → admin_audit_logs.
+     *  4. Log: admin name, role, timestamp, explicit reason â†’ admin_audit_logs.
      *  5. Emit SSE event so all live viewers get instant notification.
      *
      * Body: { reason: string }
@@ -585,7 +706,7 @@ export class AdminController extends BaseController {
                 return this.validationError(
                     c,
                     this.t('errors.missing_fields', c) +
-                    ' – An explicit reason is required for every suspension.'
+                    ' — An explicit reason is required for every suspension.'
                 );
             }
 
@@ -632,7 +753,7 @@ export class AdminController extends BaseController {
                 VALUES (?, ?, ?)
             `).bind(competitionId, admin.id, body.reason).run();
 
-            // 3. Mandatory audit log – name + role + timestamp + reason
+            // 3. Mandatory audit log â€“ name + role + timestamp + reason
             const auditLogModel = new AdminAuditLogModel(db);
             await auditLogModel.log(
                 admin.id,
@@ -643,8 +764,8 @@ export class AdminController extends BaseController {
                 `Reason: "${body.reason}". Timestamp: ${new Date().toISOString()}`
             );
 
-            // 4. SSE – push tombstone event to all viewers instantly
-            const pusher = new EventPusher(db);
+            // 4. SSE â€“ push tombstone event to all viewers instantly
+            const pusher = new EventPusher(db, c.env);
             await pusher.publishCompetitionSuspended(
                 competitionId,
                 admin.display_name ?? admin.username,
@@ -695,7 +816,7 @@ export class AdminController extends BaseController {
                 return this.error(c, 'Competition is not in suspended state.', 409);
             }
 
-            // Move to 'archived' – transparent, visible, not live
+            // Move to 'archived' â€“ transparent, visible, not live
             await db.prepare(`
                 UPDATE competitions
                 SET status = 'archived',
@@ -714,7 +835,7 @@ export class AdminController extends BaseController {
             const auditLogModel = new AdminAuditLogModel(db);
             await auditLogModel.log(
                 admin.id, 'restore_broadcast', 'competition', competitionId,
-                `Restored competition ID=${competitionId} from suspended → archived. Reason: "${body.reason}"`
+                `Restored competition ID=${competitionId} from suspended â†’ archived. Reason: "${body.reason}"`
             );
 
             return this.success(c, { restored: true, competition_id: competitionId, status: 'archived' });

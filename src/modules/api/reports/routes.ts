@@ -7,9 +7,14 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { InteractionController } from '../../../controllers/InteractionController';
+import { authMiddleware } from '../../../middleware/auth';
 
 const reportsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new InteractionController();
+
+// T3.4 FIX: submitReport calls requireAuth() which reads c.get('user') —
+// without middleware this endpoint returned 401 for everyone, always.
+reportsRoutes.use('*', authMiddleware({ required: false }));
 
 /**
  * POST /api/reports
