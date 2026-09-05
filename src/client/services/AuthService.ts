@@ -289,6 +289,35 @@ export class AuthService {
                 Modal.showAuthMessage(data.data?.message || t('auth_register_success', State.lang), 'success');
                 const form = document.getElementById('registerForm')?.querySelector('form');
                 if (form) form.reset();
+                // Email not configured (Preview without EMAIL vars): show a
+                // "resend" button that calls POST /api/auth/resend-verification
+                if ((data.data as any)?.warning === 'email_not_configured') {
+                    const msg = document.getElementById('authMessage');
+                    if (msg && !document.getElementById('resendVerificationBtn')) {
+                        const btn = document.createElement('button');
+                        btn.id = 'resendVerificationBtn';
+                        btn.type = 'button';
+                        btn.className = 'mt-2 w-full py-2 px-4 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold transition-colors';
+                        btn.textContent = State.lang === 'ar' ? 'إعادة إرسال رسالة التفعيل' : 'Resend verification email';
+                        btn.onclick = async () => {
+                            btn.disabled = true;
+                            try {
+                                const r = await fetch(`/api/auth/resend-verification?lang=${State.lang}`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ email })
+                                });
+                                const d = await r.json();
+                                Modal.showAuthMessage(d.data?.message || d.error || '', d.success ? 'success' : 'error');
+                            } catch {
+                                Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
+                            } finally {
+                                btn.disabled = false;
+                            }
+                        };
+                        msg.after(btn);
+                    }
+                }
                 // Switch to login tab after 2 seconds
                 setTimeout(() => Modal.switchAuthTab('login'), 2000);
             } else {

@@ -61,3 +61,25 @@ GET /api/sse?channel=competition:<id>              # تغذية تعليقات �
 
 Rate limiting مطبق على نقاط الكتابة الحساسة. للمشاركة في تشكيل حدود عامة
 للمطورين تواصل عبر info@maelshpro.com.
+
+## CSRF — POST من خارج المتصفح
+
+كل `POST/PUT/PATCH/DELETE` على `/api/*` يمر عبر `csrfProtection()`
+(`src/middleware/security.ts`): طلبات `GET/HEAD/OPTIONS` تُتجاوز، أما
+المغيّرة فيجب أن تثبت أنها same-origin بإحدى الطرق:
+
+- `Origin: https://<your-pages-host>` يطابق `Host`، **أو**
+- `Referer: https://<your-pages-host>/...` يطابق `Host`، **أو**
+- `X-CSRF-Token: <any-non-empty>` (لعملاء غير المتصفح مثل curl/SDK)،
+  ويُقبل أيضاً `X-Session-Token` كبديل.
+
+أي طلب مغيّر **بدون** `Origin`/`Referer`/`X-CSRF-Token` يُرفض بـ
+`403 Missing CSRF proof`. مثال curl:
+
+```bash
+curl -X POST https://dueli.maelshpro.com/api/competitions/1/comments \
+  -H "Authorization: Bearer <sessionId>" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: 1" \
+  -d '{"content":"..."}'
+```

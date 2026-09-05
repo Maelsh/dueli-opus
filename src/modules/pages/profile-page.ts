@@ -5,10 +5,12 @@
 
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+import { getCookie } from 'hono/cookie';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
+import { UserModel, SessionModel, CompetitionModel } from '../../models';
 
 const profilePageRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -19,29 +21,66 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
     const lang = c.get('lang') as Language;
     const tr = translations[getUILanguage(lang)];
     const rtl = checkRTL(lang);
-    const username = c.req.param('username');
+    const origin = new URL(c.req.url).origin;
+    let username: string | undefined = c.req.param('username');
 
-    // Fetch user data from API
-    const userRes = await fetch(`${new URL(c.req.url).origin}/api/users/${username}`, {
-        headers: { 'Content-Type': 'application/json' }
-    });
-
-    let user = null;
+    let user: any = null;
     let competitions: any[] = [];
     let stats = { competitions: 0, followers: 0, following: 0, wins: 0 };
+    let needsLogin = false;
+    let userNotFound = false;
 
-    if (userRes.ok) {
-        const data = await userRes.json() as any;
-        if (data.success && data.data) {
-            user = data.data;
-            competitions = data.data.competitions || [];
-            stats = {
-                competitions: data.data.total_competitions || 0,
-                followers: data.data.followers_count || 0,
-                following: data.data.following_count || 0,
-                wins: data.data.wins || 0
-            };
+    // NOTE: no self-fetch here — Preview/Data locality: query D1 directly.
+    // (fetch(`${origin}/api/users/...`) from inside the Worker causes
+    // subrequest loops / missing auth on Preview.)
+    try {
+        const { DB } = c.env;
+        const userModel = new UserModel(DB);
+
+        // /profile (no username): resolve own profile from session
+        if (!username) {
+            const sessionId =
+                c.req.header('Authorization')?.replace('Bearer ', '') ||
+                c.req.query('token') ||
+                getCookie(c, 'sessionId') ||
+                getCookie(c, 'session_id');
+            if (!sessionId) {
+                needsLogin = true;
+            } else {
+                const sessionModel = new SessionModel(DB);
+                const result = await sessionModel.findValidSession(sessionId);
+                if (!result) {
+                    needsLogin = true;
+                } else {
+                    username = result.user.username;
+                }
+            }
         }
+
+        if (!needsLogin && username) {
+            user = await userModel.findByUsername(username);
+            if (!user) {
+                userNotFound = true;
+                console.error(`[Profile] user not found: username=${username} origin=${origin}`);
+            } else {
+                const competitionModel = new CompetitionModel(DB);
+                const [followersRow, followingRow, userCompetitions] = await Promise.all([
+                    DB.prepare('SELECT COUNT(*) as count FROM follows WHERE following_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
+                    DB.prepare('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
+                    competitionModel.findByUser(user.id, { limit: 10 }).catch(() => [] as any[])
+                ]);
+                competitions = Array.isArray(userCompetitions) ? userCompetitions : [];
+                stats = {
+                    competitions: (user as any).total_competitions || competitions.length || 0,
+                    followers: followersRow?.count || 0,
+                    following: followingRow?.count || 0,
+                    wins: (user as any).total_wins || (user as any).wins || 0
+                };
+            }
+        }
+    } catch (err) {
+        console.error(`[Profile] query failed: username=${username} origin=${origin}`, err);
+        if (!user) userNotFound = !needsLogin;
     }
 
     const content = `
@@ -100,10 +139,20 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                                 <!-- Will be populated by JS based on auth status -->
                             </div>
                         </div>
+                    ` : needsLogin ? `
+                        <div class="text-center text-white py-12">
+                            <i class="fas fa-sign-in-alt text-5xl mb-4 opacity-50"></i>
+                            <h1 class="text-2xl font-bold">${tr.login_required || tr.login || 'Login required'}</h1>
+                            <p class="text-white/70 mt-2">${tr.login_to_view_profile || 'Please log in to view your profile'}</p>
+                            <button onclick="showLoginModal()" class="mt-6 px-8 py-3 bg-white text-purple-700 rounded-full font-bold hover:bg-gray-100 transition-colors">
+                                ${tr.login || 'Login'}
+                            </button>
+                        </div>
                     ` : `
                         <div class="text-center text-white py-12">
                             <i class="fas fa-user-slash text-5xl mb-4 opacity-50"></i>
-                            <h1 class="text-2xl font-bold">${tr.page_not_found || 'User Not Found'}</h1>
+                            <h1 class="text-2xl font-bold">404 — ${tr.page_not_found || 'User Not Found'}</h1>
+                            ${username ? `<p class="text-white/70 mt-2">@${username}</p>` : ''}
                         </div>
                     `}
                 </div>
@@ -367,6 +416,12 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
         </script>
     `;
 
+    if (needsLogin) {
+        return c.html(generateHTML(content, lang, tr.login || 'Login'), 401);
+    }
+    if (userNotFound || !user) {
+        return c.html(generateHTML(content, lang, `404 - ${username || tr.page_not_found}`), 404);
+    }
     return c.html(generateHTML(content, lang, user ? `${user.display_name || user.username} - ${tr.profile}` : tr.page_not_found));
 };
 

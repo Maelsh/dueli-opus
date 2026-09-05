@@ -15,7 +15,8 @@
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "db:migrate:local": "wrangler d1 migrations apply dueli-db --local",
     "db:seed": "wrangler d1 execute dueli-db --local --file=./db/seed.sql",
-    "db:reset": "powershell -Command \"Remove-Item -Recurse -Force .wrangler/state/v3/d1 -ErrorAction SilentlyContinue\" && npm run db:migrate:local && npm run db:seed"
+    "db:reset": "node dev-tools/reset-d1.mjs && npm run db:migrate:local && npm run db:seed",
+    "routes:inventory": "node dev-tools/route-inventory.mjs"
   },
   "dependencies": {
     "@hono/vite-cloudflare-pages": "^0.4.2",

@@ -1,0 +1,1210 @@
+{
+  "generatedAt": "2026-09-05T04:21:15.956Z",
+  "total": 172,
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/schedule/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ad-blocks",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-blocks/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ad-blocks",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-blocks/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/ad-blocks/:adId",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-blocks/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ad-reports",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-reports/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ad-reports/admin/:id/review",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-reports/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ad-reports/admin/all",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-reports/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ad-reports/admin/pending",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-reports/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ad-reports/my-reports",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-reports/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ad-reports/reasons",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/ad-reports/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/ads",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/ads",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/ads/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/ads/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/arbitrations",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/arbitrations/:id/assign",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/arbitrations/:id/transition",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/audit-logs",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/competitions/:id/restore",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/competitions/:id/suspend",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/enhanced-stats",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/live-finance/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/live-finance/:id/finalize",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/reports",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/reports/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/roles",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/roles",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/roles/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/settings",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/settings",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/stats",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/users/:id/ban",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/withdrawals",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/withdrawals/:id/approve",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/withdrawals/:id/reject",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/advertisements",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/advertisements/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/advertisements/:id/click",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/advertisements/:id/impression",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/advertisements/competition/:id/revenue",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/advertiser/campaigns",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertiser/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/advertiser/campaigns/:id/analytics",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertiser/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/advertiser/campaigns/:id/pause",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertiser/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/advertiser/campaigns/:id/resume",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertiser/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/advertiser/dashboard",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertiser/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/analytics/admin/dashboard",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/analytics/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/analytics/public",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/analytics/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/analytics/track",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/analytics/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/analytics/view",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/analytics/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/forgot-password",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/oauth/:provider",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/oauth-routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/oauth/:provider/callback",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/oauth-routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/resend-verification",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/reset-password",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/session",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/verify",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/verify-reset-code",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/auth/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/blocks",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/blocks/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/blocks",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/blocks/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/blocks/:userId",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/blocks/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/categories/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories/:id",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/categories/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories/:id/subcategories",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/categories/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/chunks/:key",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chunks/playlist/:id",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chunks/register",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chunks/verify",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/competitions/:competitionId/comments/:commentId",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/competitions/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/competitions/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/accept-invite",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/accept-request",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/comments",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/decline-invite",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/decline-request",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/end",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/invite",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/competitions/:id/like",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/likes/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/:id/like",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/likes/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/like",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/likes/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/:id/likes",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/likes/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/rate",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/competitions/:id/remind",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/schedule/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/:id/remind",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/schedule/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/remind",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/schedule/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/competitions/:id/request",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/request",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/:id/requests",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/start",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/update-vod",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/complaints",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/complaints/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/complaints/:id",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/complaints/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/complaints/my",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/complaints/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/conversations",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/messages/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/conversations/:id/messages",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/messages/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/conversations/:id/messages",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/messages/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/countries",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/countries/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/countries/:code",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/countries/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cron/run",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/cron/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/cron/run",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/cron/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/donations",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/donations/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/donations/:id/complete",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/donations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/donations/my",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/donations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/donations/top-supporters",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/donations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/donations/total",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/donations/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/donations/webhook",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/donations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/earnings",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/earnings/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/earnings/competition/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/earnings/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/earnings/history",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/earnings/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jitsi/config",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/jitsi/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jitsi/status",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/jitsi/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/leaderboard",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/leaderboard/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/matchmaking/heartbeat",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/matchmaking/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/matchmaking/offline",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/matchmaking/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matchmaking/online-users",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/matchmaking/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages/unread",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/messages/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/notifications/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/:id/read",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/notifications/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/read-all",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/notifications/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payment-methods",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/payments/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-methods",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/payments/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/payment-methods/:id",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/payments/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/payment-methods/:id",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/payments/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-methods/:id/default",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/payments/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/recommendations",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/recommendations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/recommendations/competitor-stats/:userId",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/recommendations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reminders",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/schedule/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reports",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/reports/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/reasons",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/reports/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/competitions",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/live",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/pending",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/suggestions",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/trending",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/users",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/settings",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/feed",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/settings/posts",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/settings/posts/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/users/:id/posts",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/signaling/config",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/signaling/ice-servers",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/signaling/room/create",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/signaling/verify",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sse",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/sse/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency/audit",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency/daily",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency/donations-feed",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency/feed",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency/payroll",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/users/:id/follow",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/:id/follow",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/:id/message",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/messages/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id/requests",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:username",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/delete-account",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/delete-account.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/delete-account/verify",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/delete-account.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/preferences",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/withdrawals",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/withdrawals/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/withdrawals",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/withdrawals/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/withdrawals/:id",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/withdrawals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/withdrawals/:id",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/withdrawals/routes.ts"
+    }
+  ]
+}

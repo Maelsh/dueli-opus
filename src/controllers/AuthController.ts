@@ -25,12 +25,6 @@ export class AuthController extends BaseController {
         try {
             const { DB, EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM } = c.env;
 
-            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
-                console.error('Missing EMAIL_API_KEY or EMAIL_API_URL');
-                return this.error(c, 'Server configuration error', 500);
-            }
-
-
             const body = await this.getBody<{
                 name: string;
                 email: string;
@@ -86,6 +80,18 @@ export class AuthController extends BaseController {
 
             const origin = c.req.header('origin') || `https://${c.req.header('host')}`;
 
+            // Email not configured (Preview without EMAIL vars): do NOT block
+            // registration — the user is already created above. Return a
+            // machine-readable warning so the client can show a "resend" button
+            // that calls POST /api/auth/resend-verification once vars exist.
+            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
+                console.error('[Register] EMAIL_API_KEY/EMAIL_API_URL not configured — user created without verification email');
+                return this.success(c, {
+                    message: this.t('auth_register_success', c),
+                    warning: 'email_not_configured'
+                }, 201);
+            }
+
             const emailService = new EmailService(EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM);
 
             try {
@@ -96,6 +102,9 @@ export class AuthController extends BaseController {
                     this.getLanguage(c),
                     origin
                 );
+                let apiHost = EMAIL_API_URL;
+                try { apiHost = new URL(EMAIL_API_URL).host; } catch { /* keep raw value */ }
+                console.log(`[Register] email queued to ${body.email} via ${apiHost}`);
 
             } catch (emailError) {
                 console.error('[Register] Email sending failed:', emailError);
@@ -153,13 +162,19 @@ export class AuthController extends BaseController {
         try {
             const { DB, EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM } = c.env;
 
-            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
-                return this.error(c, 'Server configuration error', 500);
-            }
-
             const body = await this.getBody<{ email: string }>(c);
             if (!body?.email) {
                 return this.validationError(c, this.t('auth_email_required', c));
+            }
+
+            // Anti-enumeration: every code path below (missing user, already
+            // verified, email misconfigured, send failure) returns the SAME
+            // generic success message so callers can't probe account existence.
+            const genericOk = () => this.success(c, { message: this.t('auth_verification_resent', c) });
+
+            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
+                console.error('[Resend] EMAIL_API_KEY/EMAIL_API_URL not configured');
+                return genericOk();
             }
 
             const userModel = new UserModel(DB);
@@ -167,7 +182,7 @@ export class AuthController extends BaseController {
 
             if (!user || (user as any).is_verified) {
                 // Don't reveal if user exists
-                return this.success(c, { message: this.t('auth_verification_resent', c) });
+                return genericOk();
             }
 
             const verificationToken = CryptoUtils.generateToken();
@@ -177,15 +192,20 @@ export class AuthController extends BaseController {
 
             const origin = c.req.header('origin') || `https://${c.req.header('host')}`;
             const emailService = new EmailService(EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM);
-            await emailService.sendVerificationEmail(
-                body.email,
-                verificationToken,
-                user.display_name || user.username,
-                this.getLanguage(c),
-                origin
-            );
+            try {
+                await emailService.sendVerificationEmail(
+                    body.email,
+                    verificationToken,
+                    user.display_name || user.username,
+                    this.getLanguage(c),
+                    origin
+                );
+            } catch (emailError) {
+                console.error('[Resend] Email sending failed:', emailError);
+                return genericOk();
+            }
 
-            return this.success(c, { message: this.t('auth_verification_resent', c) });
+            return genericOk();
         } catch (error) {
             return this.serverError(c, error as Error);
         }

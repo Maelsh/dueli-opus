@@ -1,0 +1,133 @@
+name: Quality Gate
+
+# يفرض docs/11-DEFINITION-OF-DONE.md بقدر ما يمكن أتمتته (§5 من ذلك الملف).
+# راجع docs/12-SECURITY-REMEDIATION.md §4 وdocs/13-TEST-STRATEGY.md §6 للمرجع الكامل لكل فحص.
+#
+# قرار الفريق (13-TEST-STRATEGY.md §6): الفحوص الجديدة تبدأ "تحذيرية" لأسبوع واحد
+# (continue-on-error: true) ثم تصبح مانعة. راجع تاريخ هذا الملف — إن مضى أسبوع
+# على أول تشغيل ناجح، أزل `continue-on-error` من الخطوات المعلَّمة "GRACE-PERIOD".
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ---- G2: الأنواع + سقف any (docs/11 §G2) ----
+      - name: TypeScript — no emit
+        run: npx tsc --noEmit
+
+      - name: any-count ratchet (baseline 308, must not increase)
+        run: |
+          COUNT=$(grep -rho ': any\|as any' src --include=*.ts | wc -l)
+          echo "any usages: $COUNT (baseline: 308)"
+          if [ "$COUNT" -gt 308 ]; then
+            echo "::error::any usage increased from baseline 308 to $COUNT — see docs/11-DEFINITION-OF-DONE.md G2"
+            exit 1
+          fi
+
+      # ---- G1: البناء ----
+      - name: Build
+        run: npm run build
+
+      # ---- فحوص أمنية نمطية (docs/12-SECURITY-REMEDIATION.md §4) ----
+      - name: SEC-06 — no Math.random() in security-sensitive code
+        run: |
+          if grep -rn "Math.random" src/middleware src/lib src/modules/api; then
+            echo "::error::Math.random() found in security-sensitive path — see SEC-06"
+            exit 1
+          fi
+
+      - name: SEC-11 — no session token in query string for auth middleware
+        run: |
+          if grep -rn "query('token')" src/middleware; then
+            echo "::error::token accepted via query string in authMiddleware — see SEC-11"
+            exit 1
+          fi
+
+      - name: SEC-08 — no session id in localStorage (GRACE-PERIOD)
+        continue-on-error: true
+        run: |
+          if grep -rn "localStorage.*[sS]ession" src/; then
+            echo "::warning::session id read/written via localStorage — see SEC-08 (cookie migration pending)"
+            exit 1
+          fi
+
+      - name: SEC-07 — single session key (no session_id remnants) (GRACE-PERIOD)
+        continue-on-error: true
+        run: |
+          if grep -rn "session_id'" src/modules/pages; then
+            echo "::warning::legacy session_id key still referenced — see SEC-07"
+            exit 1
+          fi
+
+      - name: SEC-05 — cors() must not run unconfigured (GRACE-PERIOD)
+        continue-on-error: true
+        run: |
+          if grep -n "cors()" src/main.ts; then
+            echo "::warning::cors() called with no allow-list — see SEC-05"
+            exit 1
+          fi
+
+      - name: SEC-10 — Durable Object must not keep an in-memory socket set (GRACE-PERIOD)
+        continue-on-error: true
+        run: |
+          if grep -n "this.sockets" workers/ -r; then
+            echo "::warning::this.sockets found — hibernation-unsafe pattern, see SEC-10"
+            exit 1
+          fi
+
+      # ---- G5: سلامة قاعدة البيانات — ترحيل من قاعدة فارغة ----
+      - name: Migrate D1 from empty database (GRACE-PERIOD — needs wrangler auth setup)
+        continue-on-error: true
+        run: |
+          npm run db:reset
+
+      # ---- الاختبارات الآلية (عند وجودها) ----
+      - name: Unit + integration tests
+        run: |
+          if [ -f "vitest.config.ts" ] || [ -d "tests" ]; then
+            npx vitest run || (echo "::error::tests failed" && exit 1)
+          else
+            echo "::warning::no tests/ directory yet — see docs/13-TEST-STRATEGY.md §8 (week-1 plan)"
+          fi
+
+      # ---- npm audit (إنتاج فقط) ----
+      - name: npm audit — production deps, high severity (GRACE-PERIOD)
+        continue-on-error: true
+        run: npm audit --audit-level=high --omit=dev
+
+      # ---- جرد المسارات — يعيد التوليد ويكشف UNGUARDED (تحذيري دوماً، انظر docs/13 §6) ----
+      - name: Regenerate route inventory
+        continue-on-error: true
+        run: |
+          node dev-tools/route-inventory.mjs
+          UNGUARDED=$(grep -c "UNGUARDED" docs/14-ROUTE-INVENTORY.md || true)
+          echo "::warning::$UNGUARDED route(s) classified UNGUARDED — review against docs/12-SECURITY-REMEDIATION.md SEC-13"
+
+      # ---- مراجع وثائق مفقودة ----
+      - name: Check for dangling doc references (GRACE-PERIOD)
+        continue-on-error: true
+        run: |
+          MISSING=0
+          for f in $(grep -rhoE 'docs/[A-Za-z0-9_.-]+\.md' docs AGENTS.md README.md 2>/dev/null | sort -u); do
+            if [ ! -f "$f" ]; then
+              echo "::warning::referenced doc missing: $f"
+              MISSING=1
+            fi
+          done
+          exit 0
