@@ -67,7 +67,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 const [followersRow, followingRow, userCompetitions] = await Promise.all([
                     DB.prepare('SELECT COUNT(*) as count FROM follows WHERE following_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
                     DB.prepare('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
-                    competitionModel.findByUser(user.id as string, { limit: 10 }).catch(() => [] as unknown[])
+                    competitionModel.findByUser(Number(user.id), { limit: 10 }).catch(() => [] as unknown[])
                 ]);
                 competitions = Array.isArray(userCompetitions) ? userCompetitions : [];
                 stats = {
