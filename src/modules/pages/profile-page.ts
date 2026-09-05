@@ -24,8 +24,8 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
     const origin = new URL(c.req.url).origin;
     let username: string | undefined = c.req.param('username');
 
-    let user: any = null;
-    let competitions: any[] = [];
+    let user: Record<string, unknown> | null = null;
+    let competitions: unknown[] = [];
     let stats = { competitions: 0, followers: 0, following: 0, wins: 0 };
     let needsLogin = false;
     let userNotFound = false;
@@ -58,7 +58,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
         }
 
         if (!needsLogin && username) {
-            user = await userModel.findByUsername(username);
+            user = await userModel.findByUsername(username) as unknown as Record<string, unknown> | null;
             if (!user) {
                 userNotFound = true;
                 console.error(`[Profile] user not found: username=${username} origin=${origin}`);
@@ -67,14 +67,14 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 const [followersRow, followingRow, userCompetitions] = await Promise.all([
                     DB.prepare('SELECT COUNT(*) as count FROM follows WHERE following_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
                     DB.prepare('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
-                    competitionModel.findByUser(user.id, { limit: 10 }).catch(() => [] as any[])
+                    competitionModel.findByUser(user.id as string, { limit: 10 }).catch(() => [] as unknown[])
                 ]);
                 competitions = Array.isArray(userCompetitions) ? userCompetitions : [];
                 stats = {
-                    competitions: (user as any).total_competitions || competitions.length || 0,
+                    competitions: (user.total_competitions as number) || competitions.length || 0,
                     followers: followersRow?.count || 0,
                     following: followingRow?.count || 0,
-                    wins: (user as any).total_wins || (user as any).wins || 0
+                    wins: (user.total_wins as number) || (user.wins as number) || 0
                 };
             }
         }
