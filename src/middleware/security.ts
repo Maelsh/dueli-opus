@@ -127,10 +127,10 @@ export function securityHeaders() {
         // Content Security Policy
         c.header('Content-Security-Policy', [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://apis.google.com",
-            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://apis.google.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com",
+            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com",
             "img-src 'self' data: https: blob:",
-            "font-src 'self' https://cdnjs.cloudflare.com",
+            "font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com data:",
             "connect-src 'self' https: wss:",
             "media-src 'self' https: blob:",
             "frame-src 'self' https://www.youtube.com https://meet.jit.si",
@@ -144,7 +144,7 @@ export function securityHeaders() {
         c.header('X-Frame-Options', 'DENY');
         c.header('X-XSS-Protection', '1; mode=block');
         c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
-        c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        c.header('Permissions-Policy', 'camera=(self), microphone=(self), display-capture=(self)');
         
         // HSTS (only in production with HTTPS)
         // c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
