@@ -5,20 +5,26 @@
  * Cloudflare Pages لا يدعم cron triggers، لذا يُستدعى هذا المسار
  * من مجدول خارجي (cron-job.org / GitHub Action / Worker) كل دقيقة.
  *
- * الحماية: مطلوب CRON_SECRET في متغيرات البيئة ومطابقته في ?key=
+ * الحماية (SEC-04، docs/12-SECURITY-REMEDIATION.md): CRON_SECRET عبر ترويسة
+ * `Authorization: Bearer <CRON_SECRET>` فقط — لا `?key=` بعد الآن، لأن query
+ * strings تُسجَّل في سجلات الطلبات وأي proxy بينها؛ سرّ يشغّل توزيع الأرباح
+ * تلقائياً لا يجوز أن يظهر في سجل نصي. `GET` مرفوض أيضاً (قابل للتشغيل من
+ * متصفح أو زاحف بمجرد معرفة الرابط) — `POST` فقط.
  *
- * GET/POST /api/cron/run?key=<CRON_SECRET>
+ * POST /api/cron/run  Authorization: Bearer <CRON_SECRET>
  */
 
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { runMinuteMaintenance } from '../../../lib/services/CronHandler';
+import { CryptoUtils } from '../../../lib/services/CryptoUtils';
 
 const cronRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 const handleRun = async (c: { req: any; env: Bindings }): Promise<Response> => {
     const secret = c.env.CRON_SECRET;
-    const provided = c.req.query('key');
+    const authHeader: string = c.req.header('Authorization') || '';
+    const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
 
     if (!secret) {
         return Response.json(
@@ -27,7 +33,7 @@ const handleRun = async (c: { req: any; env: Bindings }): Promise<Response> => {
         );
     }
 
-    if (provided !== secret) {
+    if (!provided || !CryptoUtils.timingSafeEqualString(provided, secret)) {
         return Response.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
@@ -43,7 +49,6 @@ const handleRun = async (c: { req: any; env: Bindings }): Promise<Response> => {
     }
 };
 
-cronRoutes.get('/run', (c) => handleRun(c as any));
 cronRoutes.post('/run', (c) => handleRun(c as any));
 
 export default cronRoutes;

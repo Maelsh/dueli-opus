@@ -49,6 +49,16 @@ function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
 export class CryptoUtils {
 
     /**
+     * Constant-time comparison of two secrets (e.g. CRON_SECRET, HMAC
+     * signatures). Used instead of `===` anywhere a timing side-channel
+     * could leak a secret one byte at a time (SEC-04, SEC-03).
+     */
+    static timingSafeEqualString(a: string, b: string): boolean {
+        const encoder = new TextEncoder();
+        return timingSafeEqual(encoder.encode(a), encoder.encode(b));
+    }
+
+    /**
      * Hash password using PBKDF2-SHA256 with a random salt.
      * Output format: pbkdf2$<iterations>$<saltHex>$<hashHex>
      */

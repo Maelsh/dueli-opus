@@ -12,6 +12,7 @@ import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
 import { rateLimit, csrfProtection, securityHeaders } from './middleware/security';
+import { DEFAULT_PLATFORM_URL, WWW_PLATFORM_URL } from './config/defaults';
 
 // Import API Routes - استيراد مسارات API
 import categoriesRoutes from './modules/api/categories/routes';
@@ -68,7 +69,31 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // ============================================
 
 // CORS Middleware
-app.use('/api/*', cors());
+// SEC-05 (docs/12-SECURITY-REMEDIATION.md): cors() with no options sends
+// Access-Control-Allow-Origin: * for every /api/* request, which also
+// neutralizes csrfProtection() below (a same-origin check is meaningless once
+// any origin is allowed). ALLOWED_ORIGINS is a comma-separated allow-list env
+// var; requests from origins not on the list get no CORS header at all
+// (browser blocks the response) rather than a wildcard.
+const DEFAULT_ALLOWED_ORIGINS = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    DEFAULT_PLATFORM_URL,
+    WWW_PLATFORM_URL,
+];
+app.use('/api/*', (c, next) => {
+    const configured = (c.env.ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean);
+    const allowList = configured.length > 0 ? configured : DEFAULT_ALLOWED_ORIGINS;
+    return cors({
+        origin: (origin) => (origin && allowList.includes(origin) ? origin : ''),
+        credentials: true,
+        allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Session-Token'],
+    })(c, next);
+});
 
 // Security headers on every response (CSP, X-Frame-Options, HSTS-ready, etc.)
 app.use('*', securityHeaders());

@@ -46,6 +46,10 @@ export type Bindings = {
   // Payments
   STRIPE_SECRET_KEY?: string;      // Used by src/modules/api/donations/routes.ts
   STRIPE_WEBHOOK_SECRET?: string;  // Used by src/modules/api/donations/routes.ts webhook handler
+  // SEC-05 (docs/12-SECURITY-REMEDIATION.md): explicit CORS allow-list for
+  // /api/*, comma-separated origins (e.g. "https://dueli.maelshpro.com").
+  // Unset in local dev falls back to a small localhost default in main.ts.
+  ALLOWED_ORIGINS?: string;
 }
 
 /** Language code type (supports all country languages) */

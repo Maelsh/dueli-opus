@@ -23,10 +23,18 @@ export interface Env {
     REALTIME_PUBLISH_SECRET: string;    // shared secret with the Pages app
 }
 
-/** غرفة قناة واحدة — كل العملاء المتصلين بنفس القناة يشتركون في نسخة واحدة */
+/**
+ * غرفة قناة واحدة — كل العملاء المتصلين بنفس القناة يشتركون في نسخة واحدة.
+ *
+ * SEC-10 (docs/12-SECURITY-REMEDIATION.md): لا تُستخدم مجموعة في الذاكرة
+ * (`this.sockets`) للبثّ — الكود يستدعي `state.acceptWebSocket()` الذي يُفعّل
+ * الـHibernation API، وبعد إيقاظ الغرفة من السكون Cloudflare تبني نسخة *جديدة*
+ * من الكلاس بينما اتصالات WebSocket تبقى حيّة. أي حالة في الذاكرة (كمجموعة
+ * `Set` هنا) تُصفَّر عند الإيقاظ فيصبح البثّ صامتاً (لا خطأ ولا سجل) رغم أن
+ * العملاء ما زالوا متصلين فعلياً. الإصلاح: `state.getWebSockets()` يُعيد كل
+ * الاتصالات الحيّة المُدارة من Cloudflare نفسها — لا حالة محلية إطلاقاً.
+ */
 export class RealtimeRoom implements DurableObject {
-    private readonly sockets = new Set<WebSocket>();
-
     constructor(private readonly state: DurableObjectState, private readonly env: Env) {}
 
     async fetch(request: Request): Promise<Response> {
@@ -63,7 +71,6 @@ export class RealtimeRoom implements DurableObject {
 
         const pair = new WebSocketPair();
         this.state.acceptWebSocket(pair[1]);
-        this.sockets.add(pair[1]);
 
         // تهيئة أولية
         pair[1].send(JSON.stringify({ type: 'connected', channel }));
@@ -103,26 +110,26 @@ export class RealtimeRoom implements DurableObject {
             data: body.payload ?? {}
         });
 
+        // SEC-10: state.getWebSockets() returns every live hibernating
+        // connection Cloudflare is tracking for this DO — including ones
+        // accepted by a previous (now-hibernated) instance of this class.
         let delivered = 0;
-        for (const ws of this.sockets) {
+        for (const ws of this.state.getWebSockets()) {
             try {
                 ws.send(message);
                 delivered++;
             } catch {
-                this.sockets.delete(ws);
+                // Cloudflare cleans up dead sockets on its own; nothing to do here.
             }
         }
         return Response.json({ delivered });
     }
 
-    // Hibernation callbacks
-    webSocketClose(ws: WebSocket) {
-        this.sockets.delete(ws);
-    }
+    // Hibernation callbacks — no in-memory cleanup needed (SEC-10): Cloudflare
+    // removes closed/errored sockets from state.getWebSockets() automatically.
+    webSocketClose(_ws: WebSocket) {}
 
-    webSocketError(ws: WebSocket) {
-        this.sockets.delete(ws);
-    }
+    webSocketError(_ws: WebSocket) {}
 }
 
 /** توجيه الغرف حسب اسم القناة */

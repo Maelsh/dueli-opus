@@ -10,6 +10,21 @@
 
 import { ChunkUploader } from './ChunkUploader';
 
+/**
+ * Conditional debug logger (same pattern as
+ * src/modules/pages/live/scripts/client/shared.ts:42).
+ * Enable in devtools: localStorage.setItem('dueli_debug', '1').
+ * console.error stays for real errors; everything else goes through here
+ * so production consoles stay clean.
+ */
+function debugLog(...args: unknown[]): void {
+    try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('dueli_debug') === '1') {
+            console.log.apply(console, args);
+        }
+    } catch { /* storage unavailable */ }
+}
+
 export interface VideoCompositorConfig {
     competitionId: number;
     localVideo: HTMLVideoElement;
@@ -101,7 +116,7 @@ export class VideoCompositor {
             if (MediaRecorder.isTypeSupported(type)) {
                 this.mimeType = type;
                 this.fileExtension = type.includes('mp4') ? 'mp4' : 'webm';
-                console.log(`[VideoCompositor] Using format: ${this.fileExtension} (${type})`);
+                debugLog(`[VideoCompositor] Using format: ${this.fileExtension} (${type})`);
                 break;
             }
         }
@@ -109,13 +124,13 @@ export class VideoCompositor {
         if (!this.mimeType) {
             this.mimeType = 'video/webm';
             this.fileExtension = 'webm';
-            console.warn('[VideoCompositor] No preferred format supported, using default webm');
+            debugLog('[VideoCompositor] No preferred format supported, using default webm');
         }
 
         // ⭐ تحذير إذا WebM - Safari لن يشغلها
         if (this.fileExtension === 'webm') {
-            console.warn('⚠️ Recording in WebM - Safari/iPhone viewers will NOT be able to watch!');
-            console.warn('💡 Recommend using Chrome/Edge for hosting to get MP4 format');
+            debugLog('⚠️ Recording in WebM - Safari/iPhone viewers will NOT be able to watch!');
+            debugLog('💡 Recommend using Chrome/Edge for hosting to get MP4 format');
         }
 
         // Update uploader with detected extension
@@ -137,7 +152,7 @@ export class VideoCompositor {
 
         this.isCompositing = true;
         this.drawFrame();
-        console.log('[VideoCompositor] Compositing started');
+        debugLog('[VideoCompositor] Compositing started');
     }
 
     /**
@@ -273,7 +288,7 @@ export class VideoCompositor {
                     canvasStream.addTrack(track);
                 });
             } catch (e) {
-                console.warn('[VideoCompositor] Audio mixing failed:', e);
+                debugLog('[VideoCompositor] Audio mixing failed:', e);
             }
         }
 
@@ -296,7 +311,7 @@ export class VideoCompositor {
         this.mediaRecorder.ondataavailable = async (event) => {
             if (event.data.size > 0) {
                 this.chunkNumber++;
-                console.log(`[VideoCompositor] Chunk ${this.chunkNumber} ready (${event.data.size} bytes)`);
+                debugLog(`[VideoCompositor] Chunk ${this.chunkNumber} ready (${event.data.size} bytes)`);
                 await this.uploader.uploadChunk(event.data, this.chunkNumber);
             }
         };
@@ -305,7 +320,7 @@ export class VideoCompositor {
         this.mediaRecorder.start(this.config.chunkDuration);
         this.isRecording = true;
 
-        console.log('[VideoCompositor] Recording started');
+        debugLog('[VideoCompositor] Recording started');
         this.config.onRecordingStarted?.();
     }
 
@@ -322,7 +337,7 @@ export class VideoCompositor {
                 // Finalize on server
                 await this.uploader.finalize();
 
-                console.log('[VideoCompositor] Recording stopped');
+                debugLog('[VideoCompositor] Recording stopped');
                 this.config.onRecordingStopped?.();
                 resolve();
             };
@@ -342,7 +357,7 @@ export class VideoCompositor {
             this.animationFrameId = null;
         }
 
-        console.log('[VideoCompositor] Compositing stopped');
+        debugLog('[VideoCompositor] Compositing stopped');
     }
 
     /**

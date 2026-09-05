@@ -30,6 +30,21 @@ interface FinalizeResponse {
     video_url?: string;
 }
 
+/**
+ * Conditional debug logger (same pattern as
+ * src/modules/pages/live/scripts/client/shared.ts:42).
+ * Enable in devtools: localStorage.setItem('dueli_debug', '1').
+ * console.error stays for real errors; everything else goes through here
+ * so production consoles stay clean.
+ */
+function debugLog(...args: unknown[]): void {
+    try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('dueli_debug') === '1') {
+            console.log.apply(console, args);
+        }
+    } catch { /* storage unavailable */ }
+}
+
 export class ChunkUploader {
     private config: ChunkUploaderConfig;
     private serverTimestamp: number = 0;
@@ -65,9 +80,9 @@ export class ChunkUploader {
             }
 
             this.startTimestamp = Date.now();
-            console.log(`[ChunkUploader] Time synced. Server: ${this.serverTimestamp}, Local: ${this.startTimestamp}`);
+            debugLog(`[ChunkUploader] Time synced. Server: ${this.serverTimestamp}, Local: ${this.startTimestamp}`);
         } catch (error) {
-            console.warn('[ChunkUploader] Time sync failed, using local time');
+            debugLog('[ChunkUploader] Time sync failed, using local time');
             this.serverTimestamp = Date.now();
             this.startTimestamp = Date.now();
         }
@@ -122,7 +137,7 @@ export class ChunkUploader {
             const result: UploadResponse = await response.json();
 
             if (result.success) {
-                console.log(`[ChunkUploader] Chunk ${chunkNumber} uploaded successfully`);
+                debugLog(`[ChunkUploader] Chunk ${chunkNumber} uploaded successfully`);
                 this.config.onChunkUploaded?.(chunkNumber);
             } else {
                 throw new Error(result.error || 'Upload failed');
@@ -164,7 +179,7 @@ export class ChunkUploader {
             }
 
             const result: FinalizeResponse = await response.json();
-            console.log('[ChunkUploader] Finalization triggered:', result);
+            debugLog('[ChunkUploader] Finalization triggered:', result);
             return result.success === true;
         } catch (error) {
             console.error('[ChunkUploader] Failed to finalize:', error);

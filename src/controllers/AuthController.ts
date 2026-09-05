@@ -260,9 +260,11 @@ export class AuthController extends BaseController {
                 return this.error(c, this.t('auth_email_not_verified', c));
             }
 
-            // Create session
+            // Create session (fresh id on every login = rotation) and prune
+            // stale sessions beyond the per-user cap.
             const sessionModel = new SessionModel(DB);
             const session = await sessionModel.create({ user_id: user.id });
+            await sessionModel.pruneOldSessions(user.id);
 
             return this.success(c, {
                 sessionId: session.id,

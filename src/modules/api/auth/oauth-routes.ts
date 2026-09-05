@@ -142,14 +142,12 @@ oauthRoutes.get('/:provider/callback', async (c) => {
       throw new Error('Failed to find or create user after OAuth');
     }
 
-    // Create session
-    const sessionId = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    await DB.prepare(`
-      INSERT INTO sessions (id, user_id, expires_at, created_at)
-      VALUES (?, ?, ?, datetime('now'))
-    `).bind(sessionId, (user as any).id, expiresAt).run();
+    // Create session (same TTL + rotation policy as password login)
+    const { SessionModel } = await import('../../../models/SessionModel');
+    const sessionModel = new SessionModel(DB);
+    const session = await sessionModel.create({ user_id: (user as any).id });
+    await sessionModel.pruneOldSessions((user as any).id);
+    const sessionId = session.id;
 
     return c.html(getOAuthSuccessHTML(lang, sessionId));
 

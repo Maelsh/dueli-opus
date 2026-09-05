@@ -1,121 +1,88 @@
-# 04 — خط البثّ والفيديو (Streaming Pipeline)
+# 04 — خط البث (Streaming Pipeline)
 
-> **حالة الوثيقة:** 🔧 **هيكل موثَّق من الكود، غير مكتمل.**
-> كانت هذه الوثيقة مُشاراً إليها في المشروع وغير موجودة — أُنشئت الآن لتوثيق ما يفعله الكود **فعلاً**، مع تسمية الفجوات صراحةً بدل تركها مجهولة.
-> **إكمالها من مهام المرحلة 4** في `docs/15-ROADMAP.md`.
+> من الضغط على "ابدأ البث" إلى فيديو VOD قابل لإعادة المشاهدة.
 
----
-
-## 1. المكوّنات
-
-| المكوّن | الموقع | الدور |
-|---|---|---|
-| Signaling Worker | `STREAMING_URL` (Worker + Durable Object خارجي) | تبادل SDP/ICE بين الأطراف |
-| Realtime DO | `workers/dueli-realtime/` | بثّ الأحداث اللحظية (WebSocket + Hibernation) |
-| ffmpeg / Upload Server | `UPLOAD_URL` / `FFMPEG_SERVER_URL` | استقبال القطع، تجميع HLS، إنتاج VOD |
-| Chunks API | `src/modules/api/chunks/routes.ts` | تسجيل مفاتيح القطع والتحقق منها والوكالة على الـplaylist |
-| Signaling API | `src/modules/api/signaling/routes.ts` | إعداد الغرفة، ICE servers، التحقق من الأهلية |
-| SSE fallback | `src/modules/api/sse/routes.ts` | بديل عند غياب WebSocket |
-
-**التخزين:** `chunk_keys (competition_id, chunk_index, chunk_key UNIQUE)` — `migrations/0001`.
-
----
-
-## 2. عقود الـendpoints (كما في الكود)
-
-### Chunks API — `/api/chunks`
-
-| Endpoint | الحماية الحالية | ملاحظة معمارية |
-|---|---|---|
-| `POST /register` | `authMiddleware({required:true})` ✅ | يولّد مفتاح القطعة — **بـ`Math.random()`** ⚠️ SEC-06 |
-| `GET /verify` | `verifyUploadServerOrigin` ⚠️ | ترويسة `Origin` ليست مصادقة — SEC-03 |
-| `DELETE /:key` | `verifyUploadServerOrigin` ⚠️ | **حذف فيديو بلا مصادقة خادمية** — SEC-03 |
-| `GET /playlist/:id` | مفتوح | وكيل HLS لتجاوز CORS |
-
-### Signaling API — `/api/signaling`
-
-| Endpoint | الحماية | ملاحظة |
-|---|---|---|
-| `GET /ice-servers` | مفتوح | TURN من Cloudflare Calls؛ يسقط إلى STUN إن غابت المفاتيح |
-| `GET /config` | مفتوح | يعيد `room_id` واسم خادم الإشارة |
-| `POST /verify` | فحص جلسة داخل المعالج | يتحقق أن المستخدم منشئ أو خصم في المنافسة |
-| `POST /room/create` | ⚠️ بلا وسيط | إنشاء غرفة على خادم البثّ |
-
----
-
-## 3. التدفّق المقصود
+## الخريطة الكاملة
 
 ```
-1. المضيف يفتح صفحة المنافسة
-2. GET  /api/signaling/config          → room_id + عنوان خادم الإشارة
-3. POST /api/signaling/verify          → إثبات الأهلية (منشئ/خصم)
-4. GET  /api/signaling/ice-servers     → STUN/TURN
-5. POST /api/signaling/room/create     → إنشاء الغرفة
-6. تبادل SDP/ICE عبر خادم الإشارة     → اتصال WebRTC نظير-لنظير
-7. الأحداث اللحظية عبر Realtime DO (أو SSE fallback)
-8. تسجيل القطع:
-      POST /api/chunks/register        → مفتاح لكل قطعة
-      الرفع إلى ffmpeg server          → تجميع HLS
-      GET  /api/chunks/verify          (من الخادم) → تأكيد المفتاح
-9. المشاهد يستهلك HLS عبر GET /api/chunks/playlist/:id
-10. نهاية المنافسة → VOD قابل للمشاهدة
+┌──────────┐  join/create/verify   ┌─────────────────────────┐
+│  Pages   │ ────────────────────▶ │ Signaling Worker + DO   │
+│ (Hono)   │  POST /api/signaling  │ signaling-server.*      │
+│          │  /room/create,        │ (repo منفصل، HTTP-poll)  │
+│  /live/  │  /verify ──────────┐  └─────────────────────────┘
+│  :id     │                    │               │
+└──────────┘                    │               │ poll/signal
+     │ GET /api/signaling/      │               ▼
+     │ ice-servers              │  ┌────────────────────────┐
+     │ (TURN/STUN)              │  │ P2P WebRTC             │
+     │                          │  │ host ⇄ opponent        │
+     │ Cloudflare Calls         │  │ viewers: HLS/chunks    │
+     │ rtc.live.cloudflare.com  │  └────────────────────────┘
+     │ (TURN_TOKEN_ID +                  │ MediaRecorder
+     │  TURN_API_TOKEN)                  ▼
+     │                          │ VideoCompositor (canvas)  │
+     │                          │ → 5s chunks (mp4/webm)    │
+     │                          │ → ChunkUploader           │
+     │                          │ → POST /api/chunks        │
+     │                          └────────────────────────┘
+                                                  │
+                                                  ▼
+                                   ┌────────────────────────┐
+                                   │ ffmpeg server          │
+                                   │ maelshpro.com/ffmpeg   │
+                                   │ /finalize.php → VOD    │
+                                   │ match_<id>.mp4         │
+                                   └────────────────────────┘
+                                                  │
+                                                  ▼
+                                   ┌────────────────────────┐
+                                   │ POST /api/competitions │
+                                   │ /:id/end {vod_url}     │
+                                   │ status → recorded      │
+                                   └────────────────────────┘
 ```
 
----
+## المراحل بالتفصيل
 
-## 4. الفجوات المعروفة (لا تفترض عكسها)
+### 1. الإشارة (Signaling: Worker + Durable Object)
+- السيرفر في repo منفصل (`signaling-server`) — الـ Pages لا يستضيفه.
+- الـ Pages دورها: `POST /api/signaling/room/create` (تحويل للسيرفر)،
+  `POST /api/signaling/verify` (تحقق الجلسة + الدور host/opponent)،
+  `GET /api/signaling/config` (اكتشاف الإعدادات).
+- العميل (`live/scripts/client/{host,guest,viewer,shared}.ts`) يعمل
+  polling عبر `SignalingManager` — لا WebSocket في هذا الإصدار.
+- سجلات `[DEBUG]` في هذه الملفات تمر عبر `debugLog()` المشروط
+  (`localStorage.setItem('dueli_debug','1')` لتفعيلها).
 
-كل بند فُحص في الكود. تسميتها صراحةً أفضل من وثيقة تُوهم الاكتمال.
+### 2. ICE/TURN (`GET /api/signaling/ice-servers`)
+- `fetchCloudflareIceServers()` تطلب بيانات اعتماد قصيرة العمر (TTL 24h)
+  من Cloudflare Calls وتخزنها في Cache API ~6h.
+- **بدون `TURN_TOKEN_ID` + `TURN_API_TOKEN`**: رجوع STUN-only
+  (Google + Cloudflare STUN) — يعمل على الشبكات المفتوحة ويفشل غالباً
+  خلف symmetric NAT. هذا سبب عطل "الكاميرا لا تعمل" على Preview.
+- `Permissions-Policy` يجب أن يسمح: `camera=(self), microphone=(self)`
+  (`src/middleware/security.ts`) — القيمة `camera=()` كانت تمنع البث تماماً.
 
-| # | الفجوة | المرجع |
-|---|---|---|
-| S1 | **البثّ يتوقف بصمت بعد hibernation** — DO يبثّ من `Set` في الذاكرة تُمحى عند الإيقاظ | SEC-10 |
-| S2 | مفاتيح القطع بـ`Math.random()` — قابلة للتنبؤ، بلا صلاحية زمنية، بلا ربط بالمستخدم | SEC-06 |
-| S3 | `verify`/`delete` بترويسة `Origin` فقط + `startsWith` يسمح بـ`allowed.com.evil.net` | SEC-03 |
-| S4 | `POST /room/create` بلا وسيط مصادقة | SEC-13 |
-| S5 | لا استئناف للرفع (resumable) ولا checksum ولا منع تكرار القطع | المرحلة 4 |
-| S6 | لا سياسة موثّقة لتخزين الفيديو وحذفه (retention) | المرحلة 4 / 9 |
-| S7 | لا fallback معلَن عند توقف خادم ffmpeg | المرحلة 4 |
-| S8 | TURN غير مُختبَر على شبكات الجوال وNAT الصعب | المرحلة 4 |
-| S9 | لا مراقبة لحالات ICE ولا لجودة الاتصال | المرحلة 4 |
-| S10 | SSE يستعلم D1 كل ثانيتين ⇒ ~43 مليون استعلام/يوم عند 1,000 متصل | SEC-14 |
-| S11 | خادم ffmpeg خارج المستودع — لا عقد موثَّق ولا نسخة إصدار | المرحلة 4 |
+### 3. P2P (`P2PConnection`)
+- نسختان: `src/client/services/P2PConnection.ts` (المستخدمة فعلياً عبر
+  `src/client/index.ts`) و`src/lib/services/P2PConnection.ts` (legacy غير
+  مستوردة — أُبقيت للتوافق).
+- الأدوار: `host` (ينشئ offer) / `opponent` (يرد answer) / `viewer` (مشاهدة).
+- السجلات الإنتاجية خُفضت إلى `debugLog()` المشروط؛ `console.error` فقط
+  للأخطاء الحقيقية.
 
----
+### 4. القطع والرفع (Chunks → VOD)
+- `VideoCompositor`: يدمج البثين على canvas (1280×480)، يختار mp4 إن أمكن
+  (WebM لا يعمل على Safari/iPhone — يُنصح Chrome/Edge للاستضافة)،
+  ويقطع كل **5 ثوانٍ**.
+- `ChunkUploader`: مزامنة وقت → `POST /api/chunks` لكل قطعة →
+  `finalize` عند الإنهاء (`endStream()` تستدعي `/finalize.php` ثم
+  `/api/competitions/:id/end` مع `vod_url`).
+- التشغيل اللاحق: `GET /api/chunks/playlist/:id`.
 
-## 5. متغيّرات البيئة
-
-```bash
-STREAMING_URL=""        # خادم الإشارة (Worker + DO)
-UPLOAD_URL=""           # خادم ffmpeg
-FFMPEG_SERVER_URL=""    # تجاوز اختياري لـ/api/chunks
-TURN_TOKEN_ID=""        # Cloudflare Calls — غير سرّي
-TURN_API_TOKEN=""       # سرّي — لا يُلتزَم به في git
-UPLOAD_SERVER_ORIGINS="" # قائمة origins (تُستبدل بتوقيع HMAC في SEC-03)
-```
-
-بدون `TURN_*` يسقط `/api/signaling/ice-servers` إلى STUN فقط — أي فشل الاتصال خلف NAT متماثل (شائع في شبكات الجوال).
-
----
-
-## 6. معيار قبول خطّ البثّ
-
-من `docs/15-ROADMAP.md` المرحلة 5:
-
-- [ ] مضيف + خصم + مشاهد على **أجهزة وشبكات مختلفة**
-- [ ] بثّ بعد hibernation يصل لكل الاتصالات (يُغلق S1)
-- [ ] إعادة اتصال بعد قطع الشبكة بلا تكرار ولا فقد حالة
-- [ ] غرفتان متزامنتان معزولتان
-- [ ] VOD قابل للمشاهدة بعد كل جلسة
-- [ ] **20 جلسة متتالية** بلا فقد بثّ ولا توزيع أرباح مزدوج
-- [ ] استعلامات D1 لكل اتصال انخفضت ≥ 80% (يُغلق S10)
-
----
-
-## 7. ما يجب توثيقه لإكمال هذه الوثيقة
-
-1. عقد خادم ffmpeg: endpoints، أشكال الطلب/الاستجابة، رموز الأخطاء، نسخة الإصدار.
-2. مواصفة القطع: المدة، الترميز، معدل البت، التسمية.
-3. سياسة الاحتفاظ والحذف: مدة بقاء VOD، من يحذف، ومتى.
-4. مخطط تعافٍ: ماذا يرى المستخدم عند سقوط كل مكوّن.
-5. أرقام السعة: أقصى مشاهدين متزامنين لكل غرفة، وأقصى غرف متزامنة.
+## الأعطال المعروفة وحلولها
+| العرض | السبب | الحل |
+|-------|-------|------|
+| كاميرا سوداء / فشل اتصال خلف NAT | TURN غير مضبوط (STUN-only) | ضبط `TURN_TOKEN_ID` + `TURN_API_TOKEN` في داشبورد Cloudflare (Preview **و** Production) |
+| الكاميرا ممنوعة في كل المتصفحات | `Permissions-Policy: camera=()` | القيمة الحالية `(self)` — لا ترجعها لـ `()` |
+| VOD غير موجود بعد البث | `finalize` لم يُستدعَ | `endStream()` يجب أن تكمل قبل إغلاق الصفحة |

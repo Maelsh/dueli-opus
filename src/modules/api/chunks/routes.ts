@@ -10,29 +10,43 @@ import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../conf
 
 const chunksRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
-// Generate random key
+// Generate a cryptographically random key (SEC-06: predictable PRNGs must
+// never back security tokens). 24 bytes = 192-bit entropy.
 function generateChunkKey(): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let key = '';
-    for (let i = 0; i < 32; i++) {
-        key += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return key;
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+// Short-lived one-time upload keys: 10 minutes is ample for a 5s chunk.
+const CHUNK_KEY_TTL = "datetime('now', '+10 minutes')";
 
 // Origin verification middleware for upload server
 // التحقق من أن الطلب قادم من سيرفر الرفع المصرح به
 const verifyUploadServerOrigin = async (c: any, next: any) => {
     // Get allowed origins from env, fallback to defaults.ts
-    const allowedOrigins = (c.env.UPLOAD_SERVER_ORIGINS || DEFAULT_UPLOAD_SERVER_ORIGINS)
+    const allowedHosts = (c.env.UPLOAD_SERVER_ORIGINS || DEFAULT_UPLOAD_SERVER_ORIGINS)
         .split(',')
-        .map((o: string) => o.trim());
+        .map((o: string) => {
+            try {
+                return new URL(o.trim()).host.toLowerCase();
+            } catch {
+                return '';
+            }
+        })
+        .filter(Boolean);
 
-    // Check Origin header or Referer
-    const origin = c.req.header('Origin') || c.req.header('Referer') || '';
-    const isAllowed = allowedOrigins.some((allowed: string) => origin.startsWith(allowed));
+    // Check Origin header or Referer — compare EXACT hosts (SEC-03):
+    // prefix matching would accept https://allowed.com.attacker.net
+    const raw = c.req.header('Origin') || c.req.header('Referer') || '';
+    let host = '';
+    try {
+        host = new URL(raw).host.toLowerCase();
+    } catch {
+        host = '';
+    }
 
-    if (!isAllowed) {
+    if (!host || !allowedHosts.includes(host)) {
         return c.json({ valid: false, error: 'Origin not allowed' }, 403);
     }
 
@@ -69,13 +83,15 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
             return c.json({ success: false, error: 'Only host can register chunk keys' }, 403);
         }
 
-        // Generate unique key
+        // Generate unique key bound to (user, competition, chunk) with a
+        // short expiry — the upload server must present it within minutes.
         const chunk_key = generateChunkKey();
 
         // Insert into database
         await DB.prepare(
-            'INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key) VALUES (?, ?, ?)'
-        ).bind(competition_id, chunk_index, chunk_key).run();
+            `INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key, user_id, expires_at)
+             VALUES (?, ?, ?, ?, ${CHUNK_KEY_TTL})`
+        ).bind(competition_id, chunk_index, chunk_key, user?.id ?? null).run();
 
         return c.json({
             success: true,
@@ -104,18 +120,25 @@ chunksRoutes.get('/verify', verifyUploadServerOrigin, async (c) => {
         }
 
         const chunkKey = await DB.prepare(
-            'SELECT id, competition_id, chunk_index FROM chunk_keys WHERE chunk_key = ?'
-        ).bind(key).first();
+            'SELECT id, competition_id, chunk_index, user_id, expires_at FROM chunk_keys WHERE chunk_key = ?'
+        ).bind(key).first() as any;
 
         if (!chunkKey) {
             return c.json({ valid: false, error: 'Key not found' });
+        }
+
+        // Short-lived keys: reject expired ones and clean them up
+        if (chunkKey.expires_at && new Date(chunkKey.expires_at).getTime() < Date.now()) {
+            await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(key).run();
+            return c.json({ valid: false, error: 'Key expired' });
         }
 
         return c.json({
             valid: true,
             data: {
                 competition_id: chunkKey.competition_id,
-                chunk_index: chunkKey.chunk_index
+                chunk_index: chunkKey.chunk_index,
+                user_id: chunkKey.user_id ?? null
             }
         });
 

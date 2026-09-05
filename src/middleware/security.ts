@@ -8,12 +8,17 @@
 import type { Context, Next } from 'hono';
 import type { Bindings, Variables } from '../config/types';
 
-// Rate limiting store (in production, use Redis)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
-
-/**
- * Rate limiting middleware
- */
+// SEC-12 (docs/12-SECURITY-REMEDIATION.md): rate limiting is backed by D1
+// (see migrations/0012_rate_limits.sql), not an in-memory Map — Workers
+// isolates do not share memory across edge locations, so a Map-based limiter
+// resets for free every time a client hits a different PoP. The duplicate
+// in-memory implementation that used to live in src/middleware/rate-limit.ts
+// has been removed (it was never imported anywhere — main.ts always used
+// this file's `rateLimit`).
+//
+// Fallback: if D1 is unreachable for any reason, we fail OPEN (allow the
+// request) rather than 500 the whole platform — logged as a warning so it's
+// visible, but availability wins over rate limiting during a DB outage.
 export function rateLimit(options: {
     windowMs?: number;
     maxRequests?: number;
@@ -26,32 +31,41 @@ export function rateLimit(options: {
     } = options;
 
     return async (c: Context<{ Bindings: Bindings; Variables: Variables }>, next: Next) => {
-        const key = keyGenerator(c);
         const now = Date.now();
+        const windowStart = Math.floor(now / windowMs) * windowMs;
+        const resetTime = windowStart + windowMs;
+        const rawKey = keyGenerator(c);
+        // Namespace the key by route+window size so different rateLimit()
+        // call sites (general vs. auth-strict) never collide on the same row.
+        const key = `${c.req.path}:${windowMs}:${maxRequests}:${rawKey}`;
 
-        // Get or create rate limit entry
-        let entry = rateLimitStore.get(key);
-        if (!entry || now > entry.resetTime) {
-            entry = { count: 0, resetTime: now + windowMs };
-            rateLimitStore.set(key, entry);
+        let count = 1;
+        try {
+            const db = c.env.DB;
+            // Atomic upsert-increment — single round trip, no read-then-write race.
+            await db.prepare(
+                `INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1)
+                 ON CONFLICT(key, window_start) DO UPDATE SET count = count + 1`
+            ).bind(key, windowStart).run();
+            const row = await db.prepare(
+                `SELECT count FROM rate_limits WHERE key = ? AND window_start = ?`
+            ).bind(key, windowStart).first<{ count: number }>();
+            count = row?.count ?? 1;
+        } catch (err) {
+            console.error('[RateLimit] D1 unavailable, failing open:', err);
         }
 
-        // Check limit
-        if (entry.count >= maxRequests) {
+        if (count > maxRequests) {
             return c.json({
                 success: false,
                 error: 'Too many requests, please try again later',
-                retryAfter: Math.ceil((entry.resetTime - now) / 1000)
+                retryAfter: Math.ceil((resetTime - now) / 1000)
             }, 429);
         }
 
-        // Increment count
-        entry.count++;
-
-        // Add rate limit headers
         c.header('X-RateLimit-Limit', maxRequests.toString());
-        c.header('X-RateLimit-Remaining', (maxRequests - entry.count).toString());
-        c.header('X-RateLimit-Reset', new Date(entry.resetTime).toISOString());
+        c.header('X-RateLimit-Remaining', Math.max(0, maxRequests - count).toString());
+        c.header('X-RateLimit-Reset', new Date(resetTime).toISOString());
 
         await next();
     };
@@ -259,10 +273,13 @@ function isValidUrl(url: string): boolean {
  * Generate secure random token
  */
 export function generateSecureToken(length: number = 32): string {
+    // SEC-06: crypto-grade randomness (works in Workers and Node 19+).
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const rand = new Uint32Array(length);
+    crypto.getRandomValues(rand);
     let token = '';
     for (let i = 0; i < length; i++) {
-        token += chars.charAt(Math.floor(Math.random() * chars.length));
+        token += chars.charAt(rand[i] % chars.length);
     }
     return token;
 }

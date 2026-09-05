@@ -12,6 +12,15 @@ import type { Session } from '../config/types';
 export class SessionModel {
     protected readonly db: D1Database;
 
+    /**
+     * Session lifetime (B+: shortened from 30 days — no HttpOnly yet, so a
+     * shorter window limits the blast radius of a leaked Bearer token).
+     */
+    static readonly TTL_DAYS = 7;
+
+    /** Max concurrent sessions kept per user (rotation prunes older ones). */
+    static readonly MAX_SESSIONS_PER_USER = 5;
+
     constructor(db: D1Database) {
         this.db = db;
     }
@@ -64,7 +73,7 @@ export class SessionModel {
      */
     async create(data: Partial<Session>): Promise<Session> {
         const sessionId = crypto.randomUUID();
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+        const expiresAt = new Date(Date.now() + SessionModel.TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
         await this.db.prepare(`
             INSERT INTO sessions (id, user_id, expires_at, created_at)
@@ -99,6 +108,21 @@ export class SessionModel {
         const result = await this.db.prepare(
             'DELETE FROM sessions WHERE user_id = ?'
         ).bind(userId).run();
+        return result.meta.changes;
+    }
+
+    /**
+     * Rotation: keep only the N most recent sessions per user.
+     * Called on every successful login so a fresh session is issued
+     * while stale ones (other devices beyond the cap, leaked tokens)
+     * are pruned instead of accumulating forever.
+     */
+    async pruneOldSessions(userId: number, keep: number = SessionModel.MAX_SESSIONS_PER_USER): Promise<number> {
+        const result = await this.db.prepare(
+            `DELETE FROM sessions WHERE user_id = ? AND id NOT IN (
+                SELECT id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
+            )`
+        ).bind(userId, userId, keep).run();
         return result.meta.changes;
     }
 

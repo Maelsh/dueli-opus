@@ -39,6 +39,21 @@ interface PollData {
     room_status: RoomStatus;
 }
 
+/**
+ * Conditional debug logger (same pattern as
+ * src/modules/pages/live/scripts/client/shared.ts:42).
+ * Enable in devtools: localStorage.setItem('dueli_debug', '1').
+ * console.error stays for real errors; everything else goes through here
+ * so production consoles stay clean.
+ */
+function debugLog(...args: unknown[]): void {
+    try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('dueli_debug') === '1') {
+            console.log.apply(console, args);
+        }
+    } catch { /* storage unavailable */ }
+}
+
 export class P2PConnection {
     private config: P2PConnectionConfig;
     private pc: RTCPeerConnection | null = null;
@@ -77,7 +92,7 @@ export class P2PConnection {
                 this.iceServers = result.data.iceServers;
             }
         } catch (error) {
-            console.warn('Failed to fetch ICE servers, using defaults');
+            debugLog('Failed to fetch ICE servers, using defaults');
             this.iceServers = [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' }

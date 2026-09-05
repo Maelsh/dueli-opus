@@ -257,8 +257,29 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             // Simple console-only log
             function log(msg, type = 'info') {
-                const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📡';
+                const prefix = type === 'error' ? '�??' : type === 'success' ? '�??' : '�???';
                 console.log('[LiveRoom]', prefix, msg);
+            }
+
+            // Toast notification (same look as client/ui/Toast.ts; uses the
+            // global showToast from app.js when it has already loaded).
+            function showToast(msg, type = 'info') {
+                if (typeof window.showToast === 'function' && window.showToast !== showToast) {
+                    window.showToast(msg, type);
+                    return;
+                }
+                const existing = document.querySelector('.toast');
+                if (existing) existing.remove();
+                const toast = document.createElement('div');
+                toast.className = 'toast toast-' + type;
+                toast.textContent = msg;
+                toast.style.cssText = (typeof isRTL !== 'undefined' && isRTL) ? 'left: 24px;' : 'right: 24px;';
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateY(20px)';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
             }
             
             // DOM elements
@@ -801,13 +822,34 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 adBanner.style.display = 'none';
             };
             
-            // Report Ad
-            window.reportAd = function() {
-                if (confirm(tr.report_ad_confirm || 'Report this ad as inappropriate?')) {
-                    // TODO: Send report to server
-                    log('Ad reported', 'info');
-                    adBanner.style.display = 'none';
-                    showMessage(tr.ad_reported || 'Ad reported. Thank you!', 'success');
+            // Report Ad (wired: POST /api/reports {target_type:'ad'})
+            window.reportAd = async function() {
+                if (!confirm(tr.report_ad_confirm || 'Report this ad as inappropriate?')) return;
+                try {
+                    const res = await fetch('/api/reports', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || ''),
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            target_type: 'ad',
+                            target_id: Number(competitionId),
+                            reason: 'inappropriate_content',
+                            description: 'Live-room ad report'
+                        })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success !== false) {
+                        log('Ad reported', 'info');
+                        adBanner.style.display = 'none';
+                        showToast(tr.ad_reported || 'Ad reported. Thank you!', 'success');
+                    } else {
+                        showToast(data.error || tr.report_failed || 'Failed to submit report', 'error');
+                    }
+                } catch (err) {
+                    console.error('Ad report failed:', err);
+                    showToast(tr.report_failed || 'Failed to submit report', 'error');
                 }
             };
             
@@ -957,11 +999,9 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('Comment sent: ' + text, 'info');
             };
             
-            // Show message
+            // Show message (Toast-based; mirrors client/ui/Toast.ts)
             function showMessage(msg, type) {
-                // TODO: Implement toast notification
-                console.log('[' + type + ']', msg);
-                alert(msg);
+                showToast(msg, type || 'info');
             }
             
             // Cleanup on page unload

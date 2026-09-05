@@ -73,7 +73,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 <select id="withdrawMethod" required
                                         class="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition">
                                     <option value="bank_transfer">${tr.bank_transfer || 'Bank Transfer'}</option>
-                                    <option value="paypal">PayPal</option>
+                                    <!-- PayPal hidden until a real integration exists (SEC-01) -->
                                     <option value="wise">Wise</option>
                                     <option value="crypto_usdt">Crypto USDT (TRC-20)</option>
                                 </select>
@@ -85,7 +85,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                     ${tr.payment_details || 'Payment Details'}
                                 </label>
                                 <textarea id="withdrawDetails" rows="3" required
-                                          placeholder="${tr.payment_details_placeholder || 'IBAN / PayPal email / Wallet address...'}"
+                                          placeholder="${tr.payment_details_placeholder || 'IBAN / Wise email / Wallet address...'}"
                                           class="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition resize-none"></textarea>
                             </div>
 

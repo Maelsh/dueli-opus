@@ -21,6 +21,21 @@ export interface ConnectionState {
     quality: 'excellent' | 'good' | 'fair' | 'poor';
 }
 
+/**
+ * Conditional debug logger (same pattern as
+ * src/modules/pages/live/scripts/client/shared.ts:42).
+ * Enable in devtools: localStorage.setItem('dueli_debug', '1').
+ * console.error stays for real errors; everything else goes through here
+ * so production consoles stay clean.
+ */
+function debugLog(...args: unknown[]): void {
+    try {
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('dueli_debug') === '1') {
+            console.log.apply(console, args);
+        }
+    } catch { /* storage unavailable */ }
+}
+
 export class P2PConnection {
     private pc: RTCPeerConnection | null = null;
     private dataChannel: RTCDataChannel | null = null;
@@ -95,7 +110,7 @@ export class P2PConnection {
         // Connection state change
         this.pc.onconnectionstatechange = () => {
             const state = this.pc?.connectionState;
-            console.log('P2P connection state:', state);
+            debugLog('P2P connection state:', state);
 
             switch (state) {
                 case 'connected':
@@ -115,12 +130,12 @@ export class P2PConnection {
 
         // ICE connection state
         this.pc.oniceconnectionstatechange = () => {
-            console.log('ICE connection state:', this.pc?.iceConnectionState);
+            debugLog('ICE connection state:', this.pc?.iceConnectionState);
         };
 
         // Incoming stream
         this.pc.ontrack = (event) => {
-            console.log('Received remote stream');
+            debugLog('Received remote stream');
             if (this.onStream && event.streams[0]) {
                 this.onStream(event.streams[0]);
             }
@@ -271,7 +286,7 @@ export class P2PConnection {
         if (!this.dataChannel) return;
 
         this.dataChannel.onopen = () => {
-            console.log('Data channel opened');
+            debugLog('Data channel opened');
         };
 
         this.dataChannel.onmessage = (event) => {
@@ -290,7 +305,7 @@ export class P2PConnection {
         };
 
         this.dataChannel.onclose = () => {
-            console.log('Data channel closed');
+            debugLog('Data channel closed');
         };
     }
 
@@ -325,7 +340,7 @@ export class P2PConnection {
         this.reconnectCount++;
         this.updateState({ status: 'reconnecting' });
 
-        console.log(`Reconnection attempt ${this.reconnectCount}/${this.config.reconnectAttempts}`);
+        debugLog(`Reconnection attempt ${this.reconnectCount}/${this.config.reconnectAttempts}`);
 
         this.reconnectTimer = setTimeout(() => {
             this.reinitialize();
@@ -346,7 +361,7 @@ export class P2PConnection {
     private startFallbackTimer() {
         this.fallbackTimer = setTimeout(() => {
             if (this.state.status !== 'connected') {
-                console.warn('P2P connection timeout, triggering fallback');
+                debugLog('P2P connection timeout, triggering fallback');
                 this.triggerFallback();
             }
         }, this.config.fallbackTimeout);
@@ -497,7 +512,7 @@ export class P2PConnection {
     private sendSignal(data: any) {
         // This should be implemented by the parent class
         // to send data through the signaling server
-        console.log('Signal:', data);
+        debugLog('Signal:', data);
     }
 
     /**

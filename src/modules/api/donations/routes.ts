@@ -7,8 +7,14 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { DonationModel } from '../../../models/DonationModel';
+import { authMiddleware } from '../../../middleware/auth';
 
 const donationsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Optional auth on every route in this router: donations can be made
+// anonymously, but when a session is present we attach the user so
+// /:id/complete can check ownership (SEC-01).
+donationsRoutes.use('*', authMiddleware({ required: false }));
 
 /**
  * GET /api/donations/top-supporters
@@ -71,8 +77,8 @@ donationsRoutes.post('/', async (c) => {
             }, 400);
         }
 
-        // Validate payment method
-        const validMethods = ['stripe', 'paypal', 'card'];
+        // Validate payment method (paypal hidden until a real integration exists)
+        const validMethods = ['stripe', 'card'];
         if (!payment_method || !validMethods.includes(payment_method)) {
             return c.json({
                 success: false,
@@ -143,11 +149,16 @@ donationsRoutes.post('/', async (c) => {
 
 /**
  * POST /api/donations/:id/complete
- * Mark donation as completed (webhook from payment processor)
+ * SEC-01 (docs/12-SECURITY-REMEDIATION.md): legacy manual completion.
+ * NO LONGER PUBLIC — requires auth and the caller must own the donation.
+ * The supported path is the Stripe webhook (POST /api/donations/webhook);
+ * this route stays for non-Stripe methods (e.g. manual bank transfer) where
+ * there is no webhook, but it can never complete someone else's donation.
  */
-donationsRoutes.post('/:id/complete', async (c) => {
+donationsRoutes.post('/:id/complete', authMiddleware({ required: true }), async (c) => {
     try {
-        const donationId = parseInt(c.req.param('id'));
+        const user = c.get('user') as any;
+        const donationId = parseInt(c.req.param('id') || '0');
         const body = await c.req.json();
         const { transaction_id } = body;
 
@@ -159,6 +170,26 @@ donationsRoutes.post('/:id/complete', async (c) => {
         }
 
         const donationModel = new DonationModel(c.env.DB);
+        const existing = await donationModel.findById(donationId);
+
+        if (!existing) {
+            return c.json({
+                success: false,
+                error: { message: 'Donation not found' }
+            }, 404);
+        }
+
+        // Ownership check: only the donor (when the donation has an owner)
+        // may complete it manually.
+        if (existing.user_id != null && existing.user_id !== user?.id) {
+            console.warn(`[Donations] forbidden manual complete: user=${user?.id} donation=${donationId} owner=${existing.user_id}`);
+            return c.json({
+                success: false,
+                error: { message: 'Forbidden' }
+            }, 403);
+        }
+
+        console.warn(`[Donations] manual complete: user=${user?.id} donation=${donationId} (prefer Stripe webhook for stripe/card)`);
         const donation = await donationModel.markCompleted(donationId, transaction_id);
 
         if (!donation) {

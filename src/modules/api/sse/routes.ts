@@ -58,6 +58,9 @@ sseRoutes.get('/', async (c) => {
     const lastEventId       = lastEventIdHeader ? parseInt(lastEventIdHeader, 10) : 0;
     const pusher            = new EventPusher(c.env.DB, c.env);
     const HEARTBEAT_MS      = 25_000; // 25 seconds
+    // SEC-14: D1 polling fallback interval (was 2s = 43.2M queries/day at
+    // 1k connections). Widened until the WebSocket/DO push (SEC-10) lands.
+    const POLL_INTERVAL_MS  = 10_000; // 10 seconds
 
     // Cloudflare Workers ReadableStream SSE pattern
     const stream = new ReadableStream({
@@ -110,7 +113,7 @@ sseRoutes.get('/', async (c) => {
                     }
 
                     // Heartbeat
-                    if (pollCount % Math.floor(HEARTBEAT_MS / 2000) === 0) {
+                    if (pollCount % Math.floor(HEARTBEAT_MS / POLL_INTERVAL_MS) === 0) {
                         enqueue(EventPusher.heartbeat());
                     }
                 } catch {
@@ -120,7 +123,10 @@ sseRoutes.get('/', async (c) => {
 
                 // Schedule next poll (non-blocking in Cloudflare Workers via setTimeout)
                 // Note: Cloudflare Workers support setTimeout within ReadableStream start()
-                setTimeout(poll, 2000);
+                // SEC-14 (docs/12-SECURITY-REMEDIATION.md): was 2000ms — at 1,000 concurrent
+                // connections that is 43.2M D1 queries/day. WebSocket/DO (SEC-10) is the real
+                // fix; this fallback interval is widened until that lands (docs/15 Phase 4).
+                setTimeout(poll, POLL_INTERVAL_MS);
             };
 
             // Start polling

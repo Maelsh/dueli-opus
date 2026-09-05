@@ -106,7 +106,7 @@ async function assertInvariant(db: D1Database, userId: number) {
 | F9 | webhook بتوقيع خاطئ | 400، الحالة لم تتغيّر | SEC-01 |
 | F10 | **نفس** webhook مرتين | أثر مالي **واحد** | M4 |
 | F11 | webhook بمبلغ مخالف | مرفوض | SEC-01 |
-| F12 | `POST /donations/:id/complete` | **404** | SEC-01 |
+| F12 | `POST /donations/:id/complete` | **404 (delete) أو 401/403 + مالك فقط (protect)** — نُفذت الحماية: `tests/api/donations-security.test.ts` (6 اختبارات) | SEC-01 |
 | F13 | منافسة تنتهي مرتين | توزيع واحد | idempotency |
 | F14 | توزيع أرباح | مجموع الحصص == الإيراد | محاسبة |
 | F15 | تشغيل cron متزامن | توزيع واحد | SEC-04 |

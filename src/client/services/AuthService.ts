@@ -307,7 +307,7 @@ export class AuthService {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ email })
                                 });
-                                const d = await r.json();
+                                const d = (await r.json()) as any;
                                 Modal.showAuthMessage(d.data?.message || d.error || '', d.success ? 'success' : 'error');
                             } catch {
                                 Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
@@ -315,7 +315,7 @@ export class AuthService {
                                 btn.disabled = false;
                             }
                         };
-                        msg.after(btn);
+                        msg.insertAdjacentElement('afterend', btn);
                     }
                 }
                 // Switch to login tab after 2 seconds
