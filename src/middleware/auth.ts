@@ -25,11 +25,9 @@ export function authMiddleware(options: { required?: boolean } = {}) {
     const { required = true } = options;
 
     return async (c: AppContext, next: Next) => {
-        // T2.2: Accept session via Bearer header OR ?token= query param OR sessionId cookie
-        // (EventSource cannot send custom headers, so SSE needs query-param support)
+        // Accept session via Bearer header OR sessionId cookie (SEC-11: query param token rejected)
         const authHeader = c.req.header('Authorization');
         const sessionId = authHeader?.replace('Bearer ', '')
-            || c.req.query('token')
             || getCookie(c, 'sessionId');
 
         if (!sessionId) {
