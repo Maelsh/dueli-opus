@@ -8,6 +8,7 @@
  */
 
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
@@ -319,7 +320,27 @@ app.get('/live/:id/finance', liveFinanceDashboardPage);
 // Error Handling - معالجة الأخطاء
 // ============================================
 
-app.notFound((c) => {
+/**
+ * P0 fix (2026-09-05): @hono/vite-cloudflare-pages@0.4.3's generated entry
+ * (dist/entry.js) does `worker.route('/', app); worker.notFound(app.notFoundHandler)`.
+ * Hono 4's Hono class stores the handler set by `.notFound()` in the private
+ * class field `#notFoundHandler` (hono/dist/hono-base.js) — there is no public
+ * `notFoundHandler` property, so `app.notFoundHandler` reads as `undefined`.
+ * The plugin then calls `worker.notFound(undefined)`, and `.route()` only
+ * copies `app`'s registered routes onto `worker` (hono-base.js `route()`), not
+ * its notFound handler — so any request that misses every copied route hits
+ * `worker`'s own now-undefined handler and crashes to a 500. We register the
+ * real handler the normal way AND mirror it onto a `notFoundHandler` property
+ * so the plugin's `app.notFoundHandler` read finds something real instead of
+ * `undefined`. See https://github.com/honojs/vite-plugins/issues (entry.js
+ * assumes Hono ≤3's public `app.notFoundHandler`, removed as private in v4).
+ */
+const onNotFound = (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
+  const path = c.req.path;
+  if (path === '/api' || path.startsWith('/api/')) {
+    return c.json({ success: false, error: 'Not Found' }, 404);
+  }
+
   const lang = c.get('lang') || DEFAULT_LANGUAGE;
   const tr = translations[getUILanguage(lang)];
 
@@ -337,8 +358,16 @@ app.notFound((c) => {
     ${getFooter(lang)}
   `;
 
-  return c.html(generateHTML(content, lang, '404'));
-});
+  return c.html(generateHTML(content, lang, '404'), 404);
+};
+
+app.notFound(onNotFound);
+
+// Compatibility shim for @hono/vite-cloudflare-pages's generated entry (see
+// comment above) — exposes the same handler under the public property name
+// the plugin reads instead of the real private field.
+type PagesCompatibleHono = typeof app & { notFoundHandler?: typeof onNotFound };
+(app as PagesCompatibleHono).notFoundHandler = onNotFound;
 
 app.onError((err, c) => {
   console.error(err);

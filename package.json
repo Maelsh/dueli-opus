@@ -8,7 +8,7 @@
     "dev:sandbox": "npm run build:css && npm run build:client && wrangler pages dev dist --d1=dueli-db --local --ip 0.0.0.0 --port 5173",
     "build": "npm run build:css && npm run build:client && vite build",
     "build:client": "npx esbuild src/client/index.ts --bundle --outfile=dist/static/app.js --format=iife --minify --sourcemap",
-    "build:css": "npx @tailwindcss/cli -i ./src/styles.css -o ./public/static/styles.css",
+    "build:css": "tailwindcss -i ./src/styles.css -o ./public/static/styles.css",
     "preview": "wrangler pages dev dist",
     "deploy": "npm run build && wrangler pages deploy dist",
     "deploy:prod": "npm run build && wrangler pages deploy dist --project-name dueli",
@@ -27,6 +27,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260905.1",
+    "@tailwindcss/cli": "^4.1.17",
     "autoprefixer": "^10.4.22",
     "marked": "^17.0.1",
     "postcss": "^8.5.6",
