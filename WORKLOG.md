@@ -6,6 +6,10 @@
 
 ---
 
+## 2026-09-08
+
+- `[2026-09-08] [GOV-11]` — أساس integration D1 حقيقي عبر Wrangler CLI فقط: (1) runner جديد `tests/integration/helpers/wrangler-d1-runner.mjs` ينفذ Wrangler المحلي المثبت بـ arguments array (بدون shell interpolation) — migrations عبر `wrangler d1 migrations apply dueli-db --local --persist-to=.wrangler-test` من قاعدة معزولة تُمسح عند كل تشغيل، والاستعلامات عبر `wrangler d1 execute --json` على نفس القاعدة، (2) 16 schema-contract tests بأنواع دقيقة (type guards بلا `any`/`@ts-ignore`)، (3) scripts: `test:integration` + `test:all` مع استبعاد integration من `npm test`، (4) `.wrangler-test/` ignored. **لا FakeD1، لا TEST_SCHEMA، لا SQL parsing/comment stripping/statement splitting — ملفات migrations تطبق كما هي.** / الملفات: tests/integration/, vitest.integration.config.ts, vitest.config.ts, package.json, .gitignore, docs/13 / نفذ: Cline / اختبار: `npm run test:integration` ✅ مرتين متتاليتين (16/16) + `npm test` ✅ (35/35) + `test:all` ✅ + build ✅ + tsc ✅ + db:reset ✅ / **خارج النطاق عمداً:** B1/B2/B4/B5، SEC-02، SEC-11، المالية M1–M6، Browser E2E
+
 ## 2026-08-23
 
 - `[2026-08-23] [P0-SRS0.2]` — إنشاء `docs/COMPLETE_PROJECT_PLANS.md` (أم الخطط + الخطط الخمس + الـSRS التفصيلي) كمرجع وحيد للخطط. / الملفات: docs/COMPLETE_PROJECT_PLANS.md / نفذ: ox-alpha / اختبار: لا ينطبق (توثيق)

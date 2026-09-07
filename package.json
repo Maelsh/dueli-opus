@@ -17,7 +17,9 @@
     "db:seed": "wrangler d1 execute dueli-db --local --file=./db/seed.sql",
     "db:reset": "node dev-tools/reset-d1.mjs && npm run db:migrate:local && npm run db:seed",
     "routes:inventory": "node dev-tools/route-inventory.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run -c vitest.integration.config.ts",
+    "test:all": "npm test && npm run test:integration"
   },
   "dependencies": {
     "@hono/vite-cloudflare-pages": "^0.4.2",
