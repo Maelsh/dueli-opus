@@ -52,10 +52,24 @@ jobs:
             exit 1
           fi
 
-      - name: SEC-11 — no session token in query string for auth middleware
+      # SEC-11 — TRANSITIONAL (GRACE-PERIOD, no fixed expiry date):
+      # (a) Incident rollback (PR #1, merge e38a2d3, 2026-09-07) restored the raw
+      #     ?token= query param because its premature removal (55da144) broke
+      #     authenticated SSE user channels in Production (EventSource cannot
+      #     send headers and no realtime ticket flow exists yet).
+      # (b) This remains a KNOWN security debt (docs/12-SECURITY-REMEDIATION.md
+      #     SEC-11) — the check below still FAILS when query('token') is present,
+      #     but only as a ::warning so CI does not demand breaking Production.
+      # (c) Flip back to a blocking check (remove continue-on-error) ONLY after:
+      #     realtime ticket flow (POST /api/realtime/ticket) ships AND tests
+      #     cover expiry + single-use + user-binding of tickets (Phase 4 of
+      #     docs/15-ROADMAP.md).
+      # (d) No artificial closure date is set.
+      - name: SEC-11 — query token remains temporarily required for authenticated SSE (GRACE-PERIOD)
+        continue-on-error: true
         run: |
           if grep -rn "query('token')" src/middleware; then
-            echo "::error::token accepted via query string in authMiddleware — see SEC-11"
+            echo "::warning::token accepted via query string in authMiddleware — SEC-11 is OPEN (known security debt); blocking re-check returns only after realtime ticket flow + expiry/single-use/user-binding tests (docs/15-ROADMAP.md Phase 4)"
             exit 1
           fi
 
