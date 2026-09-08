@@ -15,4 +15,7 @@ export interface WranglerD1JsonResult {
  */
 export declare function applyMigrationsViaWrangler(): string;
 export declare function queryD1(command: string): D1ResultRow[];
+export declare function execD1(command: string): void;
+export declare function wipeTestState(): void;
+export declare function applyMigrationFiles(fileNames: string[]): void;
 export declare function listMigrationFileNames(): string[];

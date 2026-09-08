@@ -189,6 +189,7 @@ export const ar = {
     errors: {
         missing_fields: 'الحقول المطلوبة مفقودة',
         content_required: 'المحتوى مطلوب',
+        invalid_id: 'معرّف غير صالح',
         invalid_rating: 'التقييم يجب أن يكون بين 1 و 5',
         invalid_request: 'طلب غير صالح',
         fetch_failed: 'فشل في جلب البيانات',
@@ -316,6 +317,12 @@ export const ar = {
         no_messages: 'لا توجد رسائل',
         type_message: 'اكتب رسالة...',
         enter_message: 'أدخل رسالتك',
+    },
+
+    // رسائل أخطاء الرسائل (تستخدم بواسطة MessageController)
+    message: {
+        invalid_recipient: 'المستلم غير صالح',
+        content_required: 'محتوى الرسالة مطلوب',
     },
 
     // الإعدادات

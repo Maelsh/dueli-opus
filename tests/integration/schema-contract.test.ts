@@ -47,6 +47,7 @@ const EXPECTED_MIGRATIONS = [
     '0012_rate_limits.sql',
     '0012_reports_ad_target.sql',
     '0013_chunk_key_binding.sql',
+    '0014_messages_conversation_alignment.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -137,8 +138,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 14 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(14);
+    it('has exactly 15 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(15);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -163,9 +164,9 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
         }
     });
 
-    it('messages does NOT have conversation_id or read_at', () => {
-        expect(messagesColumns).not.toContain('conversation_id');
-        expect(messagesColumns).not.toContain('read_at');
+    it('messages has the 0014 aligned columns: conversation_id and read_at (B1)', () => {
+        expect(messagesColumns).toContain('conversation_id');
+        expect(messagesColumns).toContain('read_at');
     });
 
     it('user_earnings table exists (0001_initial_schema.sql)', () => {

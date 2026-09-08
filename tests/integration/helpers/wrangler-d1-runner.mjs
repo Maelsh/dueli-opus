@@ -22,6 +22,7 @@ function runWrangler(args, { expectJson = false } = {}) {
             cwd: PROJECT_ROOT,
             env: CHILD_ENV,
             encoding: 'utf-8',
+            maxBuffer: 64 * 1024 * 1024,
         });
         if (!expectJson) {
             return { stdout, stderr: '' };
@@ -118,4 +119,53 @@ export function listMigrationFileNames() {
     return readdirSync(join(PROJECT_ROOT, 'migrations'))
         .filter((f) => f.startsWith('00') && f.endsWith('.sql'))
         .sort();
+}
+
+/**
+ * Remove the isolated local D1 state directory without applying anything.
+ * Used by tests that need to drive a custom migration sequence
+ * (e.g. legacy-data fixture on pre-0014 schema, then apply 0014 only).
+ */
+export function wipeTestState() {
+    rmSync(TEST_PERSIST_DIR, { recursive: true, force: true });
+}
+
+/**
+ * Execute real migration files as-is, in the given order, via the official
+ * Wrangler CLI (`wrangler d1 execute --file`). No SQL content is ever read,
+ * parsed, transformed, or copied by this runner. Does NOT wipe state —
+ * callers control the sequence explicitly.
+ */
+export function applyMigrationFiles(fileNames) {
+    for (const name of fileNames) {
+        runWrangler([
+            'd1',
+            'execute',
+            DATABASE_NAME,
+            '--local',
+            `--persist-to=${TEST_PERSIST_DIR}`,
+            '--file',
+            join(PROJECT_ROOT, 'migrations', name),
+        ]);
+    }
+}
+
+/**
+ * Execute a write/DDL statement through the Wrangler CLI against the same
+ * isolated local D1. Results are parsed (to surface SQL errors) but discarded.
+ */
+export function execD1(command) {
+    runWrangler(
+        [
+            'd1',
+            'execute',
+            DATABASE_NAME,
+            '--local',
+            `--persist-to=${TEST_PERSIST_DIR}`,
+            '--json',
+            '--command',
+            command,
+        ],
+        { expectJson: true },
+    );
 }

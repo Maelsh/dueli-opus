@@ -215,6 +215,7 @@ export const en = {
     errors: {
         missing_fields: 'Missing required fields',
         content_required: 'Content is required',
+        invalid_id: 'Invalid ID',
         invalid_rating: 'Rating must be between 1 and 5',
         invalid_request: 'Invalid request',
         fetch_failed: 'Failed to fetch data',
@@ -340,6 +341,12 @@ export const en = {
         no_messages: 'No messages yet',
         type_message: 'Type a message...',
         enter_message: 'Enter your message',
+    },
+
+    // Message error keys (used by MessageController)
+    message: {
+        invalid_recipient: 'Invalid recipient',
+        content_required: 'Message content is required',
     },
 
     // Settings Page

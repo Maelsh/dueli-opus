@@ -35,9 +35,11 @@ export interface ConversationWithUser extends Conversation {
  */
 export interface Message {
     id: number;
-    conversation_id: number;
+    conversation_id: number | null;
     sender_id: number;
+    receiver_id: number | null;
     content: string;
+    is_read: number;
     read_at: string | null;
     created_at: string;
 }
@@ -64,13 +66,40 @@ export class MessageModel extends BaseModel<Message> {
 
     /**
      * Create - required by BaseModel
+     *
+     * Saves: conversation_id, sender_id, receiver_id, content, is_read,
+     * read_at, created_at. receiver_id is derived from the conversation —
+     * never from caller-supplied (potentially untrusted) data. The sender
+     * must be a participant of the conversation.
      */
     async create(data: Partial<Message>): Promise<Message> {
+        if (!data.conversation_id || !data.sender_id || !data.content) {
+            throw new Error('conversation_id, sender_id and content are required');
+        }
+
+        const conversation = await this.db.prepare(`
+            SELECT user1_id, user2_id FROM conversations WHERE id = ?
+        `).bind(data.conversation_id).first<{ user1_id: number; user2_id: number }>();
+
+        if (!conversation) {
+            throw new Error('Conversation not found');
+        }
+
+        // Ownership check: the sender must be a participant of this conversation.
+        if (conversation.user1_id !== data.sender_id && conversation.user2_id !== data.sender_id) {
+            throw new Error('Sender is not a participant of this conversation');
+        }
+
+        const receiverId = conversation.user1_id === data.sender_id
+            ? conversation.user2_id
+            : conversation.user1_id;
+
         const now = new Date().toISOString();
         const result = await this.db.prepare(`
-            INSERT INTO ${this.tableName} (conversation_id, sender_id, content, created_at)
-            VALUES (?, ?, ?, ?)
-        `).bind(data.conversation_id, data.sender_id, data.content, now).run();
+            INSERT INTO ${this.tableName}
+                (conversation_id, sender_id, receiver_id, content, is_read, read_at, created_at)
+            VALUES (?, ?, ?, ?, 0, NULL, ?)
+        `).bind(data.conversation_id, data.sender_id, receiverId, data.content, now).run();
 
         if (result.success && result.meta.last_row_id) {
             // Update conversation's last_message_at
@@ -87,10 +116,10 @@ export class MessageModel extends BaseModel<Message> {
      * Update - required by BaseModel
      */
     async update(id: number, data: Partial<Message>): Promise<Message | null> {
-        if (data.read_at !== undefined) {
+        if (data.is_read !== undefined || data.read_at !== undefined) {
             await this.db.prepare(`
-                UPDATE ${this.tableName} SET read_at = ? WHERE id = ?
-            `).bind(data.read_at, id).run();
+                UPDATE ${this.tableName} SET is_read = ?, read_at = ? WHERE id = ?
+            `).bind(data.is_read ?? 1, data.read_at ?? null, id).run();
         }
         return this.findById(id);
     }
@@ -117,12 +146,27 @@ export class MessageModel extends BaseModel<Message> {
 
     /**
      * Mark messages as read
+     *
+     * Model-level membership guard: only a user who is an actual
+     * participant of the conversation may mark its messages read.
+     * A non-participant (user C) is rejected before any row is touched,
+     * so `is_read`/`read_at` on an A/B conversation can never be
+     * mutated from outside. Uses prepared statement + bind() only.
      */
     async markAsRead(conversationId: number, userId: number): Promise<void> {
+        const participant = await this.db.prepare(`
+            SELECT 1 FROM conversations
+            WHERE id = ? AND (user1_id = ? OR user2_id = ?)
+        `).bind(conversationId, userId, userId).first();
+
+        if (!participant) {
+            return;
+        }
+
         const now = new Date().toISOString();
         await this.db.prepare(`
-            UPDATE ${this.tableName} 
-            SET read_at = ? 
+            UPDATE ${this.tableName}
+            SET is_read = 1, read_at = ?
             WHERE conversation_id = ? AND sender_id != ? AND read_at IS NULL
         `).bind(now, conversationId, userId).run();
     }
@@ -210,7 +254,7 @@ export class ConversationModel extends BaseModel<Conversation> {
                 u.display_name as other_display_name,
                 u.avatar_url as other_avatar,
                 (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
-                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND sender_id != ? AND read_at IS NULL) as unread_count
+                (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND sender_id != ? AND is_read = 0) as unread_count
             FROM ${this.tableName} c
             JOIN users u ON u.id = CASE WHEN c.user1_id = ? THEN c.user2_id ELSE c.user1_id END
             WHERE c.user1_id = ? OR c.user2_id = ?
