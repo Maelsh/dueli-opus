@@ -5,6 +5,33 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 
 ---
+## 2026-09-08 (B1)
+
+- `[2026-09-08] [GOV-11/B1]` — إصلاح B1 (Core Messaging): محاذاة `messages` مع نموذج conversations:
+  - migration جديدة `migrations/0014_messages_conversation_alignment.sql` (غير مدمِّرة): إضافة `conversation_id` (FK→conversations ON DELETE SET NULL) و`read_at`، إنشاء محادثات legacy (INSERT OR IGNORE بترتيب min/max مطابق لـfindOrCreate)، ربط كل رسالة قديمة بمحادثتها، backfill `read_at` من `is_read=1`، فهارس `idx_messages_conversation_created (conversation_id, created_at)` و`idx_messages_receiver_unread (receiver_id, is_read)` — لا حذف لأعمدة legacy ولا تعديل migrations قديمة
+  - `src/models/MessageModel.ts`: الإنشاء يحفظ conversation_id/sender_id/receiver_id/content/is_read/read_at/created_at، مع اشتقاق receiver_id من المحادثة (لا من مدخلات) وفحص عضوية المرسل (رمي خطأ لغير المشارك)؛ markAsRead يضبط `is_read=1, read_at=now`؛ unread_count في قائمة المحادثات بـ`is_read = 0` — كل الاستعلامات prepared + bind()
+  - اختبارات حمراء أولاً: `tests/integration/messages-schema.test.ts` (9 اختبارات على D1 حقيقية عبر Wrangler CLI: أعمدة/فهارس/إنشاء/قراءة/تعليم-كمقروء/unread 1→0/وصول A وB فقط/رفض C/backfill legacy عبر تطبيق 0001–0013 ثم 0014 فقط) — فشلت قبل الإصلاح بـ`no such column: m.conversation_id: SQLITE_ERROR` ونجحت بعده
+  - runner: `applyMigrationFiles` (تنفيذ ملفات migration حقيقية عبر `wrangler d1 execute --file` بلا أي SQL parsing)، `execD1`، `wipeTestState`، إعادة محاولة لأخطاء workerd العابرة (fetch failed/SQLITE_BUSY)
+  - `vitest.integration.config.ts`: `fileParallelism: false` (حالة D1 واحدة مشتركة)
+  - `package.json`: scripts `test:integration` و`test:all` (المطلوبة في docs/13 §6 والمهام كانت مفقودة)
+  - `tests/integration/schema-contract.test.ts`: تحديث العقد إلى 15 migration وأعمدة 0014
+  / الملفات: migrations/0014_messages_conversation_alignment.sql, src/models/MessageModel.ts, tests/integration/messages-schema.test.ts, tests/integration/schema-contract.test.ts, tests/integration/helpers/wrangler-d1-runner.{mjs,d.mts}, vitest.integration.config.ts, package.json, PLAN-STATUS.md, WORKLOG.md / نفذ: Cline (B1 agent) / اختبار: integration 25/25 مرتين متتاليتين ✅ + npm test 35/35 ✅ + test:all ✅ + build ✅ + tsc ✅ + db:reset ✅ / **لا commit/PR/push — بانتظار موافقة القائد** / خارج النطاق عمداً: money/ads/auth/SSE/recommendations/P0-404/Tailwind
+
+- `[2026-09-08] [B1-i18n]` — إصلاح i18n للرسائل (مطلوب بالمهمة — شرط معماري إلزامي):
+  - إضافة مفاتيح i18n المفقودة إلى `src/i18n/ar.ts` و`src/i18n/en.ts`:
+    - `errors.invalid_id`: 'معرّف غير صالح' / 'Invalid ID'
+    - `message.invalid_recipient`: 'المستلم غير صالح' / 'Invalid recipient'
+    - `message.content_required`: 'محتوى الرسالة مطلوب' / 'Message content is required'
+  - إنشاء `tests/api/messages-i18n.test.ts` (35 اختبار):
+    - التحقق من وجود جميع مفاتيح i18n المستخدمة في MessageController بـar وen
+    - التحقق من أن الترجمات مختلفة بين ar وen (تثبت الترجمة الفعلية)
+    - التحقق من أن t() تُرجع نصوص مترجمة
+    - التحقق من دعم RTL/LTR
+    - توثيق عدم وجود نصوص ثابتة في الملفات المعدلة
+  / الملفات: src/i18n/ar.ts, src/i18n/en.ts, tests/api/messages-i18n.test.ts / نفذ: Cline / اختبار: npm test 70/70 ✅ (35 i18n + 35 original) + build ✅ + tsc ✅ / **لا commit/PR/push — بانتظار موافقة القائد**
+
+---
+
 
 ## 2026-09-08
 
