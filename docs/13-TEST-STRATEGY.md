@@ -49,7 +49,10 @@ tests/
 │   ├── sanitize.test.ts
 │   └── stripe-signature.test.ts
 ├── integration/
-│   ├── setup.ts                  # تهيئة D1 من migrations/
+│   ├── schema-contract.test.ts    # عقد schema على D1 حقيقية عبر Wrangler CLI
+│   ├── helpers/
+│   │   ├── wrangler-d1-runner.mjs     # ينفذ Wrangler CLI المحلي (migrations + queries)
+│   │   └── wrangler-d1-runner.d.mts   # أنواع دقيقة لمخرجات الـ runner
 │   ├── financial/                # ← يُكتب أولاً
 │   │   ├── invariant.test.ts     # M1
 │   │   ├── withdrawal.test.ts    # SEC-02
@@ -67,6 +70,22 @@ tests/
     ├── db.ts
     └── factories.ts
 ```
+
+### أوامر الاختبار الفعلية
+
+```bash
+npm test                  # unit/API suite الحالية (35 اختباراً)
+npm run test:integration  # D1 schema-contract integration suite (16 اختباراً)
+npm run test:all          # unit ثم integration بالترتيب
+```
+
+كيف تعمل integration suite:
+- تعتمد **Wrangler CLI المحلي المثبت** (`node_modules/wrangler/bin/wrangler.js`) حصراً.
+- تطبيق الـ migrations: `wrangler d1 migrations apply dueli-db --local --persist-to=.wrangler-test` على حالة معزولة تُمسح وتُبنى فارغة عند كل تشغيل.
+- الاستعلامات (PRAGMA/SELECT فقط): `wrangler d1 execute dueli-db --local --persist-to=.wrangler-test --json` على **نفس قاعدة D1 المعزولة**، وتفحص Vitest مخرجات JSON.
+- كل ملفات `migrations/*.sql` تطبق **كما هي** عبر Wrangler — لا FakeD1، لا TEST_SCHEMA، ولا أي SQL parsing/comment stripping/statement splitting.
+- `.wrangler-test/` حالة محلية ignored في `.gitignore` ولا تدخل Git.
+- **حدود هذه البنية:** لا تُصلح B1/B2/B4/B5، ولا تغطي المالية (M1–M6) ولا Browser E2E بالكامل — هي أساس مخطط فقط.
 
 ---
 
@@ -201,8 +220,8 @@ describe.each(protectedRoutes)('$method $path', (route) => {
 | سقف `any` | مقارنة بالأساس 308 | ✅ |
 | فحوص أمنية نمطية | `grep` (SEC-06/08/11/05/07/10) | ✅ |
 | الترحيل من صفر | `db:migrate:local` على قاعدة فارغة | ✅ |
-| Unit | `vitest run tests/unit` | ✅ |
-| Integration | `vitest run tests/integration` | ✅ |
+| Unit | `npm test` (vitest run) | ✅ |
+| Integration | `npm run test:integration` | ✅ |
 | البناء | `npm run build` | ✅ |
 | `npm audit` (إنتاج) | `--audit-level=high --omit=dev` | ✅ |
 | جرد المسارات | إعادة توليد + كشف `UNGUARDED` | ⚠️ تحذير أولاً |
