@@ -5,6 +5,17 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 
 ---
+## 2026-09-09 (B5-2)
+
+- `[2026-09-09] [B5-2]` — تعريب رسائل أخطاء المنافسة المتبقية عبر i18n (بدون تغيير رموز HTTP أو شكل الاستجابة):
+  - `src/i18n/ar.ts` + `src/i18n/en.ts`: أضيفت 11 مفتاحاً جديداً تحت `competition_errors`: `no_opponent`, `vod_url_required`, `already_has_opponent`, `invitee_required`, `cannot_invite_self`, `already_invited`, `no_pending_invitation`, `no_pending_request`, `request_already_accepted`, `already_competitor`, `competition_full` — كلها مترجمة ar+en.
+  - `src/controllers/CompetitionController.ts`: استبدال النصوص الحرفية بـ `this.t('competition_errors.<key>, c)`: `'Cannot start without opponent'` → `no_opponent` (409)، `'vod_url is required'` → `vod_url_required`، `'Competition already has opponent'` → `already_has_opponent` (مرتين)، `'invitee_id required'` → `invitee_required`، `'Cannot invite yourself'` → `cannot_invite_self`، `'User already invited'` → `already_invited`، `'No pending invitation found'` → `no_pending_invitation` (3 مرات).
+  - `tests/helpers/fake-d1.ts`: إصلاح خلل بناء (if-block مكرر بلا إغلاق يسبب خطأ esbuild) — حُذف التالف، بقي المعالج الصحيح.
+  - `tests/api/competition-errors-i18n.test.ts` (جديد، 5 اختبارات): /start بلا خصم يعيد الرسالة ar+en، /update-vod بلا vod_url يعيد الرسالة ar+en، وحارس انحدار يثبت زوال كل النصوص الحرفية.
+  / الملفات: src/controllers/CompetitionController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/helpers/fake-d1.ts, tests/api/competition-errors-i18n.test.ts / نفذ: Cline / اختبار: 5/5 ✅ + npm test 75/75 ✅ + tsc ✅ + build ✅ / **بانتظار مراجعة القائد** / خارج النطاق: متحكمات المال والإعلانات
+
+---
+
 ## 2026-09-08 (B1)
 
 - `[2026-09-08] [GOV-11/B1]` — إصلاح B1 (Core Messaging): محاذاة `messages` مع نموذج conversations:

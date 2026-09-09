@@ -206,6 +206,17 @@ export const ar = {
         already_requested: 'لقد طلبت الانضمام مسبقاً',
         not_completed: 'المنافسة لم تنتهي بعد',
         already_rated: 'لقد قيمت هذا المتنافس مسبقاً',
+        no_opponent: 'لا يمكن البدء بدون خصم',
+        vod_url_required: 'رابط التسجيل مطلوب',
+        already_has_opponent: 'المنافسة لديها خصم بالفعل',
+        invitee_required: 'يجب تحديد المدعو',
+        cannot_invite_self: 'لا يمكنك دعوة نفسك',
+        already_invited: 'تمت دعوة المستخدم مسبقاً',
+        no_pending_invitation: 'لا توجد دعوة معلقة',
+        no_pending_request: 'لا يوجد طلب معلق',
+        request_already_accepted: 'تم قبول الطلب مسبقاً',
+        already_competitor: 'المستخدم متنافس في هذه المنافسة بالفعل',
+        competition_full: 'المنافسة ممتلئة',
     },
 
     // رسائل أخطاء المستخدم

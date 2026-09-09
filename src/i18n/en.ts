@@ -232,6 +232,17 @@ export const en = {
         already_requested: 'You have already requested to join',
         not_completed: 'Competition is not completed',
         already_rated: 'You have already rated this competitor',
+        no_opponent: 'Cannot start without an opponent',
+        vod_url_required: 'Recording URL (vod_url) is required',
+        already_has_opponent: 'Competition already has an opponent',
+        invitee_required: 'Invitee is required',
+        cannot_invite_self: 'Cannot invite yourself',
+        already_invited: 'User already invited',
+        no_pending_invitation: 'No pending invitation found',
+        no_pending_request: 'No pending request found',
+        request_already_accepted: 'Request already accepted',
+        already_competitor: 'User is already a competitor in this competition',
+        competition_full: 'Competition is full',
     },
 
     // User Error Messages

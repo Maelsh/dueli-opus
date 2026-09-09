@@ -13,9 +13,12 @@ export class FakeD1 {
     blocks: Row[] = [];
     sessions: Row[] = [];
     donations: Row[] = [];
+    competitions: Row[] = [];
+    requests: Row[] = [];
     userSeq = 0;
     blockSeq = 0;
     donationSeq = 0;
+    competitionSeq = 0;
 
     prepare(sql: string): FakeStmt {
         return new FakeStmt(this, sql);
@@ -39,7 +42,17 @@ class FakeStmt {
         const q = norm(this.sql);
         const p = this.params;
 
-        // --- users lookups ---
+        // --- sessions (create/find for auth in B5-2 error-path tests) ---
+        if (q.startsWith('insert into sessions')) {
+            const row: Row = {
+                id: p[0] ?? `sess-${this.db.sessions.length + 1}`,
+                user_id: p[1],
+                expires_at: p[2],
+                created_at: new Date().toISOString(),
+            };
+            this.db.sessions.push(row);
+            return ok({ last_row_id: this.db.sessions.length, changes: 1 });
+        }
         if (q.startsWith('select * from users where id = ? and is_active = 1')) {
             return this.db.users.find((u) => u.id === p[0] && u.is_active === 1) ?? null;
         }
@@ -73,9 +86,19 @@ class FakeStmt {
             return this.db.donations.find((d) => d.id === p[0]) ?? null;
         }
 
-        // --- sessions ---
+        // --- competitions (minimal: findById for B5-2 error-path tests) ---
+        if (q.startsWith('select * from competitions where id = ?')) {
+            return this.db.competitions.find((r) => r.id === p[0]) ?? null;
+        }
+
+        // --- sessions (create/find for auth in B5-2 error-path tests) ---
         if (q.startsWith('select * from sessions where id = ?')) {
-            return this.db.sessions.find((s) => s.id === p[0]) ?? null;
+            const hit = this.db.sessions.find((s) => s.id === p[0]);
+            if (hit) {
+                const now = new Date().toISOString();
+                if (hit.expires_at && hit.expires_at <= now) return null;
+            }
+            return hit ?? null;
         }
 
         // --- user_blocks ---
