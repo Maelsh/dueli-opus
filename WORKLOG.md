@@ -3,8 +3,15 @@
 > **قاعدة ملزمة:** كل تغيير في المشروع يُسجل هنا فور تنفيذه.
 > **الصيغة:** `[YYYY-MM-DD] [P?-T??] — الوصف / الملفات / من نفذ / حالة الاختبار`
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
+---
+
+## 2026-09-09 (B4)
+
+- `[2026-09-09] [B4]` — إصلاح B4 (Scheduled tasks due-query): مقارنة `execute_at` عبر `datetime()` في `processPendingTasks` (WHERE + ORDER BY) لأن `schedule()` يخزن ISO (`toISOString`) بينما `datetime('now')` بصيغة space — المقارنة الخام لا تطابق أبداً فالمهام المستحقة لا تُنفَّذ. اختبار أحمر أولاً `tests/api/scheduled-tasks-due.test.ts` (5 حالات: WHERE يستخدم datetime()، ORDER BY يستخدم datetime()، مهمة  past بصيغة ISO تُلتقط، مهمة past بصيغة space تُلتقط، مهمة future لا تُلتقط). إثبات الحمرة: أعيد السطر إلى `t.execute_at <= datetime('now')` → الحالة الأولى تفشل (لا تطابق النمط)، ثم أعيد الإصلاح. بلا نصوص user-visible (لا i18n مطلوب)، بلا لمس للمال/الإعلانات، الإصلاح في طبقة service فقط (MVC/OOP)
+  / الملفات: src/lib/services/ScheduledTaskService.ts, tests/integration/scheduled-tasks-due.test.ts, WORKLOG.md, .github/CLI-NOTES.md, .github/pr-body-b4.md / نفذ: Cline (B4 LOCAL agent) / اختبار: integration 5/5 ✅ / commit: 57dcf74 / PR: https://github.com/Maelsh/dueli-opus/pull/7
 
 ---
+
 ## 2026-09-08 (B1)
 
 - `[2026-09-08] [GOV-11/B1]` — إصلاح B1 (Core Messaging): محاذاة `messages` مع نموذج conversations:

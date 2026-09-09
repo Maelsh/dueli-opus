@@ -112,9 +112,9 @@ export class ScheduledTaskService {
                    c.competition_type, c.scheduled_at, c.started_at, c.created_at as competition_created_at
             FROM competition_scheduled_tasks t
             JOIN competitions c ON t.competition_id = c.id
-            WHERE t.execute_at <= datetime('now')
+            WHERE datetime(t.execute_at) <= datetime('now')
             AND t.status = 'pending'
-            ORDER BY t.execute_at ASC
+            ORDER BY datetime(t.execute_at) ASC
             LIMIT 50
         `).all();
 
