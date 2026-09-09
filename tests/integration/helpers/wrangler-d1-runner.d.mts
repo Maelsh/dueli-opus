@@ -19,3 +19,12 @@ export declare function execD1(command: string): void;
 export declare function wipeTestState(): void;
 export declare function applyMigrationFiles(fileNames: string[]): void;
 export declare function listMigrationFileNames(): string[];
+
+export interface D1WriteMeta {
+    changes: number | undefined;
+    lastRowId: number | undefined;
+}
+
+export declare function runD1Write(command: string): D1WriteMeta;
+export declare function getProjectRoot(): string;
+export declare function readRepoFile(relPath: string): Promise<string>;
