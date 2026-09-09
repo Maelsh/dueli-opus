@@ -11,7 +11,8 @@ import {
     CompetitionFilters,
     CommentModel,
     NotificationModel,
-    UserModel
+    UserModel,
+    RatingModel
 } from '../models';
 import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 import { EventPusher } from '../lib/services/EventPusher';
@@ -99,39 +100,6 @@ class CompetitionRequestModel {
             )
         `).bind(requesterId, scheduledAt).run();
         return result.meta.changes;
-    }
-}
-
-/**
- * Rating Model (inline)
- */
-class RatingModel {
-    constructor(private db: D1Database) { }
-
-    async create(competitionId: number, userId: number, competitorId: number, rating: number): Promise<{ id: number }> {
-        const result = await this.db.prepare(`
-            INSERT INTO ratings (competition_id, user_id, competitor_id, rating, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
-        `).bind(competitionId, userId, competitorId, rating).run();
-        return { id: result.meta.last_row_id as number };
-    }
-
-    async hasRated(competitionId: number, userId: number, competitorId: number): Promise<boolean> {
-        const result = await this.db.prepare(`
-            SELECT 1 FROM ratings WHERE competition_id = ? AND user_id = ? AND competitor_id = ?
-        `).bind(competitionId, userId, competitorId).first();
-        return result !== null;
-    }
-
-    async findByCompetition(competitionId: number): Promise<any[]> {
-        const result = await this.db.prepare(`
-            SELECT r.*, u.display_name, u.avatar_url
-            FROM ratings r
-            JOIN users u ON r.user_id = u.id
-            WHERE r.competition_id = ?
-            ORDER BY r.created_at DESC
-        `).bind(competitionId).all();
-        return result.results;
     }
 }
 

@@ -20,6 +20,7 @@ export { MessageModel, ConversationModel, Message, Conversation, MessageWithSend
 export { AdvertisementModel, EarningsModel, Advertisement, AdImpression, UserEarnings } from './AdvertisementModel';
 export { UserSettingsModel, UserPostModel, UserSettings, UserPost, UserPostWithAuthor } from './UserSettingsModel';
 export { ScheduleModel, CompetitionReminder, ReminderWithDetails } from './ScheduleModel';
+export { RatingModel, Rating, RatingWithUser } from './RatingModel';
 
 // Task 4: Transparency Engine Models
 export { PlatformFinancialLogModel } from './PlatformFinancialLogModel';
