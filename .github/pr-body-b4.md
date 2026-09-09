@@ -3,25 +3,23 @@ Due scheduled tasks (start/end a scheduled competition) are actually captured wh
 
 ## What changed and why
 - `src/lib/services/ScheduledTaskService.ts` (line 115): Changed `WHERE t.execute_at <= datetime('now')` to `WHERE datetime(t.execute_at) <= datetime('now')`. The `schedule()` method stores `execute_at` via `Date.toISOString()` (e.g. `2026-09-09T05:00:00.000Z`) while `datetime('now')` returns `YYYY-MM-DD HH:MM:SS`. Lexical comparison never matches (`T` > ` `), so due tasks never ran. Wrapping with `datetime()` normalizes both sides.
-- `tests/api/scheduled-tasks-due.test.ts`: Enhanced from 1 to 5 tests proving (a) WHERE uses `datetime(t.execute_at)`, (b) ORDER BY uses `datetime(t.execute_at)`, (c) a past ISO-format task IS captured, (d) a past space-format task IS captured, (e) a future task is NOT captured.
+- `tests/integration/scheduled-tasks-due.test.ts`: Real D1/SQLite test via Wrangler CLI (not a JavaScript mock). Proves (a) a past ISO-format task IS captured, (b) a past space-format task IS captured, (c) a future task is NOT captured, (d) exactly 2 due tasks returned, (e) results ordered chronologically.
 - `WORKLOG.md`: Updated B4 entry with final test counts and commit/PR references.
 
-## Redness proof
-1. Reverted line 115 to `WHERE t.execute_at <= datetime('now')` (old code).
-2. Ran `npx vitest run tests/api/scheduled-tasks-due.test.ts` → **FAILED** (1/5):
+## Redness proof (behavioral, real SQL)
+1. Reverted ONLY the production WHERE clause to `WHERE t.execute_at <= datetime('now')` (old broken SQL).
+2. Ran `tests/integration/scheduled-tasks-due.test.ts` → **3 tests FAILED**:
    ```
-   × uses datetime() on execute_at in WHERE clause
-   AssertionError: expected '...WHERE t.execute_at <= datetime('now')...'
-   to match /WHERE\s+datetime\(\s*t\.execute_at\s*\)\s*<=\s*datetime\(\s*'now'\s*\)/
+   × captures a past task with T-separator (ISO) execute_at
+   × returns exactly 2 due tasks (got 1)
+   × orders results chronologically by execute_at
    ```
-3. Restored the fix (`datetime(t.execute_at)`).
+   The ISO-format task was NOT captured because lexical comparison (`T` > ` `) made it appear "later" than `datetime('now')`.
+3. Restored the fix (`WHERE datetime(t.execute_at) <= datetime('now')`).
 4. Re-ran → **5/5 passed**.
 
 ## Verification commands
-1. `npx vitest run tests/api/scheduled-tasks-due.test.ts` → **5/5 passed**
-2. `npm test` → **75/75 passed** (was 71, +4 new B4 tests)
-3. `npx tsc --noEmit` → **0 errors**
-4. `npm run build` → **success** (dist/_worker.js 892.78 kB)
+1. `./node_modules/.bin/vitest run -c vitest.integration.config.ts tests/integration/scheduled-tasks-due.test.ts` → **5/5 passed**
 
 ## i18n keys added
 None — no user-visible strings in this change.

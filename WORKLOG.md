@@ -7,8 +7,8 @@
 
 ## 2026-09-09 (B4)
 
-- `[2026-09-09] [B4]` — إصلاح B4 (Scheduled tasks due-query): مقارنة `execute_at` عبر `datetime()` في `processPendingTasks` (WHERE + ORDER BY) لأن `schedule()` يخزن ISO (`toISOString`) بينما `datetime('now')` بصيغة space — المقارنة الخام لا تطابق أبداً فالمهام المستحقة لا تُنفَّذ. اختبار أحمر أولاً `tests/api/scheduled-tasks-due.test.ts` (5 حالات: WHERE يستخدم datetime()، ORDER BY يستخدم datetime()، مهمة  past بصيغة ISO تُلتقط، مهمة past بصيغة space تُلتقط، مهمة future لا تُلتقط). إثبات الحمرة: أعيد السطر إلى `t.execute_at <= datetime('now')` → الحالة الأولى تفشل (لا تطابق النمط)، ثم أعيد الإصلاح. بلا نصوص user-visible (لا i18n مطلوب)، بلا لمس للمال/الإعلانات، الإصلاح في طبقة service فقط (MVC/OOP)
-  / الملفات: src/lib/services/ScheduledTaskService.ts, tests/integration/scheduled-tasks-due.test.ts, WORKLOG.md, .github/CLI-NOTES.md, .github/pr-body-b4.md / نفذ: Cline (B4 LOCAL agent) / اختبار: integration 5/5 ✅ / commit: 57dcf74 / PR: https://github.com/Maelsh/dueli-opus/pull/7
+- `[2026-09-09] [B4]` — إصلاح B4 (Scheduled tasks due-query): مقارنة `execute_at` عبر `datetime()` في `processPendingTasks` (WHERE + ORDER BY) لأن `schedule()` يخزن ISO (`toISOString`) بينما `datetime('now')` بصيغة space — المقارنة الخام لا تطابق أبداً فالمهام المستحقة لا تُنفَّذ. اختبار حقيقي على D1/SQLite عبر Wrangler CLI: `tests/integration/scheduled-tasks-due.test.ts` (5 حالات: مهمة past بصيغة ISO تُلتقط، مهمة past بصيغة space تُلتقط، مهمة future لا تُلتقط، عدد المهام 2، ترتيب زمني). إثبات الحمرة سلوكي: أعيد الـSQL للصيغة القديمة (`t.execute_at <= datetime('now')`) → 3 حالات تفشل (المهمة بصيغة ISO لا تُلتقط)، ثم أعيد الإصلاح → 5/5 تنجح. بلا نصوص user-visible (لا i18n مطلوب)، بلا لمس للمال/الإعلانات، الإصلاح في طبقة service فقط (MVC/OOP)
+  / الملفات: src/lib/services/ScheduledTaskService.ts, tests/integration/scheduled-tasks-due.test.ts, WORKLOG.md, .github/CLI-NOTES.md, .github/pr-body-b4.md / نفذ: Cline (B4 LOCAL agent) / اختبار: integration 5/5 ✅ / commit: a43b48aeaaf55c78fedf9dadbb20d38563624ef5 / PR: https://github.com/Maelsh/dueli-opus/pull/7
 
 ---
 
