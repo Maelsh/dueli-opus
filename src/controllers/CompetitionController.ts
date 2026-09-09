@@ -424,17 +424,35 @@ export class CompetitionController extends BaseController {
                 return this.notFound(c);
             }
 
-            await requestModel.updateStatus(body.request_id, 'accepted');
-            await model.setOpponent(competitionId, request.requester_id);
+            // Atomic batch: accept request + setOpponent + decline others + decline invitations
+            const results = await c.env.DB.batch([
+                // 1. Accept this request
+                c.env.DB.prepare(
+                    'UPDATE competition_requests SET status = \'accepted\', updated_at = datetime(\'now\') WHERE id = ?'
+                ).bind(body.request_id),
+                // 2. Atomically set opponent (only if opponent_id IS NULL)
+                c.env.DB.prepare(
+                    'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
+                ).bind(request.requester_id, competitionId),
+                // 3. Decline all other pending requests for this competition
+                c.env.DB.prepare(
+                    'UPDATE competition_requests SET status = \'rejected\', updated_at = datetime(\'now\') WHERE competition_id = ? AND id != ? AND status = \'pending\''
+                ).bind(competitionId, body.request_id),
+                // 4. Decline all pending invitations for this competition
+                c.env.DB.prepare(
+                    'UPDATE competition_invitations SET status = \'declined\' WHERE competition_id = ? AND status = \'pending\''
+                ).bind(competitionId),
+            ]);
 
-            // Auto-decline all other pending requests on this competition
-            const declinedCount = await requestModel.declineAllOther(competitionId, body.request_id);
+            // results[1] is the setOpponent UPDATE — if changes === 0, opponent was already set (race lost)
+            const setOpponentResult = results[1] as { meta: { changes: number } };
+            if (setOpponentResult.meta.changes === 0) {
+                return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
+            }
 
-            // Decline all pending invitations for this competition
-            await c.env.DB.prepare(`
-                UPDATE competition_invitations SET status = 'declined' 
-                WHERE competition_id = ? AND status = 'pending'
-            `).bind(competitionId).run();
+            // Count declined requests for response
+            const declineResult = results[2] as { meta: { changes: number } };
+            const declinedCount = declineResult.meta.changes;
 
             // AUTO-DELETE LOGIC: Delete accepted user's conflicting competitions and requests
             const autoDeletedCount = await this.handleAutoDeleteOnJoin(c, request.requester_id, competition);
@@ -789,19 +807,35 @@ export class CompetitionController extends BaseController {
 
             if (!competition) return this.notFound(c);
             if (competition.creator_id !== user.id) return this.forbidden(c);
-            if (competition.opponent_id) return this.error(c, 'Competition already has opponent');
+            if (competition.opponent_id) {
+                return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
+            }
 
             const body = await this.getBody<{ invitee_id: number; message?: string }>(c);
-            if (!body?.invitee_id) return this.validationError(c, 'invitee_id required');
-            if (body.invitee_id === user.id) return this.error(c, 'Cannot invite yourself');
+            if (!body?.invitee_id) {
+                return this.validationError(c, this.t('competition_errors.invitee_required', c));
+            }
+            if (body.invitee_id === user.id) {
+                return this.error(c, this.t('competition_errors.cannot_invite_self', c), 409);
+            }
+
+            // Block check: cannot invite a user who blocked you or whom you blocked
+            const blocked = await c.env.DB.prepare(`
+                SELECT 1 FROM user_blocks
+                WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)
+            `).bind(user.id, body.invitee_id, body.invitee_id, user.id).first();
+
+            if (blocked) {
+                return this.forbidden(c, this.t('competition_errors.blocked_user', c));
+            }
 
             // Check if already invited
             const existing = await c.env.DB.prepare(`
-                SELECT id FROM competition_invitations 
+                SELECT id FROM competition_invitations
                 WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
             `).bind(competitionId, body.invitee_id).first();
 
-            if (existing) return this.error(c, 'User already invited');
+            if (existing) return this.error(c, this.t('competition_errors.already_invited', c), 409);
 
             // Create invitation
             const result = await c.env.DB.prepare(`
@@ -840,6 +874,9 @@ export class CompetitionController extends BaseController {
     /**
      * Accept invitation
      * POST /api/competitions/:id/accept-invite
+     *
+     * Atomic: setOpponent + accept invitation + reject others in one batch.
+     * Race-safe: setOpponent returns false if opponent already set → 409.
      */
     async acceptInvite(c: AppContext) {
         try {
@@ -848,46 +885,51 @@ export class CompetitionController extends BaseController {
             const competitionId = this.getParamInt(c, 'id');
 
             const model = new CompetitionModel(c.env.DB);
-            const requestModel = new CompetitionRequestModel(c.env.DB);
-            const notificationModel = new NotificationModel(c.env.DB);
             const competition = await model.findById(competitionId);
 
             if (!competition) return this.notFound(c);
-            if (competition.opponent_id) return this.error(c, 'Competition already has opponent');
 
             // Verify invitation exists
             const invitation = await c.env.DB.prepare(`
-                SELECT * FROM competition_invitations 
+                SELECT * FROM competition_invitations
                 WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
             `).bind(competitionId, user.id).first();
 
-            if (!invitation) return this.error(c, 'No pending invitation found');
+            if (!invitation) {
+                return this.error(c, this.t('competition_errors.invitation_not_found', c), 409);
+            }
 
-            // Set user as opponent
-            await model.setOpponent(competitionId, user.id);
+            // Atomic batch: setOpponent + accept invitation + reject others + decline requests
+            const results = await c.env.DB.batch([
+                // 1. Atomically set opponent (only if opponent_id IS NULL)
+                c.env.DB.prepare(
+                    'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
+                ).bind(user.id, competitionId),
+                // 2. Accept this invitation
+                c.env.DB.prepare(
+                    'UPDATE competition_invitations SET status = \'accepted\', responded_at = datetime(\'now\') WHERE id = ?'
+                ).bind(invitation.id),
+                // 3. Decline all other pending invitations for this competition
+                c.env.DB.prepare(
+                    'UPDATE competition_invitations SET status = \'declined\' WHERE competition_id = ? AND id != ? AND status = \'pending\''
+                ).bind(competitionId, invitation.id),
+                // 4. Decline all pending requests for this competition
+                c.env.DB.prepare(
+                    'UPDATE competition_requests SET status = \'auto_declined\' WHERE competition_id = ? AND status = \'pending\''
+                ).bind(competitionId),
+            ]);
 
-            // Update invitation status
-            await c.env.DB.prepare(`
-                UPDATE competition_invitations SET status = 'accepted', responded_at = datetime('now') 
-                WHERE id = ?
-            `).bind(invitation.id).run();
-
-            // Decline all other invitations for this competition
-            await c.env.DB.prepare(`
-                UPDATE competition_invitations SET status = 'declined' 
-                WHERE competition_id = ? AND id != ? AND status = 'pending'
-            `).bind(competitionId, invitation.id).run();
-
-            // Decline all pending requests for this competition
-            await c.env.DB.prepare(`
-                UPDATE competition_requests SET status = 'auto_declined' 
-                WHERE competition_id = ? AND status = 'pending'
-            `).bind(competitionId).run();
+            // results[0] is the setOpponent UPDATE — if changes === 0, opponent was already set (race lost)
+            const setOpponentResult = results[0] as { meta: { changes: number } };
+            if (setOpponentResult.meta.changes === 0) {
+                return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
+            }
 
             // AUTO-DELETE LOGIC: Delete user's conflicting competitions and requests
             const deletedCount = await this.handleAutoDeleteOnJoin(c, user.id, competition);
 
             // Notify competition creator
+            const notificationModel = new NotificationModel(c.env.DB);
             await notificationModel.create({
                 user_id: competition.creator_id,
                 type: 'request',

@@ -5,6 +5,20 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 
 ---
+---
+## 2026-09-09 (B5-4)
+
+- `[2026-09-09] [B5-4]` — إغلاق حلقة الدعوة/القبول وتثبيت setOpponent ضد السباق:
+  - `CompetitionModel.setOpponent()`: تُبقي `AND opponent_id IS NULL` وتعيد الآن `boolean` من `meta.changes > 0` (بدل true دائماً)
+  - `CompetitionController.acceptInvitation()`: عند القبول يُنفَّذ داخل `db.batch()` واحد: ضبط opponent_id + status='accepted' + رفض بقية الدعوات المعلقة؛ `setOpponent()===false` (سباق) → 409 `competition_errors.opponent_already_set` — قبول واحد فقط ينجح
+  - `CompetitionController.invite()`: الحظر يرجع 403 برسالة مترجمة `competition_errors.blocked_user`؛ دعوة مستخدم له دعوة pending سابقة → 409 (بلا تكرار)
+  - `CompetitionController.acceptRequest()`: معالجة false من setOpponent كـ409 بنفس المفتاح
+  - i18n (`ar.ts`/`en.ts`): `competition_errors.opponent_already_set` / `invitation_not_found` / `blocked_user`
+  - اختبارات حمراء أولاً: `tests/api/competition-invite-accept.test.ts` (6 اختبارات: المسار السعيد، سباق Promise.all B/C، لا pending بعد القبول، 403 محظور بالعربية، 409 دعوة غير موجودة، إشعار لـB عند الدعوة ولـA عند القبول) — فشلت قبل الإصلاح (قبول مزدوج 200/200 وopponent متضارب) ونجحت بعده
+  - `tests/helpers/fake-d1.ts`: دعم competition_invitations + notifications + batch()
+  / الملفات: src/models/CompetitionModel.ts, src/controllers/CompetitionController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/api/competition-invite-accept.test.ts, tests/helpers/fake-d1.ts, PLAN-STATUS.md, WORKLOG.md / نفذ: Cline (B5-4 agent) / اختبار: competition-invite-accept 6/6 ✅ + npm test 76/76 ✅ + tsc ✅ + build ✅ + سباق متكرر 10/10 بلا flakiness ✅ / خارج النطاق عمداً: matchmaking, LivePayoutEngine, مالية, ads, migrations, routes wiring
+
+---
 ## 2026-09-08 (B1)
 
 - `[2026-09-08] [GOV-11/B1]` — إصلاح B1 (Core Messaging): محاذاة `messages` مع نموذج conversations:

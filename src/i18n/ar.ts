@@ -206,6 +206,14 @@ export const ar = {
         already_requested: 'لقد طلبت الانضمام مسبقاً',
         not_completed: 'المنافسة لم تنتهي بعد',
         already_rated: 'لقد قيمت هذا المتنافس مسبقاً',
+        opponent_already_set: 'تم تعيين الخصم بالفعل',
+        invitation_not_found: 'الدعوة غير موجودة أو منتهية',
+        blocked_user: 'لا يمكن التفاعل مع هذا المستخدم',
+        invitee_required: 'معرف المستخدم المدعو مطلوب',
+        cannot_invite_self: 'لا يمكنك دعوة نفسك',
+        already_invited: 'تمت دعوة هذا المستخدم مسبقاً',
+        not_authorized: 'غير مصرح لك بهذا الإجراء',
+        no_pending_invitation: 'لا توجد دعوة معلقة',
     },
 
     // رسائل أخطاء المستخدم

@@ -232,6 +232,14 @@ export const en = {
         already_requested: 'You have already requested to join',
         not_completed: 'Competition is not completed',
         already_rated: 'You have already rated this competitor',
+        opponent_already_set: 'An opponent has already been set',
+        invitation_not_found: 'Invitation not found or expired',
+        blocked_user: 'You cannot interact with this user',
+        invitee_required: 'Invitee ID is required',
+        cannot_invite_self: 'Cannot invite yourself',
+        already_invited: 'User has already been invited',
+        not_authorized: 'You are not authorized for this action',
+        no_pending_invitation: 'No pending invitation found',
     },
 
     // User Error Messages
