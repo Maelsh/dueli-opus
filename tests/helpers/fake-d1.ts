@@ -8,22 +8,41 @@ type Row = Record<string, any>;
 
 const norm = (sql: string) => sql.replace(/\s+/g, ' ').trim().toLowerCase();
 
+const ok = (meta: { last_row_id: number | null; changes: number }) => ({ success: true, meta });
+
 export class FakeD1 {
     users: Row[] = [];
     blocks: Row[] = [];
     sessions: Row[] = [];
     donations: Row[] = [];
     competitions: Row[] = [];
-    requests: Row[] = [];
-ratings: Row[] = [];
+requests: Row[] = [];
+    ratings: Row[] = [];
+    invitations: Row[] = [];
+    notifications: Row[] = [];
     userSeq = 0;
     blockSeq = 0;
     donationSeq = 0;
     competitionSeq = 0;
 ratingSeq = 0;
+    invitationSeq = 0;
+    notificationSeq = 0;
 
     prepare(sql: string): FakeStmt {
         return new FakeStmt(this, sql);
+    }
+
+    /**
+     * Execute a batch of prepared statements atomically.
+     * Each statement must already be bound before passing here.
+     */
+    async batch(statements: FakeStmt[]): Promise<{ meta: { changes: number; last_row_id: number | null } }[]> {
+        const results: { meta: { changes: number; last_row_id: number | null } }[] = [];
+        for (const stmt of statements) {
+            const result = await stmt.run();
+            results.push(result);
+        }
+        return results;
     }
 }
 
@@ -90,10 +109,10 @@ class FakeStmt {
 
 // --- competitions (minimal: findById for B5-2 error-path tests) ---
         if (q.startsWith('select * from competitions where id = ?')) {
-            return this.db.competitions.find((r) => r.id === p[0]) ?? null;
+            return this.db.competitions.find((c) => c.id === p[0]) ?? null;
         }
 
-// --- ratings ---
+        // --- ratings ---
         if (q.startsWith('select 1 from ratings')) {
             const hit = this.db.ratings.find(
                 (r) => r.competition_id === p[0] && r.user_id === p[1] && r.competitor_id === p[2]
@@ -101,7 +120,40 @@ class FakeStmt {
             return hit ? { '1': 1 } : null;
         }
 
-        // --- sessions (create/find for auth in B5-2 error-path tests) ---
+
+        // --- invitations: check existing pending invitation ---
+        if (q.includes('from competition_invitations') && q.includes("status = 'pending'") && q.includes('invitee_id = ?')) {
+            if (q.startsWith('select id from competition_invitations')) {
+                const hit = this.db.invitations.find(
+                    (i) => i.competition_id === p[0] && i.invitee_id === p[1] && i.status === 'pending'
+                );
+                return hit ? { id: hit.id } : null;
+            }
+            // SELECT * FROM competition_invitations (full row for accept)
+            if (q.startsWith('select * from competition_invitations')) {
+                return this.db.invitations.find(
+                    (i) => i.competition_id === p[0] && i.invitee_id === p[1] && i.status === 'pending'
+                ) ?? null;
+            }
+        }
+
+        // --- invitations: count pending ---
+        if (q.startsWith('select count(*)') && q.includes('from competition_invitations')) {
+            const count = this.db.invitations.filter(
+                (i) => i.competition_id === p[0] && i.status === 'pending'
+            ).length;
+            return { count };
+        }
+
+        // --- notifications: count by user+type ---
+        if (q.startsWith('select count(*)') && q.includes('from notifications')) {
+            const count = this.db.notifications.filter(
+                (n) => n.user_id === p[0] && n.type === p[1]
+            ).length;
+            return { count };
+        }
+
+        // --- sessions ---
         if (q.startsWith('select * from sessions where id = ?')) {
             const hit = this.db.sessions.find((s) => s.id === p[0]);
             if (hit) {
@@ -150,6 +202,7 @@ class FakeStmt {
                     const u = this.db.users.find((x) => x.id === r.user_id) ?? {};
                     return {
                         ...r,
+                        created_at: r.created_at ?? '',
                         display_name: u.display_name,
                         avatar_url: u.avatar_url,
                     };
@@ -238,6 +291,109 @@ class FakeStmt {
                 user[col] = p[i];
             });
             return ok({ last_row_id: null, changes: 1 });
+        }
+
+        // INSERT INTO competitions (minimal for B5-4)
+        if (q.startsWith('insert into competitions')) {
+            const newId = p[0] ?? ++this.db.competitionSeq;
+            this.db.competitions.push({
+                id: newId,
+                title: p[1] ?? 'comp',
+                creator_id: p[2],
+                opponent_id: p[3] ?? null,
+                status: p[4] ?? 'pending',
+                category_id: p[5] ?? null,
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // UPDATE competitions SET opponent_id = ?, status = 'accepted' WHERE id = ? AND opponent_id IS NULL
+        // (setOpponent — atomic guard)
+        if (q.startsWith('update competitions set opponent_id') && q.includes('opponent_id is null')) {
+            const competition = this.db.competitions.find((c) => c.id === p[1]);
+            if (!competition || competition.opponent_id !== null) {
+                return ok({ last_row_id: null, changes: 0 });
+            }
+            competition.opponent_id = p[0];
+            competition.status = 'accepted';
+            return ok({ last_row_id: null, changes: 1 });
+        }
+
+        // INSERT INTO competition_invitations
+        if (q.startsWith('insert into competition_invitations')) {
+            const newId = ++this.db.invitationSeq;
+            this.db.invitations.push({
+                id: newId,
+                competition_id: p[0],
+                inviter_id: p[1],
+                invitee_id: p[2],
+                message: p[3] ?? null,
+                status: 'pending',
+                created_at: new Date().toISOString(),
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // UPDATE competition_invitations SET status = 'accepted' WHERE id = ?
+        //   [AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?)]
+        // The EXISTS guard (added for B5-4's race fix) is honored here so the fake DB
+        // actually reproduces the real invariant: this statement is a no-op unless the
+        // setOpponent step earlier in the same batch actually won the opponent slot for
+        // the caller. params with the guard: [invitationId, competitionId, winnerId].
+        if (q.startsWith('update competition_invitations set status = \'accepted\'')) {
+            const inv = this.db.invitations.find((i) => i.id === p[0]);
+            if (!inv) return ok({ last_row_id: null, changes: 0 });
+            if (q.includes('exists')) {
+                const competition = this.db.competitions.find((c) => c.id === p[1]);
+                if (!competition || competition.opponent_id !== p[2]) {
+                    return ok({ last_row_id: null, changes: 0 });
+                }
+            }
+            inv.status = 'accepted';
+            inv.responded_at = new Date().toISOString();
+            return ok({ last_row_id: null, changes: 1 });
+        }
+
+        // UPDATE competition_invitations SET status = 'declined' WHERE competition_id = ? AND id != ? AND status = 'pending'
+        //   [AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?)]
+        // Same guard as above — params with the guard: [competitionId, exceptInvitationId, competitionId, winnerId].
+        if (q.startsWith('update competition_invitations set status = \'declined\'')) {
+            if (q.includes('exists')) {
+                const competition = this.db.competitions.find((c) => c.id === p[2]);
+                if (!competition || competition.opponent_id !== p[3]) {
+                    return ok({ last_row_id: null, changes: 0 });
+                }
+            }
+            this.db.invitations.forEach((i) => {
+                if (i.competition_id === p[0] && i.id !== p[1] && i.status === 'pending') {
+                    i.status = 'declined';
+                }
+            });
+            const changed = this.db.invitations.filter(
+                (i) => i.competition_id === p[0] && i.status === 'declined'
+            ).length;
+            return ok({ last_row_id: null, changes: changed });
+        }
+
+        // UPDATE competition_requests SET status = 'auto_declined' WHERE competition_id = ? AND status = 'pending'
+        if (q.startsWith('update competition_requests')) {
+            return ok({ last_row_id: null, changes: 0 }); // no-op in fake
+        }
+
+        // INSERT INTO notifications
+        if (q.startsWith('insert into notifications')) {
+            const newId = ++this.db.notificationSeq;
+            this.db.notifications.push({
+                id: newId,
+                user_id: p[0],
+                type: p[1],
+                title: p[2],
+                message: p[3],
+                reference_type: p[4],
+                reference_id: p[5],
+                created_at: new Date().toISOString(),
+            });
+            return ok({ last_row_id: newId, changes: 1 });
         }
 
         // INSERT INTO user_blocks ...
