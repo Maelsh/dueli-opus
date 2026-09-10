@@ -150,7 +150,17 @@ export const en = {
 
     // Comments
     comment: 'Comment',
-    comments: 'Comments',
+    comments: {
+        label: 'Comments',
+        load_more: 'Load more comments',
+        no_comments: 'No comments yet',
+        reply: 'Reply',
+        deleted: 'Comment deleted',
+    },
+    reports: {
+        reason_comment: 'Abusive comment',
+        reason_message: 'Abusive message',
+    },
     add_comment: 'Add Comment',
     live_chat: 'Live Chat',
 
@@ -226,6 +236,8 @@ export const en = {
         blocked_interaction: 'This action is not available',
         rate_limited: 'Too many attempts, please try again shortly',
         content_too_long: 'Text exceeds the allowed length',
+        comment_not_found: 'Comment not found',
+        not_comment_owner: 'Only the comment owner or an admin can delete it',
     },
 
     // Competition Error Messages

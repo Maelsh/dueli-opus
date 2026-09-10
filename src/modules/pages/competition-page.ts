@@ -128,7 +128,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const isCompleted = comp.status === 'completed';
         const isCreator = window.currentUser && window.currentUser.id === comp.creator_id;
         const isOpponent = window.currentUser && window.currentUser.id === comp.opponent_id;
-        const hasRequested = comp.requests?.some(r => r.requester_id === window.currentUser?.id && r.status === 'pending');
+        const hasRequested = comp.user_has_pending_request === true;
         const needsOpponent = isPending && !comp.opponent_id;
         
         const bgColors = {
@@ -397,8 +397,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <p class="text-sm text-gray-500">\${tr.viewers}</p>
                     </div>
                     <div>
-                      <p class="text-3xl font-bold text-purple-600">\${comp.total_comments || 0}</p>
-                      <p class="text-sm text-gray-500">\${tr.comments}</p>
+                      <p class="text-3xl font-bold text-purple-600">\${comp.comments_count ?? comp.total_comments ?? 0}</p>
+                      <p class="text-sm text-gray-500">\${tr.comments.label}</p>
                     </div>
                   </div>
                   
@@ -425,16 +425,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     <h3 class="font-bold text-gray-900 dark:text-white">\${tr.live_chat}</h3>
                   </div>
                   <div class="h-80 overflow-y-auto p-4 space-y-3" id="chatMessages">
-                    \${comp.comments?.length ? renderCommentsTree(comp.comments) : '<p class="text-center text-gray-400">' + tr.no_comments_yet + '</p>'}
+                    <p class="text-center text-gray-400" id="commentsEmpty"></p>
                   </div>
                   <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                     \${window.currentUser ? \`
                       <form onsubmit="sendComment(event)" class="flex gap-2">
-                        <input type="text" id="commentInput" placeholder="\${tr.add_comment}..." class="flex-1 border dark:border-gray-600 dark:bg-gray-700 rounded-full px-4 py-2 text-sm">
-                        <button type="submit" class="p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors">
+                        <input type="text" id="commentInput" placeholder="\${tr.add_comment}..." aria-label="\${tr.add_comment || 'Add comment'}" class="flex-1 border dark:border-gray-600 dark:bg-gray-700 rounded-full px-4 py-2 text-sm">
+                        <button type="submit" aria-label="\${tr.send || 'Send'}" class="p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors">
                           <i class="fas fa-paper-plane"></i>
                         </button>
                       </form>
+                      <div class="mt-2 text-center">
+                        <button id="commentsMoreBtn" onclick="loadMoreComments()" class="hidden text-sm text-purple-600 hover:underline font-medium" aria-label="\${(tr.comments && tr.comments.load_more) || tr.load_more || 'Load more'}">\${(tr.comments && tr.comments.load_more) || tr.load_more || 'Load more'}</button>
+                      </div>
                     \` : \`
                       <button onclick="showLoginModal()" class="w-full py-2 text-center text-purple-600 hover:underline text-sm font-medium">
                         \${tr.login_required}
@@ -556,6 +559,66 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       };
 
+      // B2+B3: paged comments state (roots carry replies_count)
+      let commentsItems = [];
+      let commentsTotal = 0;
+      const COMMENTS_PAGE = 20;
+      function commentsEmptyText() {
+        return (tr.comments && tr.comments.no_comments) || tr.no_comments_yet || 'No comments yet';
+      }
+      function paintCommentsEmpty() {
+        const el = document.getElementById('commentsEmpty');
+        if (el && commentsItems.length === 0) el.textContent = commentsEmptyText();
+        if (el && commentsItems.length > 0) el.textContent = '';
+      }
+      async function fetchCommentsPage(offset) {
+        const res = await fetch('/api/competitions/' + competitionId + '/comments?limit=' + COMMENTS_PAGE + '&offset=' + offset);
+        const data = await res.json();
+        return data.success ? data.data : { items: [], total: 0 };
+      }
+      async function loadCommentsInitial() {
+        const page = await fetchCommentsPage(0);
+        commentsItems = page.items || [];
+        commentsTotal = page.total || 0;
+        const box = document.getElementById('chatMessages');
+        if (box) box.innerHTML = renderCommentsTree(commentsItems) || '';
+        paintCommentsEmpty();
+        syncMoreBtn();
+      }
+      window.loadMoreComments = async function() {
+        const page = await fetchCommentsPage(commentsItems.length);
+        commentsItems = commentsItems.concat(page.items || []);
+        commentsTotal = page.total || commentsTotal;
+        const box = document.getElementById('chatMessages');
+        if (box) box.innerHTML = renderCommentsTree(commentsItems) || '';
+        paintCommentsEmpty();
+        syncMoreBtn();
+      };
+      function syncMoreBtn() {
+        const btn = document.getElementById('commentsMoreBtn');
+        if (btn) btn.classList.toggle('hidden', !(commentsItems.length < commentsTotal));
+      }
+      function prependLiveComment(cm) {
+        // Live comment arrives via SSE — newest first at the top.
+        commentsItems = [cm].concat(commentsItems);
+        commentsTotal += 1;
+        const box = document.getElementById('chatMessages');
+        if (box) box.innerHTML = renderCommentsTree(commentsItems) || '';
+        paintCommentsEmpty();
+        syncMoreBtn();
+      }
+      function subscribeCommentsLive() {
+        try {
+          const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
+          es.addEventListener('comment_new', function(ev) {
+            try {
+              const payload = JSON.parse(ev.data);
+              if (payload && payload.comment) prependLiveComment(payload.comment);
+            } catch (e) {}
+          });
+        } catch (e) {}
+      }
+
       // T3.3: nested replies state
       let replyToComment = null;
 
@@ -628,9 +691,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           input.value = '';
           input.placeholder = tr.add_comment + '...';
           replyToComment = null;
-          loadCompetition();
+          await loadCommentsInitial();
         } catch (err) { console.error(err); }
-      }
+      };
+
+      // B2+B3: hydrate paged comments + live subscription after first render
+      loadCommentsInitial();
+      subscribeCommentsLive();
       
       async function toggleLike() {
         if (!window.currentUser) { showLoginModal(); return; }
@@ -691,10 +758,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } catch (err) { console.error(err); }
       }
       
-      // T3.3: report modal now supports any target (competition | comment | user)
+      // B2+B3: report modal supports competition | comment | message | user
       const REPORT_REASONS = {
         competition: ['spam', 'misleading', 'inappropriate_content', 'copyright', 'other'],
         comment: ['spam', 'harassment', 'hate_speech', 'inappropriate_content', 'other'],
+        message: ['spam', 'harassment', 'hate_speech', 'inappropriate_content', 'other'],
         user: ['spam', 'harassment', 'fake_account', 'inappropriate_content', 'other']
       };
       const REPORT_REASON_LABELS = {

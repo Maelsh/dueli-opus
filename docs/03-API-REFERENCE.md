@@ -35,6 +35,14 @@
 | `/api/payment-methods` | modules/api/payments | ✅ مربوطة (T4.2) — طرق السحب للسحوبات |
 | `/api/ad-blocks`, `/api/ad-reports` | modules/api/ad-* | ✅ مربوطة (T4.3) |
 
+## B2+B3 — التعليقات (2026-09-10)
+
+- `GET /api/competitions/:id/comments?limit=&offset=&parent_id=` — ترقيم (افتراضي 20، أقصى 100، `offset>=0`)؛ `parent_id` غائب/`null` = جذور مع `replies_count`؛ رقم = ردود مباشرة. الإخراج `{ items, total, limit, offset }`.
+- `GET /api/competitions/:id` — حمولة خفيفة: **لا مصفوفات** `comments/requests/ratings`؛ بدلها `{ comments_count, requests_count, ratings_count }`.
+- `POST /api/competitions/:id/comments` — بعد الإدراج ينشر `comment_new` عبر `EventPusher.publishComment` داخل `try/catch` (فشل البث لا يفشل الإنشاء).
+- `DELETE /api/competitions/:competitionId/comments/:commentId` — حذف ناعم (`deleted_at`)؛ المالك أو الأدمن فقط (غير المالك → 403).
+- البلاغات: `comment` موجودة + `message` مضافة (`REPORT_REASONS.message`) عبر نفس `/api/reports` وطابور الأدمن — لا نظام جديد.
+
 ## ❌ موجودة ككود لكنها غير مربوطة (404)
 
 | البادئة | الوحدة | الخطة |

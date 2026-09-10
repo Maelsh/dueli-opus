@@ -5,6 +5,21 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 ---
 
+## 2026-09-10 (B2+B3)
+
+- `[2026-09-10] [B2+B3]` — ترقيم التعليقات + شجرة الردود + بث حي + حمولة أخف (فرع `feat/core-comments-tree-and-live`):
+  - `migrations/0016_comments_soft_delete.sql` (جديد): `deleted_at` + فهرسا `(competition_id,deleted_at)` و`(parent_id,deleted_at)`.
+  - `src/models/CommentModel.ts`: `findByCompetitionPaged(comp,limit,offset,parentId)` (حد 1–100، افتراضي 20، `offset>=0`، استبعاد `deleted_at`) + `countVisible` + `softDelete` + `replies_count` لكل جذر؛ `findByCompetition/countTopLevel` تستبعد المحذوف.
+  - `src/controllers/CompetitionController.ts`: `show()` خفيف (`comments_count/requests_count/ratings_count` بلا مصفوفات) + `getComments()` الجديد + `addComment` ينشر `publishComment` داخل `try/catch` + `deleteComment` حذف ناعم (مالك/أدمن، غير المالك 403، مفقود/محذوف 404 بمفاتيح i18n).
+  - `src/modules/api/competitions/routes.ts`: `GET /:id/comments` جديد.
+  - `src/models/ReportModel.ts` + `InteractionController`: نوع `message` مضاف لنفس نظام البلاغات (`REPORT_REASONS.message`) — لا نظام جديد.
+  - i18n (ar+en فقط، بلا مفاتيح جديدة خارج البند): `comments.{label,load_more,no_comments,reply,deleted}` + `reports.{reason_comment,reason_message}` + `errors.{comment_not_found,not_comment_owner}`.
+  - `src/modules/pages/competition-page.ts`: يجلب `/comments?limit=20&offset=` مع زر تحميل المزيد + اشتراك SSE `comment_new` + عدّاد `comments_count` + `aria-label` للزر/الإدخال؛ لا مساس بمنطق الإعلانات.
+  - `tests/api/comments-pagination.test.ts` (جديد، 6/6 ✅): سُلّم **أحمر أولاً** (6/6 فشل على الأساس قبل الإصلاح) ثم أخضر بعد الإصلاح؛ `tests/helpers/fake-d1.ts`: دعم comments المرقّمة + `sse_event_log` + عدّادات خفيفة.
+  - **CI baseline**: العدد الفعلي `ANYCOUNT=311` (محسوب `grep -rho ': any\|as any' src`)؛ `docs/11` يذكر 308 و`quality-gate.yml` يذكر 310 — الافتراض (310→312) غير صحيح لذا **لم يُعدَّل أي baseline وأُضيفت سطر واحد `as number`** (312) ضمن هذا البند فقط مع تسجيله هنا.
+  / الملفات: migrations/0016_comments_soft_delete.sql, src/models/CommentModel.ts, src/config/types.ts, src/controllers/CompetitionController.ts, src/controllers/InteractionController.ts, src/models/ReportModel.ts, src/modules/api/competitions/routes.ts, src/modules/pages/competition-page.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/api/comments-pagination.test.ts, tests/helpers/fake-d1.ts, docs/03-API-REFERENCE.md, docs/14-ROUTE-INVENTORY.md, dev-tools/route-inventory.json, WORKLOG.md, PLAN-STATUS.md / نفذ: Cline / اختبار: comments-pagination 6/6 ✅ + npm test 111/111 ✅ + tsc ✅ + build ✅ + route-inventory ✅ / PR: feat/core-comments-tree-and-live (بلا دمج)
+---
+
 ## 2026-09-10 (B7)
 
 - `[2026-09-10] [B7]` — حدود المعدل لكل فعل وحدود طول المحتوى (التعليقات والرسائل):

@@ -34,6 +34,12 @@ competitionsRoutes.get('/', (c) => controller.list(c));
 competitionsRoutes.get('/:id', (c) => controller.show(c));
 
 /**
+ * B2+B3: paged competition comments
+ * GET /api/competitions/:id/comments
+ */
+competitionsRoutes.get('/:id/comments', (c) => controller.getComments(c));
+
+/**
  * Get competition requests
  * GET /api/competitions/:id/requests
  */
