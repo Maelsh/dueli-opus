@@ -18,7 +18,8 @@ import {
 import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 import { EventPusher } from '../lib/services/EventPusher';
 import { Sanitize } from '../lib/services/Sanitize';
-import { BlockedInteractionError } from '../lib/errors/AppError';
+import { RateLimitService } from '../lib/services/RateLimitService';
+import { BlockedInteractionError, ContentTooLongError } from '../lib/errors/AppError';
 
 /**
  * Competition Request Model (inline - should be in separate file)
@@ -669,6 +670,14 @@ export class CompetitionController extends BaseController {
                 return this.validationError(c, this.t('errors.content_required', c));
             }
 
+            // B7: per-user rate limit — 10 comments / minute (constants live in
+            // RateLimitService; controllers never duplicate counting logic).
+            const rateLimitResult = await new RateLimitService(c.env.DB).consume(user.id, 'comment');
+            if (!rateLimitResult.allowed) {
+                c.header('Retry-After', String(rateLimitResult.retryAfter));
+                return this.error(c, this.t('errors.rate_limited', c), 429);
+            }
+
             const model = new CompetitionModel(c.env.DB);
             const competition = await model.findById(competitionId);
             if (!competition) {
@@ -688,6 +697,10 @@ export class CompetitionController extends BaseController {
         } catch (error) {
             if (error instanceof BlockedInteractionError) {
                 return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
+            // B7: oversized comment → 400 + localized message, no row written
+            if (error instanceof ContentTooLongError) {
+                return this.error(c, this.t('errors.content_too_long', c), 400);
             }
             return this.serverError(c, error as Error);
         }

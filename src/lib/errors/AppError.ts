@@ -131,3 +131,20 @@ export class BlockedInteractionError extends AppError {
         this.name = 'BlockedInteractionError';
     }
 }
+
+/**
+ * Content Too Long Error - 400 Bad Request (B7)
+ * خطأ تجاوز الطول المسموح
+ *
+ * Thrown by the model layer (CommentModel / MessageModel) when the submitted
+ * content exceeds the schema-allowed length (comment ≤ 2000, message ≤ 4000
+ * chars — see migrations/0015_content_length_bounds.sql). Carries no message
+ * payload on purpose — the controller catching it must translate via
+ * t('errors.content_too_long') so the response is localized.
+ */
+export class ContentTooLongError extends AppError {
+    constructor() {
+        super('CONTENT_TOO_LONG', 'Text exceeds the allowed length', 400);
+        this.name = 'ContentTooLongError';
+    }
+}

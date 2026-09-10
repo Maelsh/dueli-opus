@@ -198,6 +198,8 @@ export const ar = {
         delete_failed: 'فشل في الحذف',
         something_wrong: 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
         blocked_interaction: 'لا يمكن إتمام هذا الإجراء',
+        rate_limited: 'محاولات كثيرة، حاول بعد قليل',
+        content_too_long: 'النص أطول من الحد المسموح',
     },
 
     // رسائل أخطاء المنافسة

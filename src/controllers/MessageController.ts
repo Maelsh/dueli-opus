@@ -11,7 +11,8 @@ import { Sanitize } from '../lib/services/Sanitize';
 import { MessageModel, ConversationModel } from '../models/MessageModel';
 import { NotificationModel } from '../models/NotificationModel';
 import { UserModel } from '../models/UserModel';
-import { BlockedInteractionError } from '../lib/errors/AppError';
+import { RateLimitService } from '../lib/services/RateLimitService';
+import { BlockedInteractionError, ContentTooLongError } from '../lib/errors/AppError';
 
 /**
  * Message Controller Class
@@ -98,6 +99,14 @@ export class MessageController extends BaseController {
                 return this.validationError(c, this.t('message.content_required', c));
             }
 
+            // B7: per-user rate limit — 20 messages / minute (constants live in
+            // RateLimitService; controllers never duplicate counting logic).
+            const rateLimitResult = await new RateLimitService(c.env.DB).consume(user.id, 'message');
+            if (!rateLimitResult.allowed) {
+                c.header('Retry-After', String(rateLimitResult.retryAfter));
+                return this.error(c, this.t('errors.rate_limited', c), 429);
+            }
+
             // Check access
             const conversationModel = new ConversationModel(c.env.DB);
             const hasAccess = await conversationModel.userHasAccess(conversationId, user.id);
@@ -136,6 +145,10 @@ export class MessageController extends BaseController {
             if (error instanceof BlockedInteractionError) {
                 return this.forbidden(c, this.t('errors.blocked_interaction', c));
             }
+            // B7: oversized message → 400 + localized message, no row written
+            if (error instanceof ContentTooLongError) {
+                return this.error(c, this.t('errors.content_too_long', c), 400);
+            }
             console.error('Send message error:', error);
             return this.serverError(c, error as Error);
         }
@@ -158,6 +171,13 @@ export class MessageController extends BaseController {
             const body = await this.getBody<{ content: string }>(c);
             if (!body || !body.content || body.content.trim().length === 0) {
                 return this.validationError(c, this.t('message.content_required', c));
+            }
+
+            // B7: per-user rate limit — 20 messages / minute
+            const rateLimitResult = await new RateLimitService(c.env.DB).consume(user.id, 'message');
+            if (!rateLimitResult.allowed) {
+                c.header('Retry-After', String(rateLimitResult.retryAfter));
+                return this.error(c, this.t('errors.rate_limited', c), 429);
             }
 
             // Check if target user exists
@@ -194,6 +214,10 @@ export class MessageController extends BaseController {
         } catch (error) {
             if (error instanceof BlockedInteractionError) {
                 return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
+            // B7: oversized message → 400 + localized message, no row written
+            if (error instanceof ContentTooLongError) {
+                return this.error(c, this.t('errors.content_too_long', c), 400);
             }
             console.error('Start conversation error:', error);
             return this.serverError(c, error as Error);
