@@ -233,7 +233,7 @@ export const en = {
         not_completed: 'Competition is not completed',
         already_rated: 'You have already rated this competitor',
         not_eligible_to_start: 'Competition cannot be started in its current state',
-        no_opponent: 'Cannot start competition without an opponent',
+        no_opponent: 'Cannot start without an opponent',
         not_live: 'Competition is not live',
         already_completed: 'Competition is already completed',
         vod_url_required: 'Recording URL (vod_url) is required',

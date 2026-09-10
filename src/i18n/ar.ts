@@ -207,7 +207,7 @@ export const ar = {
         not_completed: 'المنافسة لم تنتهي بعد',
         already_rated: 'لقد قيمت هذا المتنافس مسبقاً',
         not_eligible_to_start: 'لا يمكن بدء المنافسة في حالتها الحالية',
-        no_opponent: 'لا يمكن بدء المنافسة بدون خصم',
+        no_opponent: 'لا يمكن البدء بدون خصم',
         not_live: 'المنافسة ليست جارية',
         already_completed: 'المنافسة منتهية بالفعل',
         vod_url_required: 'رابط التسجيل مطلوب',
