@@ -4,13 +4,15 @@
  * SessionModel / AuthController / profilePage / CompetitionModel.findByUser.
  */
 
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
+
 type Row = Record<string, any>;
 
 const norm = (sql: string) => sql.replace(/\s+/g, ' ').trim().toLowerCase();
 
 const ok = (meta: { last_row_id: number | null; changes: number }) => ({ success: true, meta });
 
-export class FakeD1 {
+export class FakeD1 implements D1Database {
     users: Row[] = [];
     blocks: Row[] = [];
     sessions: Row[] = [];
@@ -48,15 +50,16 @@ export class FakeD1 {
      * B7: SELECT statements return { results: [row] } like real D1 so
      * RateLimitService can read the counter back from the batch result.
      */
-    async batch(statements: FakeStmt[]): Promise<{ meta: { changes: number; last_row_id: number | null }; results?: Row[] }[]> {
-        const results: { meta: { changes: number; last_row_id: number | null }; results?: Row[] }[] = [];
+    async batch(statements: D1PreparedStatement[]): Promise<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[]> {
+        const results: { success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[] = [];
         for (const stmt of statements) {
-            const q = norm(stmt.sql);
+            const fakeStmt = stmt as unknown as FakeStmt;
+            const q = norm(fakeStmt.sql);
             if (q.startsWith('select')) {
-                const row = await stmt.first();
+                const row = await fakeStmt.first();
                 results.push({ success: true, meta: { changes: 0, last_row_id: null }, results: row ? [row] : [] });
             } else {
-                const result = await stmt.run();
+                const result = await fakeStmt.run();
                 results.push(result);
             }
         }
@@ -90,7 +93,7 @@ class FakeStmt {
                 created_at: new Date().toISOString(),
             };
             this.db.sessions.push(row);
-            return ok({ last_row_id: this.db.sessions.length, changes: 1 });
+            return row;
         }
         if (q.startsWith('select * from users where id = ? and is_active = 1')) {
             return this.db.users.find((u) => u.id === p[0] && u.is_active === 1) ?? null;
@@ -306,7 +309,7 @@ class FakeStmt {
                     (r) => r.parent_id === c.id && !r.deleted_at
                 ).length;
                 return { ...c, display_name: u.display_name, avatar_url: u.avatar_url, username: u.username, replies_count };
-            }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            }).sort((a, b) => new Date((b as Row).created_at).getTime() - new Date((a as Row).created_at).getTime());
             const lim = p[limIdx] as number;
             const off = p[offIdx] as number;
             if (Number.isFinite(lim) && Number.isFinite(off)) rows = rows.slice(off, off + lim);
@@ -356,9 +359,19 @@ class FakeStmt {
         return { results: [] };
     }
 
+    async raw(): Promise<any[]> {
+        const q = norm(this.sql);
+        if (q.startsWith('select')) {
+            const row = await this.first();
+            return row ? [row] : [];
+        }
+        return [];
+    }
+
     async run(): Promise<{
         success: boolean;
         meta: { last_row_id: number | null; changes: number };
+        results?: Row[];
     }> {
         const ok = (meta: { last_row_id: number | null; changes: number }) => ({ success: true, meta });
         const q = norm(this.sql);
@@ -582,14 +595,15 @@ class FakeStmt {
             return ok({ last_row_id: newId, changes: 1 });
         }
         if (q.startsWith('select * from sse_event_log where id = ?')) {
-            return this.db.sseEvents.find((e) => e.id === p[0]) ?? null;
+            const row = this.db.sseEvents.find((e) => e.id === p[0]) ?? null;
+            return { success: true, meta: { last_row_id: null, changes: 0 }, results: row ? [row] : [] };
         }
         if (q.startsWith('select * from sse_event_log where channel = ?')) {
             const rows = this.db.sseEvents
                 .filter((e) => e.channel === p[0] && e.id > (p[1] as number))
                 .sort((a, b) => a.id - b.id)
                 .slice(0, (p[2] as number) || 50);
-            return { results: rows };
+            return { success: true, meta: { last_row_id: null, changes: 0 }, results: rows };
         }
 
         // B7: UPDATE competitions SET total_comments = total_comments + 1 WHERE id = ?

@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { D1Database } from '@cloudflare/workers-types';
 import app from '../../src/main';
 import { UserModel } from '../../src/models/UserModel';
 import { SessionModel } from '../../src/models/SessionModel';
