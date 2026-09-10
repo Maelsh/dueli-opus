@@ -5,6 +5,13 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 ---
 
+## 2026-09-09 (B5-1)
+
+- `[2026-09-09] [B5-1]` — حراسة انتقالات حالة المنافسة: `CompetitionModel.startLive()` → UPDATE مشروط `AND status='accepted'`، `complete()` → `AND status='live'`، وboolean من `meta.changes` (مع before/after fallback لأن Wrangler CLI المحلي يُسقط meta في الكتابة — الـfallback مثبت باختبار حقيقي). Controller: start يفحص الملكية ثم `status!=='accepted'` → 409 `competition_errors.not_eligible_to_start` ثم غياب opponent → 409 `competition_errors.no_opponent` (i18n بدل النص الإنجليزي المكتوب) ثم race (`startLive=false`) → نفس 409؛ end: `completed` → نجاح `already_completed:true`، `!==live` → 409 `competition_errors.not_live`، `complete=false` (race) → idempotent success بلا `finalize_payouts` ثانية. i18n: `not_eligible_to_start/no_opponent/not_live/already_completed` في ar+en. لم يُلمس: LivePayoutEngine/ScheduledTaskService.updateAggregatesAfterVote/المالية/migrations/B5-2+
+  / الملفات: src/models/CompetitionModel.ts, src/controllers/CompetitionController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/integration/competition-state-guards.test.ts (جديد), tests/api/competition-state-guards-i18n.test.ts (جديد), PLAN-STATUS.md, WORKLOG.md / نفذ: Cline (B5-1 LOCAL agent) / اختبار: integration 7/7 عبر D1 حقيقية ✅ + npm test 73/73 ✅ + tsc ✅ + build ✅ / **لا commit/PR/push — بانتظار موافقة القائد**
+
+---
+
 ## 2026-09-09 (B4)
 
 - `[2026-09-09] [B4]` — إصلاح B4 (Scheduled tasks due-query): مقارنة `execute_at` عبر `datetime()` في `processPendingTasks` (WHERE + ORDER BY) لأن `schedule()` يخزن ISO (`toISOString`) بينما `datetime('now')` بصيغة space — المقارنة الخام لا تطابق أبداً فالمهام المستحقة لا تُنفَّذ. اختبار حقيقي على D1/SQLite عبر Wrangler CLI: `tests/integration/scheduled-tasks-due.test.ts` (5 حالات: مهمة past بصيغة ISO تُلتقط، مهمة past بصيغة space تُلتقط، مهمة future لا تُلتقط، عدد المهام 2، ترتيب زمني). إثبات الحمرة سلوكي: أعيد الـSQL للصيغة القديمة (`t.execute_at <= datetime('now')`) → 3 حالات تفشل (المهمة بصيغة ISO لا تُلتقط)، ثم أعيد الإصلاح → 5/5 تنجح. بلا نصوص user-visible (لا i18n مطلوب)، بلا لمس للمال/الإعلانات، الإصلاح في طبقة service فقط (MVC/OOP)

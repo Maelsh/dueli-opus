@@ -286,6 +286,14 @@ export class CompetitionModel extends BaseModel<Competition> {
         const liveUrl = options?.liveUrl || null;
         const youtubeLiveId = options?.youtubeLiveId || null;
 
+        // B5-1: guarded transition — only accepted -> live.
+        // Capture the pre-state so environments where `meta.changes` is
+        // unavailable (some local Wrangler CLI versions omit it for writes)
+        // can still decide from real before/after state.
+        const before = await this.db.prepare(
+            'SELECT status FROM competitions WHERE id = ?'
+        ).bind(id).first<{ status: string } | null>();
+
         const result = await this.db.prepare(`
             UPDATE competitions 
             SET status = 'live', 
@@ -294,9 +302,16 @@ export class CompetitionModel extends BaseModel<Competition> {
                 live_url = ?,
                 stream_status = 'live',
                 stream_started_at = datetime('now')
-            WHERE id = ?
+            WHERE id = ? AND status = 'accepted'
         `).bind(youtubeLiveId, liveUrl, id).run();
-        return result.meta.changes > 0;
+        // Real D1/workers runtime: authoritative row-count signal.
+        if (typeof result.meta?.changes === 'number' && result.meta.changes > 0) return true;
+        if (typeof result.meta?.changes === 'number' && result.meta.changes === 0) return false;
+        // Fallback (meta unavailable): true only on a real accepted -> live flip.
+        const after = await this.db.prepare(
+            'SELECT status FROM competitions WHERE id = ?'
+        ).bind(id).first<{ status: string } | null>();
+        return before?.status === 'accepted' && after?.status === 'live';
     }
 
     /**
@@ -309,6 +324,11 @@ export class CompetitionModel extends BaseModel<Competition> {
         const vodUrl = options?.vodUrl || null;
         const youtubeVideoUrl = options?.youtubeVideoUrl || null;
 
+        // B5-1: guarded transition — only live -> completed (see startLive).
+        const before = await this.db.prepare(
+            'SELECT status FROM competitions WHERE id = ?'
+        ).bind(id).first<{ status: string } | null>();
+
         const result = await this.db.prepare(`
             UPDATE competitions 
             SET status = 'completed', 
@@ -317,9 +337,14 @@ export class CompetitionModel extends BaseModel<Competition> {
                 vod_url = ?,
                 stream_status = 'ready',
                 stream_ended_at = datetime('now')
-            WHERE id = ?
+            WHERE id = ? AND status = 'live'
         `).bind(youtubeVideoUrl, vodUrl, id).run();
-        return result.meta.changes > 0;
+        if (typeof result.meta?.changes === 'number' && result.meta.changes > 0) return true;
+        if (typeof result.meta?.changes === 'number' && result.meta.changes === 0) return false;
+        const after = await this.db.prepare(
+            'SELECT status FROM competitions WHERE id = ?'
+        ).bind(id).first<{ status: string } | null>();
+        return before?.status === 'live' && after?.status === 'completed';
     }
 
     /**

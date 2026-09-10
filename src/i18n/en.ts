@@ -232,6 +232,10 @@ export const en = {
         already_requested: 'You have already requested to join',
         not_completed: 'Competition is not completed',
         already_rated: 'You have already rated this competitor',
+        not_eligible_to_start: 'Competition cannot be started in its current state',
+        no_opponent: 'Cannot start competition without an opponent',
+        not_live: 'Competition is not live',
+        already_completed: 'Competition is already completed',
     },
 
     // User Error Messages

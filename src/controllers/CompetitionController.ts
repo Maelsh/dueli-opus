@@ -510,9 +510,14 @@ export class CompetitionController extends BaseController {
                 return this.forbidden(c);
             }
 
+            // B5-1: state guard — only accepted competitions can go live
+            if (competition.status !== 'accepted') {
+                return this.error(c, this.t('competition_errors.not_eligible_to_start', c), 409);
+            }
+
             // Must have opponent to start
             if (!competition.opponent_id) {
-                return this.error(c, 'Cannot start without opponent');
+                return this.error(c, this.t('competition_errors.no_opponent', c), 409);
             }
 
             const body = await this.getBody<{
@@ -520,10 +525,15 @@ export class CompetitionController extends BaseController {
                 live_url?: string;
             }>(c);
 
-            await model.startLive(id, {
+            const started = await model.startLive(id, {
                 youtubeLiveId: body?.youtube_live_id,
                 liveUrl: body?.live_url
             });
+
+            // B5-1: race — status changed between read and guarded UPDATE
+            if (!started) {
+                return this.error(c, this.t('competition_errors.not_eligible_to_start', c), 409);
+            }
 
             // Rule C: Schedule auto-end after 2 hours
             const taskService = new ScheduledTaskService(c.env.DB);
@@ -566,15 +576,26 @@ export class CompetitionController extends BaseController {
                 return this.success(c, { ended: true, status: 'completed', already_completed: true });
             }
 
+            // B5-1: only live competitions can be completed
+            if (competition.status !== 'live') {
+                return this.error(c, this.t('competition_errors.not_live', c), 409);
+            }
+
             const body = await this.getBody<{
                 youtube_video_url?: string;
                 vod_url?: string;
             }>(c);
 
-            await model.complete(id, {
+            const completed = await model.complete(id, {
                 youtubeVideoUrl: body?.youtube_video_url,
                 vodUrl: body?.vod_url
             });
+
+            // B5-1: race — already completed between read and guarded UPDATE.
+            // Treat as idempotent success; never schedule finalize_payouts twice.
+            if (!completed) {
+                return this.success(c, { ended: true, status: 'completed', already_completed: true });
+            }
 
             // Delete chunk keys when competition ends (live â†’ completed)
             // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة

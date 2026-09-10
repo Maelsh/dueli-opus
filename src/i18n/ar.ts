@@ -206,6 +206,10 @@ export const ar = {
         already_requested: 'لقد طلبت الانضمام مسبقاً',
         not_completed: 'المنافسة لم تنتهي بعد',
         already_rated: 'لقد قيمت هذا المتنافس مسبقاً',
+        not_eligible_to_start: 'لا يمكن بدء المنافسة في حالتها الحالية',
+        no_opponent: 'لا يمكن بدء المنافسة بدون خصم',
+        not_live: 'المنافسة ليست جارية',
+        already_completed: 'المنافسة منتهية بالفعل',
     },
 
     // رسائل أخطاء المستخدم

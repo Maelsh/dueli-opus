@@ -169,3 +169,53 @@ export function execD1(command) {
         { expectJson: true },
     );
 }
+
+/**
+ * Execute a WRITE statement through the Wrangler CLI and return the write
+ * meta ({ changes, last_row_id }) when the CLI reports it.
+ *
+ * NOTE: some local Wrangler CLI versions omit `meta.changes` for writes —
+ * callers must treat an absent `changes` as "unknown" (verify real
+ * before/after state instead of assuming 0). This helper never fabricates
+ * a row count: what the CLI does not report stays `undefined`.
+ */
+export function runD1Write(command) {
+    const payload = runWrangler(
+        [
+            'd1',
+            'execute',
+            DATABASE_NAME,
+            '--local',
+            `--persist-to=${TEST_PERSIST_DIR}`,
+            '--json',
+            '--command',
+            command,
+        ],
+        { expectJson: true },
+    );
+    const first = Array.isArray(payload) ? payload[0] : payload;
+    const meta = (first && first.meta) || {};
+    return {
+        changes: typeof meta.changes === 'number' ? meta.changes : undefined,
+        lastRowId: typeof meta.last_row_id === 'number' ? meta.last_row_id : undefined,
+    };
+}
+
+/**
+ * Absolute path of the repository root (the directory containing
+ * package.json / src / tests). Exposed so TypeScript tests never need to
+ * import Node built-ins (path/url) themselves.
+ */
+export function getProjectRoot() {
+    return PROJECT_ROOT;
+}
+
+/**
+ * Read a UTF-8 text file at a repo-relative path (e.g.
+ * 'src/controllers/CompetitionController.ts'). Lets tests assert on source
+ * contracts without importing 'fs' / 'path' in TypeScript.
+ */
+export async function readRepoFile(relPath) {
+    const { readFile } = await import('fs/promises');
+    return readFile(join(PROJECT_ROOT, relPath), 'utf-8');
+}
