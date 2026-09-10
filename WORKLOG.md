@@ -11,12 +11,18 @@
   / الملفات: src/models/CompetitionModel.ts, src/controllers/CompetitionController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/integration/competition-state-guards.test.ts (جديد), tests/api/competition-state-guards-i18n.test.ts (جديد), PLAN-STATUS.md, WORKLOG.md / نفذ: Cline (B5-1 LOCAL agent) / اختبار: integration 7/7 عبر D1 حقيقية ✅ + npm test 73/73 ✅ + tsc ✅ + build ✅ / **لا commit/PR/push — بانتظار موافقة القائد**
 
 ---
-
 ## 2026-09-09 (B4)
 
 - `[2026-09-09] [B4]` — إصلاح B4 (Scheduled tasks due-query): مقارنة `execute_at` عبر `datetime()` في `processPendingTasks` (WHERE + ORDER BY) لأن `schedule()` يخزن ISO (`toISOString`) بينما `datetime('now')` بصيغة space — المقارنة الخام لا تطابق أبداً فالمهام المستحقة لا تُنفَّذ. اختبار حقيقي على D1/SQLite عبر Wrangler CLI: `tests/integration/scheduled-tasks-due.test.ts` (5 حالات: مهمة past بصيغة ISO تُلتقط، مهمة past بصيغة space تُلتقط، مهمة future لا تُلتقط، عدد المهام 2، ترتيب زمني). إثبات الحمرة سلوكي: أعيد الـSQL للصيغة القديمة (`t.execute_at <= datetime('now')`) → 3 حالات تفشل (المهمة بصيغة ISO لا تُلتقط)، ثم أعيد الإصلاح → 5/5 تنجح. بلا نصوص user-visible (لا i18n مطلوب)، بلا لمس للمال/الإعلانات، الإصلاح في طبقة service فقط (MVC/OOP)
   / الملفات: src/lib/services/ScheduledTaskService.ts, tests/integration/scheduled-tasks-due.test.ts, WORKLOG.md, .github/CLI-NOTES.md, .github/pr-body-b4.md / نفذ: Cline (B4 LOCAL agent) / اختبار: integration 5/5 ✅ / commit: 608a7fc / PR: https://github.com/Maelsh/dueli-opus/pull/7
+## 2026-09-09 (B5-2)
 
+- `[2026-09-09] [B5-2]` — تعريب رسائل أخطاء المنافسة المتبقية عبر i18n (بدون تغيير رموز HTTP أو شكل الاستجابة):
+  - `src/i18n/ar.ts` + `src/i18n/en.ts`: أضيفت 11 مفتاحاً جديداً تحت `competition_errors`: `no_opponent`, `vod_url_required`, `already_has_opponent`, `invitee_required`, `cannot_invite_self`, `already_invited`, `no_pending_invitation`, `no_pending_request`, `request_already_accepted`, `already_competitor`, `competition_full` — كلها مترجمة ar+en.
+  - `src/controllers/CompetitionController.ts`: استبدال النصوص الحرفية بـ `this.t('competition_errors.<key>, c)`: `'Cannot start without opponent'` → `no_opponent` (409)، `'vod_url is required'` → `vod_url_required`، `'Competition already has opponent'` → `already_has_opponent` (مرتين)، `'invitee_id required'` → `invitee_required`، `'Cannot invite yourself'` → `cannot_invite_self`، `'User already invited'` → `already_invited`، `'No pending invitation found'` → `no_pending_invitation` (3 مرات).
+  - `tests/helpers/fake-d1.ts`: إصلاح خلل بناء (if-block مكرر بلا إغلاق يسبب خطأ esbuild) — حُذف التالف، بقي المعالج الصحيح.
+  - `tests/api/competition-errors-i18n.test.ts` (جديد، 5 اختبارات): /start بلا خصم يعيد الرسالة ar+en، /update-vod بلا vod_url يعيد الرسالة ar+en، وحارس انحدار يثبت زوال كل النصوص الحرفية.
+  / الملفات: src/controllers/CompetitionController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/helpers/fake-d1.ts, tests/api/competition-errors-i18n.test.ts / نفذ: Cline / اختبار: 5/5 ✅ + npm test 75/75 ✅ + tsc ✅ + build ✅ / **بانتظار مراجعة القائد** / خارج النطاق: متحكمات المال والإعلانات
 ---
 
 ## 2026-09-08 (B1)

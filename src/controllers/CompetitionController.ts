@@ -642,7 +642,7 @@ export class CompetitionController extends BaseController {
 
             const body = await this.getBody<{ vod_url: string }>(c);
             if (!body?.vod_url) {
-                return this.validationError(c, 'vod_url is required');
+                return this.validationError(c, this.t('competition_errors.vod_url_required', c));
             }
 
             await model.setVodUrl(id, body.vod_url);
@@ -810,11 +810,11 @@ export class CompetitionController extends BaseController {
 
             if (!competition) return this.notFound(c);
             if (competition.creator_id !== user.id) return this.forbidden(c);
-            if (competition.opponent_id) return this.error(c, 'Competition already has opponent');
+            if (competition.opponent_id) return this.error(c, this.t('competition_errors.already_has_opponent', c));
 
             const body = await this.getBody<{ invitee_id: number; message?: string }>(c);
-            if (!body?.invitee_id) return this.validationError(c, 'invitee_id required');
-            if (body.invitee_id === user.id) return this.error(c, 'Cannot invite yourself');
+            if (!body?.invitee_id) return this.validationError(c, this.t('competition_errors.invitee_required', c));
+            if (body.invitee_id === user.id) return this.error(c, this.t('competition_errors.cannot_invite_self', c));
 
             // Check if already invited
             const existing = await c.env.DB.prepare(`
@@ -822,7 +822,7 @@ export class CompetitionController extends BaseController {
                 WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
             `).bind(competitionId, body.invitee_id).first();
 
-            if (existing) return this.error(c, 'User already invited');
+            if (existing) return this.error(c, this.t('competition_errors.already_invited', c));
 
             // Create invitation
             const result = await c.env.DB.prepare(`
@@ -874,7 +874,7 @@ export class CompetitionController extends BaseController {
             const competition = await model.findById(competitionId);
 
             if (!competition) return this.notFound(c);
-            if (competition.opponent_id) return this.error(c, 'Competition already has opponent');
+            if (competition.opponent_id) return this.error(c, this.t('competition_errors.already_has_opponent', c));
 
             // Verify invitation exists
             const invitation = await c.env.DB.prepare(`
@@ -882,7 +882,7 @@ export class CompetitionController extends BaseController {
                 WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
             `).bind(competitionId, user.id).first();
 
-            if (!invitation) return this.error(c, 'No pending invitation found');
+            if (!invitation) return this.error(c, this.t('competition_errors.no_pending_invitation', c));
 
             // Set user as opponent
             await model.setOpponent(competitionId, user.id);
@@ -954,7 +954,7 @@ export class CompetitionController extends BaseController {
                 WHERE ci.competition_id = ? AND ci.invitee_id = ? AND ci.status = 'pending'
             `).bind(competitionId, user.id).first<any>();
 
-            if (!invitation) return this.error(c, 'No pending invitation found');
+            if (!invitation) return this.error(c, this.t('competition_errors.no_pending_invitation', c));
 
             const result = await c.env.DB.prepare(`
                 UPDATE competition_invitations 
@@ -963,7 +963,7 @@ export class CompetitionController extends BaseController {
             `).bind(invitation.id).run();
 
             if (result.meta.changes === 0) {
-                return this.error(c, 'No pending invitation found');
+                return this.error(c, this.t('competition_errors.no_pending_invitation', c));
             }
 
             // T2.2: Real-time push to creator (declined)
