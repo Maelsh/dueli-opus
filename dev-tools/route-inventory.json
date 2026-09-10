@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-05T04:21:15.956Z",
+  "generatedAt": "2026-09-10T18:25:44.024Z",
   "total": 172,
   "routes": [
     {
@@ -556,6 +556,13 @@
       "file": "src/modules/api/competitions/routes.ts"
     },
     {
+      "method": "GET",
+      "path": "/api/competitions/:id/comments",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
       "method": "POST",
       "path": "/api/competitions/:id/comments",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
@@ -738,13 +745,6 @@
       "file": "src/modules/api/countries/routes.ts"
     },
     {
-      "method": "GET",
-      "path": "/api/cron/run",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
-      "file": "src/modules/api/cron/routes.ts"
-    },
-    {
       "method": "POST",
       "path": "/api/cron/run",
       "classification": "UNGUARDED ⚠",
@@ -754,43 +754,43 @@
     {
       "method": "POST",
       "path": "/api/donations",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/donations/:id/complete",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "GET",
       "path": "/api/donations/my",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "GET",
       "path": "/api/donations/top-supporters",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "GET",
       "path": "/api/donations/total",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/donations/webhook",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {

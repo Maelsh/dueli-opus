@@ -169,7 +169,7 @@ export class InteractionController extends BaseController {
             }
 
             // Validate target type
-            if (!['user', 'competition', 'comment', 'ad'].includes(body.target_type)) {
+            if (!['user', 'competition', 'comment', 'message', 'ad'].includes(body.target_type)) {
                 return this.validationError(c, this.t('report.invalid_target', c));
             }
 

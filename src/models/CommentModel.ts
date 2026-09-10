@@ -21,6 +21,17 @@ export interface CommentWithUser extends Comment {
     display_name?: string;
     avatar_url?: string;
     username?: string;
+    replies_count?: number;
+}
+
+/**
+ * Paged comments result (B2+B3).
+ */
+export interface PagedComments {
+    items: CommentWithUser[];
+    total: number;
+    limit: number;
+    offset: number;
 }
 
 /**
@@ -39,10 +50,76 @@ export class CommentModel extends BaseModel<Comment> {
             SELECT c.*, u.display_name, u.avatar_url, u.username
             FROM comments c
             JOIN users u ON c.user_id = u.id
-            WHERE c.competition_id = ?
+            WHERE c.competition_id = ? AND c.deleted_at IS NULL
             ORDER BY c.created_at DESC
             LIMIT ? OFFSET ?
         `, competitionId, limit, offset);
+    }
+
+    /**
+     * B2+B3: paged competition comments with optional parent filter.
+     * - limit clamped to [1,100], default 20; offset >= 0.
+     * - parentId null => root comments (each carries replies_count).
+     * - parentId number => direct replies only.
+     * - Soft-deleted rows (deleted_at NOT NULL) are always excluded.
+     */
+    async findByCompetitionPaged(
+        competitionId: number,
+        rawLimit?: number,
+        rawOffset?: number,
+        parentId?: number | null
+    ): Promise<PagedComments> {
+        let limit = Number.isFinite(rawLimit as number) ? Math.floor(rawLimit as number) : 20;
+        if (limit <= 0) limit = 20;
+        if (limit > 100) limit = 100;
+        let offset = Number.isFinite(rawOffset as number) ? Math.floor(rawOffset as number) : 0;
+        if (offset < 0) offset = 0;
+
+        const baseWhere = parentId === undefined || parentId === null
+            ? 'c.competition_id = ? AND c.parent_id IS NULL AND c.deleted_at IS NULL'
+            : 'c.competition_id = ? AND c.parent_id = ? AND c.deleted_at IS NULL';
+        const baseParams = parentId === undefined || parentId === null
+            ? [competitionId]
+            : [competitionId, parentId];
+
+        const totalRow = await this.queryOne<{ n: number }>(
+            `SELECT COUNT(*) AS n FROM comments c WHERE ${baseWhere}`,
+            ...baseParams
+        );
+        const total = totalRow?.n || 0;
+
+        const items = await this.query<CommentWithUser>(`
+            SELECT c.*, u.display_name, u.avatar_url, u.username,
+                (SELECT COUNT(*) FROM comments r WHERE r.parent_id = c.id AND r.deleted_at IS NULL) AS replies_count
+            FROM comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE ${baseWhere}
+            ORDER BY c.created_at DESC
+            LIMIT ? OFFSET ?
+        `, ...baseParams, limit, offset);
+
+        return { items, total, limit, offset };
+    }
+
+    /**
+     * B2+B3: number of visible comments (non-deleted) for a competition.
+     */
+    async countVisible(competitionId: number): Promise<number> {
+        const row = await this.queryOne<{ n: number }>(
+            'SELECT COUNT(*) AS n FROM comments WHERE competition_id = ? AND deleted_at IS NULL',
+            competitionId
+        );
+        return row?.n || 0;
+    }
+
+    /**
+     * B2+B3: soft-delete a comment (sets deleted_at only).
+     */
+    async softDelete(id: number): Promise<boolean> {
+        const result = await this.db.prepare(
+            "UPDATE comments SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL"
+        ).bind(id).run();
+        return result.meta.changes > 0;
     }
 
     /**
@@ -103,7 +180,7 @@ export class CommentModel extends BaseModel<Comment> {
      */
     async countTopLevel(competitionId: number): Promise<number> {
         const row = await this.db.prepare(
-            'SELECT COUNT(*) AS n FROM comments WHERE competition_id = ? AND parent_id IS NULL'
+            'SELECT COUNT(*) AS n FROM comments WHERE competition_id = ? AND parent_id IS NULL AND deleted_at IS NULL'
         ).bind(competitionId).first<{ n: number }>();
         return row?.n || 0;
     }

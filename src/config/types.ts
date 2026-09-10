@@ -207,6 +207,8 @@ export interface Comment extends TimestampedEntity {
   user_id: number;
   content: string;
   is_live: boolean;
+  parent_id?: number | null;
+  deleted_at?: string | null;
   // Joined user data
   display_name?: string;
   avatar_url?: string;

@@ -124,7 +124,17 @@ export const ar = {
 
     // التعليقات
     comment: 'تعليق',
-    comments: 'التعليقات',
+    comments: {
+        label: 'التعليقات',
+        load_more: 'عرض المزيد من التعليقات',
+        no_comments: 'لا توجد تعليقات بعد',
+        reply: 'رد',
+        deleted: 'تم حذف التعليق',
+    },
+    reports: {
+        reason_comment: 'تعليق مسيء',
+        reason_message: 'رسالة مسيئة',
+    },
     add_comment: 'أضف تعليقاً',
     live_chat: 'المحادثة المباشرة',
 
@@ -200,6 +210,8 @@ export const ar = {
         blocked_interaction: 'لا يمكن إتمام هذا الإجراء',
         rate_limited: 'محاولات كثيرة، حاول بعد قليل',
         content_too_long: 'النص أطول من الحد المسموح',
+        comment_not_found: 'التعليق غير موجود',
+        not_comment_owner: 'فقط مالك التعليق أو المشرف يمكنه حذفه',
     },
 
     // رسائل أخطاء المنافسة

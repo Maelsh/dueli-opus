@@ -147,8 +147,6 @@ export class CompetitionController extends BaseController {
         try {
             const model = new CompetitionModel(c.env.DB);
             const commentModel = new CommentModel(c.env.DB);
-            const requestModel = new CompetitionRequestModel(c.env.DB);
-            const ratingModel = new RatingModel(c.env.DB);
 
             const id = this.getParamInt(c, 'id');
             const competition = await model.findWithDetails(id);
@@ -159,17 +157,22 @@ export class CompetitionController extends BaseController {
 
             await model.incrementViews(id);
 
-            const comments = await commentModel.findByCompetition(id);
-            const requests = await requestModel.findByCompetition(id);
-            const ratings = await ratingModel.findByCompetition(id);
+            // B2+B3: light payload — counts only, no full arrays.
+            const comments_count = await commentModel.countVisible(id);
+            const requestsRow = await c.env.DB.prepare(
+                "SELECT COUNT(*) AS n FROM competition_requests WHERE competition_id = ? AND status = 'pending'"
+            ).bind(id).first<{ n: number }>();
+            const ratingsRow = await c.env.DB.prepare(
+                'SELECT COUNT(*) AS n FROM ratings WHERE competition_id = ?'
+            ).bind(id).first<{ n: number }>();
 
             const timer = ScheduledTaskService.getTimerDeadline(competition as any);
 
             return this.success(c, {
                 ...competition,
-                comments,
-                requests,
-                ratings,
+                comments_count,
+                requests_count: requestsRow?.n || 0,
+                ratings_count: ratingsRow?.n || 0,
                 timer
             });
         } catch (error) {
@@ -693,6 +696,22 @@ export class CompetitionController extends BaseController {
                 parent_id: body.parent_id ?? null
             });
 
+            // B2+B3: live publish after successful insert; broadcast failure
+            // must never fail comment creation.
+            try {
+                const pusher = new EventPusher(c.env.DB, c.env);
+                await pusher.publishComment(competitionId, {
+                    id: comment.id,
+                    user_id: user.id,
+                    username: user.display_name || user.username,
+                    avatar_url: user.avatar_url || null,
+                    content: comment.content,
+                    created_at: comment.created_at as string
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishComment failed:', pushError);
+            }
+
             return this.success(c, comment, 201);
         } catch (error) {
             if (error instanceof BlockedInteractionError) {
@@ -702,6 +721,40 @@ export class CompetitionController extends BaseController {
             if (error instanceof ContentTooLongError) {
                 return this.error(c, this.t('errors.content_too_long', c), 400);
             }
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * B2+B3: paged competition comments
+     * GET /api/competitions/:id/comments?limit=&offset=&parent_id=
+     */
+    async getComments(c: AppContext) {
+        try {
+            const competitionId = this.getParamInt(c, 'id');
+            if (!competitionId) {
+                return this.validationError(c, this.t('errors.invalid_id', c));
+            }
+            const limitRaw = c.req.query('limit');
+            const offsetRaw = c.req.query('offset');
+            const parentRaw = c.req.query('parent_id');
+            const limit = limitRaw === undefined ? undefined : parseInt(limitRaw, 10);
+            const offset = offsetRaw === undefined ? undefined : parseInt(offsetRaw, 10);
+            const parentId = parentRaw === undefined || parentRaw === '' || parentRaw === 'null'
+                ? null
+                : parseInt(parentRaw, 10);
+            if (offset !== undefined && (Number.isNaN(offset) || offset < 0)) {
+                return this.validationError(c, this.t('errors.invalid_id', c));
+            }
+            const commentModel = new CommentModel(c.env.DB);
+            const page = await commentModel.findByCompetitionPaged(
+                competitionId,
+                limit,
+                offset,
+                Number.isNaN(parentId as number) ? null : parentId
+            );
+            return this.success(c, page);
+        } catch (error) {
             return this.serverError(c, error as Error);
         }
     }
@@ -723,16 +776,18 @@ export class CompetitionController extends BaseController {
             const competition = await model.findById(competitionId);
             const comment = await commentModel.findById(commentId);
 
-            if (!competition || !comment) {
-                return this.notFound(c);
+            if (!competition || !comment || (comment as any).deleted_at) {
+                return this.error(c, this.t('errors.comment_not_found', c), 404);
             }
 
-            // Can delete if owner of comment or competition creator
-            if (comment.user_id !== user.id && competition.creator_id !== user.id) {
-                return this.forbidden(c);
+            // B2+B3: owner or admin only.
+            const isOwner = comment.user_id === user.id;
+            const isAdmin = user.is_admin === 1;
+            if (!isOwner && !isAdmin) {
+                return this.error(c, this.t('errors.not_comment_owner', c), 403);
             }
 
-            await commentModel.delete(commentId);
+            await commentModel.softDelete(commentId);
             return this.success(c, { deleted: true });
         } catch (error) {
             return this.serverError(c, error as Error);

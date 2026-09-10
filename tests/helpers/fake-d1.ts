@@ -22,6 +22,8 @@ export class FakeD1 {
     ratings: Row[] = [];
     invitations: Row[] = [];
     notifications: Row[] = [];
+    sseEvents: Row[] = [];
+    sseSeq = 0;
     // B7: comments + rate_limits support for rate-limits tests
     comments: Row[] = [];
     rateLimits: Row[] = [];
@@ -138,6 +140,39 @@ class FakeStmt {
             return this.db.comments.find((cm) => cm.id === p[0]) ?? null;
         }
 
+        // --- B2+B3: visible comment counts ---
+        if (q.startsWith('select count(*) as n from comments')) {
+            const compId = p[0];
+            let rows = this.db.comments.filter((c) => c.competition_id === compId && !c.deleted_at);
+            if (q.includes('parent_id is null')) rows = rows.filter((c) => c.parent_id == null);
+            else if (q.includes('parent_id = ?')) rows = rows.filter((c) => c.parent_id === p[1]);
+            return { n: rows.length };
+        }
+
+        // --- B2+B3: light competition counts ---
+        if (q.startsWith('select count(*) as n from competition_requests')) {
+            const n = this.db.requests.filter((r) => r.competition_id === p[0] && r.status === 'pending').length;
+            return { n };
+        }
+        if (q.startsWith('select count(*) as n from ratings')) {
+            const n = this.db.ratings.filter((r) => r.competition_id === p[0]).length;
+            return { n };
+        }
+
+        // --- B2+B3: competition details join ---
+        if (q.includes('from competitions c') && q.includes('join categories cat')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            if (!comp) return null;
+            const creator = this.db.users.find((u) => u.id === comp.creator_id) ?? {};
+            const opponent = this.db.users.find((u) => u.id === comp.opponent_id) ?? {};
+            return {
+                ...comp,
+                category_name_ar: 'x', category_name_en: 'x', category_slug: 'x',
+                creator_name: creator.display_name, creator_username: creator.username, creator_avatar: creator.avatar_url,
+                opponent_name: opponent.display_name, opponent_username: opponent.username, opponent_avatar: opponent.avatar_url,
+            };
+        }
+
         // --- B7: rate_limits (RateLimitService read-back) ---
         if (q.startsWith('select count from rate_limits where key = ? and window_start = ?')) {
             const hit = this.db.rateLimits.find(
@@ -251,6 +286,32 @@ class FakeStmt {
         const q = norm(this.sql);
         const p = this.params;
 
+        // --- comments (B2+B3: paged + replies_count + soft-delete aware) ---
+        if (q.includes('from comments c') && q.includes('join users u')) {
+            const hasParent = q.includes('c.parent_id = ?');
+            const compId = p[0];
+            const parentVal = hasParent ? p[1] : undefined;
+            const limIdx = hasParent ? 2 : 1;
+            const offIdx = hasParent ? 3 : 2;
+            let rows = this.db.comments.filter((c) => {
+                if (c.competition_id !== compId) return false;
+                if (c.deleted_at) return false;
+                if (hasParent) return c.parent_id === parentVal;
+                if (q.includes('c.parent_id is null')) return c.parent_id == null;
+                return true;
+            });
+            rows = rows.map((c) => {
+                const u = this.db.users.find((x) => x.id === c.user_id) ?? {};
+                const replies_count = this.db.comments.filter(
+                    (r) => r.parent_id === c.id && !r.deleted_at
+                ).length;
+                return { ...c, display_name: u.display_name, avatar_url: u.avatar_url, username: u.username, replies_count };
+            }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            const lim = p[limIdx] as number;
+            const off = p[offIdx] as number;
+            if (Number.isFinite(lim) && Number.isFinite(off)) rows = rows.slice(off, off + lim);
+            return { results: rows };
+        }
         // --- ratings with user details (JOIN) ---
         if (q.includes('from ratings r') && q.includes('join users u')) {
             const competitionId = p[0];
@@ -508,6 +569,29 @@ class FakeStmt {
             return ok({ last_row_id: newId, changes: 1 });
         }
 
+        // B2+B3: soft-delete + SSE log (test fake only)
+        if (q.startsWith('update comments set deleted_at')) {
+            const row = this.db.comments.find((c) => c.id === p[0] && !c.deleted_at);
+            if (!row) return ok({ last_row_id: null, changes: 0 });
+            row.deleted_at = new Date().toISOString();
+            return ok({ last_row_id: null, changes: 1 });
+        }
+        if (q.startsWith('insert into sse_event_log')) {
+            const newId = ++this.db.sseSeq;
+            this.db.sseEvents.push({ id: newId, channel: p[0], event_type: p[1], payload: p[2], created_at: new Date().toISOString() });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+        if (q.startsWith('select * from sse_event_log where id = ?')) {
+            return this.db.sseEvents.find((e) => e.id === p[0]) ?? null;
+        }
+        if (q.startsWith('select * from sse_event_log where channel = ?')) {
+            const rows = this.db.sseEvents
+                .filter((e) => e.channel === p[0] && e.id > (p[1] as number))
+                .sort((a, b) => a.id - b.id)
+                .slice(0, (p[2] as number) || 50);
+            return { results: rows };
+        }
+
         // B7: UPDATE competitions SET total_comments = total_comments + 1 WHERE id = ?
         if (q.startsWith('update competitions set total_comments')) {
             const comp = this.db.competitions.find((cm) => cm.id === p[0]);
@@ -515,7 +599,7 @@ class FakeStmt {
             return ok({ last_row_id: null, changes: comp ? 1 : 0 });
         }
 
-        // B7: INSERT INTO rate_limits ... ON CONFLICT(key, window_start) DO UPDATE SET count = count + 1
+        // --- B7: INSERT INTO rate_limits ... ON CONFLICT(key, window_start) DO UPDATE SET count = count + 1
         if (q.startsWith('insert into rate_limits')) {
             const hit = this.db.rateLimits.find(
                 (r) => r.key === p[0] && r.window_start === p[1]
