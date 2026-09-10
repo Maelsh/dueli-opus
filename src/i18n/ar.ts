@@ -197,6 +197,7 @@ export const ar = {
         update_failed: 'فشل في التحديث',
         delete_failed: 'فشل في الحذف',
         something_wrong: 'حدث خطأ ما. يرجى المحاولة مرة أخرى.',
+        blocked_interaction: 'لا يمكن إتمام هذا الإجراء',
     },
 
     // رسائل أخطاء المنافسة

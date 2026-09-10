@@ -6,6 +6,8 @@
  * خدمة إدارة حالة المستخدم - مشغول/متاح
  */
 
+import { UserBlockModel } from '../../models/UserBlockModel';
+
 export class UserStatusService {
     constructor(private db: D1Database) { }
 
@@ -99,12 +101,8 @@ export class UserStatusService {
      * Plan Solution 6: حظر المستخدمين
      */
     async isBlocked(user1Id: number, user2Id: number): Promise<boolean> {
-        const block = await this.db.prepare(`
-            SELECT 1 FROM user_blocks 
-            WHERE (blocker_id = ? AND blocked_id = ?)
-            OR (blocker_id = ? AND blocked_id = ?)
-        `).bind(user1Id, user2Id, user2Id, user1Id).first();
-        return block !== null;
+        // B6: unified on UserBlockModel.isBlockedBetween — no duplicate SQL.
+        return new UserBlockModel(this.db).isBlockedBetween(user1Id, user2Id);
     }
 
     /**

@@ -223,6 +223,7 @@ export const en = {
         update_failed: 'Failed to update',
         delete_failed: 'Failed to delete',
         something_wrong: 'Something went wrong. Please try again.',
+        blocked_interaction: 'This action is not available',
     },
 
     // Competition Error Messages

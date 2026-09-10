@@ -6,6 +6,8 @@
 
 import { D1Database } from '@cloudflare/workers-types';
 import { BaseModel } from './base/BaseModel';
+import { UserBlockModel } from './UserBlockModel';
+import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
  * Conversation Interface
@@ -93,6 +95,12 @@ export class MessageModel extends BaseModel<Message> {
         const receiverId = conversation.user1_id === data.sender_id
             ? conversation.user2_id
             : conversation.user1_id;
+
+        // B6: cannot message a user you're blocked by or have blocked.
+        const blocked = await new UserBlockModel(this.db).isBlockedBetween(data.sender_id, receiverId);
+        if (blocked) {
+            throw new BlockedInteractionError();
+        }
 
         const now = new Date().toISOString();
         const result = await this.db.prepare(`
@@ -227,6 +235,13 @@ export class ConversationModel extends BaseModel<Conversation> {
      * Find or create conversation between two users
      */
     async findOrCreate(user1Id: number, user2Id: number): Promise<Conversation> {
+        // B6: cannot start (or resume) a conversation with a blocked user,
+        // in either direction — checked before find-or-create either branch.
+        const blocked = await new UserBlockModel(this.db).isBlockedBetween(user1Id, user2Id);
+        if (blocked) {
+            throw new BlockedInteractionError();
+        }
+
         // Normalize order to prevent duplicates
         const [minId, maxId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
 

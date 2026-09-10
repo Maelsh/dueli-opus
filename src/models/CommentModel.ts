@@ -5,6 +5,8 @@
 
 import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { Comment } from '../config/types';
+import { UserBlockModel } from './UserBlockModel';
+import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
  * Comment with user data
@@ -46,6 +48,21 @@ export class CommentModel extends BaseModel<Comment> {
             const parent = await this.findById(data.parent_id);
             if (!parent || (parent as any).competition_id !== data.competition_id) {
                 throw new Error('Invalid parent comment');
+            }
+        }
+
+        // B6: cannot comment on a competition whose creator has blocked/is blocked
+        // by the commenter — a blocked pair may not interact at all.
+        const competition = await this.db.prepare(
+            'SELECT creator_id FROM competitions WHERE id = ?'
+        ).bind(data.competition_id).first<{ creator_id: number }>();
+        if (competition && competition.creator_id !== data.user_id) {
+            const blocked = await new UserBlockModel(this.db).isBlockedBetween(
+                data.user_id!,
+                competition.creator_id
+            );
+            if (blocked) {
+                throw new BlockedInteractionError();
             }
         }
 

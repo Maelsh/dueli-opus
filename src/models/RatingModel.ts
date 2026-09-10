@@ -6,6 +6,8 @@
  */
 
 import { BaseModel } from './base/BaseModel';
+import { UserBlockModel } from './UserBlockModel';
+import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
  * Rating entity
@@ -46,6 +48,11 @@ export class RatingModel extends BaseModel<Rating> {
     async create(...args: any[]): Promise<any> {
         if (args.length === 4) {
             const [competitionId, userId, competitorId, rating] = args as [number, number, number, number];
+            // B6: rater and rated competitor must not be blocking each other.
+            const blocked = await new UserBlockModel(this.db).isBlockedBetween(userId, competitorId);
+            if (blocked) {
+                throw new BlockedInteractionError();
+            }
             const result = await this.db.prepare(`
                 INSERT INTO ratings (competition_id, user_id, competitor_id, rating, created_at)
                 VALUES (?, ?, ?, ?, datetime('now'))
@@ -53,6 +60,10 @@ export class RatingModel extends BaseModel<Rating> {
             return { id: result.meta.last_row_id as number };
         }
         const data = args[0] as Partial<Rating>;
+        const blocked = await new UserBlockModel(this.db).isBlockedBetween(data.user_id!, data.competitor_id!);
+        if (blocked) {
+            throw new BlockedInteractionError();
+        }
         const result = await this.db.prepare(`
             INSERT INTO ratings (competition_id, user_id, competitor_id, rating, created_at)
             VALUES (?, ?, ?, ?, datetime('now'))
