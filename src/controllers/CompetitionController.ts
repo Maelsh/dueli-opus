@@ -166,6 +166,16 @@ export class CompetitionController extends BaseController {
                 'SELECT COUNT(*) AS n FROM ratings WHERE competition_id = ?'
             ).bind(id).first<{ n: number }>();
 
+            // B2+B3: lightweight per-user request indicator (no full array)
+            const currentUser = this.getCurrentUser(c);
+            let user_has_pending_request = false;
+            if (currentUser) {
+                const userReq = await c.env.DB.prepare(
+                    "SELECT 1 FROM competition_requests WHERE competition_id = ? AND requester_id = ? AND status = 'pending'"
+                ).bind(id, currentUser.id).first<{ '1': number }>();
+                user_has_pending_request = userReq !== null;
+            }
+
             const timer = ScheduledTaskService.getTimerDeadline(competition as any);
 
             return this.success(c, {
@@ -173,6 +183,7 @@ export class CompetitionController extends BaseController {
                 comments_count,
                 requests_count: requestsRow?.n || 0,
                 ratings_count: ratingsRow?.n || 0,
+                user_has_pending_request,
                 timer
             });
         } catch (error) {

@@ -128,7 +128,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const isCompleted = comp.status === 'completed';
         const isCreator = window.currentUser && window.currentUser.id === comp.creator_id;
         const isOpponent = window.currentUser && window.currentUser.id === comp.opponent_id;
-        const hasRequested = comp.requests?.some(r => r.requester_id === window.currentUser?.id && r.status === 'pending');
+        const hasRequested = comp.user_has_pending_request === true;
         const needsOpponent = isPending && !comp.opponent_id;
         
         const bgColors = {
@@ -398,7 +398,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     </div>
                     <div>
                       <p class="text-3xl font-bold text-purple-600">\${comp.comments_count ?? comp.total_comments ?? 0}</p>
-                      <p class="text-sm text-gray-500">\${tr.comments}</p>
+                      <p class="text-sm text-gray-500">\${tr.comments.label}</p>
                     </div>
                   </div>
                   
