@@ -424,28 +424,41 @@ export class CompetitionController extends BaseController {
                 return this.notFound(c);
             }
 
-            // Atomic batch: accept request + setOpponent + decline others + decline invitations
+            // Atomic batch: setOpponent + accept request + decline others + decline invitations
+            // setOpponent runs FIRST; steps 2-4 re-check competitions.opponent_id so a losing
+            // race (setOpponent affects 0 rows) can never mark this request — or anyone else's
+            // request/invitation — as accepted/declined. db.batch() does NOT short-circuit on
+            // changes = 0, so each dependent statement must re-verify success itself.
             const results = await c.env.DB.batch([
-                // 1. Accept this request
-                c.env.DB.prepare(
-                    'UPDATE competition_requests SET status = \'accepted\', updated_at = datetime(\'now\') WHERE id = ?'
-                ).bind(body.request_id),
-                // 2. Atomically set opponent (only if opponent_id IS NULL)
+                // 1. Atomically set opponent (only if opponent_id IS NULL)
                 c.env.DB.prepare(
                     'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
                 ).bind(request.requester_id, competitionId),
-                // 3. Decline all other pending requests for this competition
+                // 2. Accept this request — ONLY if step 1 actually won the opponent slot
                 c.env.DB.prepare(
-                    'UPDATE competition_requests SET status = \'rejected\', updated_at = datetime(\'now\') WHERE competition_id = ? AND id != ? AND status = \'pending\''
-                ).bind(competitionId, body.request_id),
-                // 4. Decline all pending invitations for this competition
+                    `UPDATE competition_requests SET status = 'accepted', updated_at = datetime('now')
+                     WHERE id = ? AND EXISTS (
+                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                     )`
+                ).bind(body.request_id, competitionId, request.requester_id),
+                // 3. Decline all other pending requests for this competition — same guard
                 c.env.DB.prepare(
-                    'UPDATE competition_invitations SET status = \'declined\' WHERE competition_id = ? AND status = \'pending\''
-                ).bind(competitionId),
+                    `UPDATE competition_requests SET status = 'rejected', updated_at = datetime('now')
+                     WHERE competition_id = ? AND id != ? AND status = 'pending' AND EXISTS (
+                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                     )`
+                ).bind(competitionId, body.request_id, competitionId, request.requester_id),
+                // 4. Decline all pending invitations for this competition — same guard
+                c.env.DB.prepare(
+                    `UPDATE competition_invitations SET status = 'declined'
+                     WHERE competition_id = ? AND status = 'pending' AND EXISTS (
+                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                     )`
+                ).bind(competitionId, competitionId, request.requester_id),
             ]);
 
-            // results[1] is the setOpponent UPDATE — if changes === 0, opponent was already set (race lost)
-            const setOpponentResult = results[1] as { meta: { changes: number } };
+            // results[0] is the setOpponent UPDATE — if changes === 0, opponent was already set (race lost)
+            const setOpponentResult = results[0] as { meta: { changes: number } };
             if (setOpponentResult.meta.changes === 0) {
                 return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
             }
@@ -900,23 +913,36 @@ export class CompetitionController extends BaseController {
             }
 
             // Atomic batch: setOpponent + accept invitation + reject others + decline requests
+            // Steps 2-4 are guarded by re-checking competitions.opponent_id so that a losing
+            // race (step 1 affects 0 rows) can never mark this invitation, or anyone else's
+            // request/invitation, as accepted/declined. db.batch() does NOT short-circuit on
+            // changes = 0, so each dependent statement must re-verify success itself.
             const results = await c.env.DB.batch([
                 // 1. Atomically set opponent (only if opponent_id IS NULL)
                 c.env.DB.prepare(
                     'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
                 ).bind(user.id, competitionId),
-                // 2. Accept this invitation
+                // 2. Accept this invitation — ONLY if step 1 actually won the opponent slot
                 c.env.DB.prepare(
-                    'UPDATE competition_invitations SET status = \'accepted\', responded_at = datetime(\'now\') WHERE id = ?'
-                ).bind(invitation.id),
-                // 3. Decline all other pending invitations for this competition
+                    `UPDATE competition_invitations SET status = 'accepted', responded_at = datetime('now')
+                     WHERE id = ? AND EXISTS (
+                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                     )`
+                ).bind(invitation.id, competitionId, user.id),
+                // 3. Decline all other pending invitations for this competition — same guard
                 c.env.DB.prepare(
-                    'UPDATE competition_invitations SET status = \'declined\' WHERE competition_id = ? AND id != ? AND status = \'pending\''
-                ).bind(competitionId, invitation.id),
-                // 4. Decline all pending requests for this competition
+                    `UPDATE competition_invitations SET status = 'declined'
+                     WHERE competition_id = ? AND id != ? AND status = 'pending' AND EXISTS (
+                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                     )`
+                ).bind(competitionId, invitation.id, competitionId, user.id),
+                // 4. Decline all pending requests for this competition — same guard
                 c.env.DB.prepare(
-                    'UPDATE competition_requests SET status = \'auto_declined\' WHERE competition_id = ? AND status = \'pending\''
-                ).bind(competitionId),
+                    `UPDATE competition_requests SET status = 'auto_declined'
+                     WHERE competition_id = ? AND status = 'pending' AND EXISTS (
+                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                     )`
+                ).bind(competitionId, competitionId, user.id),
             ]);
 
             // results[0] is the setOpponent UPDATE — if changes === 0, opponent was already set (race lost)

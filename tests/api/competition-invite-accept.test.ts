@@ -77,8 +77,87 @@ describe('B5-4 invite/accept loop', () => {
             authedPost('/api/competitions/1001/accept-invite', cSession, 'en'),
         ]);
         expect([rB.status, rC.status].sort()).toEqual([200, 409]);
+
+        // --- Exit Gate: DB state must reflect exactly one winner, never both ---
         const row: any = await sharedDb.prepare('SELECT * FROM competitions WHERE id = ?').bind(1001).first();
+
+        // 1. Exactly one opponent, and it must be one of B/C.
         expect([bId, cId]).toContain(row.opponent_id);
+        expect(row.status).toBe('accepted');
+
+        // 2. Figure out who actually won (200) and who lost (409) this run.
+        const winnerIsB = rB.status === 200;
+        const winnerId = winnerIsB ? bId : cId;
+        const loserId = winnerIsB ? cId : bId;
+        expect(row.opponent_id).toBe(winnerId);
+
+        const winnerInvite = sharedDb.invitations.find(
+            (i: any) => i.competition_id === 1001 && i.invitee_id === winnerId
+        );
+        const loserInvite = sharedDb.invitations.find(
+            (i: any) => i.competition_id === 1001 && i.invitee_id === loserId
+        );
+
+        // 3. Only the winner's invitation is accepted.
+        expect(winnerInvite.status).toBe('accepted');
+
+        // 4. The loser's invitation must NEVER become accepted — this is the core
+        //    B5-4 invariant: losing the opponent-slot race must not also flip the
+        //    loser's own invitation to accepted (the db.batch()/changes=0 bug).
+        expect(loserInvite.status).not.toBe('accepted');
+
+        // 5. No pending conflicts: the loser's invitation must have been resolved
+        //    (declined) once the winner locked the slot, not left dangling as 'pending'.
+        expect(loserInvite.status).toBe('declined');
+
+        // 6. Exactly one invitation row for this competition is 'accepted' — never two.
+        const acceptedCount = sharedDb.invitations.filter(
+            (i: any) => i.competition_id === 1001 && i.status === 'accepted'
+        ).length;
+        expect(acceptedCount).toBe(1);
+    });
+
+    it('2b. Race repeated: invariants hold across many concurrent attempts (flakiness check)', async () => {
+        for (let i = 0; i < 25; i++) {
+            resetDb();
+            const users = new UserModel(sharedDb as any);
+            const a = (await users.create({ email: `a${i}@race.test`, username: `ra${i}`, display_name: 'A' })).id;
+            const b = (await users.create({ email: `b${i}@race.test`, username: `rb${i}`, display_name: 'B' })).id;
+            const c = (await users.create({ email: `c${i}@race.test`, username: `rc${i}`, display_name: 'C' })).id;
+            const sessions = new SessionModel(sharedDb as any);
+            const aSess = (await sessions.create({ user_id: a })).id;
+            const bSess = (await sessions.create({ user_id: b })).id;
+            const cSess = (await sessions.create({ user_id: c })).id;
+            sharedDb.competitions.push({
+                id: 2000 + i, title: 'race', creator_id: a, opponent_id: null,
+                status: 'pending', category_id: null,
+            });
+
+            await authedPost(`/api/competitions/${2000 + i}/invite`, aSess, 'en', { invitee_id: b });
+            await authedPost(`/api/competitions/${2000 + i}/invite`, aSess, 'en', { invitee_id: c });
+            const [rB, rC] = await Promise.all([
+                authedPost(`/api/competitions/${2000 + i}/accept-invite`, bSess, 'en'),
+                authedPost(`/api/competitions/${2000 + i}/accept-invite`, cSess, 'en'),
+            ]);
+
+            expect([rB.status, rC.status].sort()).toEqual([200, 409]);
+
+            const row: any = await sharedDb.prepare('SELECT * FROM competitions WHERE id = ?').bind(2000 + i).first();
+            const winnerId = rB.status === 200 ? b : c;
+            const loserId = rB.status === 200 ? c : b;
+            expect(row.opponent_id).toBe(winnerId);
+
+            const acceptedInvites = sharedDb.invitations.filter(
+                (inv: any) => inv.competition_id === 2000 + i && inv.status === 'accepted'
+            );
+            expect(acceptedInvites.length).toBe(1);
+            expect(acceptedInvites[0].invitee_id).toBe(winnerId);
+
+            const loserInvite = sharedDb.invitations.find(
+                (inv: any) => inv.competition_id === 2000 + i && inv.invitee_id === loserId
+            );
+            expect(loserInvite.status).toBe('declined');
+        }
     });
 
     it('3. After B accepts, no pending invitations remain', async () => {

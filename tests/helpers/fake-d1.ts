@@ -288,17 +288,35 @@ class FakeStmt {
         }
 
         // UPDATE competition_invitations SET status = 'accepted' WHERE id = ?
+        //   [AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?)]
+        // The EXISTS guard (added for B5-4's race fix) is honored here so the fake DB
+        // actually reproduces the real invariant: this statement is a no-op unless the
+        // setOpponent step earlier in the same batch actually won the opponent slot for
+        // the caller. params with the guard: [invitationId, competitionId, winnerId].
         if (q.startsWith('update competition_invitations set status = \'accepted\'')) {
             const inv = this.db.invitations.find((i) => i.id === p[0]);
             if (!inv) return ok({ last_row_id: null, changes: 0 });
+            if (q.includes('exists')) {
+                const competition = this.db.competitions.find((c) => c.id === p[1]);
+                if (!competition || competition.opponent_id !== p[2]) {
+                    return ok({ last_row_id: null, changes: 0 });
+                }
+            }
             inv.status = 'accepted';
             inv.responded_at = new Date().toISOString();
             return ok({ last_row_id: null, changes: 1 });
         }
 
         // UPDATE competition_invitations SET status = 'declined' WHERE competition_id = ? AND id != ? AND status = 'pending'
+        //   [AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?)]
+        // Same guard as above — params with the guard: [competitionId, exceptInvitationId, competitionId, winnerId].
         if (q.startsWith('update competition_invitations set status = \'declined\'')) {
-            const before = this.db.invitations.length;
+            if (q.includes('exists')) {
+                const competition = this.db.competitions.find((c) => c.id === p[2]);
+                if (!competition || competition.opponent_id !== p[3]) {
+                    return ok({ last_row_id: null, changes: 0 });
+                }
+            }
             this.db.invitations.forEach((i) => {
                 if (i.competition_id === p[0] && i.id !== p[1] && i.status === 'pending') {
                     i.status = 'declined';
