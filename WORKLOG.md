@@ -5,6 +5,21 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 ---
 
+## 2026-09-10 (B7)
+
+- `[2026-09-10] [B7]` — حدود المعدل لكل فعل وحدود طول المحتوى (التعليقات والرسائل):
+  - `src/lib/services/RateLimitService.ts` (جديد): `consume(userId, action, limit, windowSeconds)` على جدول `rate_limits` (0012)، ثابتات `RATE_LIMITS` (comment: 10/60s · message: 20/60s)، ذرّية عبر UPSERT + `CASE WHEN window_start >= ...`، تعيد `{ allowed, count, retryAfter }`.
+  - `migrations/0015_content_length_bounds.sql` (جديد): بدل إعادة بناء جدولي comments/messages لإضافة CHECK (مدمّر للبيانات القائمة) — استُخدمت triggers تقبل الرفض (`RAISE(ABORT)`) عند content > 2000 (تعليق) / > 4000 (رسالة) في INSERT وUPDATE. **السبب موثّق في رأس ملف الترحيل**. تحقّق مكافئ في طبقة النموذج قبل الإدراج: `CommentModel.create/update` و`MessageModel.create` ترمي `ContentTooLongError`.
+  - `src/lib/errors/AppError.ts`: `ContentTooLongError` (400، مفتاح `errors.content_too_long`).
+  - Controllers: `CompetitionController.addComment` (rate limit ثم طول) و`MessageController.sendMessage/startConversation` (rate limit 20/دقيقة) — 429 + ترويسة `Retry-After` + رسالة i18n `errors.rate_limited`. لم يُلمس: المسارات المالية/الإعلانية ولا أي middleware عام.
+  - i18n: `errors.rate_limited` + `errors.content_too_long` في ar+en.
+  - `tests/helpers/fake-d1.ts`: دعم comments وrate_limits وbatch SELECT.
+  - `tests/api/rate-limits.test.ts` (جديد، 6 سيناريوهات: 10 تعليقات⇒429+Retry-After، 20 رسالة⇒429، انتهاء النافذة، عزل لكل مستخدم/فعل، 2001/4001 حرفاً⇒400 بلا صف مكتوب).
+  / الملفات: src/lib/services/RateLimitService.ts, migrations/0015_content_length_bounds.sql, src/lib/errors/AppError.ts, src/models/CommentModel.ts, src/models/MessageModel.ts, src/controllers/CompetitionController.ts, src/controllers/MessageController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/helpers/fake-d1.ts, tests/api/rate-limits.test.ts, WORKLOG.md / نفذ: Cline (B7 agent) / اختبار: rate-limits 6/6 ✅ + npm test 105/105 ✅ + tsc ✅ + build ✅ + db:reset ✅ / PR: fix/core-rate-limits-content-bounds
+---
+
+
+
 ## 2026-09-09 (B5-1)
 
 - `[2026-09-09] [B5-1]` — حراسة انتقالات حالة المنافسة: `CompetitionModel.startLive()` → UPDATE مشروط `AND status='accepted'`، `complete()` → `AND status='live'`، وboolean من `meta.changes` (مع before/after fallback لأن Wrangler CLI المحلي يُسقط meta في الكتابة — الـfallback مثبت باختبار حقيقي). Controller: start يفحص الملكية ثم `status!=='accepted'` → 409 `competition_errors.not_eligible_to_start` ثم غياب opponent → 409 `competition_errors.no_opponent` (i18n بدل النص الإنجليزي المكتوب) ثم race (`startLive=false`) → نفس 409؛ end: `completed` → نجاح `already_completed:true`، `!==live` → 409 `competition_errors.not_live`، `complete=false` (race) → idempotent success بلا `finalize_payouts` ثانية. i18n: `not_eligible_to_start/no_opponent/not_live/already_completed` في ar+en. لم يُلمس: LivePayoutEngine/ScheduledTaskService.updateAggregatesAfterVote/المالية/migrations/B5-2+

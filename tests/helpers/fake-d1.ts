@@ -22,6 +22,9 @@ export class FakeD1 {
     ratings: Row[] = [];
     invitations: Row[] = [];
     notifications: Row[] = [];
+    // B7: comments + rate_limits support for rate-limits tests
+    comments: Row[] = [];
+    rateLimits: Row[] = [];
     userSeq = 0;
     blockSeq = 0;
     donationSeq = 0;
@@ -31,6 +34,7 @@ export class FakeD1 {
     ratingSeq = 0;
     invitationSeq = 0;
     notificationSeq = 0;
+    commentSeq = 0;
 
     prepare(sql: string): FakeStmt {
         return new FakeStmt(this, sql);
@@ -39,12 +43,20 @@ export class FakeD1 {
     /**
      * Execute a batch of prepared statements atomically.
      * Each statement must already be bound before passing here.
+     * B7: SELECT statements return { results: [row] } like real D1 so
+     * RateLimitService can read the counter back from the batch result.
      */
-    async batch(statements: FakeStmt[]): Promise<{ meta: { changes: number; last_row_id: number | null } }[]> {
-        const results: { meta: { changes: number; last_row_id: number | null } }[] = [];
+    async batch(statements: FakeStmt[]): Promise<{ meta: { changes: number; last_row_id: number | null }; results?: Row[] }[]> {
+        const results: { meta: { changes: number; last_row_id: number | null }; results?: Row[] }[] = [];
         for (const stmt of statements) {
-            const result = await stmt.run();
-            results.push(result);
+            const q = norm(stmt.sql);
+            if (q.startsWith('select')) {
+                const row = await stmt.first();
+                results.push({ success: true, meta: { changes: 0, last_row_id: null }, results: row ? [row] : [] });
+            } else {
+                const result = await stmt.run();
+                results.push(result);
+            }
         }
         return results;
     }
@@ -55,7 +67,7 @@ class FakeStmt {
 
     constructor(
         private db: FakeD1,
-        private sql: string
+        readonly sql: string
     ) {}
 
     bind(...params: any[]): this {
@@ -119,6 +131,19 @@ class FakeStmt {
         if (q.startsWith('select creator_id from competitions where id = ?')) {
             const comp = this.db.competitions.find((c) => c.id === p[0]);
             return comp ? { creator_id: comp.creator_id } : null;
+        }
+
+        // --- B7: comments ---
+        if (q.startsWith('select * from comments where id = ?')) {
+            return this.db.comments.find((cm) => cm.id === p[0]) ?? null;
+        }
+
+        // --- B7: rate_limits (RateLimitService read-back) ---
+        if (q.startsWith('select count from rate_limits where key = ? and window_start = ?')) {
+            const hit = this.db.rateLimits.find(
+                (r) => r.key === p[0] && r.window_start === p[1]
+            );
+            return hit ? { count: hit.count } : null;
         }
 
         // --- conversations ---
@@ -466,6 +491,41 @@ class FakeStmt {
                 created_at: new Date().toISOString(),
             });
             return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // INSERT INTO comments (competition_id, user_id, content, is_live, parent_id, created_at)
+        if (q.startsWith('insert into comments')) {
+            const newId = ++this.db.commentSeq;
+            this.db.comments.push({
+                id: newId,
+                competition_id: p[0],
+                user_id: p[1],
+                content: p[2],
+                is_live: p[3],
+                parent_id: p[4],
+                created_at: new Date().toISOString(),
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // B7: UPDATE competitions SET total_comments = total_comments + 1 WHERE id = ?
+        if (q.startsWith('update competitions set total_comments')) {
+            const comp = this.db.competitions.find((cm) => cm.id === p[0]);
+            if (comp) comp.total_comments = (comp.total_comments || 0) + 1;
+            return ok({ last_row_id: null, changes: comp ? 1 : 0 });
+        }
+
+        // B7: INSERT INTO rate_limits ... ON CONFLICT(key, window_start) DO UPDATE SET count = count + 1
+        if (q.startsWith('insert into rate_limits')) {
+            const hit = this.db.rateLimits.find(
+                (r) => r.key === p[0] && r.window_start === p[1]
+            );
+            if (hit) {
+                hit.count += 1;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            this.db.rateLimits.push({ key: p[0], window_start: p[1], count: 1 });
+            return ok({ last_row_id: null, changes: 1 });
         }
 
         // INSERT INTO user_blocks ...

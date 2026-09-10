@@ -224,6 +224,8 @@ export const en = {
         delete_failed: 'Failed to delete',
         something_wrong: 'Something went wrong. Please try again.',
         blocked_interaction: 'This action is not available',
+        rate_limited: 'Too many attempts, please try again shortly',
+        content_too_long: 'Text exceeds the allowed length',
     },
 
     // Competition Error Messages

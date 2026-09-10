@@ -6,7 +6,13 @@
 import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { Comment } from '../config/types';
 import { UserBlockModel } from './UserBlockModel';
-import { BlockedInteractionError } from '../lib/errors/AppError';
+import { BlockedInteractionError, ContentTooLongError } from '../lib/errors/AppError';
+
+/**
+ * B7: maximum allowed comment length (chars).
+ * Must stay in sync with migrations/0015_content_length_bounds.sql.
+ */
+export const COMMENT_MAX_CONTENT_LENGTH = 2000;
 
 /**
  * Comment with user data
@@ -43,6 +49,13 @@ export class CommentModel extends BaseModel<Comment> {
      * Create comment
      */
     async create(data: Partial<Comment> & { parent_id?: number | null }): Promise<Comment> {
+        // B7: content length bound (comment ≤ 2000 chars) — enforced BEFORE any
+        // write so an oversized payload leaves no row behind. Mirrors the DB
+        // trigger in migrations/0015_content_length_bounds.sql.
+        if (!data.content || data.content.length > COMMENT_MAX_CONTENT_LENGTH) {
+            throw new ContentTooLongError();
+        }
+
         // T3.3: nested replies — validate the parent belongs to the same competition
         if (data.parent_id) {
             const parent = await this.findById(data.parent_id);
@@ -100,6 +113,10 @@ export class CommentModel extends BaseModel<Comment> {
      */
     async update(id: number, data: Partial<Comment>): Promise<Comment | null> {
         if (data.content) {
+            // B7: same length bound applies to updates
+            if (data.content.length > COMMENT_MAX_CONTENT_LENGTH) {
+                throw new ContentTooLongError();
+            }
             await this.db.prepare(
                 'UPDATE comments SET content = ? WHERE id = ?'
             ).bind(data.content, id).run();

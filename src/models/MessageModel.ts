@@ -7,7 +7,13 @@
 import { D1Database } from '@cloudflare/workers-types';
 import { BaseModel } from './base/BaseModel';
 import { UserBlockModel } from './UserBlockModel';
-import { BlockedInteractionError } from '../lib/errors/AppError';
+import { BlockedInteractionError, ContentTooLongError } from '../lib/errors/AppError';
+
+/**
+ * B7: maximum allowed message length (chars).
+ * Must stay in sync with migrations/0015_content_length_bounds.sql.
+ */
+export const MESSAGE_MAX_CONTENT_LENGTH = 4000;
 
 /**
  * Conversation Interface
@@ -77,6 +83,13 @@ export class MessageModel extends BaseModel<Message> {
     async create(data: Partial<Message>): Promise<Message> {
         if (!data.conversation_id || !data.sender_id || !data.content) {
             throw new Error('conversation_id, sender_id and content are required');
+        }
+
+        // B7: content length bound (message ≤ 4000 chars) — enforced BEFORE any
+        // write so an oversized payload leaves no row behind. Mirrors the DB
+        // trigger in migrations/0015_content_length_bounds.sql.
+        if (data.content.length > MESSAGE_MAX_CONTENT_LENGTH) {
+            throw new ContentTooLongError();
         }
 
         const conversation = await this.db.prepare(`
