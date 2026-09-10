@@ -15,10 +15,12 @@ export class FakeD1 {
     donations: Row[] = [];
     competitions: Row[] = [];
     requests: Row[] = [];
+ratings: Row[] = [];
     userSeq = 0;
     blockSeq = 0;
     donationSeq = 0;
     competitionSeq = 0;
+ratingSeq = 0;
 
     prepare(sql: string): FakeStmt {
         return new FakeStmt(this, sql);
@@ -86,9 +88,17 @@ class FakeStmt {
             return this.db.donations.find((d) => d.id === p[0]) ?? null;
         }
 
-        // --- competitions (minimal: findById for B5-2 error-path tests) ---
+// --- competitions (minimal: findById for B5-2 error-path tests) ---
         if (q.startsWith('select * from competitions where id = ?')) {
             return this.db.competitions.find((r) => r.id === p[0]) ?? null;
+        }
+
+// --- ratings ---
+        if (q.startsWith('select 1 from ratings')) {
+            const hit = this.db.ratings.find(
+                (r) => r.competition_id === p[0] && r.user_id === p[1] && r.competitor_id === p[2]
+            );
+            return hit ? { '1': 1 } : null;
         }
 
         // --- sessions (create/find for auth in B5-2 error-path tests) ---
@@ -130,6 +140,23 @@ class FakeStmt {
     async all(): Promise<{ results: Row[] }> {
         const q = norm(this.sql);
         const p = this.params;
+
+        // --- ratings with user details (JOIN) ---
+        if (q.includes('from ratings r') && q.includes('join users u')) {
+            const competitionId = p[0];
+            const rows = this.db.ratings
+                .filter((r) => r.competition_id === competitionId)
+                .map((r) => {
+                    const u = this.db.users.find((x) => x.id === r.user_id) ?? {};
+                    return {
+                        ...r,
+                        display_name: u.display_name,
+                        avatar_url: u.avatar_url,
+                    };
+                })
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            return { results: rows };
+        }
 
         if (q.includes('from user_blocks b')) {
             const id = p[0];
@@ -238,6 +265,20 @@ class FakeStmt {
         // Cascade deletes in block() (conversations / invitations / requests) — no-op
         if (q.startsWith('delete from conversations') || q.startsWith('delete from competition_')) {
             return ok({ last_row_id: null, changes: 0 });
+        }
+
+        // INSERT INTO ratings (competition_id, user_id, competitor_id, rating, created_at)
+        if (q.startsWith('insert into ratings')) {
+            const newId = ++this.db.ratingSeq;
+            this.db.ratings.push({
+                id: newId,
+                competition_id: p[0],
+                user_id: p[1],
+                competitor_id: p[2],
+                rating: p[3],
+                created_at: new Date().toISOString(),
+            });
+            return ok({ last_row_id: newId, changes: 1 });
         }
 
         // INSERT INTO donations (user_id, amount, currency, payment_method,
