@@ -16,7 +16,7 @@
  * Note: financial/ads routes are intentionally NOT covered here (frozen scope).
  */
 
-import { D1Database } from '@cloudflare/workers-types';
+import { D1Database, D1Result } from '@cloudflare/workers-types';
 
 /** B7 limits: action → { limit, windowSeconds } */
 export const RATE_LIMITS = {
@@ -73,7 +73,8 @@ export class RateLimitService {
                     `SELECT count FROM rate_limits WHERE key = ? AND window_start = ?`
                 ).bind(key, windowStart),
             ]);
-            const row = (results[1] as any)?.results?.[0] as { count: number } | undefined;
+            const readBack = results[1] as D1Result<{ count: number }>;
+            const row = readBack?.results?.[0];
             count = row?.count ?? 1;
         } catch (err) {
             console.error('[RateLimitService] D1 unavailable, failing open:', err);
