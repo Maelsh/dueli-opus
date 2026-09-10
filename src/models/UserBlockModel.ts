@@ -105,6 +105,17 @@ export class UserBlockModel extends BaseModel<UserBlock> {
     }
 
     /**
+     * Single source of truth for "are these two users blocking each other,
+     * in either direction?" (B6: فرض الحظر مركزياً). One query with OR —
+     * not two. Every call site across the app (messages, comments, follows,
+     * ratings, invitations) must go through this instead of duplicating the
+     * user_blocks SQL.
+     */
+    async isBlockedBetween(userIdA: number, userIdB: number): Promise<boolean> {
+        return this.isBlocked(userIdA, userIdB);
+    }
+
+    /**
      * Get list of blocked users
      * قائمة المستخدمين المحظورين
      */

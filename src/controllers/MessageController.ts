@@ -11,6 +11,7 @@ import { Sanitize } from '../lib/services/Sanitize';
 import { MessageModel, ConversationModel } from '../models/MessageModel';
 import { NotificationModel } from '../models/NotificationModel';
 import { UserModel } from '../models/UserModel';
+import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
  * Message Controller Class
@@ -132,6 +133,9 @@ export class MessageController extends BaseController {
 
             return this.success(c, { message });
         } catch (error) {
+            if (error instanceof BlockedInteractionError) {
+                return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
             console.error('Send message error:', error);
             return this.serverError(c, error as Error);
         }
@@ -188,6 +192,9 @@ export class MessageController extends BaseController {
 
             return this.success(c, { conversation, message });
         } catch (error) {
+            if (error instanceof BlockedInteractionError) {
+                return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
             console.error('Start conversation error:', error);
             return this.serverError(c, error as Error);
         }

@@ -16,7 +16,9 @@ export class FakeD1 {
     sessions: Row[] = [];
     donations: Row[] = [];
     competitions: Row[] = [];
-requests: Row[] = [];
+    conversations: Row[] = [];
+    messages: Row[] = [];
+    requests: Row[] = [];
     ratings: Row[] = [];
     invitations: Row[] = [];
     notifications: Row[] = [];
@@ -24,7 +26,9 @@ requests: Row[] = [];
     blockSeq = 0;
     donationSeq = 0;
     competitionSeq = 0;
-ratingSeq = 0;
+    conversationSeq = 0;
+    messageSeq = 0;
+    ratingSeq = 0;
     invitationSeq = 0;
     notificationSeq = 0;
 
@@ -110,6 +114,35 @@ class FakeStmt {
 // --- competitions (minimal: findById for B5-2 error-path tests) ---
         if (q.startsWith('select * from competitions where id = ?')) {
             return this.db.competitions.find((c) => c.id === p[0]) ?? null;
+        }
+        // B6: CommentModel.create queries creator_id only (not all columns)
+        if (q.startsWith('select creator_id from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp ? { creator_id: comp.creator_id } : null;
+        }
+
+        // --- conversations ---
+        if (q.startsWith('select * from conversations where id = ?')) {
+            return this.db.conversations.find((c: any) => c.id === p[0]) ?? null;
+        }
+        if (q.startsWith('select user1_id, user2_id from conversations where id = ?')) {
+            const conv = this.db.conversations.find((c: any) => c.id === p[0]);
+            if (!conv) return null;
+            return { user1_id: conv.user1_id, user2_id: conv.user2_id };
+        }
+        if (q.startsWith('select 1 from conversations')) {
+            const conv = this.db.conversations.find((c: any) => c.id === p[0]);
+            if (conv) return { '1': 1 };
+            return null;
+        }
+        // findOrCreate: SELECT * FROM conversations WHERE (user1_id = ? AND user2_id = ?) OR ...
+        if (q.startsWith('select * from conversations where (user1_id = ?')) {
+            const [minId, maxId] = p;
+            const conv = this.db.conversations.find((c: any) =>
+                (c.user1_id === minId && c.user2_id === maxId) ||
+                (c.user1_id === maxId && c.user2_id === minId)
+            );
+            return conv ?? null;
         }
 
         // --- ratings ---
@@ -305,6 +338,45 @@ class FakeStmt {
                 category_id: p[5] ?? null,
             });
             return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // B6: INSERT INTO conversations (for startConversation test)
+        if (q.startsWith('insert into conversations')) {
+            const newId = ++this.db.conversationSeq;
+            this.db.conversations.push({
+                id: newId,
+                user1_id: p[0],
+                user2_id: p[1],
+                created_at: p[2] ?? new Date().toISOString(),
+                last_message_at: null,
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // B6: INSERT INTO messages (for message creation test)
+        if (q.startsWith('insert into messages')) {
+            const newId = ++this.db.messageSeq;
+            this.db.messages.push({
+                id: newId,
+                conversation_id: p[0],
+                sender_id: p[1],
+                receiver_id: p[2],
+                content: p[3],
+                is_read: 0,
+                read_at: null,
+                created_at: p[5] ?? new Date().toISOString(),
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // B6: UPDATE conversations SET last_message_at = ? WHERE id = ?
+        if (q.startsWith('update conversations set last_message_at')) {
+            const conv = this.db.conversations.find((c: any) => c.id === p[1]);
+            if (conv) {
+                conv.last_message_at = p[0];
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
         }
 
         // UPDATE competitions SET opponent_id = ?, status = 'accepted' WHERE id = ? AND opponent_id IS NULL

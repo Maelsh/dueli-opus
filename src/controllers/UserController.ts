@@ -8,6 +8,8 @@
 
 import { BaseController, AppContext } from './base/BaseController';
 import { UserModel, CompetitionModel, NotificationModel } from '../models';
+import { UserBlockModel } from '../models/UserBlockModel';
+import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
  * Follow Model (inline)
@@ -16,6 +18,11 @@ class FollowModel {
     constructor(private db: D1Database) { }
 
     async follow(followerId: number, followingId: number): Promise<boolean> {
+        // B6: cannot follow a user you're blocked by or have blocked.
+        const blocked = await new UserBlockModel(this.db).isBlockedBetween(followerId, followingId);
+        if (blocked) {
+            throw new BlockedInteractionError();
+        }
         try {
             await this.db.prepare(
                 'INSERT OR IGNORE INTO follows (follower_id, following_id, created_at) VALUES (?, ?, datetime("now"))'
@@ -284,6 +291,9 @@ export class UserController extends BaseController {
 
             return this.success(c, { followed: true });
         } catch (error) {
+            if (error instanceof BlockedInteractionError) {
+                return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
             return this.serverError(c, error as Error);
         }
     }

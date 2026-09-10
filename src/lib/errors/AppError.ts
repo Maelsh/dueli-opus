@@ -113,3 +113,21 @@ export class RateLimitError extends AppError {
         this.name = 'RateLimitError';
     }
 }
+
+/**
+ * Blocked Interaction Error - 403 Forbidden
+ * خطأ تفاعل محظور (B6: فرض الحظر مركزياً)
+ *
+ * Thrown by the model/service layer whenever a user_blocks relationship
+ * exists between two users involved in an action (message, comment,
+ * follow, rating, invitation). Carries no message payload on purpose —
+ * the controller catching it must translate via t('errors.blocked_interaction')
+ * so the response is localized and never reveals who blocked whom or the
+ * direction of the block.
+ */
+export class BlockedInteractionError extends AppError {
+    constructor() {
+        super('BLOCKED_INTERACTION', 'This action is not available', 403);
+        this.name = 'BlockedInteractionError';
+    }
+}

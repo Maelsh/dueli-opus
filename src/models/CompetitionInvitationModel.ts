@@ -1,5 +1,6 @@
 import { BaseModel } from './base/BaseModel';
 import { ConflictError, NotFoundError, AuthorizationError } from '../lib/errors/AppError';
+import { UserBlockModel } from './UserBlockModel';
 
 export interface CompetitionInvitation {
     id: number;
@@ -233,11 +234,7 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
      * التحقق من الحظر
      */
     private async checkBlock(userId1: number, userId2: number): Promise<boolean> {
-        const result = await this.db.prepare(`
-            SELECT 1 FROM user_blocks 
-            WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)
-        `).bind(userId1, userId2, userId2, userId1).first();
-
-        return result !== null;
+        // B6: unified on UserBlockModel.isBlockedBetween — no duplicate SQL.
+        return new UserBlockModel(this.db).isBlockedBetween(userId1, userId2);
     }
 }

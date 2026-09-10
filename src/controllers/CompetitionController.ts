@@ -12,11 +12,13 @@ import {
     CommentModel,
     NotificationModel,
     UserModel,
-    RatingModel
+    RatingModel,
+    UserBlockModel
 } from '../models';
 import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 import { EventPusher } from '../lib/services/EventPusher';
 import { Sanitize } from '../lib/services/Sanitize';
+import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
  * Competition Request Model (inline - should be in separate file)
@@ -684,6 +686,9 @@ export class CompetitionController extends BaseController {
 
             return this.success(c, comment, 201);
         } catch (error) {
+            if (error instanceof BlockedInteractionError) {
+                return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
             return this.serverError(c, error as Error);
         }
     }
@@ -774,6 +779,9 @@ export class CompetitionController extends BaseController {
 
             return this.success(c, rating, 201);
         } catch (error) {
+            if (error instanceof BlockedInteractionError) {
+                return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
             return this.serverError(c, error as Error);
         }
     }
@@ -822,10 +830,8 @@ if (competition.opponent_id) {
             }
 
             // Block check: cannot invite a user who blocked you or whom you blocked
-            const blocked = await c.env.DB.prepare(`
-                SELECT 1 FROM user_blocks
-                WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)
-            `).bind(user.id, body.invitee_id, body.invitee_id, user.id).first();
+            // B6: unified on UserBlockModel.isBlockedBetween — no duplicate SQL.
+            const blocked = await new UserBlockModel(c.env.DB).isBlockedBetween(user.id, body.invitee_id);
 
             if (blocked) {
                 return this.forbidden(c, this.t('competition_errors.blocked_user', c));

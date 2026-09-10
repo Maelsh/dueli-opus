@@ -21,6 +21,7 @@ export { AdvertisementModel, EarningsModel, Advertisement, AdImpression, UserEar
 export { UserSettingsModel, UserPostModel, UserSettings, UserPost, UserPostWithAuthor } from './UserSettingsModel';
 export { ScheduleModel, CompetitionReminder, ReminderWithDetails } from './ScheduleModel';
 export { RatingModel, Rating, RatingWithUser } from './RatingModel';
+export { UserBlockModel, UserBlock } from './UserBlockModel';
 
 // Task 4: Transparency Engine Models
 export { PlatformFinancialLogModel } from './PlatformFinancialLogModel';
