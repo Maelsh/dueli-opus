@@ -128,13 +128,16 @@ export class MessageController extends BaseController {
                     ? conversation.user2_id
                     : conversation.user1_id;
 
-                // Create notification for recipient
+                // B9: message notification — stored as `type + payload`, rendered
+                // in the recipient's language at GET /api/notifications time.
                 const notificationModel = new NotificationModel(c.env.DB);
-                await notificationModel.create({
+                await notificationModel.createForType({
                     user_id: recipientId,
-                    type: 'comment', // Valid NotificationType
-                    title: this.t('notification.new_message', c),
-                    message: `${user.display_name || user.username}: ${body.content.substring(0, 100)}...`,
+                    type: 'message',
+                    payload: {
+                        actor: user.display_name || user.username,
+                        preview: body.content.substring(0, 100),
+                    },
                     reference_type: 'conversation',
                     reference_id: conversationId
                 });
@@ -201,11 +204,15 @@ export class MessageController extends BaseController {
 
             // Create notification
             const notificationModel = new NotificationModel(c.env.DB);
-            await notificationModel.create({
+            // B9: message notification — stored as `type + payload`, rendered in
+            // the recipient's language at GET /api/notifications time.
+            await notificationModel.createForType({
                 user_id: targetUserId,
-                type: 'comment', // Valid NotificationType
-                title: this.t('notification.new_message', c),
-                message: `${user.display_name || user.username}: ${body.content.substring(0, 100)}...`,
+                type: 'message',
+                payload: {
+                    actor: user.display_name || user.username,
+                    preview: body.content.substring(0, 100),
+                },
                 reference_type: 'conversation',
                 reference_id: conversation.id
             });

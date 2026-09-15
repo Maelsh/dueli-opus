@@ -5,7 +5,13 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 ---
 
-## 2026-09-15 (B8)
+## 2026-09-15
+
+- `[2026-09-15] [B9]` تصحيح أنواع الإشعارات + التوطين وقت العرض (فرع `fix/core-notification-types` — بلا دمج):
+  إشعار الرسالة كان يُخزَّن `type='comment'` (خطأ نسخ) → أُصلح إلى `type='message'` في `MessageController.sendMessage/startConversation` عبر `NotificationModel.createForType()` (يخزّن `type + payload` فقط، و`title` = مفتاح i18n لا جملة مترجمة)؛ تعداد `NotificationType` وُسّع (`message/post_like/post_comment`) **بلا migration** (عمود `notifications.type` نص TEXT بلا CHECK في 0001 — تم فحص كل migrations)؛ `NotificationPresenter` جديد يولّد `title/message/link` وقت العرض حسب `?lang=` مع fallback آمن (`notification.generic`، بلا exception ولا كسر للصفحة)؛ i18n جديدة ar+en (`notification.new_message_body/new_post_like(_body)/new_post_comment(_body)/generic/competition_invite`)؛ إشعار `follow` تحوّل لنفس العقد (`title: this.t(...)` عند الإرسال → payload)؛ فحص `INSERT INTO notifications` أظهر أن Cron/Scheduled/Competition*‎/ad-reports خارج نطاق النواة المجمّد (Core-First) فلم تُلمس — التوافق معها عبر fallback العرض.
+  / Files: src/config/types.ts, src/models/NotificationModel.ts, src/lib/services/NotificationPresenter.ts (new), src/controllers/MessageController.ts, src/controllers/UserController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/api/notification-types.test.ts (new), tests/helpers/fake-d1.ts, PLAN-STATUS.md.
+  / Verify: RED أولاً (`type='comment'` + مفاتيح مفقودة + بلا link) ثم `notification-types.test.ts` 8/8 ✅ + `npm test` 125/125 ✅ + `npx tsc --noEmit` ✅ + `npm run build` ✅؛ بلا migration ⇒ لا `db:reset`.
+  / Out of scope, observed but NOT touched: CompetitionController/CompetitionInvitationModel/CompetitionRequestModel/CronHandler/ScheduledTaskService/ad-reports notification writes (مال/إعلانات/بث = مجمّدة).
 
 - `[2026-09-15] [B8]` — توحيد الإعجاب/عدم الإعجاب (فرع `fix/core-like-dislike-consistency`): قرار التنفيذ **الإكمال** لا الإزالة.
   - `src/models/LikeModel.ts`: `ReactionType = 'like' | 'dislike'` + `ReactionStatus`؛ `setReaction()` و`clearReaction()` تُنفّذان **كل** الكتابة في `db.batch()` واحد (حذف الفعل المعاكس → `INSERT OR IGNORE` للفعل → إعادة حساب `competitions.likes_count/dislikes_count` من الجدولين) ⇒ لا يجتمع like و dislike لنفس المستخدم/المنافسة، والتكرار idempotent؛ `assertNotBlocked()` يمرّ عبر `UserBlockModel.isBlockedBetween` (آلية B6 المركزية) قبل أي كتابة؛ `getStatus()` يعيد الحقول الأربعة؛ `getDislikeCount()` و`hasDisliked()`. حُذف `addLike/removeLike` (كانا check-then-act عبر round-tripين = سباق).
