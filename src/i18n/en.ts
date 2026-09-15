@@ -244,6 +244,13 @@ export const en = {
         content_too_long: 'Text exceeds the allowed length',
         comment_not_found: 'Comment not found',
         not_comment_owner: 'Only the comment owner or an admin can delete it',
+        service_unavailable: 'Service temporarily unavailable. Please try again later.',
+    },
+
+    // Discovery (B13: resilient discovery pages)
+    discovery: {
+        no_results: 'No results to show',
+        retry: 'Retry',
     },
 
     // Competition Error Messages
