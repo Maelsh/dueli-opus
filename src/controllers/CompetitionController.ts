@@ -20,6 +20,7 @@ import { EventPusher } from '../lib/services/EventPusher';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
 import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError } from '../lib/errors/AppError';
+import { isWindowOpen } from '../models/RatingModel';
 
 /**
  * Competition Request Model (inline - should be in separate file)
@@ -905,6 +906,54 @@ export class CompetitionController extends BaseController {
             if (msg.includes('UNIQUE constraint failed: ratings')) {
                 return this.error(c, this.t('competition_errors.already_rated', c), 409);
             }
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * B11: anonymous ratings summary (public, no rater identity).
+     * GET /api/competitions/:id/ratings/summary
+     */
+    async ratingsSummary(c: AppContext) {
+        try {
+            const competitionId = this.getParamInt(c, 'id');
+            const model = new CompetitionModel(c.env.DB);
+            const ratingModel = new RatingModel(c.env.DB);
+            const competition = await model.findById(competitionId);
+            if (!competition) return this.notFound(c, this.t('competition_errors.not_found', c));
+            const comp = competition;
+            const ids = [comp.creator_id, comp.opponent_id].filter((v) => typeof v === 'number' && v !== null);
+            const competitors = await ratingModel.getSummary(competitionId, ids);
+            return this.success(c, { competitors });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * B11: withdraw own rating inside the 24h window only.
+     * DELETE /api/competitions/:id/rate?competitor_id=
+     */
+    async withdrawRating(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const competitionId = this.getParamInt(c, 'id');
+            const competitorId = this.getQueryInt(c, 'competitor_id', NaN);
+            if (!Number.isFinite(competitorId)) return this.validationError(c, this.t('errors.missing_fields', c));
+            const model = new CompetitionModel(c.env.DB);
+            const ratingModel = new RatingModel(c.env.DB);
+            const competition = await model.findById(competitionId);
+            if (!competition) return this.notFound(c, this.t('competition_errors.not_found', c));
+            const comp = competition;
+            if (competitorId !== comp.creator_id && competitorId !== comp.opponent_id) return this.validationError(c, this.t('errors.invalid_request', c));
+            const { isWindowOpen } = await import('../models/RatingModel');
+            const endedAt = comp.ended_at ?? null;
+            if (!isWindowOpen(endedAt, Date.now())) return this.error(c, this.t('competition_errors.rating_window_closed', c), 409);
+            const removed = await ratingModel.withdrawRating(competitionId, user.id, competitorId);
+            if (!removed) return this.notFound(c, this.t('ratings.no_ratings', c));
+            return this.success(c, { withdrawn: true, message: this.t('ratings.withdrawn', c) });
+        } catch (error) {
             return this.serverError(c, error as Error);
         }
     }

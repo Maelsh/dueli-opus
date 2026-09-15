@@ -824,6 +824,14 @@ export const en = {
     rate_failed: 'Rating failed',
     rate_winner_banner: 'Winner by public rating',
 
+    // ── B11: anonymous ratings summary + withdrawal ──────────────
+    ratings: {
+        summary_title: 'Ratings summary',
+        average: 'Average',
+        no_ratings: 'No ratings yet',
+        withdrawn: 'Your rating has been withdrawn',
+    },
+
     // ── T1.3: Streaming ──────────────
     recording_processing: 'Preparing the recording...',
 

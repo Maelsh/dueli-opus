@@ -10,7 +10,8 @@ import * as path from 'node:path';
  * Verifies:
  * 1. create() inserts a row and returns id.
  * 2. hasRated() = false before, true after.
- * 3. findByCompetition() returns rows with user data.
+ * 3. findByCompetition() returns anonymized rows (B11: NO rater identity
+ *    — no user_id, display_name, avatar_url, username).
  * 4. Architectural guard: no `class RatingModel` or `INSERT INTO ratings`
  *    remains in CompetitionController.ts.
  */
@@ -47,15 +48,18 @@ describe('RatingModel', () => {
         expect(await model.hasRated(1, 100, 200)).toBe(true);
     });
 
-    it('3. findByCompetition() returns rows with user display_name and avatar_url', async () => {
+    it('3. findByCompetition() returns anonymized rows with no rater identity (B11)', async () => {
         await model.create(1, 100, 200, 5);
         await model.create(1, 200, 100, 3);
         const rows = await model.findByCompetition(1);
         expect(rows.length).toBe(2);
-        // Each row must carry user details from JOIN
+        // B11 privacy: public rating rows must not expose rater identity.
         for (const row of rows) {
-            expect(row.display_name).toBeDefined();
-            expect(row.avatar_url).toBeDefined();
+            expect(row).not.toHaveProperty('user_id');
+            expect(row).not.toHaveProperty('display_name');
+            expect(row).not.toHaveProperty('avatar_url');
+            expect(row).not.toHaveProperty('username');
+            expect(row).not.toHaveProperty('email');
         }
     });
 

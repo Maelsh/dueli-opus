@@ -1,3 +1,14 @@
+## 2026-09-15 — B11
+
+- `[B11]` ملخّص التقييمات مجهول الهوية + سحب التقييم داخل النافذة:
+  - `GET /api/competitions/:id/ratings/summary` — تجميع في `RatingModel.getSummary()` بـ SQL GROUP BY (لا صفوف تقييمات في JS)؛ متوسط/count/توزيع لكل مشارك؛ `average=null` عند 0 تقييم؛ **لا هوية مقيّم إطلاقاً** في الاستجابة.
+  - `DELETE /api/competitions/:id/rate?competitor_id=` — سحب التقييم: لمقيّم فعلي فقط، داخل نافذة B10 (`isWindowOpen` مُعاد استخدامها) وإلا 409 `rating_window_closed`؛ الحذف + إعادة حساب المجاميع في `db.batch()` واحد؛ من لم يقيّم ⇒ 404.
+  - إزالة تسريب الهوية: `RatingModel.findByCompetition()` لم تعد تعيد user_id/display_name/avatar_url (بلا JOIN users)؛ اختبار B5-3 القديم حُوِّل لحارس خصوصية.
+  - migration `0017_ratings_competition_competitor_idx.sql`: فهرس `ratings(competition_id, competitor_id)` (لم يكن موجوداً).
+  - i18n: `ratings.summary_title/average/no_ratings/withdrawn` ar+en.
+  - RED-FIRST: `tests/api/ratings-summary.test.ts` (7 اختبارات) فشلت على baseline ثم أُخضعت؛ خصوصية مثبتة فعلياً (فحص عميق للاستجابة كاملة بلا user_id/username/email).
+  / تحقق: ratings-summary 7/7 ✅ + npm test 141/141 ✅ + tsc ✅ + build ✅ + db:reset ✅
+
 # 📜 WORKLOG — سجل العمل والتعديلات
 
 > **قاعدة ملزمة:** كل تغيير في المشروع يُسجل هنا فور تنفيذه.

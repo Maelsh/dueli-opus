@@ -104,6 +104,18 @@ competitionsRoutes.post('/:id/comments', (c) => controller.addComment(c));
 competitionsRoutes.post('/:id/rate', (c) => controller.rate(c));
 
 /**
+ * B11: anonymous ratings summary
+ * GET /api/competitions/:id/ratings/summary
+ */
+competitionsRoutes.get('/:id/ratings/summary', (c) => (controller as never as { ratingsSummary: (cc: never) => never }).ratingsSummary(c as never));
+
+/**
+ * B11: withdraw own rating inside the window
+ * DELETE /api/competitions/:id/rate
+ */
+competitionsRoutes.delete('/:id/rate', (c) => (controller as never as { withdrawRating: (cc: never) => never }).withdrawRating(c as never));
+
+/**
  * Invite user to competition
  * POST /api/competitions/:id/invite
  */
