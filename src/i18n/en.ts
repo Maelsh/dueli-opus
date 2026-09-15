@@ -265,6 +265,9 @@ export const en = {
         invitation_not_found: 'Invitation not found or expired',
         blocked_user: 'You cannot interact with this user',
         not_authorized: 'You are not authorized for this action',
+        rating_self_forbidden: 'You cannot rate yourself or your own competition',
+        rating_watch_required: 'You must watch the competition before rating it',
+        rating_window_closed: 'Rating window has closed (24 hours after the competition ended)',
     },
 
     // User Error Messages

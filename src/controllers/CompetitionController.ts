@@ -19,7 +19,7 @@ import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 import { EventPusher } from '../lib/services/EventPusher';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
-import { BlockedInteractionError, ContentTooLongError } from '../lib/errors/AppError';
+import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError } from '../lib/errors/AppError';
 
 /**
  * Competition Request Model (inline - should be in separate file)
@@ -832,13 +832,40 @@ export class CompetitionController extends BaseController {
             const ratingModel = new RatingModel(c.env.DB);
 
             const competition = await model.findById(competitionId);
-            if (!competition || competition.status !== 'completed') {
-                return this.error(c, this.t('competition_errors.not_completed', c));
+            if (!competition) {
+                return this.notFound(c, this.t('competition_errors.not_found', c));
+            }
+            if (competition.status !== 'completed') {
+                return this.error(c, this.t('competition_errors.not_completed', c), 403);
             }
 
-            const hasRated = await ratingModel.hasRated(competitionId, user.id, body.competitor_id);
-            if (hasRated) {
-                return this.error(c, this.t('competition_errors.already_rated', c));
+            // B10: participant guard — creator/opponent can never rate this
+            // competition (self-rating), whoever the target is.
+            const comp = competition as never as { creator_id: number; opponent_id: number | null };
+            if (user.id === comp.creator_id || user.id === comp.opponent_id) {
+                return this.error(c, this.t('competition_errors.rating_self_forbidden', c), 403);
+            }
+            // Target must be a participant; otherwise invalid request.
+            if (body.competitor_id !== comp.creator_id && body.competitor_id !== comp.opponent_id) {
+                return this.validationError(c, this.t('errors.invalid_request', c));
+            }
+
+            // B10: server-side eligibility (watch / 24h window / duplicate).
+            try {
+                await ratingModel.checkEligibility(competition as never, user.id, body.competitor_id);
+            } catch (eligError) {
+                if (eligError instanceof RatingEligibilityError) {
+                    const key = eligError.eligibilityCode === 'SELF'
+                        ? 'competition_errors.rating_self_forbidden'
+                        : eligError.eligibilityCode === 'WATCH'
+                            ? 'competition_errors.rating_watch_required'
+                            : eligError.eligibilityCode === 'WINDOW'
+                                ? 'competition_errors.rating_window_closed'
+                                : 'competition_errors.already_rated';
+                    const status = eligError.eligibilityCode === 'NOT_COMPLETED' ? 403 : eligError.eligibilityCode === 'DUPLICATE' ? 409 : 403;
+                    return this.error(c, this.t(key, c), status);
+                }
+                throw eligError;
             }
 
             const rating = await ratingModel.create(
@@ -860,6 +887,23 @@ export class CompetitionController extends BaseController {
         } catch (error) {
             if (error instanceof BlockedInteractionError) {
                 return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
+            if (error instanceof RatingEligibilityError) {
+                // TOCTOU race: two concurrent first-time votes — the loser's
+                // UNIQUE insert surfaces here; report as duplicate, 409.
+                const key = error.eligibilityCode === 'SELF'
+                    ? 'competition_errors.rating_self_forbidden'
+                    : error.eligibilityCode === 'WATCH'
+                        ? 'competition_errors.rating_watch_required'
+                        : error.eligibilityCode === 'WINDOW'
+                            ? 'competition_errors.rating_window_closed'
+                            : 'competition_errors.already_rated';
+                const status = error.eligibilityCode === 'DUPLICATE' ? 409 : 403;
+                return this.error(c, this.t(key, c), status);
+            }
+            const msg = (error as Error)?.message || '';
+            if (msg.includes('UNIQUE constraint failed: ratings')) {
+                return this.error(c, this.t('competition_errors.already_rated', c), 409);
             }
             return this.serverError(c, error as Error);
         }

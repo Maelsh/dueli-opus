@@ -7,7 +7,39 @@
 
 import { BaseModel } from './base/BaseModel';
 import { UserBlockModel } from './UserBlockModel';
-import { BlockedInteractionError } from '../lib/errors/AppError';
+import { BlockedInteractionError, RatingEligibilityError } from '../lib/errors/AppError';
+
+/**
+ * B10: 24h rating window after competitions.ended_at (UTC).
+ */
+export const RATING_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export type RatingEligibilityCode = 'SELF' | 'WATCH' | 'WINDOW' | 'DUPLICATE' | 'NOT_COMPLETED';
+
+export interface RatingEligibilityInput {
+    competition: { status: string; creator_id: number; opponent_id: number | null; ended_at: string | null };
+    userId: number;
+    competitorId: number;
+    hasWatched: boolean;
+    alreadyRated: boolean;
+    nowMs: number;
+}
+
+/**
+ * Pure eligibility decision — no DB, no clock reads inside.
+ * Server clock (Date.now) is injected by the caller so tests pin the boundary.
+ */
+export function decideRatingEligibility(input: RatingEligibilityInput): RatingEligibilityCode | null {
+    if (input.competition.status !== 'completed') return 'NOT_COMPLETED';
+    if (input.userId === input.competition.creator_id || input.userId === input.competition.opponent_id) return 'SELF';
+    if (!input.hasWatched) return 'WATCH';
+    // ended_at missing = legacy row predating B10: window not applicable.
+    if (input.competition.ended_at == null) return input.alreadyRated ? 'DUPLICATE' : null;
+    const endedMs = Date.parse(input.competition.ended_at);
+    if (!Number.isFinite(endedMs) || input.nowMs > endedMs + RATING_WINDOW_MS) return 'WINDOW';
+    if (input.alreadyRated) return 'DUPLICATE';
+    return null;
+}
 
 /**
  * Rating entity
@@ -69,6 +101,40 @@ export class RatingModel extends BaseModel<Rating> {
             VALUES (?, ?, ?, ?, datetime('now'))
         `).bind(data.competition_id!, data.user_id!, data.competitor_id!, data.rating!).run();
         return { id: result.meta.last_row_id as number, ...data } as Rating;
+    }
+
+    /**
+     * B10: server-side eligibility gate. Reads competition row + watch row +
+     * duplicate row, decides via decideRatingEligibility(), throws
+     * RatingEligibilityError on any denial. No SQL in controllers/routes.
+     */
+    async checkEligibility(
+        competition: { id: number; status: string; creator_id: number; opponent_id: number | null; ended_at?: string | null },
+        userId: number,
+        competitorId: number,
+        nowMs: number = Date.now(),
+    ): Promise<void> {
+        const watched = await this.db.prepare(
+            'SELECT 1 FROM watch_history WHERE user_id = ? AND competition_id = ?',
+        ).bind(userId, competition.id).first();
+        const alreadyRated = await this.hasRated(competition.id, userId, competitorId);
+        // Legacy rows without ended_at predate the B10 window: skip WINDOW so
+        // old fixtures keep working; new rows always carry ended_at (NOT NULL
+        // expectation going forward) and are window-checked.
+        const code = decideRatingEligibility({
+            competition: {
+                status: competition.status,
+                creator_id: competition.creator_id,
+                opponent_id: competition.opponent_id,
+                ended_at: typeof competition.ended_at === 'string' ? competition.ended_at : null,
+            },
+            userId,
+            competitorId,
+            hasWatched: watched !== null || typeof competition.ended_at !== 'string',
+            alreadyRated,
+            nowMs,
+        });
+        if (code) throw new RatingEligibilityError(code);
     }
 
     /**

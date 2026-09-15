@@ -133,6 +133,23 @@ export class BlockedInteractionError extends AppError {
 }
 
 /**
+ * Rating Eligibility Errors - 403 Forbidden (B10)
+ * أخطاء أهلية التقييم
+ *
+ * Thrown by RatingModel.checkEligibility() so CompetitionController.rate()
+ * can translate each code to its own i18n key. 403 for all: the caller is
+ * authenticated but not entitled to rate this competition.
+ */
+export class RatingEligibilityError extends AppError {
+    constructor(
+        public eligibilityCode: 'SELF' | 'WATCH' | 'WINDOW' | 'DUPLICATE' | 'NOT_COMPLETED',
+    ) {
+        super('RATING_NOT_ELIGIBLE', eligibilityCode, 403);
+        this.name = 'RatingEligibilityError';
+    }
+}
+
+/**
  * Content Too Long Error - 400 Bad Request (B7)
  * خطأ تجاوز الطول المسموح
  *

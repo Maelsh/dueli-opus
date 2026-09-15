@@ -22,6 +22,7 @@ export class FakeD1 implements D1Database {
     messages: Row[] = [];
     requests: Row[] = [];
     ratings: Row[] = [];
+    watchHistory: Row[] = [];
     invitations: Row[] = [];
     notifications: Row[] = [];
     sseEvents: Row[] = [];
@@ -225,6 +226,14 @@ class FakeStmt {
                 (c.user1_id === maxId && c.user2_id === minId)
             );
             return conv ?? null;
+        }
+
+        // --- B10: watch_history existence check (rating eligibility) ---
+        if (q.startsWith('select 1 from watch_history')) {
+            const hit = this.db.watchHistory.find(
+                (w) => w.user_id === p[0] && w.competition_id === p[1]
+            );
+            return hit ? { '1': 1 } : null;
         }
 
         // --- ratings ---
@@ -746,6 +755,18 @@ class FakeStmt {
                 competitor_id: p[2],
                 rating: p[3],
                 created_at: new Date().toISOString(),
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // --- B10: INSERT INTO watch_history (test seeding only) ---
+        if (q.startsWith('insert into watch_history')) {
+            const newId = this.db.watchHistory.length + 1;
+            this.db.watchHistory.push({
+                id: newId,
+                user_id: p[0],
+                competition_id: p[1],
+                watch_duration_seconds: p[2] ?? 0,
             });
             return ok({ last_row_id: newId, changes: 1 });
         }
