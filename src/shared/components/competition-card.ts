@@ -122,7 +122,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
                   <i class="fas fa-thumbs-up text-green-400"></i>
                   ${(item.likes_count || 0).toLocaleString()}
                 </span>
-                <span class="flex items-center gap-1.5 transition-colors hover:text-red-400" title="${(tr as any).dislike?.title || 'Dislikes'}">
+                <span class="flex items-center gap-1.5 transition-colors hover:text-red-400" title="${tr.interactions.dislikes_count}">
                   <i class="fas fa-thumbs-down text-red-400"></i>
                   ${(item.dislikes_count || 0).toLocaleString()}
                 </span>

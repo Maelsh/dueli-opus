@@ -415,6 +415,14 @@ export const ar = {
         not_found: 'الإعجاب غير موجود',
     },
 
+    // عدم الإعجاب (B8)
+    interactions: {
+        dislike: 'عدم الإعجاب',
+        undislike: 'إلغاء عدم الإعجاب',
+        dislikes_count: 'عدد عدم الإعجاب',
+        dislike_not_found: 'عدم الإعجاب غير موجود',
+    },
+
     // المنشورات
     post: {
         content_required: 'محتوى المنشور مطلوب',

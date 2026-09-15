@@ -6,6 +6,28 @@
 
 import { D1Database } from '@cloudflare/workers-types';
 import { BaseModel } from './base/BaseModel';
+import { UserBlockModel } from './UserBlockModel';
+import { BlockedInteractionError } from '../lib/errors/AppError';
+
+/**
+ * B8: the two interaction kinds this model owns.
+ * Both are stored in their own physical table (`likes` / `dislikes`, both
+ * created in migrations/0001_initial_schema.sql with
+ * UNIQUE(user_id, competition_id)) — the schema already had a home for
+ * dislikes, so no new migration was needed.
+ */
+export type ReactionType = 'like' | 'dislike';
+
+/**
+ * B8: the complete interaction state of one user on one competition,
+ * plus the two public counters. This is what GET /:id/like returns.
+ */
+export interface ReactionStatus {
+    liked: boolean;
+    disliked: boolean;
+    likes_count: number;
+    dislikes_count: number;
+}
 
 /**
  * Like Interface
@@ -61,43 +83,140 @@ export class LikeModel extends BaseModel<Like> {
     }
 
     /**
+     * Table that physically stores a given reaction kind.
+     * Fixed mapping (never user input) — safe to interpolate into SQL.
+     */
+    private tableFor(type: ReactionType): 'likes' | 'dislikes' {
+        return type === 'like' ? 'likes' : 'dislikes';
+    }
+
+    /**
+     * The opposite kind — the one that must be cleared on a switch.
+     */
+    private oppositeOf(type: ReactionType): ReactionType {
+        return type === 'like' ? 'dislike' : 'like';
+    }
+
+    /**
+     * B8 + B6: a blocked pair must not interact at all.
+     * The competition's creator is the interaction counterpart (same rule as
+     * CommentModel), and the check goes through UserBlockModel.isBlockedBetween
+     * — the single source of truth for "are these two users blocking each
+     * other?" — so nothing is written for a blocked pair.
+     */
+    private async assertNotBlocked(userId: number, competitionId: number): Promise<void> {
+        const competition = await this.db.prepare(
+            'SELECT creator_id FROM competitions WHERE id = ?'
+        ).bind(competitionId).first<{ creator_id: number }>();
+
+        if (!competition || competition.creator_id === userId) {
+            return;
+        }
+        const blocked = await new UserBlockModel(this.db).isBlockedBetween(userId, competition.creator_id);
+        if (blocked) {
+            throw new BlockedInteractionError();
+        }
+    }
+
+    /**
      * Check if user has liked a competition
      */
     async hasLiked(userId: number, competitionId: number): Promise<boolean> {
+        return this.hasReaction(userId, competitionId, 'like');
+    }
+
+    /**
+     * B8: check if user has disliked a competition
+     */
+    async hasDisliked(userId: number, competitionId: number): Promise<boolean> {
+        return this.hasReaction(userId, competitionId, 'dislike');
+    }
+
+    /**
+     * B8: does this user already hold that reaction row?
+     */
+    private async hasReaction(userId: number, competitionId: number, type: ReactionType): Promise<boolean> {
         const result = await this.db.prepare(
-            `SELECT id FROM ${this.tableName} WHERE user_id = ? AND competition_id = ?`
+            `SELECT id FROM ${this.tableFor(type)} WHERE user_id = ? AND competition_id = ?`
         ).bind(userId, competitionId).first();
         return !!result;
     }
 
     /**
-     * Add like
+     * B8: set a reaction atomically. A like clears any dislike of the same
+     * user on the same competition and vice versa, so the two can never
+     * coexist. Idempotent: repeating the same reaction writes nothing new.
+     *
+     * All statements (clear opposite → insert own → refresh cached counters)
+     * run in ONE db.batch(), which D1 executes as a single transaction. The
+     * previous implementation did `hasLiked()` then `addLike()` as two
+     * separate round-trips — a check-then-act race two concurrent requests
+     * could both win.
      */
-    async addLike(userId: number, competitionId: number): Promise<Like | null> {
-        // Check if already liked
-        if (await this.hasLiked(userId, competitionId)) {
-            return null;
-        }
+    async setReaction(userId: number, competitionId: number, type: ReactionType): Promise<ReactionStatus> {
+        await this.assertNotBlocked(userId, competitionId);
 
+        const addTable = this.tableFor(type);
+        const removeTable = this.tableFor(this.oppositeOf(type));
         const now = new Date().toISOString();
-        const result = await this.db.prepare(
-            `INSERT INTO ${this.tableName} (user_id, competition_id, created_at) VALUES (?, ?, ?)`
-        ).bind(userId, competitionId, now).run();
 
-        if (result.success && result.meta.last_row_id) {
-            return this.findById(result.meta.last_row_id);
-        }
-        return null;
+        await this.db.batch([
+            this.db.prepare(
+                `DELETE FROM ${removeTable} WHERE user_id = ? AND competition_id = ?`
+            ).bind(userId, competitionId),
+            this.db.prepare(
+                `INSERT OR IGNORE INTO ${addTable} (user_id, competition_id, created_at) VALUES (?, ?, ?)`
+            ).bind(userId, competitionId, now),
+            this.countersStatement(competitionId)
+        ]);
+
+        return this.getStatus(userId, competitionId);
     }
 
     /**
-     * Remove like
+     * B8: clear one reaction atomically and report whether a row was actually
+     * removed, so the controller can answer 404 when there was nothing to clear.
      */
-    async removeLike(userId: number, competitionId: number): Promise<boolean> {
-        const result = await this.db.prepare(
-            `DELETE FROM ${this.tableName} WHERE user_id = ? AND competition_id = ?`
-        ).bind(userId, competitionId).run();
-        return result.success && (result.meta.changes ?? 0) > 0;
+    async clearReaction(userId: number, competitionId: number, type: ReactionType): Promise<ReactionStatus & { removed: boolean }> {
+        const table = this.tableFor(type);
+
+        const results = await this.db.batch([
+            this.db.prepare(
+                `DELETE FROM ${table} WHERE user_id = ? AND competition_id = ?`
+            ).bind(userId, competitionId),
+            this.countersStatement(competitionId)
+        ]);
+
+        const removed = ((results[0] as { meta?: { changes?: number } })?.meta?.changes ?? 0) > 0;
+        const status = await this.getStatus(userId, competitionId);
+        return { ...status, removed };
+    }
+
+    /**
+     * B8: both counters, recomputed from their source tables inside the same
+     * transaction as the row change. `competitions.likes_count` /
+     * `dislikes_count` are read by `SELECT c.*` in CompetitionModel and shown
+     * on the competition cards, so they must never drift from the rows.
+     */
+    private countersStatement(competitionId: number) {
+        return this.db.prepare(
+            `UPDATE competitions
+                SET likes_count = (SELECT COUNT(*) FROM likes WHERE competition_id = ?),
+                    dislikes_count = (SELECT COUNT(*) FROM dislikes WHERE competition_id = ?)
+              WHERE id = ?`
+        ).bind(competitionId, competitionId, competitionId);
+    }
+
+    /**
+     * B8: full interaction state for one viewer (or an anonymous one).
+     */
+    async getStatus(userId: number | null, competitionId: number): Promise<ReactionStatus> {
+        const likes_count = await this.getLikeCount(competitionId);
+        const dislikes_count = await this.getDislikeCount(competitionId);
+        const liked = userId ? await this.hasReaction(userId, competitionId, 'like') : false;
+        const disliked = userId ? await this.hasReaction(userId, competitionId, 'dislike') : false;
+
+        return { liked, disliked, likes_count, dislikes_count };
     }
 
     /**
@@ -106,6 +225,16 @@ export class LikeModel extends BaseModel<Like> {
     async getLikeCount(competitionId: number): Promise<number> {
         const result = await this.db.prepare(
             `SELECT COUNT(*) as count FROM ${this.tableName} WHERE competition_id = ?`
+        ).bind(competitionId).first<{ count: number }>();
+        return result?.count || 0;
+    }
+
+    /**
+     * B8: get dislike count for competition
+     */
+    async getDislikeCount(competitionId: number): Promise<number> {
+        const result = await this.db.prepare(
+            `SELECT COUNT(*) as count FROM dislikes WHERE competition_id = ?`
         ).bind(competitionId).first<{ count: number }>();
         return result?.count || 0;
     }

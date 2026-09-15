@@ -439,6 +439,14 @@ export const en = {
         not_found: 'Like not found',
     },
 
+    // Dislikes (B8)
+    interactions: {
+        dislike: 'Dislike',
+        undislike: 'Remove dislike',
+        dislikes_count: 'Dislikes',
+        dislike_not_found: 'Dislike not found',
+    },
+
     // Posts
     post: {
         content_required: 'Post content is required',

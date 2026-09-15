@@ -5,7 +5,20 @@
 > مرجع المهمة (P?-T??) حسب `docs/COMPLETE_PROJECT_PLANS.md`
 ---
 
-## 2026-09-10 (B2+B3)
+## 2026-09-15 (B8)
+
+- `[2026-09-15] [B8]` — توحيد الإعجاب/عدم الإعجاب (فرع `fix/core-like-dislike-consistency`): قرار التنفيذ **الإكمال** لا الإزالة.
+  - `src/models/LikeModel.ts`: `ReactionType = 'like' | 'dislike'` + `ReactionStatus`؛ `setReaction()` و`clearReaction()` تُنفّذان **كل** الكتابة في `db.batch()` واحد (حذف الفعل المعاكس → `INSERT OR IGNORE` للفعل → إعادة حساب `competitions.likes_count/dislikes_count` من الجدولين) ⇒ لا يجتمع like و dislike لنفس المستخدم/المنافسة، والتكرار idempotent؛ `assertNotBlocked()` يمرّ عبر `UserBlockModel.isBlockedBetween` (آلية B6 المركزية) قبل أي كتابة؛ `getStatus()` يعيد الحقول الأربعة؛ `getDislikeCount()` و`hasDisliked()`. حُذف `addLike/removeLike` (كانا check-then-act عبر round-tripين = سباق).
+  - `src/controllers/InteractionController.ts`: `likeCompetition` أصبح "set like" ذرّياً، و`dislikeCompetition`/`undislikeCompetition` جديدان؛ مسار كتابة مشترك (`setReaction`) ومسار حذف مشترك (`clearReaction`) يوحّدان الأخطاء ويردان 403 على `BlockedInteractionError`؛ `getLikeStatus` يعيد `{ liked, disliked, likes_count, dislikes_count }`.
+  - `src/modules/api/likes/routes.ts`: `POST` و`DELETE` لـ`/competitions/:id/dislike` بنفس نمط like — ربط HTTP فقط، بلا SQL.
+  - i18n (ar+en): `interactions.{dislike, undislike, dislikes_count, dislike_not_found}` + ربط عنوان عدّاد البطاقة بـ`interactions.dislikes_count` بدل النص الإنجليزي الحرفي.
+  - `src/client/services/InteractionService.ts`: قراءة `likes_count` من الاستجابة الجديدة (كان يقرأ `likeCount` فيصفر العدّاد في الواجهة).
+  - `tests/api/like-dislike.test.ts` (جديد، 6/6): سُلّم **أحمر أولاً** — 6/6 فشل على الأساس (5×`expected 404 to be 200` + `expected 404 to be 403`) ثم 6/6 خضراء؛ `tests/helpers/fake-d1.ts`: دعم جدولي likes/dislikes + عدّادات البطاقات.
+  - **لا migration جديدة**: `likes` و`dislikes` (كلاهما `UNIQUE(user_id, competition_id)`) و`competitions.likes_count/dislikes_count` موجودة في `migrations/0001_initial_schema.sql` ولم تلمسها أي ترحيلات لاحقة (تحقّق بـ`Select-String` على كل `migrations/*.sql`).
+  / الملفات: src/models/LikeModel.ts, src/controllers/InteractionController.ts, src/modules/api/likes/routes.ts, src/i18n/ar.ts, src/i18n/en.ts, src/shared/components/competition-card.ts, src/client/services/InteractionService.ts, tests/api/like-dislike.test.ts, tests/helpers/fake-d1.ts, docs/03-API-REFERENCE.md, docs/14-ROUTE-INVENTORY.md, dev-tools/route-inventory.json, WORKLOG.md, PLAN-STATUS.md / نفذ: Cline / اختبار: like-dislike 6/6 ✅ (أحمر أولاً 6/6) + npm test 117/117 ✅ + tsc ✅ + build ✅ + route-inventory 174 مساراً ✅ / PR: fix/core-like-dislike-consistency (بلا دمج)
+---
+
+
 
 - `[2026-09-10] [B2+B3]` — ترقيم التعليقات + شجرة الردود + بث حي + حمولة أخف (فرع `feat/core-comments-tree-and-live`):
   - `migrations/0016_comments_soft_delete.sql` (جديد): `deleted_at` + فهرسا `(competition_id,deleted_at)` و`(parent_id,deleted_at)`.

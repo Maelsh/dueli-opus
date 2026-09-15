@@ -43,6 +43,16 @@
 - `DELETE /api/competitions/:competitionId/comments/:commentId` — حذف ناعم (`deleted_at`)؛ المالك أو الأدمن فقط (غير المالك → 403).
 - البلاغات: `comment` موجودة + `message` مضافة (`REPORT_REASONS.message`) عبر نفس `/api/reports` وطابور الأدمن — لا نظام جديد.
 
+## B8 — توحيد الإعجاب/عدم الإعجاب (2026-09-15)
+
+- `POST /api/competitions/:id/dislike` — **جديد**: كان `dislikes` مخزَّناً ومعروضاً في الواجهة بلا أي مسار يكتبه.
+- `DELETE /api/competitions/:id/dislike` — **جديد**: حذف عدم الإعجاب (404 + `interactions.dislike_not_found` إن لم يكن موجوداً).
+- التبديل **ذرّي** في `db.batch()` واحد: الإعجاب يلغي عدم الإعجاب والعكس، ولا يجتمعان لنفس المستخدم/المنافسة؛ تكرار نفس الفعل idempotent (`INSERT OR IGNORE`).
+- `GET /api/competitions/:id/like` — يُعيد الآن `{ liked, disliked, likes_count, dislikes_count }` (كان `{ liked, likeCount }`).
+- `competitions.likes_count/dislikes_count` يُعاد حسابهما من الجدولين داخل نفس المعاملة (هما ما تقرأه البطاقات عبر `SELECT c.*`).
+- الحظر المركزي (B6) مطبَّق على الفعلين: زوج محظور ⇒ 403 `errors.blocked_interaction` بلا كتابة أي صف.
+- لا ترحيل جديد: الجدولان `likes` و`dislikes` موجودان في `0001_initial_schema.sql`.
+
 ## ❌ موجودة ككود لكنها غير مربوطة (404)
 
 | البادئة | الوحدة | الخطة |

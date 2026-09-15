@@ -30,6 +30,22 @@ likesRoutes.delete('/competitions/:id/like', async (c) => {
 });
 
 /**
+ * DELETE /api/competitions/:id/dislike
+ * Remove the current user's dislike (B8)
+ */
+likesRoutes.delete('/competitions/:id/dislike', async (c) => {
+    return controller.undislikeCompetition(c);
+});
+
+/**
+ * POST /api/competitions/:id/dislike
+ * Dislike a competition (B8) — clears an existing like atomically
+ */
+likesRoutes.post('/competitions/:id/dislike', async (c) => {
+    return controller.dislikeCompetition(c);
+});
+
+/**
  * GET /api/competitions/:id/like
  * Get like status for current user
  */
