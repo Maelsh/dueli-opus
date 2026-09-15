@@ -9,6 +9,7 @@
 import { BaseController, AppContext } from './base/BaseController';
 import { UserModel, CompetitionModel, NotificationModel } from '../models';
 import { UserBlockModel } from '../models/UserBlockModel';
+import { NotificationPresenter } from '../lib/services/NotificationPresenter';
 import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
@@ -279,12 +280,11 @@ export class UserController extends BaseController {
 
             await followModel.follow(currentUser.id, targetId);
 
-            // Create notification
-            await notificationModel.create({
+            // B9: stored as `type + payload`; label rendered at read time.
+            await notificationModel.createForType({
                 user_id: targetId,
                 type: 'follow',
-                title: this.t('new_follower', c),
-                message: `${currentUser.display_name || currentUser.username}`,
+                payload: { actor: currentUser.display_name || currentUser.username },
                 reference_type: 'user',
                 reference_id: currentUser.id
             });
@@ -332,8 +332,13 @@ export class UserController extends BaseController {
             const notificationModel = new NotificationModel(DB);
 
             const limit = this.getQueryInt(c, 'limit', 50);
-            const notifications = await notificationModel.findByUser(currentUser.id, { limit });
+            const rows = await notificationModel.findByUser(currentUser.id, { limit });
             const unreadCount = await notificationModel.countUnread(currentUser.id);
+
+            // B9: `type + payload` is stored; the label/body/deep link are
+            // generated HERE, in the recipient's request language (`?lang=`).
+            const lang = this.getLanguage(c);
+            const notifications = rows.map((row) => NotificationPresenter.present(row, lang));
 
             return this.success(c, { notifications, unreadCount });
         } catch (error) {

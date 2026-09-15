@@ -260,12 +260,23 @@ class FakeStmt {
             return { count };
         }
 
-        // --- notifications: count by user+type ---
+        // --- notifications: count by user+type, or unread count by user (B9) ---
         if (q.startsWith('select count(*)') && q.includes('from notifications')) {
+            if (q.includes('is_read')) {
+                const count = this.db.notifications.filter(
+                    (n) => n.user_id === p[0] && !n.is_read
+                ).length;
+                return { count };
+            }
             const count = this.db.notifications.filter(
                 (n) => n.user_id === p[0] && n.type === p[1]
             ).length;
             return { count };
+        }
+
+        // --- notifications: single row (NotificationModel.create -> findById) ---
+        if (q.startsWith('select * from notifications where id = ?')) {
+            return this.db.notifications.find((n) => n.id === p[0]) ?? null;
         }
 
         // --- sessions ---
@@ -334,6 +345,19 @@ class FakeStmt {
             if (Number.isFinite(lim) && Number.isFinite(off)) rows = rows.slice(off, off + lim);
             return { results: rows };
         }
+        // --- notifications inbox: user's rows, newest first, limit/offset (B9) ---
+        if (q.includes('from notifications') && q.includes('user_id = ?') && q.includes('order by created_at desc')) {
+            let rows = this.db.notifications
+                .filter((n) => n.user_id === p[0])
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            const limit = Number(p[1]);
+            const offset = Number(p[2]);
+            if (Number.isFinite(limit) && Number.isFinite(offset)) {
+                rows = rows.slice(offset, offset + limit);
+            }
+            return { results: rows };
+        }
+
         // --- ratings with user details (JOIN) ---
         if (q.includes('from ratings r') && q.includes('join users u')) {
             const competitionId = p[0];

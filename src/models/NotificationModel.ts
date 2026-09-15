@@ -5,15 +5,29 @@
 
 import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { Notification, NotificationType } from '../config/types';
+import {
+    NotificationPresenter,
+    type NotificationPayload,
+} from '../lib/services/NotificationPresenter';
 
 /**
- * Notification creation data
+ * Notification creation data.
+ *
+ * B9 contract: `title` is an **i18n key**, never a translated sentence, and
+ * user content is carried as an untranslated `payload`. The label/body are
+ * generated at render time by `NotificationPresenter` in the recipient's
+ * language. Legacy callers may still pass a plain `message` (already-rendered
+ * snapshot) — those rows keep working through the presenter's fallback path.
  */
 export interface CreateNotificationData {
     user_id: number;
     type: NotificationType;
+    /** i18n key of the label (e.g. `notification.new_message`) — not text. */
     title: string;
-    message: string;
+    /** Plain, untranslated content (legacy path). Prefer `payload` for new code. */
+    message?: string;
+    /** Structured untranslated payload — stored as JSON in the `message` column. */
+    payload?: NotificationPayload;
     reference_type?: string;
     reference_id?: number;
 }
@@ -58,9 +72,14 @@ export class NotificationModel extends BaseModel<Notification> {
     }
 
     /**
-     * Create notification
+     * Create notification.
+     * Stores `type + title (i18n key) + payload` — never a translated sentence.
      */
     async create(data: CreateNotificationData): Promise<Notification> {
+        const payloadText = data.payload
+            ? JSON.stringify(data.payload)
+            : (data.message || '');
+
         const result = await this.db.prepare(`
             INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, is_read, created_at)
             VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'))
@@ -68,12 +87,34 @@ export class NotificationModel extends BaseModel<Notification> {
             data.user_id,
             data.type,
             data.title,
-            data.message,
+            payloadText,
             data.reference_type || null,
             data.reference_id || null
         ).run();
 
         return (await this.findById(result.meta.last_row_id as number))!;
+    }
+
+    /**
+     * B9: preferred creation path — persists `type + payload` only.
+     * The label is derived from the type's i18n key at render time, so callers
+     * cannot accidentally store a translated sentence in the database.
+     */
+    async createForType(data: {
+        user_id: number;
+        type: NotificationType;
+        payload?: NotificationPayload;
+        reference_type?: string;
+        reference_id?: number;
+    }): Promise<Notification> {
+        return this.create({
+            user_id: data.user_id,
+            type: data.type,
+            title: NotificationPresenter.titleKeyFor(data.type, data.reference_type ?? null),
+            payload: data.payload,
+            reference_type: data.reference_type,
+            reference_id: data.reference_id,
+        });
     }
 
     /**

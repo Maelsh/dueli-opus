@@ -105,8 +105,22 @@ export type CompetitionStatus = 'pending' | 'accepted' | 'live' | 'completed' | 
 /** Competition request status values */
 export type RequestStatus = 'pending' | 'accepted' | 'declined';
 
-/** Notification types */
-export type NotificationType = 'request' | 'follow' | 'comment' | 'rating' | 'system' | 'invitation';
+/** Notification types
+ *  B9: adds `message`, `post_like`, `post_comment` — the stored `type` is the
+ *  single source of truth for how a notification is labeled and where it links.
+ *  The `notifications.type` column is plain TEXT (migration 0001) with no CHECK
+ *  constraint, so widening this union needs no migration.
+ */
+export type NotificationType =
+  | 'request'
+  | 'follow'
+  | 'comment'
+  | 'rating'
+  | 'system'
+  | 'invitation'
+  | 'message'
+  | 'post_like'
+  | 'post_comment';
 
 // ============================================
 // Domain Interfaces
