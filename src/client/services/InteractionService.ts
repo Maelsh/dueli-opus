@@ -41,7 +41,7 @@ export class InteractionService {
         try {
             const response = await ApiClient.post(`/api/competitions/${competitionId}/like`);
             if (response.success) {
-                return { success: true, likeCount: response.data?.likeCount };
+                return { success: true, likeCount: response.data?.likes_count };
             }
             Toast.error(response.error || t('errors.something_wrong', State.lang));
             return { success: false };
@@ -60,7 +60,7 @@ export class InteractionService {
         try {
             const response = await ApiClient.delete(`/api/competitions/${competitionId}/like`);
             if (response.success) {
-                return { success: true, likeCount: response.data?.likeCount };
+                return { success: true, likeCount: response.data?.likes_count };
             }
             return { success: false };
         } catch (error) {
@@ -91,7 +91,7 @@ export class InteractionService {
             if (response.success) {
                 return {
                     liked: response.data?.liked || false,
-                    likeCount: response.data?.likeCount || 0
+                    likeCount: response.data?.likes_count || 0
                 };
             }
             return { liked: false, likeCount: 0 };

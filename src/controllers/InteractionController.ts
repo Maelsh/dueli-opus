@@ -7,8 +7,9 @@
 import { Context } from 'hono';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
-import { LikeModel } from '../models/LikeModel';
+import { LikeModel, ReactionType } from '../models/LikeModel';
 import { ReportModel, CreateReportData, REPORT_REASONS, ReportTargetType } from '../models/ReportModel';
+import { BlockedInteractionError } from '../lib/errors/AppError';
 
 /**
  * Interaction Controller Class
@@ -23,39 +24,24 @@ export class InteractionController extends BaseController {
     /**
      * Like a competition
      * POST /api/competitions/:id/like
+     *
+     * B8: this is now an atomic "set like" — if the user was disliking the
+     * competition, the dislike is cleared in the same transaction. Repeating
+     * the call is idempotent instead of a 400.
      */
     async likeCompetition(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
-        try {
-            if (!this.requireAuth(c)) return this.unauthorized(c);
-            const user = this.getCurrentUser(c);
+        return this.setReaction(c, 'like');
+    }
 
-            const competitionId = this.getParamInt(c, 'id');
-            if (!competitionId) {
-                return this.validationError(c, this.t('errors.invalid_id', c));
-            }
-
-            const likeModel = new LikeModel(c.env.DB);
-
-            // Check if already liked
-            if (await likeModel.hasLiked(user.id, competitionId)) {
-                return this.error(c, this.t('like.already_liked', c), 400);
-            }
-
-            const like = await likeModel.addLike(user.id, competitionId);
-            if (!like) {
-                return this.serverError(c, new Error('Failed to add like'));
-            }
-
-            const likeCount = await likeModel.getLikeCount(competitionId);
-
-            return this.success(c, {
-                liked: true,
-                likeCount
-            });
-        } catch (error) {
-            console.error('Like competition error:', error);
-            return this.serverError(c, error as Error);
-        }
+    /**
+     * Dislike a competition
+     * POST /api/competitions/:id/dislike
+     *
+     * B8: the missing half of the like/dislike pair — same atomic path as
+     * `likeCompetition`, so a dislike clears an existing like.
+     */
+    async dislikeCompetition(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        return this.setReaction(c, 'dislike');
     }
 
     /**
@@ -63,6 +49,23 @@ export class InteractionController extends BaseController {
      * DELETE /api/competitions/:id/like
      */
     async unlikeCompetition(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        return this.clearReaction(c, 'like', 'like.not_found');
+    }
+
+    /**
+     * Remove a dislike
+     * DELETE /api/competitions/:id/dislike
+     */
+    async undislikeCompetition(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        return this.clearReaction(c, 'dislike', 'interactions.dislike_not_found');
+    }
+
+    /**
+     * B8: shared write path for both reactions — auth, id validation, then the
+     * single atomic model call. Throws are mapped once, so like and dislike can
+     * never drift apart in behaviour (both honour the central B6 block guard).
+     */
+    private async setReaction(c: Context<{ Bindings: Bindings; Variables: Variables }>, type: ReactionType) {
         try {
             if (!this.requireAuth(c)) return this.unauthorized(c);
             const user = this.getCurrentUser(c);
@@ -73,27 +76,54 @@ export class InteractionController extends BaseController {
             }
 
             const likeModel = new LikeModel(c.env.DB);
-            const removed = await likeModel.removeLike(user.id, competitionId);
+            const status = await likeModel.setReaction(user.id, competitionId, type);
 
-            if (!removed) {
-                return this.error(c, this.t('like.not_found', c), 404);
-            }
-
-            const likeCount = await likeModel.getLikeCount(competitionId);
-
-            return this.success(c, {
-                liked: false,
-                likeCount
-            });
+            return this.success(c, status);
         } catch (error) {
-            console.error('Unlike competition error:', error);
+            if (error instanceof BlockedInteractionError) {
+                return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
+            console.error(`Set ${type} reaction error:`, error);
             return this.serverError(c, error as Error);
         }
     }
 
     /**
-     * Get like status and count
+     * B8: shared delete path for both reactions.
+     */
+    private async clearReaction(
+        c: Context<{ Bindings: Bindings; Variables: Variables }>,
+        type: ReactionType,
+        notFoundKey: string
+    ) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+
+            const competitionId = this.getParamInt(c, 'id');
+            if (!competitionId) {
+                return this.validationError(c, this.t('errors.invalid_id', c));
+            }
+
+            const likeModel = new LikeModel(c.env.DB);
+            const { removed, ...status } = await likeModel.clearReaction(user.id, competitionId, type);
+
+            if (!removed) {
+                return this.error(c, this.t(notFoundKey, c), 404);
+            }
+
+            return this.success(c, status);
+        } catch (error) {
+            console.error(`Clear ${type} reaction error:`, error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * Get like/dislike status and counts
      * GET /api/competitions/:id/like
+     *
+     * B8: returns the four fields in one shape for both reactions.
      */
     async getLikeStatus(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
         try {
@@ -104,11 +134,9 @@ export class InteractionController extends BaseController {
 
             const likeModel = new LikeModel(c.env.DB);
             const user = this.getCurrentUser(c);
+            const status = await likeModel.getStatus(user?.id ?? null, competitionId);
 
-            const likeCount = await likeModel.getLikeCount(competitionId);
-            const liked = user ? await likeModel.hasLiked(user.id, competitionId) : false;
-
-            return this.success(c, { liked, likeCount });
+            return this.success(c, status);
         } catch (error) {
             console.error('Get like status error:', error);
             return this.serverError(c, error as Error);

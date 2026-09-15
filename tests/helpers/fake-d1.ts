@@ -29,7 +29,12 @@ export class FakeD1 implements D1Database {
     // B7: comments + rate_limits support for rate-limits tests
     comments: Row[] = [];
     rateLimits: Row[] = [];
+    // B8: likes + dislikes (two real tables in migration 0001)
+    likes: Row[] = [];
+    dislikes: Row[] = [];
     userSeq = 0;
+    likeSeq = 0;
+    dislikeSeq = 0;
     blockSeq = 0;
     donationSeq = 0;
     competitionSeq = 0;
@@ -136,6 +141,20 @@ class FakeStmt {
         if (q.startsWith('select creator_id from competitions where id = ?')) {
             const comp = this.db.competitions.find((c) => c.id === p[0]);
             return comp ? { creator_id: comp.creator_id } : null;
+        }
+
+        // --- B8: likes / dislikes (kept as two physical tables, see LikeModel) ---
+        if (q.startsWith('select count(*) as count from likes where competition_id = ?')) {
+            return { count: this.db.likes.filter((l) => l.competition_id === p[0]).length };
+        }
+        if (q.startsWith('select count(*) as count from dislikes where competition_id = ?')) {
+            return { count: this.db.dislikes.filter((d) => d.competition_id === p[0]).length };
+        }
+        if (q.startsWith('select id from likes where user_id = ? and competition_id = ?')) {
+            return this.db.likes.find((l) => l.user_id === p[0] && l.competition_id === p[1]) ?? null;
+        }
+        if (q.startsWith('select id from dislikes where user_id = ? and competition_id = ?')) {
+            return this.db.dislikes.find((d) => d.user_id === p[0] && d.competition_id === p[1]) ?? null;
         }
 
         // --- B7: comments ---
@@ -580,6 +599,46 @@ class FakeStmt {
                 created_at: new Date().toISOString(),
             });
             return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // --- B8: likes / dislikes inserts + deletes + cached competition counters ---
+        // INSERT [OR IGNORE] INTO likes|dislikes (user_id, competition_id, created_at) VALUES (?, ?, ?)
+        if (q.startsWith('insert into likes') || q.startsWith('insert or ignore into likes')) {
+            const ignore = q.startsWith('insert or ignore');
+            const dup = this.db.likes.find((l) => l.user_id === p[0] && l.competition_id === p[1]);
+            if (dup && ignore) return ok({ last_row_id: null, changes: 0 });
+            const newId = ++this.db.likeSeq;
+            this.db.likes.push({ id: newId, user_id: p[0], competition_id: p[1], created_at: p[2] ?? new Date().toISOString() });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+        if (q.startsWith('insert into dislikes') || q.startsWith('insert or ignore into dislikes')) {
+            const ignore = q.startsWith('insert or ignore');
+            const dup = this.db.dislikes.find((d) => d.user_id === p[0] && d.competition_id === p[1]);
+            if (dup && ignore) return ok({ last_row_id: null, changes: 0 });
+            const newId = ++this.db.dislikeSeq;
+            this.db.dislikes.push({ id: newId, user_id: p[0], competition_id: p[1], created_at: p[2] ?? new Date().toISOString() });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+        // DELETE FROM likes|dislikes WHERE user_id = ? AND competition_id = ?
+        if (q.startsWith('delete from likes where user_id = ? and competition_id = ?')) {
+            const before = this.db.likes.length;
+            this.db.likes = this.db.likes.filter((l) => !(l.user_id === p[0] && l.competition_id === p[1]));
+            return ok({ last_row_id: null, changes: before - this.db.likes.length });
+        }
+        if (q.startsWith('delete from dislikes where user_id = ? and competition_id = ?')) {
+            const before = this.db.dislikes.length;
+            this.db.dislikes = this.db.dislikes.filter((d) => !(d.user_id === p[0] && d.competition_id === p[1]));
+            return ok({ last_row_id: null, changes: before - this.db.dislikes.length });
+        }
+        // UPDATE competitions SET likes_count = (SELECT COUNT(*) FROM likes WHERE competition_id = ?),
+        //   dislikes_count = (SELECT COUNT(*) FROM dislikes WHERE competition_id = ?) WHERE id = ?
+        // Recomputes the cached counters from the two source tables (atomic with the row change).
+        if (q.startsWith('update competitions set likes_count')) {
+            const comp = this.db.competitions.find((cm) => cm.id === p[2]);
+            if (!comp) return ok({ last_row_id: null, changes: 0 });
+            comp.likes_count = this.db.likes.filter((l) => l.competition_id === p[0]).length;
+            comp.dislikes_count = this.db.dislikes.filter((d) => d.competition_id === p[1]).length;
+            return ok({ last_row_id: null, changes: 1 });
         }
 
         // B2+B3: soft-delete + SSE log (test fake only)
