@@ -367,6 +367,36 @@ class FakeStmt {
             return { results: rows };
         }
 
+        // --- B11: anonymous summary aggregation (SQL GROUP BY) ---
+        if (q.includes('from ratings') && q.includes('group by competitor_id')) {
+            const compId = p[0];
+            const groups = new Map();
+            for (const r of this.db.ratings.filter((x) => x.competition_id === compId)) {
+                const arr = groups.get(r.competitor_id) || [];
+                arr.push(r);
+                groups.set(r.competitor_id, arr);
+            }
+            const rows = [];
+            for (const [competitor_id, arr] of groups) {
+                const count = arr.length;
+                const avg = count === 0 ? null : arr.reduce((s2, x) => s2 + Number(x.rating), 0) / count;
+                rows.push({ competitor_id, average: avg, count, c1: arr.filter((x) => Number(x.rating) === 1).length, c2: arr.filter((x) => Number(x.rating) === 2).length, c3: arr.filter((x) => Number(x.rating) === 3).length, c4: arr.filter((x) => Number(x.rating) === 4).length, c5: arr.filter((x) => Number(x.rating) === 5).length });
+            }
+            return { results: rows };
+        }
+
+        // --- B11: anonymized public ratings view (no JOIN to users) ---
+        if (q.startsWith('select id, competition_id, competitor_id, rating, created_at')) {
+            const rows = this.db.ratings.filter((r) => r.competition_id === p[0]).map((r) => ({ id: r.id, competition_id: r.competition_id, competitor_id: r.competitor_id, rating: r.rating, created_at: r.created_at || '' }));
+            return { results: rows };
+        }
+
+        // --- B11: withdraw existence check ---
+        if (q.startsWith('select id from ratings')) {
+            const hit = this.db.ratings.find((r) => r.competition_id === p[0] && r.user_id === p[1] && r.competitor_id === p[2]);
+            return hit ? { id: hit.id } : null;
+        }
+
         // --- ratings with user details (JOIN) ---
         if (q.includes('from ratings r') && q.includes('join users u')) {
             const competitionId = p[0];
@@ -729,6 +759,27 @@ class FakeStmt {
                 created_at: new Date().toISOString()
             });
             return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // --- B11: DELETE FROM ratings (withdraw) + recompute competitions aggregates ---
+        if (q.startsWith('delete from ratings')) {
+            const before = this.db.ratings.length;
+            this.db.ratings = this.db.ratings.filter((r) => !(r.competition_id === p[0] && r.user_id === p[1] && r.competitor_id === p[2]));
+            return ok({ last_row_id: null, changes: before - this.db.ratings.length });
+        }
+
+        // --- B11: recompute competitions aggregates after withdraw ---
+        if (q.startsWith('update competitions') && q.includes('creator_rating = coalesce')) {
+            const compId = p[p.length - 1];
+            const comp = this.db.competitions.find((c) => c.id === compId);
+            if (comp) {
+                const rows = this.db.ratings.filter((r) => r.competition_id === compId);
+                const avg = (arr) => arr.length ? arr.reduce((s2, x) => s2 + Number(x.rating), 0) / arr.length : 0;
+                comp.creator_rating = avg(rows.filter((r) => r.competitor_id === comp.creator_id));
+                comp.opponent_rating = comp.opponent_id ? avg(rows.filter((r) => r.competitor_id === comp.opponent_id)) : 0;
+                comp.average_rating = avg(rows);
+            }
+            return ok({ last_row_id: null, changes: 1 });
         }
 
         // DELETE FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?
