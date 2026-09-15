@@ -16,7 +16,7 @@ const sharedDb = new FakeD1();
 function resetDb() {
     Object.assign(sharedDb, {
         users: [], blocks: [], sessions: [], donations: [],
-        competitions: [], requests: [], ratings: [],
+        competitions: [], requests: [], ratings: [], watchHistory: [],
         invitations: [], notifications: [], conversations: [], messages: [],
         userSeq: 0, blockSeq: 0, donationSeq: 0, competitionSeq: 0,
         conversationSeq: 0, messageSeq: 0, ratingSeq: 0, invitationSeq: 0, notificationSeq: 0,
@@ -37,8 +37,8 @@ async function authedPost(path: string, sid: string, lang: string, body?: unknow
 }
 
 describe('B6: Central block enforcement via API', () => {
-    let aId: number, bId: number;
-    let aSession: string, bSession: string;
+    let aId: number, bId: number, cId: number;
+    let aSession: string, bSession: string, cSession: string;
 
     beforeEach(async () => {
         resetDb();
@@ -46,8 +46,12 @@ describe('B6: Central block enforcement via API', () => {
         const sessions = new SessionModel(sharedDb as any);
         aId = (await users.create({ email: 'b6a@test.local', username: 'b6_a', display_name: 'B6 A' })).id;
         bId = (await users.create({ email: 'b6b@test.local', username: 'b6_b', display_name: 'B6 B' })).id;
+        // B10: creator/opponent can never rate (self-rating guard). C is a
+        // neutral third-party viewer so block-vs-allow on /rate is observable.
+        cId = (await users.create({ email: 'b6c@test.local', username: 'b6_c', display_name: 'B6 C' })).id;
         aSession = (await sessions.create({ user_id: aId })).id;
         bSession = (await sessions.create({ user_id: bId })).id;
+        cSession = (await sessions.create({ user_id: cId })).id;
 
         sharedDb.competitions.push({
             id: 910001,
@@ -57,6 +61,7 @@ describe('B6: Central block enforcement via API', () => {
             status: 'completed',
             category_id: 820001,
         });
+        sharedDb.watchHistory.push({ user_id: cId, competition_id: 910001, watch_duration_seconds: 60 });
     });
 
     it('1. A blocked B -> B starts a conversation with A: 403 + no conversation row', async () => {
@@ -128,12 +133,11 @@ describe('B6: Central block enforcement via API', () => {
         expect(text).toContain('لا يمكن إتمام هذا الإجراء');
     });
 
-    it('5. A blocked B -> B cannot rate A: 403', async () => {
+    it('5. A blocked C -> C cannot rate A: 403', async () => {
         await sharedDb.prepare(
             'INSERT INTO user_blocks (blocker_id, blocked_id, reason, created_at) VALUES (?, ?, ?, datetime(\'now\'))'
-        ).bind(aId, bId, 'test').run();
-
-        const res = await authedPost(`/api/competitions/910001/rate`, bSession, 'ar', { competitor_id: aId, rating: 5 });
+        ).bind(aId, cId, 'test').run();
+        const res = await authedPost(`/api/competitions/910001/rate`, cSession, 'ar', { competitor_id: aId, rating: 5 });
         expect(res.status).toBe(403);
         const text = await res.text();
         expect(text).toContain('لا يمكن إتمام هذا الإجراء');
@@ -155,8 +159,8 @@ describe('B6: Central block enforcement via API', () => {
         const followRes = await authedPost(`/api/users/${aId}/follow`, bSession, 'ar');
         expect(followRes.status).toBe(200);
 
-        // Rate
-        const rateRes = await authedPost(`/api/competitions/910001/rate`, bSession, 'ar', { competitor_id: aId, rating: 5 });
+        // Rate (B10: third-party viewer C rates creator A)
+        const rateRes = await authedPost(`/api/competitions/910001/rate`, cSession, 'ar', { competitor_id: aId, rating: 5 });
         expect(rateRes.status).toBe(201);
 
         // Comment

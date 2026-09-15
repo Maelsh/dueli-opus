@@ -239,6 +239,9 @@ export const ar = {
         invitation_not_found: 'الدعوة غير موجودة أو منتهية',
         blocked_user: 'لا يمكن التفاعل مع هذا المستخدم',
         not_authorized: 'غير مصرح لك بهذا الإجراء',
+        rating_self_forbidden: 'لا يمكنك تقييم نفسك أو منافستك',
+        rating_watch_required: 'يجب مشاهدة المنافسة قبل تقييمها',
+        rating_window_closed: 'انتهت نافذة التقييم (24 ساعة من انتهاء المنافسة)',
     },
 
     // رسائل أخطاء المستخدم
