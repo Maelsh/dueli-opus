@@ -15,61 +15,30 @@ export class ScheduledTaskService {
     /**
      * T1.5: Finalize a completed competition:
      * aggregate viewer ratings → winner_id → ELO → automatic payouts.
-     * Idempotent-safe via revenue log finalization flag.
+     *
+     * B12: aggregates + winner + one-time ELO now run through the atomic
+     * db.batch() in updateAggregatesAfterVote (ELO applied at most once
+     * per competition, enforced by the DB via competitions.elo_applied_at).
+     * Only the financial finalization (finalize_payouts — untouched) is
+     * added on top.
      */
     async finalizeCompetition(competitionId: number): Promise<{ winnerId: number | null }> {
         const { LivePayoutEngine } = await import('./LivePayoutEngine');
-        const { EloRatingService } = await import('./EloRatingService');
 
-        const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, status FROM competitions WHERE id = ?
+        // Atomic aggregates + winner + one-time ELO (idempotent)
+        await this.updateAggregatesAfterVote(competitionId);
+
+        const row = await this.db.prepare(`
+            SELECT winner_id FROM competitions WHERE id = ?
         `).bind(competitionId).first<any>();
 
-        if (!competition || competition.status !== 'completed') {
-            return { winnerId: null };
-        }
-
-        // 1) Aggregate viewer ratings (1–5) per competitor
-        const agg = await this.db.prepare(`
-            SELECT
-                AVG(CASE WHEN competitor_id = ? THEN rating END) as creator_avg,
-                AVG(CASE WHEN competitor_id = ? THEN rating END) as opponent_avg
-            FROM ratings WHERE competition_id = ?
-        `).bind(competition.creator_id, competition.opponent_id ?? -1, competitionId).first<any>();
-
-        const creatorAvg = agg?.creator_avg || 0;
-        const opponentAvg = agg?.opponent_avg || 0;
-        const parts = (creatorAvg > 0 ? 1 : 0) + (opponentAvg > 0 ? 1 : 0);
-        const overallAvg = parts > 0 ? (creatorAvg + opponentAvg) / parts : 0;
-
-        // 2) Winner by average rating (null on tie / no opponent / no votes)
-        let winnerId: number | null = null;
-        if (competition.opponent_id && (creatorAvg > 0 || opponentAvg > 0)) {
-            if (creatorAvg > opponentAvg) winnerId = competition.creator_id;
-            else if (opponentAvg > creatorAvg) winnerId = competition.opponent_id;
-        }
-
-        await this.db.prepare(`
-            UPDATE competitions
-            SET creator_rating = ?, opponent_rating = ?, average_rating = ?, winner_id = ?
-            WHERE id = ?
-        `).bind(creatorAvg, opponentAvg, overallAvg, winnerId, competitionId).run();
-
-        // 3) ELO update
-        try {
-            await new EloRatingService(this.db).updateRatings(competitionId, winnerId);
-        } catch (e) {
-            console.error(`[Finalize] ELO failed for #${competitionId}:`, e);
-        }
-
-        // 4) Automatic payouts split by ratings
         try {
             await new LivePayoutEngine(this.db).finalizePayouts(competitionId);
         } catch (e) {
             console.error(`[Finalize] Payout failed for #${competitionId}:`, e);
         }
 
-        return { winnerId };
+        return { winnerId: row?.winner_id ?? null };
     }
 
     /**
@@ -155,6 +124,11 @@ export class ScheduledTaskService {
             case 'finalize_payouts':
                 // T1.5: ratings-based automatic distribution (replaces blind 35/35/30)
                 await this.finalizeCompetition(task.competition_id);
+                break;
+            case 'recalc_aggregates':
+                // B12: durable retry for a failed aggregate/ELO batch —
+                // updateAggregatesAfterVote is idempotent, so re-running is safe.
+                await this.updateAggregatesAfterVote(task.competition_id);
                 break;
             case 'check_disconnection':
                 await this.handleDisconnectionCheck(task);
@@ -420,13 +394,31 @@ export class ScheduledTaskService {
     /**
      * T1.5: Recompute aggregates/winner/ELO/payout-split after each new vote
      * (lightweight — does NOT credit earnings; that happens once via finalize_payouts)
+     *
+     * B12 — atomicity & ELO idempotency:
+     * - All writes (aggregates + winner_id + ELO + elo_applied_at claim) run in
+     *   ONE db.batch() — D1 executes a batch as a single serialized transaction,
+     *   so no interleaved run() sequence can produce a torn state.
+     * - ELO is applied at most once per competition, enforced INSIDE the
+     *   database (not JavaScript): the user-rating writes are guarded by
+     *   `(SELECT elo_applied_at FROM competitions WHERE id = ?) IS NULL` and the
+     *   claim itself is `UPDATE competitions SET elo_applied_at = ? WHERE id = ?
+     *   AND elo_applied_at IS NULL`. A concurrent duplicate batch (serialized
+     *   after the first) finds the claim set and its guarded writes match 0 rows.
+     * - Draw rule (documented in docs/05): equal averages (including both zero
+     *   or missing opponent) → winner_id = NULL and the draw ELO rule
+     *   (0.5 / 0.5) applies once.
+     * - Failure handling: if the batch fails, the vote (caller) still succeeds;
+     *   the failure is logged and a `recalc_aggregates` scheduled task is
+     *   recorded as a durable retry (executed by processPendingTasks).
      */
     async updateAggregatesAfterVote(competitionId: number): Promise<void> {
         const { LivePayoutEngine } = await import('./LivePayoutEngine');
-        const { EloRatingService } = await import('./EloRatingService');
+        const { computeEloChange } = await import('./EloRatingService');
+        const { isWindowOpen } = await import('../../models/RatingModel');
 
         const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, status FROM competitions WHERE id = ?
+            SELECT id, creator_id, opponent_id, status, ended_at, elo_applied_at FROM competitions WHERE id = ?
         `).bind(competitionId).first<any>();
 
         if (!competition || competition.status !== 'completed') return;
@@ -443,22 +435,34 @@ export class ScheduledTaskService {
         const parts = (creatorAvg > 0 ? 1 : 0) + (opponentAvg > 0 ? 1 : 0);
         const overallAvg = parts > 0 ? (creatorAvg + opponentAvg) / parts : 0;
 
+        // B12 draw rule: tie (equal averages, including both zero) or missing
+        // opponent => explicit winner_id = NULL (never left implicit).
         let winnerId: number | null = null;
-        if (competition.opponent_id && (creatorAvg > 0 || opponentAvg > 0)) {
+        if (competition.opponent_id) {
             if (creatorAvg > opponentAvg) winnerId = competition.creator_id;
             else if (opponentAvg > creatorAvg) winnerId = competition.opponent_id;
         }
 
-        await this.db.prepare(`
-            UPDATE competitions
-            SET creator_rating = ?, opponent_rating = ?, average_rating = ?, winner_id = ?
-            WHERE id = ?
-        `).bind(creatorAvg, opponentAvg, overallAvg, winnerId, competitionId).run();
+        // B12: ELO is finalized only once the rating window (ended_at + 24h,
+        // B10) has closed — until then aggregates/winner_id stay provisional
+        // and ELO is not claimed, so a later vote/withdrawal can never leave
+        // the ELO inconsistent with the final result. Legacy rows without
+        // ended_at have no applicable window (isWindowOpen(null) === true) so
+        // their ELO stays untouched, same as their rating window.
+        const resultFinal = !isWindowOpen(competition.ended_at ?? null, Date.now());
 
         try {
-            await new EloRatingService(this.db).updateRatings(competitionId, winnerId);
+            await this.applyAggregatesAndEloOnce(competition, creatorAvg, opponentAvg, overallAvg, winnerId, computeEloChange, resultFinal);
         } catch (e) {
-            console.error(`[Vote] ELO failed for #${competitionId}:`, e);
+            // B12: do NOT swallow silently and do NOT fail the vote — record a
+            // durable scheduled retry instead. processPendingTasks re-runs this
+            // method (idempotent) until aggregates + ELO land.
+            console.error(`[Vote] Aggregate/ELO batch failed for #${competitionId}:`, e);
+            try {
+                await this.schedule(competitionId, 'recalc_aggregates', new Date(Date.now() + 60 * 1000));
+            } catch (scheduleError) {
+                console.error(`[Vote] Failed to schedule recalc_aggregates retry for #${competitionId}:`, scheduleError);
+            }
         }
 
         try {
@@ -466,6 +470,63 @@ export class ScheduledTaskService {
         } catch (e) {
             console.error(`[Vote] Payout recalc failed for #${competitionId}:`, e);
         }
+    }
+
+    /**
+     * B12: single atomic db.batch() — aggregates + one-time ELO.
+     * Statement order inside the batch mirrors SQLite's sequential execution:
+     * the guarded user-rating writes run while elo_applied_at is still NULL,
+     * then the claim sets it. A later serialized duplicate finds it set and
+     * its guarded writes match 0 rows.
+     */
+    private async applyAggregatesAndEloOnce(
+        competition: { id: number; creator_id: number; opponent_id: number | null },
+        creatorAvg: number,
+        opponentAvg: number,
+        overallAvg: number,
+        winnerId: number | null,
+        computeElo: (a: number, b: number, w: number | null, c: number, o: number, k?: number) => { creator: number; opponent: number },
+        resultFinal: boolean
+    ): Promise<void> {
+        const statements: D1PreparedStatement[] = [
+            this.db.prepare(`
+                UPDATE competitions
+                SET creator_rating = ?, opponent_rating = ?, average_rating = ?, winner_id = ?
+                WHERE id = ?
+            `).bind(creatorAvg, opponentAvg, overallAvg, winnerId, competition.id),
+        ];
+
+        if (resultFinal && competition.opponent_id) {
+            const creator = await this.db.prepare(`
+                SELECT id, elo_rating FROM users WHERE id = ?
+            `).bind(competition.creator_id).first<any>();
+            const opponent = await this.db.prepare(`
+                SELECT id, elo_rating FROM users WHERE id = ?
+            `).bind(competition.opponent_id).first<any>();
+            const next = computeElo(
+                creator?.elo_rating || 1500,
+                opponent?.elo_rating || 1500,
+                winnerId,
+                competition.creator_id,
+                competition.opponent_id
+            );
+            // One-time ELO, guarded inside SQL (never a JS pre-check):
+            statements.push(this.db.prepare(`
+                UPDATE users SET elo_rating = ?
+                WHERE id = ? AND (SELECT elo_applied_at FROM competitions WHERE id = ?) IS NULL
+            `).bind(next.creator, competition.creator_id, competition.id));
+            statements.push(this.db.prepare(`
+                UPDATE users SET elo_rating = ?
+                WHERE id = ? AND (SELECT elo_applied_at FROM competitions WHERE id = ?) IS NULL
+            `).bind(next.opponent, competition.opponent_id, competition.id));
+            // The claim itself — wins exactly once across all invocations.
+            statements.push(this.db.prepare(`
+                UPDATE competitions SET elo_applied_at = ?
+                WHERE id = ? AND elo_applied_at IS NULL
+            `).bind(new Date().toISOString(), competition.id));
+        }
+
+        await this.db.batch(statements);
     }
 
     /**

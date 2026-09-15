@@ -106,7 +106,13 @@ export const en = {
     magic: 'Magic',
 
     // Competitions
-    competition: 'Competition',
+    competition: {
+        self: 'Competition',
+        // ── B12: competition result (winner/draw/pending) ──────────────
+        winner: 'Winner',
+        draw: 'Draw',
+        pending_result: 'Result not decided yet',
+    },
     competitions: 'Competitions',
     create_competition: 'Create Competition',
     join_competition: 'Join Competition',
