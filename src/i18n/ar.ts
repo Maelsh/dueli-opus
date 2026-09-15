@@ -80,7 +80,13 @@ export const ar = {
     },
 
     // المنافسات
-    competition: 'منافسة',
+    competition: {
+        self: 'منافسة',
+        // ── B12: نتيجة المنافسة (فائز/تعادل/معلقة) ──────────────
+        winner: 'فائز',
+        draw: 'تعادل',
+        pending_result: 'النتيجة لم تُحسم بعد',
+    },
     competitions: 'المنافسات',
     create_competition: 'إنشاء منافسة',
     join_competition: 'انضم للمنافسة',

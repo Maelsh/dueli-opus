@@ -9,6 +9,22 @@
   - RED-FIRST: `tests/api/ratings-summary.test.ts` (7 اختبارات) فشلت على baseline ثم أُخضعت؛ خصوصية مثبتة فعلياً (فحص عميق للاستجابة كاملة بلا user_id/username/email).
   / تحقق: ratings-summary 7/7 ✅ + npm test 141/141 ✅ + tsc ✅ + build ✅ + db:reset ✅
 
+## 2026-09-15 — B12
+
+- `[B12]` ذرّية تحديد الفائز + ELO idempotent (فرع `fix/core-winner-elo-atomicity` — بلا دمج):
+  - `ScheduledTaskService.updateAggregatesAfterVote()` أُعادت كتابتها: المتوسطات + `winner_id` + ELO + مطالبة `elo_applied_at` كلها في **`db.batch()` واحد** (لا `run()` متتابعة) — D1 ينفّذ الدفعة كمعاملة واحدة.
+  - Idempotency داخل قاعدة البيانات لا JS: migration `0018_competitions_elo_applied_at.sql` (عمود `competitions.elo_applied_at`)؛ كتابتا `users.elo_rating` مشروطة بـ `(SELECT elo_applied_at ...) IS NULL` والمطالبة `UPDATE ... SET elo_applied_at = ? WHERE elo_applied_at IS NULL` — أي استدعاء متزامن/متكرر يطابق صفر صفوف.
+  - **ELO لا يُحسم إلا بعد إغلاق نافذة التقييم** (`isWindowOpen` من B10 مُعاد استخدامها) — يمنع حسم ELO على نتيجة مؤقتة قابلة للانقلاب بالتصويت/السحب اللاحق. صفوف legacy بلا `ended_at` لا يُلمس ELO لها.
+  - قاعدة التعادل الصريحة: تساوي المتوسطين (بما فيهما صفر/غياب الخصم) ⇒ `winner_id = NULL` + ELO بقاعدة التعادل 0.5/0.5 مرة واحدة.
+  - فشل الدفعة لا يفشل التصويت (201): يُسجَّل الخطأ + مهمة مجدولة `recalc_aggregates` (+60s) كإعادة محاولة دائمة عبر `processPendingTasks` (idempotent).
+  - `finalizeCompetition()` أعيد استخدام المسار الذرّي ثم `finalizePayouts` كما هو — **LivePayoutEngine والمالية لم تُمس**.
+  - i18n: `competition.winner/draw/pending_result` ar+en؛ `GET .../ratings/summary` يعيد الآن `result: {status, label}` عبر `t()` (بلا أي هوية مقيّم — حارس B11 سليم).
+  - RED-FIRST: `tests/api/winner-elo-atomicity.test.ts` (6) فشل 4/6 على baseline (تضاعف ELO عند الاستدعاء المزدوج، تعادل مطبق مرتين، لا إعادة محاولة عند الفشل، مفاتيح i18n مفقودة) ثم 6/6 ✅.
+  / Files: migrations/0018_competitions_elo_applied_at.sql, src/lib/services/ScheduledTaskService.ts, src/lib/services/EloRatingService.ts (دالة نقية computeEloChange فقط — لا تغيير سلوك), src/controllers/CompetitionController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/api/winner-elo-atomicity.test.ts (new), tests/helpers/fake-d1.ts, docs/05-COMPETITION-LIFECYCLE.md, PLAN-STATUS.md, WORKLOG.md
+  / نفذ: Cline (B12 LOCAL agent)
+  / Verify: winner-elo-atomicity 6/6 ✅ + npm test ✅ + tsc ✅ + build ✅ (+ `db:migrate:local` يطبق 0018) — التفاصيل بالتقرير النهائي
+  / ⚠️ ملاحظة مسجلة: `tests/integration/schema-contract.test.ts` يفشل أصلاً على main (يتوقع 15 migration بينما المجلد فيه 18 قبل B12)؛ إضافة 0018 تزيد العدّاد لنفس الفشل القائم مسبقاً — تحديث القائمة خارج نطاق B12 بقرار المالك.
+
 # 📜 WORKLOG — سجل العمل والتعديلات
 
 > **قاعدة ملزمة:** كل تغيير في المشروع يُسجل هنا فور تنفيذه.

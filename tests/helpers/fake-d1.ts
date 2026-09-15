@@ -33,6 +33,8 @@ export class FakeD1 implements D1Database {
     // B8: likes + dislikes (two real tables in migration 0001)
     likes: Row[] = [];
     dislikes: Row[] = [];
+    // B12: scheduled tasks (retry record for failed aggregate calculation)
+    scheduledTasks: Row[] = [];
     userSeq = 0;
     likeSeq = 0;
     dislikeSeq = 0;
@@ -55,21 +57,32 @@ export class FakeD1 implements D1Database {
      * Each statement must already be bound before passing here.
      * B7: SELECT statements return { results: [row] } like real D1 so
      * RateLimitService can read the counter back from the batch result.
+     * B12: batches are serialized (one runs to completion before the next
+     * starts) to emulate D1's serialized write transactions — without this,
+     * two concurrent batches could interleave statements and break the
+     * guard semantics the tests are supposed to verify.
      */
+    private batchQueue: Promise<unknown> = Promise.resolve();
+
     async batch(statements: D1PreparedStatement[]): Promise<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[]> {
-        const results: { success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[] = [];
-        for (const stmt of statements) {
-            const fakeStmt = stmt as unknown as FakeStmt;
-            const q = norm(fakeStmt.sql);
-            if (q.startsWith('select')) {
-                const row = await fakeStmt.first();
-                results.push({ success: true, meta: { changes: 0, last_row_id: null }, results: row ? [row] : [] });
-            } else {
-                const result = await fakeStmt.run();
-                results.push(result);
+        const executeBatch = async (): Promise<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[]> => {
+            const results: { success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[] = [];
+            for (const stmt of statements) {
+                const fakeStmt = stmt as unknown as FakeStmt;
+                const q = norm(fakeStmt.sql);
+                if (q.startsWith('select')) {
+                    const row = await fakeStmt.first();
+                    results.push({ success: true, meta: { changes: 0, last_row_id: null }, results: row ? [row] : [] });
+                } else {
+                    const result = await fakeStmt.run();
+                    results.push(result);
+                }
             }
-        }
-        return results;
+            return results;
+        };
+        const p = this.batchQueue.then(executeBatch);
+        this.batchQueue = p.catch(() => undefined);
+        return p;
     }
 }
 
@@ -138,6 +151,42 @@ class FakeStmt {
         if (q.startsWith('select * from competitions where id = ?')) {
             return this.db.competitions.find((c) => c.id === p[0]) ?? null;
         }
+        // --- B12: aggregates/ELO selectors used by ScheduledTaskService ---
+        if (q.startsWith('select id, creator_id, opponent_id, status, ended_at, elo_applied_at from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp
+                ? { id: comp.id, creator_id: comp.creator_id, opponent_id: comp.opponent_id ?? null, status: comp.status, ended_at: comp.ended_at ?? null, elo_applied_at: comp.elo_applied_at ?? null }
+                : null;
+        }
+        if (q.startsWith('select id, creator_id, opponent_id, status from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp
+                ? { id: comp.id, creator_id: comp.creator_id, opponent_id: comp.opponent_id ?? null, status: comp.status }
+                : null;
+        }
+        if (q.startsWith('select winner_id from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp ? { winner_id: comp.winner_id ?? null } : null;
+        }
+        // SELECT AVG(CASE WHEN competitor_id = ? THEN rating END) ... FROM ratings WHERE competition_id = ?
+        if (q.startsWith('select avg(') && q.includes('from ratings')) {
+            const rows = this.db.ratings.filter((r) => r.competition_id === p[2]);
+            const c = rows.filter((r) => r.competitor_id === p[0]);
+            const o = rows.filter((r) => r.competitor_id === p[1]);
+            const avg = (arr: Row[]) => (arr.length ? arr.reduce((s, x) => s + Number(x.rating), 0) / arr.length : null);
+            return { creator_avg: avg(c), opponent_avg: avg(o) };
+        }
+        // SELECT id, elo_rating FROM users WHERE id = ? (EloRatingService)
+        if (q.startsWith('select id, elo_rating from users where id = ?')) {
+            const u = this.db.users.find((x) => x.id === p[0]);
+            return u ? { id: u.id, elo_rating: u.elo_rating ?? null } : null;
+        }
+        // SELECT creator_id, opponent_id FROM competitions WHERE id = ? (EloRatingService)
+        if (q.startsWith('select creator_id, opponent_id from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp ? { creator_id: comp.creator_id, opponent_id: comp.opponent_id ?? null } : null;
+        }
+
         // B6: CommentModel.create queries creator_id only (not all columns)
         if (q.startsWith('select creator_id from competitions where id = ?')) {
             const comp = this.db.competitions.find((c) => c.id === p[0]);
@@ -433,6 +482,18 @@ class FakeStmt {
             return { results: rows };
         }
 
+        // --- B12: pending scheduled tasks JOIN competitions (processPendingTasks) ---
+        if (q.includes('from competition_scheduled_tasks t') && q.includes('t.status = \'pending\'')) {
+            const nowIso = new Date().toISOString();
+            const rows = this.db.scheduledTasks
+                .filter((t) => t.status === 'pending' && String(t.execute_at) <= nowIso)
+                .map((t) => {
+                    const comp = this.db.competitions.find((c) => c.id === t.competition_id) ?? {};
+                    return { ...t, competition_status: comp.status ?? null, creator_id: comp.creator_id ?? null, opponent_id: comp.opponent_id ?? null };
+                });
+            return { results: rows };
+        }
+
         // competitions / follows / anything else -> empty list
         if (q.includes('from competitions') || q.includes('from follows')) {
             return { results: [] };
@@ -491,6 +552,34 @@ class FakeStmt {
         // INSERT INTO sessions (id, user_id, expires_at, created_at) VALUES (?, ?, ?, ...)
         if (q.startsWith('insert into sessions')) {
             this.db.sessions.push({ id: p[0], user_id: p[1], expires_at: p[2] });
+            return ok({ last_row_id: null, changes: 1 });
+        }
+
+        // --- B12: INSERT INTO competition_scheduled_tasks (retry record) ---
+        if (q.startsWith('insert into competition_scheduled_tasks')) {
+            const newId = this.db.scheduledTasks.length + 1;
+            this.db.scheduledTasks.push({
+                id: newId,
+                competition_id: p[0],
+                task_type: p[1],
+                execute_at: p[2],
+                status: 'pending',
+                created_at: new Date().toISOString(),
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // --- B12: guarded one-time ELO write (params: [elo, userId, competitionId]) ---
+        // Honors the DB-level idempotency guard: no-op once elo_applied_at is set.
+        if (q.startsWith('update users set elo_rating')) {
+            const [elo, userId] = p;
+            if (q.includes('elo_applied_at')) {
+                const comp = this.db.competitions.find((c) => c.id === p[2]);
+                if (!comp || comp.elo_applied_at != null) return ok({ last_row_id: null, changes: 0 });
+            }
+            const user = this.db.users.find((u) => u.id === userId);
+            if (!user) return ok({ last_row_id: null, changes: 0 });
+            user.elo_rating = elo;
             return ok({ last_row_id: null, changes: 1 });
         }
 
@@ -631,6 +720,24 @@ class FakeStmt {
         // UPDATE competition_requests SET status = 'auto_declined' WHERE competition_id = ? AND status = 'pending'
         if (q.startsWith('update competition_requests')) {
             return ok({ last_row_id: null, changes: 0 }); // no-op in fake
+        }
+
+        // --- B12: generic UPDATE competitions SET <cols...> WHERE id = ?
+        // Honors the `elo_applied_at IS NULL` claim guard like real SQLite:
+        // a second concurrent claim inside a serialized batch is a no-op.
+        if (q.startsWith('update competitions set')) {
+            const setPart = q.slice('update competitions set'.length).split(' where ')[0];
+            const cols = [...setPart.matchAll(/(\w+)\s*=\s*\?/g)].map((m) => m[1]);
+            const id = p[p.length - 1];
+            const comp = this.db.competitions.find((c) => c.id === id);
+            if (!comp) return ok({ last_row_id: null, changes: 0 });
+            if (q.includes('elo_applied_at is null') && comp.elo_applied_at != null) {
+                return ok({ last_row_id: null, changes: 0 });
+            }
+            cols.forEach((col, i) => {
+                comp[col] = p[i];
+            });
+            return ok({ last_row_id: null, changes: 1 });
         }
 
         // INSERT INTO notifications

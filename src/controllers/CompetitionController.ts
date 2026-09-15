@@ -924,7 +924,19 @@ export class CompetitionController extends BaseController {
             const comp = competition;
             const ids = [comp.creator_id, comp.opponent_id].filter((v) => typeof v === 'number' && v !== null);
             const competitors = await ratingModel.getSummary(competitionId, ids);
-            return this.success(c, { competitors });
+            // B12: explicit, localized result status (winner / draw / pending)
+            const compRow = comp as { status?: string; opponent_id?: number | null; winner_id?: number | null };
+            const hasVotes = competitors.some((c) => c.count > 0);
+            const resultStatus: 'winner' | 'draw' | 'pending_result' =
+                compRow.winner_id != null
+                    ? 'winner'
+                    : compRow.status === 'completed' && compRow.opponent_id && hasVotes
+                        ? 'draw'
+                        : 'pending_result';
+            return this.success(c, {
+                competitors,
+                result: { status: resultStatus, label: this.t(`competition.${resultStatus}`, c) },
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
