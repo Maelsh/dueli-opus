@@ -1,23 +1,19 @@
 /**
  * Leaderboard API Routes
- * مسارات API للترتيب
+ * مسارات API للترتيب — ربط HTTP فقط (B13: المنطق في LeaderboardController/Model)
  */
 
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
-import { EloRatingService } from '../../../lib/services/EloRatingService';
+import { LeaderboardController } from '../../../controllers/LeaderboardController';
 
 const leaderboardRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+const controller = new LeaderboardController();
 
 /**
  * Get leaderboard
  * GET /api/leaderboard
  */
-leaderboardRoutes.get('/', async (c) => {
-    const limit = parseInt(c.req.query('limit') || '50');
-    const service = new EloRatingService(c.env.DB);
-    const leaders = await service.getLeaderboard(limit);
-    return c.json({ success: true, data: leaders });
-});
+leaderboardRoutes.get('/', (c) => controller.getLeaderboard(c));
 
 export default leaderboardRoutes;

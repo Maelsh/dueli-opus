@@ -1,19 +1,28 @@
-/**
+﻿/**
  * @file src/controllers/SearchController.ts
- * @description متحكم البحث
+ * @description ظ…طھط­ظƒظ… ط§ظ„ط¨ط­ط«
  * @module controllers/SearchController
  */
 
 import { Context } from 'hono';
 import { Bindings, Variables } from '../config/types';
-import { BaseController } from './base/BaseController';
+import { BaseController, AppContext } from './base/BaseController';
 import { SearchModel, SearchFilters } from '../models/SearchModel';
 
 /**
  * Search Controller Class
- * متحكم البحث والاكتشاف
+ * ظ…طھط­ظƒظ… ط§ظ„ط¨ط­ط« ظˆط§ظ„ط§ظƒطھط´ط§ظپ
  */
 export class SearchController extends BaseController {
+
+    /**
+     * B13: unified discovery error â€” structured JSON 500 with a generic
+     * i18n message. Internal details stay in the server log only.
+     */
+    private discoveryError(c: AppContext, error: Error) {
+        console.error(`[${this.constructor.name}] Error:`, error);
+        return this.error(c, this.t('errors.service_unavailable', c), 500);
+    }
 
     /**
      * Search competitions
@@ -39,7 +48,7 @@ export class SearchController extends BaseController {
             return this.success(c, result);
         } catch (error) {
             console.error('Search competitions error:', error);
-            return this.serverError(c, error as Error);
+            return this.discoveryError(c, error as Error);
         }
     }
 
@@ -63,7 +72,7 @@ export class SearchController extends BaseController {
             return this.success(c, result);
         } catch (error) {
             console.error('Search users error:', error);
-            return this.serverError(c, error as Error);
+            return this.discoveryError(c, error as Error);
         }
     }
 
@@ -90,7 +99,7 @@ export class SearchController extends BaseController {
             });
         } catch (error) {
             console.error('Get suggestions error:', error);
-            return this.serverError(c, error as Error);
+            return this.discoveryError(c, error as Error);
         }
     }
 
@@ -107,7 +116,7 @@ export class SearchController extends BaseController {
             return this.success(c, { competitions });
         } catch (error) {
             console.error('Get trending error:', error);
-            return this.serverError(c, error as Error);
+            return this.discoveryError(c, error as Error);
         }
     }
 
@@ -126,7 +135,7 @@ export class SearchController extends BaseController {
             return this.success(c, result);
         } catch (error) {
             console.error('Get live error:', error);
-            return this.serverError(c, error as Error);
+            return this.discoveryError(c, error as Error);
         }
     }
 
@@ -145,7 +154,7 @@ export class SearchController extends BaseController {
             return this.success(c, result);
         } catch (error) {
             console.error('Get pending error:', error);
-            return this.serverError(c, error as Error);
+            return this.discoveryError(c, error as Error);
         }
     }
 }

@@ -112,6 +112,24 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           ]);
         }
         
+        // B13: translated error fallback with a retry button — never a blank screen
+        function showDiscoveryError(containerId) {
+          const el = document.getElementById(containerId);
+          if (!el) return;
+          el.innerHTML = \`
+            <div class="text-center py-8 text-red-500 dark:text-red-400" role="alert">
+              <i class="fas fa-exclamation-triangle mb-2" aria-hidden="true"></i>
+              <p>\${tr.errors?.service_unavailable || tr.error_occurred || 'Error'}</p>
+              <button type="button" class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-400 text-white rounded-full text-sm font-semibold transition-colors" data-action="retry-discovery" aria-label="\${tr.discovery?.retry || 'Retry'}">
+                <i class="fas fa-rotate-right" aria-hidden="true"></i>
+                \${tr.discovery?.retry || 'Retry'}
+              </button>
+            </div>
+          \`;
+          const retryBtn = el.querySelector('[data-action="retry-discovery"]');
+          if (retryBtn) retryBtn.addEventListener('click', loadSearchResults);
+        }
+
         async function loadCompetitions() {
           try {
             let url = '/api/competitions?limit=50';
@@ -160,12 +178,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             \`;
           } catch (err) {
             console.error('Failed to load competitions:', err);
-            document.getElementById('competitionsContainer').innerHTML = \`
-              <div class="text-center py-8 text-red-500">
-                <i class="fas fa-exclamation-triangle mb-2"></i>
-                <p>\${tr.error_occurred || 'An error occurred'}</p>
-              </div>
-            \`;
+            showDiscoveryError('competitionsContainer');
           }
         }
         
@@ -203,7 +216,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
                   <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
                     <i class="fas fa-users text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
                   </div>
-                  <p class="text-gray-500 dark:text-gray-400">\${tr.no_users || 'No users found'}</p>
+                  <p class="text-gray-500 dark:text-gray-400">\${tr.discovery?.no_results || tr.no_users || 'No users found'}</p>
                 </div>
               \`;
               countEl.textContent = '(0)';
@@ -305,12 +318,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             \`;
           } catch (err) {
             console.error('Failed to load users:', err);
-            document.getElementById('usersContainer').innerHTML = \`
-              <div class="text-center py-8 text-red-500">
-                <i class="fas fa-exclamation-triangle mb-2"></i>
-                <p>\${tr.error_occurred || 'An error occurred'}</p>
-              </div>
-            \`;
+            showDiscoveryError('usersContainer');
           }
         }
         

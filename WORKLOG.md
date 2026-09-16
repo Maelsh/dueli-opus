@@ -25,6 +25,21 @@
   / Verify: winner-elo-atomicity 6/6 ✅ + npm test ✅ + tsc ✅ + build ✅ (+ `db:migrate:local` يطبق 0018) — التفاصيل بالتقرير النهائي
   / ⚠️ ملاحظة مسجلة: `tests/integration/schema-contract.test.ts` يفشل أصلاً على main (يتوقع 15 migration بينما المجلد فيه 18 قبل B12)؛ إضافة 0018 تزيد العدّاد لنفس الفشل القائم مسبقاً — تحديث القائمة خارج نطاق B12 بقرار المالك.
 
+## 2026-09-16 — B13
+
+- `[B13]` صلابة نقاط الاكتشاف (leaderboard / search / explore) — استجابة JSON منضبطة في كل الحالات:
+  - نقل SQL من المسارات إلى النماذج: `LeaderboardModel.getLeaderboard()` يحتوي جمع المتصدرين بالكامل (`SELECT ... FROM users WHERE elo_rating IS NOT NULL ORDER BY elo_rating DESC LIMIT ?` مع استعلامات فرعية لـ `total_competitions`/`wins`) ويعيد `(result.results || [])` مصفوفة فارغة عند انعدام البيانات — لا SQL في `src/modules/api/leaderboard/routes.ts`.
+  - `SearchController` يضمّ `discoveryError()` خاصة (private) تعيد `this.error(c, this.t('errors.service_unavailable', c), 500)` مع logging داخلي فقط — كل معالجات البحث (competitions/users/suggestions/trending/live/pending) داخل try/catch يوجّه للخطأ الموحّد.
+  - `LeaderboardController.getLeaderboard()` try/catch يُرجع 200 `success(c, leaders)` عند النجاح (بما فيها المصفوفة الفارغة) و500 بـ `errors.service_unavailable` عند الفشل.
+  - Twig/B13: صفحة الاستكشاف عميل-side (`explore-page.ts`) تحتوي `showDiscoveryError(containerId)` تعرض رسالة مترجمة + زر إعادة محاولة — لا شاشة بيضاء.
+  - i18n الجديدة ar+en: `errors.service_unavailable`، `discovery.no_results`، `discovery.retry`.
+  - RED-FIRST: `tests/api/discovery-endpoints.test.ts` (9 اختبارات)covering leaderboard (ناجح/فارغ/فشل + Content-Type دائماً application/json)، search (live/empty/results/failure)، explore fallback (رسالة عربية + retry + no_results) — فشل على baseline ثم 9/9 ✅.
+  - grep يؤكد انعدام أي جملة SELECT/INSERT/UPDATE/DELETE/MERGE في `src/modules/api/leaderboard/routes.ts` و `src/modules/api/search/routes.ts`.
+  - لم يُلمس: منطق توصيات الترتيب (5.B/B14)، الملفات المالية، الإعلانات، البث الحي.
+  / Files: tests/api/discovery-endpoints.test.ts (new), src/models/LeaderboardModel.ts, src/controllers/LeaderboardController.ts, src/controllers/SearchController.ts, src/modules/api/leaderboard/routes.ts, src/modules/api/search/routes.ts, src/modules/pages/explore-page.ts, src/i18n/ar.ts, src/i18n/en.ts, PLAN-STATUS.md, WORKLOG.md
+  / نفذ: Cline (B13 LOCAL agent)
+  / Verify: discovery-endpoints 9/9 ✅ + npm test 156/156 ✅ + `npx tsc --noEmit` ✅ + `npm run build` ✅ + grep SQL في routes نظيف ✅
+
 # 📜 WORKLOG — سجل العمل والتعديلات
 
 > **قاعدة ملزمة:** كل تغيير في المشروع يُسجل هنا فور تنفيذه.

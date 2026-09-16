@@ -63,6 +63,7 @@
 | T5.3 | PWA كامل / موبايل | 🔧 | manifest.json, sw.js (v2 + تقليم كاش) | الأساس + تحسينات ✅ — offline كامل تحسين مستقبلي | 2026-08-23 |
 | T5.4 | ترجمة مجتمعية + AI moderation | ☐ مؤجل | - | بعد نمو المحتوى — قرار مالك | |
 | T5.5 | API عامة موثقة | ✅ | docs/08-PUBLIC-API.md | دليل مطورين خارجيين كامل | 2026-08-23 |
+| B13 | صلابة leaderboard/search/explore (JSON دائماً، MVC منفصل، لا SQL في routes) | ✅ اجتازت G1–G8 | src/modules/api/leaderboard/routes.ts, src/modules/api/search/routes.ts, src/controllers/LeaderboardController.ts, src/controllers/SearchController.ts, src/models/LeaderboardModel.ts, src/i18n/ar.ts, src/i18n/en.ts, src/modules/pages/explore-page.ts, tests/api/discovery-endpoints.test.ts | 200 JSON نجاح/فارغ، 500 JSON نظيف مترجم بلا تسريب، Content-Type دائماً application/json، grep يؤكد انعدام SQL في المسارات، 9/9 اختبارات ✅ + npm test 156/156 ✅ + tsc ✅ + build ✅ | 2026-09-16 |
 
 ## حوكمة الجودة (2026-09-05)
 
