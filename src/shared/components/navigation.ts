@@ -36,7 +36,7 @@ export function getNavigation(lang: Language): string {
             <button onclick="toggleCountryMenu()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.country_language || 'Language & Country'}">
               <i class="fas fa-globe text-xl"></i>
             </button>
-            <div id="countryMenu" class="hidden fixed sm:absolute ${isRTL ? 'sm:left-0' : 'sm:right-0'} left-1/2 sm:left-auto transform -translate-x-1/2 sm:translate-x-0 top-20 sm:top-full sm:mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
+            <div id="countryMenu" class="dropdown-panel hidden fixed sm:absolute ${isRTL ? 'sm:left-0' : 'sm:right-0'} left-1/2 sm:left-auto transform -translate-x-1/2 sm:translate-x-0 top-20 sm:top-full sm:mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
               <!-- Search Box -->
               <div class="p-3 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-[#1a1a1a]">
                 <div class="relative">
@@ -69,8 +69,8 @@ export function getNavigation(lang: Language): string {
 
           <!-- Auth Section - Login Button (hidden when logged in) -->
           <div id="authSection">
-            <button onclick="showLoginModal()" class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30 ${isRTL ? 'scale-x-[-1]' : ''}" title="${tr.login || 'Login'}">
-              <i class="fas fa-arrow-right-to-bracket text-lg"></i>
+            <button onclick="showLoginModal()" class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30" title="${tr.login || 'Login'}">
+              <i class="fas fa-sign-in-alt text-lg"></i>
             </button>
           </div>
           
@@ -83,7 +83,7 @@ export function getNavigation(lang: Language): string {
                 <span id="notificationBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
               <!-- Notifications Dropdown -->
-              <div id="notificationsDropdown" class="hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
+              <div id="notificationsDropdown" class="dropdown-panel hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <span class="font-bold text-gray-900 dark:text-white">${tr.notifications || 'Notifications'}</span>
                   <button onclick="markAllNotificationsRead()" class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
@@ -107,7 +107,7 @@ export function getNavigation(lang: Language): string {
                 <span id="messagesBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
               <!-- Messages Dropdown -->
-              <div id="messagesDropdown" class="hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
+              <div id="messagesDropdown" class="dropdown-panel hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <span class="font-bold text-gray-900 dark:text-white">${tr.messages?.title || 'Messages'}</span>
                   <button onclick="markAllMessagesRead()" class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>

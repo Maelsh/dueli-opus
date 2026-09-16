@@ -103,7 +103,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <div class="absolute top-3 ${rtl ? 'right-3' : 'left-3'} z-20">
               ${isLive ? `<span class="badge-live shadow-md"><span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>${tr.status_live}</span>` :
       isPending ? `<span class="badge-pending shadow-md">${tr.status_pending}</span>` :
-        isAccepted ? `<span class="px-2.5 py-1 rounded-full bg-blue-500 text-white text-xs font-bold shadow-md"><i class="fas fa-check mr-1"></i>${tr.status_accepted || 'Ready'}</span>` :
+        isAccepted ? `<span class="px-2.5 py-1 rounded-full bg-blue-500 text-white text-xs font-bold shadow-md"><i class="fas fa-check me-1"></i>${tr.status_accepted || 'Ready'}</span>` :
           `<span class="badge-recorded shadow-md"><i class="fas fa-play text-xs"></i>${tr.recorded}</span>`}
             </div>
             

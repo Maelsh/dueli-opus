@@ -1,5 +1,5 @@
 import { getCompetitionCard, type CompetitionCardProps } from './competition-card';
-import { translations, getUILanguage, isRTL } from '../../i18n';
+import { translations, getUILanguage, isRTL, t } from '../../i18n';
 import type { Language } from '../../config/types';
 
 export function getCompetitionSection(
@@ -42,10 +42,10 @@ export function getCompetitionSection(
           
           ${allowSeeAll ? `
             <div class="flex items-center gap-2">
-              <button class="section-prev p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed" aria-label="${(tr as any).previous || 'Previous'}" onclick="document.getElementById('${uniqueId}-scroll').scrollBy({left: ${rtl ? 300 : -300}, behavior: 'smooth'})">
+              <button class="section-prev p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed max-sm:opacity-100 max-sm:scale-100" aria-label="${t('previous', lang)}" onclick="document.getElementById('${uniqueId}-scroll').scrollBy({left: ${rtl ? 300 : -300}, behavior: 'smooth'})">
                 <i class="fas fa-chevron-${rtl ? 'right' : 'left'} text-gray-600 dark:text-gray-300"></i>
               </button>
-              <button class="section-next p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed" aria-label="${(tr as any).next || 'Next'}" onclick="document.getElementById('${uniqueId}-scroll').scrollBy({left: ${rtl ? -300 : 300}, behavior: 'smooth'})">
+              <button class="section-next p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed max-sm:opacity-100 max-sm:scale-100" aria-label="${t('next', lang)}" onclick="document.getElementById('${uniqueId}-scroll').scrollBy({left: ${rtl ? -300 : 300}, behavior: 'smooth'})">
                 <i class="fas fa-chevron-${rtl ? 'left' : 'right'} text-gray-600 dark:text-gray-300"></i>
               </button>
               <a href="/explore?category=${title}&lang=${lang}" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800" style="color: ${color}">

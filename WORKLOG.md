@@ -1,3 +1,16 @@
+## 2026-09-16 — B15
+
+- `[B15]` RTL/dark/mobile polish لمسار Beta (فرع `fix/core-rtl-dark-mobile-polish` — بلا دمج):
+  - RTL (مشاكل وجدت فعلاً وأُصلحت): (1) زر الدخول في `navigation.ts` كان يستخدم `scale-x-[-1]` المحظور — استُبدل بأيقونة `fa-sign-in-alt` المحايدة الاتجاه؛ (2) هوامش أيقونات فيزيائية `mr-1/mr-2/ml-1` في `competition-page.ts`/`create-page.ts`/`competition-card.ts` لا تنعكس في RTL — استُبدلت بـ`me-1/me-2` المنطقية؛ (3) فئات Tailwind مبنية ديناميكياً (`-${rtl?...}-1` في user-card) لا يراها مسح JIT — استُبدلت بفئات ثابتة كاملة؛ (4) `aria-label` للكاروسيل في `competition-section.ts` كانت نصوصاً حرفية `|| 'Previous'/'Next'` — أُضيف `previous/next` لـar+en واستُخدم `t()`؛ أسهم الكاروسيل كانت hover-only (مخفية على اللمس) — أُضيف `max-sm:opacity-100 max-sm:scale-100`.
+  - Dark (حالات مكسورة فعلاً): `badge-live`/`badge-pending`/`tab-inactive` بلا `body.dark` (نص داكن على خلفية فاتحة في الوضع الداكن) — أُضيفت متغيرات dark.
+  - Mobile: لا `overflow-x` guard على الصفحة (خطر تمرير أفقي) — أُضيف `overflow-x: clip` على `html,body` (لا يكسر `sticky nav`)؛ القوائم `w-80` كانت تتجاوز viewport على الشاشات الصغيرة — أُضيفت فئة `.dropdown-panel` بـ`max-width: calc(100vw - 2rem)`.
+  - RED-FIRST: `tests/ui/rtl-dark-mobile.test.ts` (12 اختباراً) سُلّم أحمر أولاً: 6 فشل / 6 نجاح على baseline، ثم بعد الإصلاح 14/14 ✅ (أُضيف اختباران i18n/touch أثناء العمل).
+  - خارج النطاق (لم يُلمس، يُسجَّل فقط): `live/core.ts` و`live/scripts/client/shared.ts` فيهما `mr-1/mr-2` (شارات VOD/status — البث الحي مجمّد)؛ `dev-tools/test-stream-page.ts`؛ عشرات `|| 'English'` fallbacks في navigation وصفحات الرسائل/الإعدادات (تُنظَّف في مهمة i18n المرحلة 8)؛ `isRTL ? 'ml-2' : 'mr-2'` ternaries المتبقية في التقارير/التبرعات (صفحات مجمّدة — تعمل لكن يُفضَّل `me-*` لاحقاً).
+  / Files: src/styles.css, src/shared/components/navigation.ts, src/shared/components/user-card.ts, src/shared/components/competition-card.ts, src/shared/components/competition-section.ts, src/modules/pages/competition-page.ts, src/modules/pages/create-page.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/ui/rtl-dark-mobile.test.ts (new), PLAN-STATUS.md, WORKLOG.md
+  / نفذ: Cline (B15 LOCAL agent)
+  / Verify: rtl-dark-mobile 14/14 ✅ + npm test 73 suites 188/188 ✅ + tsc --noEmit ✅ (بلا مخرج) + build ✅ (188 modules, _worker.js 926kB)
+  / PR: fix/core-rtl-dark-mobile-polish (بلا دمج)
+
 ## 2026-09-16 — B14
 
 - `[B14]` تثبيت أوزان التوصيات وسلوك الاحتياط (فرع `test/core-recommendation-ranking` — بلا دمج):

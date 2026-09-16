@@ -17,6 +17,11 @@
 }
 
 /* Base styles */
+html,
+body {
+    overflow-x: clip;
+}
+
 body {
     font-family: 'Cairo', system-ui, sans-serif;
     transition: background-color 0.3s, color 0.3s;
@@ -288,6 +293,15 @@ body.dark .btn-secondary:hover {
     color: #6b7280;
 }
 
+body.dark .tab-inactive {
+    color: #9ca3af;
+}
+
+body.dark .tab-inactive:hover {
+    background: rgba(139, 92, 246, 0.2);
+    color: #a78bfa;
+}
+
 .tab-inactive:hover {
     background: rgba(139, 92, 246, 0.1);
     color: #8B5CF6;
@@ -424,6 +438,11 @@ body.dark .social-btn:hover {
     gap: 6px;
 }
 
+body.dark .badge-live {
+    background: rgba(220, 38, 38, 0.2);
+    color: #fca5a5;
+}
+
 
 .badge-recorded {
     background: #e5e7eb;
@@ -446,6 +465,11 @@ body.dark .badge-recorded {
     border-radius: 20px;
     font-size: 12px;
     font-weight: 600;
+}
+
+body.dark .badge-pending {
+    background: rgba(217, 119, 6, 0.2);
+    color: #fcd34d;
 }
 
 /* Line clamp */
@@ -681,6 +705,11 @@ body.dark .user-menu-item:hover {
 .toast-info {
     background: #3B82F6;
     color: white;
+}
+
+/* Wide dropdown panels: never exceed the viewport on small screens */
+.dropdown-panel {
+    max-width: calc(100vw - 2rem);
 }
 
 /* RTL Support */

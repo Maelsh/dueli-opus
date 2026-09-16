@@ -155,8 +155,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     \${isLive ? '<span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>' : ''}
                     \${isLive ? tr.status_live : isPending ? tr.status_pending : isAccepted ? (tr.status_accepted || 'Ready') : tr.status_completed}
                   </span>
-                  <span class="text-sm text-gray-500">
-                    <i class="\${comp.category_icon} mr-1"></i>
+                  <span class="text-sm text-gray-500 dark:text-gray-400">
+                    <i class="\${comp.category_icon} me-1"></i>
                     \${getCategoryName(comp, lang)}
                   </span>
                 </div>
@@ -302,7 +302,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         <h4 class="font-bold text-gray-400">\${tr.awaiting_opponent}</h4>
                         \${isCreator ? \`
                           <button onclick="window.toggleInvitePanel && window.toggleInvitePanel(\${comp.id})" class="mt-3 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-sm font-bold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95">
-                            <i class="fas fa-user-plus mr-1"></i>
+                            <i class="fas fa-user-plus me-1"></i>
                             \${tr.matchmaking?.invite_opponent_btn || tr.invite || 'Invite Opponent'}
                           </button>
                         \` : ''}
@@ -313,7 +313,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           </button>
                         \` : hasRequested ? \`
                           <button onclick="cancelRequest()" class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-300 transition-all">
-                            <i class="fas fa-times mr-1"></i>
+                            <i class="fas fa-times me-1"></i>
                             \${tr.cancel_request}
                           </button>
                         \` : !window.currentUser ? \`
@@ -346,7 +346,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   <!-- T2.4: Viewer rating card -->
                   <div class="card p-6" id="rateCard">
                     <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">
-                      <i class="fas fa-star text-amber-400 ml-1"></i>
+                      <i class="fas fa-star text-amber-400 me-1"></i>
                       \${tr.rate_title || 'Rate the competitors'}
                     </h3>
                     <div class="space-y-4">
@@ -633,7 +633,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               \${window.currentUser ? \`
                 <span class="inline-flex items-center gap-3 mt-0.5">
                   <button onclick="setReplyTo(\${cm.id}, '\${(cm.display_name || '').replace(/'/g, '')}')" class="text-xs text-gray-400 hover:text-purple-500 transition-colors">
-                    <i class="fas fa-reply mr-1"></i>\${tr.reply || 'Reply'}
+                    <i class="fas fa-reply me-1"></i>\${tr.reply || 'Reply'}
                   </button>
                   <button onclick="showReportModal('comment', \${cm.id})" class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="\${tr.report || 'Report'}">
                     <i class="fas fa-flag"></i>
@@ -796,7 +796,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         modal.innerHTML = \`
           <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 transform animate-scale-up">
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              <i class="fas fa-flag text-red-500 \${isRTL ? 'ml-2' : 'mr-2'}"></i>
+              <i class="fas fa-flag text-red-500 me-2"></i>
               \${tr.report || 'Report'}
             </h3>
             <div class="space-y-3 mb-6">
