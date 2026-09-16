@@ -288,6 +288,8 @@ export const ar = {
     no_more: 'لا توجد نتائج أخرى',
     go_home: 'اذهب إلى الرئيسية',
     go_back: 'العودة',
+    previous: 'السابق',
+    next: 'التالي',
 
     // المصادقة - رسائل API
     auth_all_fields_required: 'جميع الحقول مطلوبة',

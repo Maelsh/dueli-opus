@@ -312,6 +312,8 @@ export const en = {
     no_more: 'No more results',
     go_home: 'Go to Home',
     go_back: 'Go Back',
+    previous: 'Previous',
+    next: 'Next',
 
     // Auth - API messages
     auth_all_fields_required: 'All fields are required',

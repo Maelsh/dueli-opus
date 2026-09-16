@@ -111,7 +111,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
             </div>
             
             <button type="submit" class="btn-primary w-full py-4 text-lg">
-              <i class="fas fa-plus mr-2"></i>
+              <i class="fas fa-plus me-2"></i>
               \${tr.create_competition}
             </button>
           </form>

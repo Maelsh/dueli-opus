@@ -46,13 +46,13 @@ export function getUserCard(user: UserCardProps, lang: Language): string {
             onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'"
           >
           ${user.is_verified ? `
-            <div class="absolute -bottom-1 -${rtl ? 'left' : 'right'}-1 bg-blue-500 rounded-full p-1" title="${tr.verified || 'Verified'}">
+            <div class="absolute -bottom-1 ${rtl ? '-left-1' : '-right-1'} bg-blue-500 rounded-full p-1" title="${tr.verified || 'Verified'}">
               <i class="fas fa-check text-white text-xs" aria-hidden="true"></i>
               <span class="sr-only">${tr.verified || 'Verified'}</span>
             </div>
           ` : ''}
           ${user.is_busy ? `
-            <div class="absolute top-0 ${rtl ? 'left' : 'right'}-0 w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse" title="${tr.busy_in_stream || 'Busy in stream'}"></div>
+            <div class="absolute top-0 ${rtl ? 'left-0' : 'right-0'} w-3 h-3 bg-red-500 rounded-full border-2 border-white dark:border-gray-800 animate-pulse" title="${tr.busy_in_stream || 'Busy in stream'}"></div>
           ` : ''}
         </div>
         
