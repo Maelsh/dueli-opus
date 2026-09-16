@@ -907,6 +907,9 @@ export const en = {
         win_rate: 'Win Rate',
         top_categories: 'Top Categories',
         degraded_notice: 'Showing broader results for you',
+        for_you: 'For You',
+        trending: 'Trending',
+        empty: 'No competitions match your preferences right now. Check back later!',
     },
 
     // ── Task 8: Competition Lifecycle & Strict Timers ───────────

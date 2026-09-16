@@ -1,3 +1,15 @@
+## 2026-09-16 — B14
+
+- `[B14]` تثبيت أوزان التوصيات وسلوك الاحتياط (فرع `test/core-recommendation-ranking` — بلا دمج):
+  - `RecommendationEngine`: استخراج الأوزان إلى ثوابت مسماة بالقيم نفسها بلا تغيير سلوكي (`WEIGHT_LANGUAGE_MATCH=25`, `WEIGHT_COUNTRY_MATCH=20`, `WEIGHT_CATEGORY_MATCH=20`, `WEIGHT_UNWATCHED=10`, `WEIGHT_RECENCY_MAX/MODERATE/WEAK=10/7/4`, `WEIGHT_RATING_MAX=15`, `WEIGHT_FOLLOWED=15`, `RECENCY_*_DAYS=1/3/7`, `VIEW_POPULARITY_FACTOR=0.01`)؛ `getGuestRecommendations` في `RecommendationController` أعيد ربطه بنفس الثوابت.
+  - `tests/api/recommendations-ranking.test.ts` (جديد، 18 اختباراً) + `tests/helpers/sqlite-d1.ts` (real migrations عبر `node:sqlite`): يثبت الترتيب نفسه (phase + score) للحالات الست (لغة/بلد/متابعة/أحدث/زائر/حساسية متابعة).
+  - i18n: `recommendations.for_you/trending/empty` ar+en.
+  - RED-FIRST: قبل التثبيت 5 فشل / 13 نجاح (انظر `_b14_red_scratch.txt`) ثم 18/18 ✅.
+  / Files: src/lib/services/RecommendationEngine.ts, src/controllers/RecommendationController.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/api/recommendations-ranking.test.ts (new), tests/helpers/sqlite-d1.ts (new), PLAN-STATUS.md, WORKLOG.md
+  / نفذ: Cline (B14 completion agent)
+  / Verify: recommendations-ranking 18/18 ✅ + npm test 23 files 174/174 ✅ + tsc --noEmit ✅ (بلا مخرج) + build ✅ (188 modules, _worker.js 926kB) — التفاصيل بتقرير PR
+  / ⚠️ خارج النطاق (لم يُلمس): getFeed/الصفحة الرئيسية تُركا كما هما بعد ثبوت الربط القائم؛ أي خلل آخر يُسجل بتقرير PR فقط.
+
 ## 2026-09-15 — B11
 
 - `[B11]` ملخّص التقييمات مجهول الهوية + سحب التقييم داخل النافذة:

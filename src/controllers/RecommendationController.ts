@@ -82,11 +82,11 @@ export class RecommendationController extends BaseController {
                    u.username as creator_username,
                    u.display_name as creator_name,
                    u.avatar_url as creator_avatar,
-                   CASE WHEN c.language = ? THEN 25 ELSE 0 END
-                   + COALESCE(c.total_views, 0) * 0.01
-                   + CASE WHEN c.created_at > datetime('now', '-1 day') THEN 10
-                          WHEN c.created_at > datetime('now', '-3 days') THEN 7
-                          WHEN c.created_at > datetime('now', '-7 days') THEN 4
+                   CASE WHEN c.language = ? THEN ${RecommendationEngine.WEIGHT_LANGUAGE_MATCH} ELSE 0 END
+                   + COALESCE(c.total_views, 0) * ${RecommendationEngine.VIEW_POPULARITY_FACTOR}
+                   + CASE WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_RECENT_DAYS} day') THEN ${RecommendationEngine.WEIGHT_RECENCY_MAX}
+                          WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_MODERATE_DAYS} days') THEN ${RecommendationEngine.WEIGHT_RECENCY_MODERATE}
+                          WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_WEAK_DAYS} days') THEN ${RecommendationEngine.WEIGHT_RECENCY_WEAK}
                           ELSE 0 END
                    as score
             FROM competitions c
