@@ -28,6 +28,24 @@ export interface RecommendationResult {
 }
 
 export class RecommendationEngine {
+    // ── B14: pinned weight constants (values unchanged) ───────────────────
+    static readonly WEIGHT_LANGUAGE_MATCH = 25;
+    static readonly WEIGHT_COUNTRY_MATCH = 20;
+    static readonly WEIGHT_CATEGORY_MATCH = 20;
+    static readonly WEIGHT_UNWATCHED = 10;
+    static readonly WEIGHT_RECENCY_MAX = 10;
+    static readonly WEIGHT_RECENCY_MODERATE = 7;
+    static readonly WEIGHT_RECENCY_WEAK = 4;
+    static readonly WEIGHT_RATING_MAX = 15;
+    static readonly WEIGHT_FOLLOWED = 15;
+
+    static readonly RECENCY_RECENT_DAYS = 1;
+    static readonly RECENCY_MODERATE_DAYS = 3;
+    static readonly RECENCY_WEAK_DAYS = 7;
+
+    /** Guest fallback only: every view is worth this many points (value unchanged). */
+    static readonly VIEW_POPULARITY_FACTOR = 0.01;
+
     constructor(private db: D1Database) { }
 
     /**
@@ -249,16 +267,16 @@ export class RecommendationEngine {
                 cat.icon as category_icon,
                 cat.color as category_color,
                 (
-                    CASE WHEN c.language = ? THEN 25 ELSE 0 END
-                    + CASE WHEN u1.country = ? THEN 20 ELSE 0 END
-                    + MIN(COALESCE(c.average_rating, 0) / 5.0 * 15, 15)
-                    + CASE WHEN c.category_id IN (${categoryClause}) THEN 20 ELSE 0 END
-                    + CASE WHEN c.id NOT IN (SELECT competition_id FROM watch_history WHERE user_id = ${userId}) THEN 10 ELSE 0 END
-                    + CASE WHEN c.created_at > datetime('now', '-1 day') THEN 10
-                           WHEN c.created_at > datetime('now', '-3 days') THEN 7
-                           WHEN c.created_at > datetime('now', '-7 days') THEN 4
+                    CASE WHEN c.language = ? THEN ${RecommendationEngine.WEIGHT_LANGUAGE_MATCH} ELSE 0 END
+                    + CASE WHEN u1.country = ? THEN ${RecommendationEngine.WEIGHT_COUNTRY_MATCH} ELSE 0 END
+                    + MIN(COALESCE(c.average_rating, 0) / 5.0 * ${RecommendationEngine.WEIGHT_RATING_MAX}, ${RecommendationEngine.WEIGHT_RATING_MAX})
+                    + CASE WHEN c.category_id IN (${categoryClause}) THEN ${RecommendationEngine.WEIGHT_CATEGORY_MATCH} ELSE 0 END
+                    + CASE WHEN c.id NOT IN (SELECT competition_id FROM watch_history WHERE user_id = ${userId}) THEN ${RecommendationEngine.WEIGHT_UNWATCHED} ELSE 0 END
+                    + CASE WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_RECENT_DAYS} day') THEN ${RecommendationEngine.WEIGHT_RECENCY_MAX}
+                           WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_MODERATE_DAYS} days') THEN ${RecommendationEngine.WEIGHT_RECENCY_MODERATE}
+                           WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_WEAK_DAYS} days') THEN ${RecommendationEngine.WEIGHT_RECENCY_WEAK}
                            ELSE 0 END
-                    + CASE WHEN c.creator_id IN (${followedClause}) THEN 15 ELSE 0 END
+                    + CASE WHEN c.creator_id IN (${followedClause}) THEN ${RecommendationEngine.WEIGHT_FOLLOWED} ELSE 0 END
                 ) as score
             FROM competitions c
             JOIN users u1 ON c.creator_id = u1.id
