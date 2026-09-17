@@ -41,6 +41,15 @@ export class CommentModel extends BaseModel<Comment> {
     protected readonly tableName = 'comments';
 
     /**
+     * Resolve the author of a comment (F-5D moderation cascade).
+     */
+    async getAuthorId(commentId: number): Promise<number | null> {
+        const row = await this.db.prepare('SELECT user_id FROM comments WHERE id = ?')
+            .bind(commentId).first<{ user_id: number }>();
+        return row?.user_id ?? null;
+    }
+
+    /**
      * Find comments for a competition with user data
      */
     async findByCompetition(competitionId: number, options: QueryOptions = {}): Promise<CommentWithUser[]> {
