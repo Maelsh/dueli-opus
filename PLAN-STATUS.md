@@ -8,6 +8,12 @@
 > الرموز الصحيحة من الآن: `☐ لم تبدأ` | `🔧 جارية` | `🧪 مُتحقَّقة يدوياً (لا اختبار آلي)` | `✅ اجتازت G1–G8` | `⛔ معطلة`
 > مرجع التعريفات الكاملة: `docs/COMPLETE_PROJECT_PLANS.md` (تاريخي) — مرجع البوابة الحاكمة: `docs/11-DEFINITION-OF-DONE.md`
 > خارطة الطريق المصححة والأولويات الفعلية: `docs/15-ROADMAP.md`
+## F-5C — SQL inside Pages (2026-09-18)
+
+- 🔧 Local extraction validated, remote review/staging pending: only the F-4-identified SQL in src/modules/pages/profile-page.ts (two `follows` COUNT statements → FollowModel.getFollowersCount/getFollowingCount) and src/modules/pages/live/main.ts (session lookup → SessionModel.findBySessionId; competition lookup → CompetitionModel.findOne) moved to the Model layer, reusing existing methods with identical SQL/bindings. New tests: 9 profile + 25 live-page pins passed before and after extraction; focused suites 58/58 after (incl. F-5A/F-5B regression pins), npx tsc --noEmit exit 0, npm run build exit 0. No F-5A/F-5B/F-5D/F-6 or unrelated work included. See WORKLOG.md for evidence and rollback. No full G1–G8 completion claim; no migration needed.
+
+
+
 
 ## F-5B — Controller-local FollowModel (2026-09-17)
 
