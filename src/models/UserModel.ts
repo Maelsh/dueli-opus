@@ -242,6 +242,54 @@ export class UserModel extends BaseModel<User> {
             WHERE u.username = ?
         `, username.toLowerCase());
     }
+
+    // =====================================
+    // Admin operations (F-5D)
+    // عمليات الإدارة
+    // =====================================
+
+    /**
+     * Admin user listing with optional search and pagination.
+     * Same SELECT columns, WHERE, ORDER BY and LIMIT/OFFSET as before extraction.
+     */
+    async searchForAdmin(filters: { search?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+        let query = `
+                SELECT id, username, display_name, email, avatar_url, is_verified, is_admin,
+                       total_competitions, average_rating, created_at
+                FROM users
+            `;
+        const params: any[] = [];
+
+        if (filters.search) {
+            query += ` WHERE username LIKE ? OR email LIKE ? OR display_name LIKE ?`;
+            params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
+        }
+
+        query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+        params.push(filters.limit ?? 50, filters.offset ?? 0);
+
+        const result = await this.db.prepare(query).bind(...params).all();
+        return result.results || [];
+    }
+
+    /**
+     * Resolve ban target admin-safety state (T1.4).
+     */
+    async getBanTarget(id: number): Promise<{ id: number; is_admin: number | null } | null> {
+        return this.db.prepare(
+            'SELECT id, is_admin FROM users WHERE id = ?'
+        ).bind(id).first<{ id: number; is_admin: number | null }>();
+    }
+
+    /**
+     * T1.4 FIX (BUG-12): ban/unban alters account status, not the verification badge.
+     */
+    async setActive(id: number, isActive: boolean): Promise<boolean> {
+        const result = await this.db.prepare(
+            'UPDATE users SET is_active = ? WHERE id = ?'
+        ).bind(isActive ? 1 : 0, id).run();
+        return result.meta.changes > 0;
+    }
 }
 
 export default UserModel;

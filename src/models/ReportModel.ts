@@ -303,6 +303,16 @@ export class ReportModel extends BaseModel<Report> {
         `).bind(targetType, targetId).first<{ count: number }>();
         return result?.count || 0;
     }
+
+    /**
+     * Resolve the moderation target of a report (F-5D).
+     * Used before executing a moderation action / audit log entry.
+     */
+    async getTarget(reportId: number): Promise<{ id: number; target_type: string; target_id: number } | null> {
+        return this.db.prepare(
+            'SELECT id, target_type, target_id FROM reports WHERE id = ?'
+        ).bind(reportId).first<{ id: number; target_type: string; target_id: number }>();
+    }
 }
 
 export default ReportModel;

@@ -422,6 +422,109 @@ export class CompetitionModel extends BaseModel<Competition> {
         ).bind(competitionId).run();
         return result.meta.changes;
     }
+
+    // =====================================
+    // Admin moderation operations (F-5D)
+    // عمليات الإشراف الإداري
+    // =====================================
+
+    /**
+     * Resolve the creator of a competition (F-5D moderation cascade).
+     */
+    async getCreatorId(competitionId: number): Promise<number | null> {
+        const row = await this.db.prepare('SELECT creator_id FROM competitions WHERE id = ?')
+            .bind(competitionId).first<{ creator_id: number }>();
+        return row?.creator_id ?? null;
+    }
+
+    /**
+     * Fetch the state needed to validate a broadcast suspension.
+     */
+    async getSuspendState(id: number): Promise<{
+        id: number; title: string; status: string;
+        creator_id: number; opponent_id: number | null;
+    } | null> {
+        return this.db.prepare(
+            `SELECT id, title, status, creator_id, opponent_id FROM competitions WHERE id = ?`
+        ).bind(id).first<{
+            id: number; title: string; status: string;
+            creator_id: number; opponent_id: number | null;
+        }>();
+    }
+
+    /**
+     * Fetch the state needed to validate a broadcast restore.
+     */
+    async getRestoreState(id: number): Promise<{ id: number; status: string } | null> {
+        return this.db.prepare(
+            `SELECT id, status FROM competitions WHERE id = ?`
+        ).bind(id).first<{ id: number; status: string }>();
+    }
+
+    /**
+     * Suspend a competition with a public tombstone reason (Task 9).
+     * NEVER deletes the competition — retains full history.
+     */
+    async suspend(id: number, tombstoneReason: string): Promise<boolean> {
+        const result = await this.db.prepare(`
+                UPDATE competitions
+                SET status = 'suspended',
+                    auto_deleted_reason = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+            `).bind(tombstoneReason, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Restore a suspended competition back to 'archived' (transparent, visible).
+     */
+    async restore(id: number, tombstoneReason: string): Promise<boolean> {
+        const result = await this.db.prepare(`
+                UPDATE competitions
+                SET status = 'archived',
+                    auto_deleted_reason = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+            `).bind(tombstoneReason, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Record a suspension in competition_suspensions.
+     */
+    async recordSuspension(competitionId: number, adminId: number, reason: string): Promise<boolean> {
+        const result = await this.db.prepare(`
+                INSERT INTO competition_suspensions (competition_id, admin_id, reason)
+                VALUES (?, ?, ?)
+            `).bind(competitionId, adminId, reason).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Mark the open suspension record as restored.
+     */
+    async markSuspensionRestored(competitionId: number, adminId: number): Promise<boolean> {
+        const result = await this.db.prepare(`
+                UPDATE competition_suspensions
+                SET restored_at = datetime('now'), restored_by = ?
+                WHERE competition_id = ? AND restored_at IS NULL
+            `).bind(adminId, competitionId).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Delete a competition and its dependent rows (moderation cascade).
+     * Order matters: dependents first, then the competition row itself.
+     */
+    async deleteCascade(competitionId: number): Promise<boolean> {
+        await this.db.prepare('DELETE FROM competition_requests WHERE competition_id = ?').bind(competitionId).run();
+        await this.db.prepare('DELETE FROM competition_invitations WHERE competition_id = ?').bind(competitionId).run();
+        await this.db.prepare('DELETE FROM ratings WHERE competition_id = ?').bind(competitionId).run();
+        await this.db.prepare('DELETE FROM chunk_keys WHERE competition_id = ?').bind(competitionId).run();
+        await this.db.prepare('DELETE FROM competitions WHERE id = ?').bind(competitionId).run();
+        return true;
+    }
 }
 
 export default CompetitionModel;

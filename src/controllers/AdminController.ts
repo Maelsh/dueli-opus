@@ -3,11 +3,13 @@ import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
 import { UserModel } from '../models/UserModel';
 import { CompetitionModel } from '../models/CompetitionModel';
+import { CommentModel } from '../models/CommentModel';
 import { ReportModel } from '../models/ReportModel';
 import { AdvertisementModel, EarningsModel } from '../models/AdvertisementModel';
 import { AdminRoleModel, AdminRoleType } from '../models/AdminRoleModel';
 import { SessionModel } from '../models/SessionModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
+import { AdminStatsModel } from '../models/AdminStatsModel';
 import { PlatformSettingsModel } from '../models/PlatformSettingsModel';
 import { PlatformFinancialLogModel } from '../models/PlatformFinancialLogModel';
 import { ArbitrationService, ArbitrationStatus } from '../lib/services/ArbitrationService';
@@ -29,21 +31,18 @@ export class AdminController extends BaseController {
             }
 
             const db = c.env.DB;
+            const statsModel = new AdminStatsModel(db);
 
             const [users, competitions, reports, ads] = await Promise.all([
-                db.prepare('SELECT COUNT(*) as count FROM users').first<{ count: number }>(),
-                db.prepare('SELECT COUNT(*) as count FROM competitions').first<{ count: number }>(),
-                db.prepare('SELECT COUNT(*) as count FROM reports WHERE status = ?').bind('pending').first<{ count: number }>(),
-                db.prepare('SELECT COUNT(*) as count FROM advertisements WHERE is_active = 1').first<{ count: number }>()
+                statsModel.countUsers(),
+                statsModel.countCompetitions(),
+                statsModel.countPendingReports(),
+                statsModel.countActiveAds()
             ]);
 
-            const competitionStats = await db.prepare(`
-                SELECT status, COUNT(*) as count FROM competitions GROUP BY status
-            `).all<{ status: string; count: number }>();
+            const competitionStats = await statsModel.competitionsByStatus();
 
-            const revenueStats = await db.prepare(`
-                SELECT SUM(amount) as total FROM user_earnings
-            `).first<{ total: number | null }>();
+            const revenueStats = await statsModel.totalRevenue();
 
             return this.success(c, {
                 users: users?.count || 0,
@@ -67,24 +66,10 @@ export class AdminController extends BaseController {
             const offset = this.getQueryInt(c, 'offset') || 0;
             const search = this.getQuery(c, 'search');
 
-            let query = `
-                SELECT id, username, display_name, email, avatar_url, is_verified, is_admin,
-                       total_competitions, average_rating, created_at
-                FROM users
-            `;
-            const params: any[] = [];
+            const userModel = new UserModel(c.env.DB);
+            const users = await userModel.searchForAdmin({ search, limit, offset });
 
-            if (search) {
-                query += ` WHERE username LIKE ? OR email LIKE ? OR display_name LIKE ?`;
-                params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-            }
-
-            query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-            params.push(limit, offset);
-
-            const result = await c.env.DB.prepare(query).bind(...params).all();
-
-            return this.success(c, { users: result.results || [] });
+            return this.success(c, { users });
         } catch (error) {
             console.error('Admin get users error:', error);
             return this.serverError(c, error as Error);
@@ -108,16 +93,13 @@ export class AdminController extends BaseController {
                 return this.error(c, 'Cannot ban yourself');
             }
 
-            const target = await c.env.DB.prepare(
-                'SELECT id, is_admin FROM users WHERE id = ?'
-            ).bind(userId).first<any>();
+            const userModel = new UserModel(c.env.DB);
+            const target = await userModel.getBanTarget(userId);
             if (!target) return this.notFound(c);
             if (target.is_admin) return this.error(c, 'Cannot ban an admin');
 
             // T1.4 FIX (BUG-12): ban alters account status, not the verification badge
-            await c.env.DB.prepare(`
-                UPDATE users SET is_active = ? WHERE id = ?
-            `).bind(body.banned ? 0 : 1, userId).run();
+            await userModel.setActive(userId, !body.banned);
 
             // T1.4: When banning, destroy all sessions so the user is logged out everywhere
             let killedSessions = 0;
@@ -184,9 +166,7 @@ export class AdminController extends BaseController {
             if (actionExecuted) {
                 try {
                     const auditModel = new AdminAuditLogModel(c.env.DB);
-                    const report = await c.env.DB.prepare(
-                        'SELECT target_type, target_id FROM reports WHERE id = ?'
-                    ).bind(reportId).first<any>();
+                    const report = await new ReportModel(c.env.DB).getTarget(reportId);
                     await auditModel.log(
                         user.id,
                         'report_action:' + body.action_taken,
@@ -217,9 +197,7 @@ export class AdminController extends BaseController {
         adminId: number
     ): Promise<string | null> {
         const db = c.env.DB;
-        const report = await db.prepare(
-            'SELECT id, target_type, target_id FROM reports WHERE id = ?'
-        ).bind(reportId).first<any>();
+        const report = await new ReportModel(db).getTarget(reportId);
 
         if (!report) throw new Error('Report not found');
         const { target_type, target_id } = report;
@@ -227,25 +205,21 @@ export class AdminController extends BaseController {
         switch (action) {
             case 'ban_user': {
                 // Resolve the offending user: direct target, or author of the content
+                const userModel = new UserModel(db);
                 let userId: number | null = null;
                 if (target_type === 'user') {
                     userId = target_id;
                 } else if (target_type === 'comment') {
-                    const row = await db.prepare('SELECT user_id FROM comments WHERE id = ?')
-                        .bind(target_id).first<any>();
-                    userId = row?.user_id ?? null;
+                    userId = await new CommentModel(db).getAuthorId(target_id);
                 } else if (target_type === 'competition') {
-                    const row = await db.prepare('SELECT creator_id FROM competitions WHERE id = ?')
-                        .bind(target_id).first<any>();
-                    userId = row?.creator_id ?? null;
+                    userId = await new CompetitionModel(db).getCreatorId(target_id);
                 }
                 if (!userId) throw new Error('Could not resolve user to ban');
 
-                const target = await db.prepare('SELECT is_admin FROM users WHERE id = ?')
-                    .bind(userId).first<any>();
+                const target = await userModel.getBanTarget(userId);
                 if (target?.is_admin) throw new Error('Cannot ban an admin');
 
-                await db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').bind(userId).run();
+                await userModel.setActive(userId, false);
                 const sessionModel = new SessionModel(db);
                 await sessionModel.deleteByUser(userId);
                 return `banned_user:${userId}`;
@@ -253,17 +227,13 @@ export class AdminController extends BaseController {
 
             case 'delete_comment': {
                 if (target_type !== 'comment') throw new Error('Target is not a comment');
-                await db.prepare('DELETE FROM comments WHERE id = ?').bind(target_id).run();
+                await new CommentModel(db).delete(target_id);
                 return `deleted_comment:${target_id}`;
             }
 
             case 'delete_competition': {
                 if (target_type !== 'competition') throw new Error('Target is not a competition');
-                await db.prepare('DELETE FROM competition_requests WHERE competition_id = ?').bind(target_id).run();
-                await db.prepare('DELETE FROM competition_invitations WHERE competition_id = ?').bind(target_id).run();
-                await db.prepare('DELETE FROM ratings WHERE competition_id = ?').bind(target_id).run();
-                await db.prepare('DELETE FROM chunk_keys WHERE competition_id = ?').bind(target_id).run();
-                await db.prepare('DELETE FROM competitions WHERE id = ?').bind(target_id).run();
+                await new CompetitionModel(db).deleteCascade(target_id);
                 return `deleted_competition:${target_id}`;
             }
 
@@ -590,33 +560,24 @@ export class AdminController extends BaseController {
 
             const db = c.env.DB;
             const financialModel = new PlatformFinancialLogModel(db);
+            const statsModel = new AdminStatsModel(db);
 
             const [
                 users, competitions, pendingReports, activeAds,
                 competitionStats, financialSummary, todaySummary
             ] = await Promise.all([
-                db.prepare('SELECT COUNT(*) as count FROM users WHERE is_active = 1').first<{ count: number }>(),
-                db.prepare('SELECT COUNT(*) as count FROM competitions').first<{ count: number }>(),
-                db.prepare("SELECT COUNT(*) as count FROM reports WHERE arbitration_status IN ('submitted', 'under_review', 'investigation')").first<{ count: number }>(),
-                db.prepare("SELECT COUNT(*) as count FROM advertisements WHERE campaign_status = 'active'").first<{ count: number }>(),
-                db.prepare('SELECT status, COUNT(*) as count FROM competitions GROUP BY status').all<{ status: string; count: number }>(),
+                statsModel.countActiveUsers(),
+                statsModel.countCompetitions(),
+                statsModel.countArbitrationPending(),
+                statsModel.countCampaignActiveAds(),
+                statsModel.competitionsByStatus(),
                 financialModel.getTotals(),
                 financialModel.getTodaySummary()
             ]);
 
-            const demographics = await db.prepare(`
-                SELECT country, COUNT(*) as count FROM users WHERE is_active = 1 GROUP BY country ORDER BY count DESC LIMIT 10
-            `).all<{ country: string; count: number }>();
+            const demographics = await statsModel.userCountryDemographics();
 
-            const hottestCompetitions = await db.prepare(`
-                SELECT c.id, c.title, c.status, c.total_views, c.creator_rating, c.opponent_rating,
-                       cr.display_name as creator_name, op.display_name as opponent_name
-                FROM competitions c
-                LEFT JOIN users cr ON c.creator_id = cr.id
-                LEFT JOIN users op ON c.opponent_id = op.id
-                WHERE c.status IN ('live', 'accepted')
-                ORDER BY c.total_views DESC LIMIT 5
-            `).all();
+            const hottestCompetitions = await statsModel.hottestCompetitions();
 
             return this.success(c, {
                 users: users?.count || 0,
@@ -711,14 +672,10 @@ export class AdminController extends BaseController {
             }
 
             const db = c.env.DB;
+            const competitionModel = new CompetitionModel(db);
 
             // Fetch the competition to verify it exists and is live/accepted
-            const competition = await db.prepare(
-                `SELECT id, title, status, creator_id, opponent_id FROM competitions WHERE id = ?`
-            ).bind(competitionId).first<{
-                id: number; title: string; status: string;
-                creator_id: number; opponent_id: number | null;
-            }>();
+            const competition = await competitionModel.getSuspendState(competitionId);
 
             if (!competition) return this.notFound(c);
 
@@ -736,22 +693,13 @@ export class AdminController extends BaseController {
             const adminRoleName  = adminRole?.role ?? 'Admin';
 
             // 1. Change status to 'suspended' (NOT deleted)
-            await db.prepare(`
-                UPDATE competitions
-                SET status = 'suspended',
-                    auto_deleted_reason = ?,
-                    updated_at = datetime('now')
-                WHERE id = ?
-            `).bind(
-                `[SUSPENDED by ${admin.username ?? admin.display_name} (${adminRoleName})] ${body.reason}`,
-                competitionId
-            ).run();
+            await competitionModel.suspend(
+                competitionId,
+                `[SUSPENDED by ${admin.username ?? admin.display_name} (${adminRoleName})] ${body.reason}`
+            );
 
             // 2. Record in competition_suspensions table
-            await db.prepare(`
-                INSERT INTO competition_suspensions (competition_id, admin_id, reason)
-                VALUES (?, ?, ?)
-            `).bind(competitionId, admin.id, body.reason).run();
+            await competitionModel.recordSuspension(competitionId, admin.id, body.reason);
 
             // 3. Mandatory audit log â€“ name + role + timestamp + reason
             const auditLogModel = new AdminAuditLogModel(db);
@@ -806,10 +754,9 @@ export class AdminController extends BaseController {
             }
 
             const db = c.env.DB;
+            const competitionModel = new CompetitionModel(db);
 
-            const competition = await db.prepare(
-                `SELECT id, status FROM competitions WHERE id = ?`
-            ).bind(competitionId).first<{ id: number; status: string }>();
+            const competition = await competitionModel.getRestoreState(competitionId);
 
             if (!competition) return this.notFound(c);
             if (competition.status !== 'suspended') {
@@ -817,20 +764,13 @@ export class AdminController extends BaseController {
             }
 
             // Move to 'archived' â€“ transparent, visible, not live
-            await db.prepare(`
-                UPDATE competitions
-                SET status = 'archived',
-                    auto_deleted_reason = ?,
-                    updated_at = datetime('now')
-                WHERE id = ?
-            `).bind(`[RESTORED by ${admin.username ?? admin.display_name}] ${body.reason}`, competitionId).run();
+            await competitionModel.restore(
+                competitionId,
+                `[RESTORED by ${admin.username ?? admin.display_name}] ${body.reason}`
+            );
 
             // Update suspension record
-            await db.prepare(`
-                UPDATE competition_suspensions
-                SET restored_at = datetime('now'), restored_by = ?
-                WHERE competition_id = ? AND restored_at IS NULL
-            `).bind(admin.id, competitionId).run();
+            await competitionModel.markSuspensionRestored(competitionId, admin.id);
 
             const auditLogModel = new AdminAuditLogModel(db);
             await auditLogModel.log(

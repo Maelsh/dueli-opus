@@ -1,3 +1,15 @@
+
+## F-5D — SQL inside AdminController (2026-09-18)
+
+- 🔧 Local extraction validated, remote review/staging pending: every direct SQL statement inside `src/controllers/AdminController.ts` moved to the Model layer, behavior-preserving (same SQL, bindings, WHERE, sorting/pagination, error handling and response contracts; authorization and i18n untouched).
+- New model: `src/models/AdminStatsModel.ts` (dashboard statistics + enhanced statistics: user/competition/report/ad counts, competitions-by-status, total revenue, active users, arbitration-pending, campaign-active ads, country demographics, hottest competitions).
+- Extended existing models (no duplicates): `UserModel.searchForAdmin/getBanTarget/setActive` (users search/pagination, ban target resolution, ban/unban `is_active` update), `ReportModel.getTarget` (moderation target + audit target), `CommentModel.getAuthorId` (moderation author resolution), `CompetitionModel.getCreatorId/getSuspendState/getRestoreState/suspend/restore/recordSuspension/markSuspensionRestored/deleteCascade` (broadcast suspend/restore Task 9 + moderation cascade delete).
+- New tests: `tests/models/AdminModelExtraction.test.ts` — 11 tests (static pin: no `.prepare(`/SQL in AdminController; behavior pins on sqlite over the real migrations for all extracted responsibilities). Focused suites: 11/11; affected model regressions (UserModel/FollowModel/RatingModel) 28/28. `npx tsc --noEmit`: exit 0. `npm run build`: exit 0.
+- No schema/migration, route, URL, other-controller or F-6 work included. Rollback: revert the F-5D commit; no data migration needed.
+- Files: src/controllers/AdminController.ts, src/models/AdminStatsModel.ts, src/models/UserModel.ts, src/models/ReportModel.ts, src/models/CommentModel.ts, src/models/CompetitionModel.ts, tests/models/AdminModelExtraction.test.ts, PLAN-STATUS.md, WORKLOG.md.
+- Local implementation validated; remote review/staging pending. Status remains 🔧 under G1–G8; no full quality-gate completion claim.
+
+
 # 📊 PLAN-STATUS — لوحة حالة المهام
 
 > ⚠️ **تحذير حاكم (2026-09-05):** `docs/11-DEFINITION-OF-DONE.md` وجد أن علامة "✅
