@@ -83,8 +83,6 @@ export const en = {
     sects: 'Sects',
     politics: 'Politics',
     economics: 'Economics',
-    current_affairs: 'Current Affairs',
-    disputes: 'Other Disputes',
 
     // Science subcategories
     physics: 'Physics',
@@ -92,18 +90,9 @@ export const en = {
     chemistry: 'Chemistry',
     math: 'Mathematics',
     technology: 'Technology',
-    medicine: 'Medicine',
-    philosophy: 'Philosophy',
 
     // Talents subcategories
-    singing: 'Singing',
     poetry: 'Poetry',
-    art: 'Art',
-    sports: 'Sports',
-    comedy: 'Comedy',
-    cooking: 'Cooking',
-    gaming: 'Gaming',
-    magic: 'Magic',
 
     // Competitions
     competition: {
