@@ -1,3 +1,4 @@
+import type { D1Result } from '@cloudflare/workers-types';
 import { BaseModel } from './base/BaseModel';
 import { ConflictError, NotFoundError, AuthorizationError } from '../lib/errors/AppError';
 
@@ -282,6 +283,191 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
         `).bind(requesterId).all();
 
         return result.results || [];
+    }
+
+    /**
+     * Insert a pending request row (lightweight insert used by CompetitionController).
+     * إدراج طلب معلق
+     */
+    async insertPendingRequest(
+        competitionId: number,
+        requesterId: number,
+        message?: string
+    ): Promise<{ id: number }> {
+        const result = await this.db.prepare(`
+            INSERT INTO competition_requests (competition_id, requester_id, message, status, created_at)
+            VALUES (?, ?, ?, 'pending', datetime('now'))
+        `).bind(competitionId, requesterId, message || null).run();
+        return { id: result.meta.last_row_id as number };
+    }
+
+    /**
+     * Update a request status.
+     * تحديث حالة الطلب
+     */
+    async updateStatus(id: number, status: string): Promise<boolean> {
+        const result = await this.db.prepare(
+            'UPDATE competition_requests SET status = ? WHERE id = ?'
+        ).bind(status, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Delete a user's pending request on a competition (cancel).
+     * حذف طلب معلق
+     */
+    async deletePendingByRequester(competitionId: number, requesterId: number): Promise<boolean> {
+        const result = await this.db.prepare(
+            "DELETE FROM competition_requests WHERE competition_id = ? AND requester_id = ? AND status = 'pending'"
+        ).bind(competitionId, requesterId).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Pending requests of a competition + requester summary (light payload used
+     * by GET /api/competitions/:id/requests).
+     * طلبات معلقة مع ملخص مقدم الطلب
+     */
+    async findPendingWithRequester(competitionId: number): Promise<any[]> {
+        const result = await this.db.prepare(`
+            SELECT r.*, u.display_name, u.avatar_url, u.username
+            FROM competition_requests r
+            JOIN users u ON r.requester_id = u.id
+            WHERE r.competition_id = ? AND r.status = 'pending'
+            ORDER BY r.created_at DESC
+        `).bind(competitionId).all();
+        return result.results;
+    }
+
+    /**
+     * Count a competition's pending requests (competition detail payload).
+     * عدد الطلبات المعلقة لمنافسة
+     */
+    async countPendingByCompetition(competitionId: number): Promise<number> {
+        const row = await this.db.prepare(
+            "SELECT COUNT(*) AS n FROM competition_requests WHERE competition_id = ? AND status = 'pending'"
+        ).bind(competitionId).first<{ n: number }>();
+        return row?.n || 0;
+    }
+
+    /**
+     * Whether the user already has a pending request on this competition.
+     * هل لدى المستخدم طلب معلق على هذه المنافسة
+     */
+    async hasPendingForRequester(competitionId: number, requesterId: number): Promise<boolean> {
+        const row = await this.db.prepare(
+            "SELECT 1 FROM competition_requests WHERE competition_id = ? AND requester_id = ? AND status = 'pending'"
+        ).bind(competitionId, requesterId).first<{ '1': number }>();
+        return row !== null;
+    }
+
+    /**
+     * Decline all pending requests for a competition except one
+     * رفض جميع الطلبات المعلقة للمنافسة باستثناء طلب واحد
+     */
+    async declineAllOther(competitionId: number, exceptRequestId: number): Promise<number> {
+        const result = await this.db.prepare(`
+            UPDATE competition_requests 
+            SET status = 'auto_declined' 
+            WHERE competition_id = ? AND id != ? AND status = 'pending'
+        `).bind(competitionId, exceptRequestId).run();
+        return result.meta.changes;
+    }
+
+    /**
+     * Delete pending requests from user on time-conflicting competitions
+     * حذف الطلبات المعلقة من المستخدم على منافسات متعارضة بالوقت
+     */
+    async deleteConflictingRequests(requesterId: number, scheduledAt: string | null): Promise<number> {
+        if (!scheduledAt) return 0;
+
+        // Delete pending requests from this user on competitions scheduled within 2 hours
+        const result = await this.db.prepare(`
+            DELETE FROM competition_requests 
+            WHERE requester_id = ? 
+            AND status = 'pending' 
+            AND competition_id IN (
+                SELECT id FROM competitions 
+                WHERE scheduled_at IS NOT NULL 
+                AND abs(strftime('%s', scheduled_at) - strftime('%s', ?)) < 7200
+            )
+        `).bind(requesterId, scheduledAt).run();
+        return result.meta.changes;
+    }
+
+    /**
+     * Delete a user's pending requests on immediate (unscheduled) competitions.
+     * حذف طلبات المستخدم المعلقة على المنافسات الفورية
+     */
+    async deletePendingImmediate(requesterId: number): Promise<number> {
+        const result = await this.db.prepare(`
+            DELETE FROM competition_requests 
+            WHERE requester_id = ? 
+            AND competition_id IN (SELECT id FROM competitions WHERE scheduled_at IS NULL)
+        `).bind(requesterId).run();
+        return result.meta.changes;
+    }
+
+    /**
+     * Delete a user's pending requests on competitions scheduled within a window (seconds).
+     * حذف الطلبات المعلقة داخل نافذة زمنية
+     */
+    async deletePendingInTimeWindow(
+        requesterId: number,
+        scheduledAt: string,
+        windowSeconds: number
+    ): Promise<number> {
+        const result = await this.db.prepare(`
+            DELETE FROM competition_requests 
+            WHERE requester_id = ? 
+            AND competition_id IN (
+                SELECT id FROM competitions 
+                WHERE scheduled_at IS NOT NULL 
+                AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < ?
+            )
+        `).bind(requesterId, scheduledAt, windowSeconds).run();
+        return result.meta.changes;
+    }
+
+    /**
+     * Accept a request atomically: guarded setOpponent + accept this request +
+     * decline the competing requests/invitations — ONE serialized db.batch().
+     * The caller inspects results[0].meta.changes to detect a lost race; the
+     * dependent steps re-check competitions.opponent_id because db.batch()
+     * never short-circuits on changes = 0.
+     */
+    async acceptRequestAtomic(
+        competitionId: number,
+        requestId: number,
+        requesterId: number
+    ): Promise<D1Result[]> {
+        return this.db.batch([
+            // 1. Atomically set opponent (only if opponent_id IS NULL)
+            this.db.prepare(
+                'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
+            ).bind(requesterId, competitionId),
+            // 2. Accept this request — ONLY if step 1 actually won the opponent slot
+            this.db.prepare(
+                `UPDATE competition_requests SET status = 'accepted', updated_at = datetime('now')
+                 WHERE id = ? AND EXISTS (
+                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                 )`
+            ).bind(requestId, competitionId, requesterId),
+            // 3. Decline all other pending requests for this competition — same guard
+            this.db.prepare(
+                `UPDATE competition_requests SET status = 'rejected', updated_at = datetime('now')
+                 WHERE competition_id = ? AND id != ? AND status = 'pending' AND EXISTS (
+                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                 )`
+            ).bind(competitionId, requestId, competitionId, requesterId),
+            // 4. Decline all pending invitations for this competition — same guard
+            this.db.prepare(
+                `UPDATE competition_invitations SET status = 'declined'
+                 WHERE competition_id = ? AND status = 'pending' AND EXISTS (
+                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                 )`
+            ).bind(competitionId, competitionId, requesterId),
+        ]);
     }
 
     /**

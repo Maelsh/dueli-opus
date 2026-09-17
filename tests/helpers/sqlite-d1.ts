@@ -37,6 +37,11 @@ class SqliteStatement {
         return new SqliteStatement(this.raw, this.sql, params);
     }
 
+    /** Raw SQL text — SqliteD1.batch() needs it to tell reads from writes. */
+    get sqlText(): string {
+        return this.sql;
+    }
+
     /**
      * node:sqlite only accepts null, number, bigint, string and Uint8Array.
      * D1 rejects undefined as well, so normalise it to null like D1 does not
@@ -46,8 +51,16 @@ class SqliteStatement {
         return this.params.map((value) => (value === undefined ? null : value as any));
     }
 
+    private normalizedSql(): string {
+        // D1 tolerates datetime("now") (double-quoted string); node:sqlite treats
+        // "now" as an identifier and throws `no such column: "now"`. Production
+        // code (SessionModel) uses the double-quoted form, so normalize it here
+        // in the TEST SHIM ONLY — no application SQL is touched (F-5A scope).
+        return this.sql.replace(/datetime\("now"\)/g, "datetime('now')");
+    }
+
     private rows(): any[] {
-        return this.raw.prepare(this.sql).all(...this.safeParams());
+        return this.raw.prepare(this.normalizedSql()).all(...this.safeParams());
     }
 
     async first<T = any>(): Promise<T | null> {
@@ -64,7 +77,7 @@ class SqliteStatement {
         success: boolean;
         meta: { last_row_id: number | null; changes: number };
     }> {
-        const outcome = this.raw.prepare(this.sql).run(...this.safeParams());
+        const outcome = this.raw.prepare(this.normalizedSql()).run(...this.safeParams());
         return {
             success: true,
             meta: {
@@ -91,6 +104,35 @@ export class SqliteD1 {
 
     prepare(sql: string): SqliteStatement {
         return new SqliteStatement(this.db, sql);
+    }
+
+    /**
+     * Execute a batch of prepared statements the way D1 does: one serialized
+     * write transaction, statements run in order, and NO short-circuit when a
+     * statement reports changes = 0. SELECTs come back with their rows so a
+     * caller can read a value back out of the batch (RateLimitService does
+     * exactly that), which is what makes guard-based batch logic testable.
+     */
+    async batch(
+        statements: SqliteStatement[]
+    ): Promise<Array<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: unknown[] }>> {
+        const results: Array<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: unknown[] }> = [];
+        this.db.exec('BEGIN');
+        try {
+            for (const statement of statements) {
+                if (statement.sqlText.trim().toLowerCase().startsWith('select')) {
+                    const rows = await statement.all();
+                    results.push({ success: true, meta: { changes: 0, last_row_id: null }, results: rows.results });
+                } else {
+                    results.push(await statement.run());
+                }
+            }
+            this.db.exec('COMMIT');
+        } catch (error) {
+            this.db.exec('ROLLBACK');
+            throw error;
+        }
+        return results;
     }
 
     /** Raw statement execution for fixture setup (multiple rows, no bindings). */

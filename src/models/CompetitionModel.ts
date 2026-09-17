@@ -377,6 +377,51 @@ export class CompetitionModel extends BaseModel<Competition> {
             'UPDATE competitions SET total_views = total_views + 1 WHERE id = ?'
         ).bind(id).run();
     }
+
+    /**
+     * Pending immediate competitions created by a user (no opponent yet).
+     * منافسات فورية معلقة بلا خصم
+     */
+    async findPendingImmediateByCreator(
+        creatorId: number,
+        excludeCompetitionId: number
+    ): Promise<Array<{ id: number; title: string }>> {
+        const result = await this.db.prepare(`
+            SELECT id, title FROM competitions 
+            WHERE creator_id = ? AND id != ? AND scheduled_at IS NULL AND opponent_id IS NULL AND status = 'pending'
+        `).bind(creatorId, excludeCompetitionId).all();
+        return (result.results || []) as Array<{ id: number; title: string }>;
+    }
+
+    /**
+     * Pending scheduled competitions that conflict (inside windowSeconds) with a slot.
+     * منافسات مجدولة معلقة متعارضة زمنياً
+     */
+    async findPendingTimeConflicts(
+        creatorId: number,
+        excludeCompetitionId: number,
+        scheduledAt: string,
+        windowSeconds: number
+    ): Promise<Array<{ id: number; title: string }>> {
+        const result = await this.db.prepare(`
+            SELECT id, title FROM competitions 
+            WHERE creator_id = ? AND id != ? AND scheduled_at IS NOT NULL AND opponent_id IS NULL 
+            AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < ?
+        `).bind(creatorId, excludeCompetitionId, scheduledAt, windowSeconds).all();
+        return (result.results || []) as Array<{ id: number; title: string }>;
+    }
+
+    /**
+     * Delete the upload chunk keys bound to a competition (their lifetime is the
+     * competition's live stream, so they are dropped when it ends).
+     * حذف مفاتيح القطع عند انتهاء المنافسة
+     */
+    async deleteChunkKeys(competitionId: number): Promise<number> {
+        const result = await this.db.prepare(
+            'DELETE FROM chunk_keys WHERE competition_id = ?'
+        ).bind(competitionId).run();
+        return result.meta.changes;
+    }
 }
 
 export default CompetitionModel;

@@ -9,6 +9,8 @@ import { BaseController, AppContext } from './base/BaseController';
 import {
     CompetitionModel,
     CompetitionFilters,
+    CompetitionRequestModel,
+    CompetitionInvitationModel,
     CommentModel,
     NotificationModel,
     UserModel,
@@ -21,91 +23,6 @@ import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
 import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError } from '../lib/errors/AppError';
 import { isWindowOpen } from '../models/RatingModel';
-
-/**
- * Competition Request Model (inline - should be in separate file)
- */
-class CompetitionRequestModel {
-    constructor(private db: D1Database) { }
-
-    async create(competitionId: number, requesterId: number, message?: string): Promise<{ id: number }> {
-        const result = await this.db.prepare(`
-            INSERT INTO competition_requests (competition_id, requester_id, message, status, created_at)
-            VALUES (?, ?, ?, 'pending', datetime('now'))
-        `).bind(competitionId, requesterId, message || null).run();
-        return { id: result.meta.last_row_id as number };
-    }
-
-    async findPending(competitionId: number, requesterId: number): Promise<any> {
-        return await this.db.prepare(`
-            SELECT * FROM competition_requests 
-            WHERE competition_id = ? AND requester_id = ? AND status = 'pending'
-        `).bind(competitionId, requesterId).first();
-    }
-
-    async findById(id: number): Promise<any> {
-        return await this.db.prepare('SELECT * FROM competition_requests WHERE id = ?').bind(id).first();
-    }
-
-    async updateStatus(id: number, status: string): Promise<boolean> {
-        const result = await this.db.prepare(
-            'UPDATE competition_requests SET status = ? WHERE id = ?'
-        ).bind(status, id).run();
-        return result.meta.changes > 0;
-    }
-
-    async delete(competitionId: number, requesterId: number): Promise<boolean> {
-        const result = await this.db.prepare(
-            'DELETE FROM competition_requests WHERE competition_id = ? AND requester_id = ? AND status = "pending"'
-        ).bind(competitionId, requesterId).run();
-        return result.meta.changes > 0;
-    }
-
-    async findByCompetition(competitionId: number): Promise<any[]> {
-        const result = await this.db.prepare(`
-            SELECT r.*, u.display_name, u.avatar_url, u.username
-            FROM competition_requests r
-            JOIN users u ON r.requester_id = u.id
-            WHERE r.competition_id = ? AND r.status = 'pending'
-            ORDER BY r.created_at DESC
-        `).bind(competitionId).all();
-        return result.results;
-    }
-
-    /**
-     * Decline all pending requests for a competition except one
-     * رفض جميع الطلبات المعلقة للمنافسة باستثناء طلب واحد
-     */
-    async declineAllOther(competitionId: number, exceptRequestId: number): Promise<number> {
-        const result = await this.db.prepare(`
-            UPDATE competition_requests 
-            SET status = 'auto_declined' 
-            WHERE competition_id = ? AND id != ? AND status = 'pending'
-        `).bind(competitionId, exceptRequestId).run();
-        return result.meta.changes;
-    }
-
-    /**
-     * Delete pending requests from user on time-conflicting competitions
-     * حذف الطلبات المعلقة من المستخدم على منافسات متعارضة بالوقت
-     */
-    async deleteConflictingRequests(requesterId: number, scheduledAt: string | null): Promise<number> {
-        if (!scheduledAt) return 0;
-
-        // Delete pending requests from this user on competitions scheduled within 2 hours
-        const result = await this.db.prepare(`
-            DELETE FROM competition_requests 
-            WHERE requester_id = ? 
-            AND status = 'pending'
-            AND competition_id IN (
-                SELECT id FROM competitions 
-                WHERE scheduled_at IS NOT NULL 
-                AND abs(strftime('%s', scheduled_at) - strftime('%s', ?)) < 7200
-            )
-        `).bind(requesterId, scheduledAt).run();
-        return result.meta.changes;
-    }
-}
 
 /**
  * Competition Controller Class
@@ -148,6 +65,8 @@ export class CompetitionController extends BaseController {
         try {
             const model = new CompetitionModel(c.env.DB);
             const commentModel = new CommentModel(c.env.DB);
+            const requestModel = new CompetitionRequestModel(c.env.DB);
+            const ratingModel = new RatingModel(c.env.DB);
 
             const id = this.getParamInt(c, 'id');
             const competition = await model.findWithDetails(id);
@@ -160,21 +79,14 @@ export class CompetitionController extends BaseController {
 
             // B2+B3: light payload — counts only, no full arrays.
             const comments_count = await commentModel.countVisible(id);
-            const requestsRow = await c.env.DB.prepare(
-                "SELECT COUNT(*) AS n FROM competition_requests WHERE competition_id = ? AND status = 'pending'"
-            ).bind(id).first<{ n: number }>();
-            const ratingsRow = await c.env.DB.prepare(
-                'SELECT COUNT(*) AS n FROM ratings WHERE competition_id = ?'
-            ).bind(id).first<{ n: number }>();
+            const requests_count = await requestModel.countPendingByCompetition(id);
+            const ratings_count = await ratingModel.countByCompetition(id);
 
             // B2+B3: lightweight per-user request indicator (no full array)
             const currentUser = this.getCurrentUser(c);
             let user_has_pending_request = false;
             if (currentUser) {
-                const userReq = await c.env.DB.prepare(
-                    "SELECT 1 FROM competition_requests WHERE competition_id = ? AND requester_id = ? AND status = 'pending'"
-                ).bind(id, currentUser.id).first<{ '1': number }>();
-                user_has_pending_request = userReq !== null;
+                user_has_pending_request = await requestModel.hasPendingForRequester(id, currentUser.id);
             }
 
             const timer = ScheduledTaskService.getTimerDeadline(competition as any);
@@ -182,8 +94,8 @@ export class CompetitionController extends BaseController {
             return this.success(c, {
                 ...competition,
                 comments_count,
-                requests_count: requestsRow?.n || 0,
-                ratings_count: ratingsRow?.n || 0,
+                requests_count,
+                ratings_count,
                 user_has_pending_request,
                 timer
             });
@@ -337,7 +249,7 @@ export class CompetitionController extends BaseController {
             }
 
             const body = await this.getBody<{ message?: string }>(c);
-            const request = await requestModel.create(competitionId, user.id, body?.message);
+            const request = await requestModel.insertPendingRequest(competitionId, user.id, body?.message);
 
             await notificationModel.create({
                 user_id: competition.creator_id,
@@ -365,7 +277,7 @@ export class CompetitionController extends BaseController {
             const competitionId = this.getParamInt(c, 'id');
 
             const requestModel = new CompetitionRequestModel(c.env.DB);
-            const deleted = await requestModel.delete(competitionId, user.id);
+            const deleted = await requestModel.deletePendingByRequester(competitionId, user.id);
 
             if (!deleted) {
                 return this.notFound(c);
@@ -410,38 +322,11 @@ export class CompetitionController extends BaseController {
                 return this.notFound(c);
             }
 
-            // Atomic batch: setOpponent + accept request + decline others + decline invitations
-            // setOpponent runs FIRST; steps 2-4 re-check competitions.opponent_id so a losing
-            // race (setOpponent affects 0 rows) can never mark this request — or anyone else's
-            // request/invitation — as accepted/declined. db.batch() does NOT short-circuit on
-            // changes = 0, so each dependent statement must re-verify success itself.
-            const results = await c.env.DB.batch([
-                // 1. Atomically set opponent (only if opponent_id IS NULL)
-                c.env.DB.prepare(
-                    'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
-                ).bind(request.requester_id, competitionId),
-                // 2. Accept this request — ONLY if step 1 actually won the opponent slot
-                c.env.DB.prepare(
-                    `UPDATE competition_requests SET status = 'accepted', updated_at = datetime('now')
-                     WHERE id = ? AND EXISTS (
-                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                     )`
-                ).bind(body.request_id, competitionId, request.requester_id),
-                // 3. Decline all other pending requests for this competition — same guard
-                c.env.DB.prepare(
-                    `UPDATE competition_requests SET status = 'rejected', updated_at = datetime('now')
-                     WHERE competition_id = ? AND id != ? AND status = 'pending' AND EXISTS (
-                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                     )`
-                ).bind(competitionId, body.request_id, competitionId, request.requester_id),
-                // 4. Decline all pending invitations for this competition — same guard
-                c.env.DB.prepare(
-                    `UPDATE competition_invitations SET status = 'declined'
-                     WHERE competition_id = ? AND status = 'pending' AND EXISTS (
-                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                     )`
-                ).bind(competitionId, competitionId, request.requester_id),
-            ]);
+            const results = await requestModel.acceptRequestAtomic(
+                competitionId,
+                body.request_id,
+                request.requester_id
+            );
 
             // results[0] is the setOpponent UPDATE — if changes === 0, opponent was already set (race lost)
             const setOpponentResult = results[0] as { meta: { changes: number } };
@@ -616,9 +501,7 @@ export class CompetitionController extends BaseController {
 
             // Delete chunk keys when competition ends (live â†’ completed)
             // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة
-            await c.env.DB.prepare(
-                'DELETE FROM chunk_keys WHERE competition_id = ?'
-            ).bind(id).run();
+            await model.deleteChunkKeys(id);
 
             // T1.5: Finalization is DEFERRED — viewers rate AFTER completion (rate endpoint),
             // so a scheduled task finalizes winner/payouts 24h after end.
@@ -978,7 +861,7 @@ export class CompetitionController extends BaseController {
         try {
             const competitionId = this.getParamInt(c, 'id');
             const requestModel = new CompetitionRequestModel(c.env.DB);
-            const requests = await requestModel.findByCompetition(competitionId);
+            const requests = await requestModel.findPendingWithRequester(competitionId);
             return this.success(c, requests);
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -997,6 +880,7 @@ export class CompetitionController extends BaseController {
 
             const model = new CompetitionModel(c.env.DB);
             const notificationModel = new NotificationModel(c.env.DB);
+            const invitationModel = new CompetitionInvitationModel(c.env.DB);
             const competition = await model.findById(competitionId);
 
             if (!competition) return this.notFound(c);
@@ -1022,18 +906,17 @@ if (competition.opponent_id) {
             }
 
             // Check if already invited
-            const existing = await c.env.DB.prepare(`
-                SELECT id FROM competition_invitations
-                WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
-            `).bind(competitionId, body.invitee_id).first();
+            const existing = await invitationModel.hasPendingInvitation(competitionId, body.invitee_id);
 
 if (existing) return this.error(c, this.t('competition_errors.already_invited', c), 409);
 
             // Create invitation
-            const result = await c.env.DB.prepare(`
-                INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, message, status, created_at)
-                VALUES (?, ?, ?, ?, 'pending', datetime('now'))
-            `).bind(competitionId, user.id, body.invitee_id, body.message || null).run();
+            const result = await invitationModel.insertPendingInvitation(
+                competitionId,
+                user.id,
+                body.invitee_id,
+                body.message
+            );
 
             // Notify invitee
             await notificationModel.create({
@@ -1057,7 +940,7 @@ if (existing) return this.error(c, this.t('competition_errors.already_invited', 
                 console.error('[CompetitionController] publishInvite failed:', pushError);
             }
 
-            return this.success(c, { id: result.meta.last_row_id, invited: true });
+            return this.success(c, { id: result.id, invited: true });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
@@ -1077,52 +960,23 @@ if (existing) return this.error(c, this.t('competition_errors.already_invited', 
             const competitionId = this.getParamInt(c, 'id');
 
             const model = new CompetitionModel(c.env.DB);
+            const invitationModel = new CompetitionInvitationModel(c.env.DB);
             const competition = await model.findById(competitionId);
 
             if (!competition) return this.notFound(c);
 
             // Verify invitation exists
-            const invitation = await c.env.DB.prepare(`
-                SELECT * FROM competition_invitations
-                WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
-            `).bind(competitionId, user.id).first();
+            const invitation = await invitationModel.findPendingByInvitee(competitionId, user.id);
 
 if (!invitation) {
                 return this.error(c, this.t('competition_errors.invitation_not_found', c), 409);
             }
 
-            // Atomic batch: setOpponent + accept invitation + reject others + decline requests
-            // Steps 2-4 are guarded by re-checking competitions.opponent_id so that a losing
-            // race (step 1 affects 0 rows) can never mark this invitation, or anyone else's
-            // request/invitation, as accepted/declined. db.batch() does NOT short-circuit on
-            // changes = 0, so each dependent statement must re-verify success itself.
-            const results = await c.env.DB.batch([
-                // 1. Atomically set opponent (only if opponent_id IS NULL)
-                c.env.DB.prepare(
-                    'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
-                ).bind(user.id, competitionId),
-                // 2. Accept this invitation — ONLY if step 1 actually won the opponent slot
-                c.env.DB.prepare(
-                    `UPDATE competition_invitations SET status = 'accepted', responded_at = datetime('now')
-                     WHERE id = ? AND EXISTS (
-                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                     )`
-                ).bind(invitation.id, competitionId, user.id),
-                // 3. Decline all other pending invitations for this competition — same guard
-                c.env.DB.prepare(
-                    `UPDATE competition_invitations SET status = 'declined'
-                     WHERE competition_id = ? AND id != ? AND status = 'pending' AND EXISTS (
-                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                     )`
-                ).bind(competitionId, invitation.id, competitionId, user.id),
-                // 4. Decline all pending requests for this competition — same guard
-                c.env.DB.prepare(
-                    `UPDATE competition_requests SET status = 'auto_declined'
-                     WHERE competition_id = ? AND status = 'pending' AND EXISTS (
-                         SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                     )`
-                ).bind(competitionId, competitionId, user.id),
-            ]);
+            const results = await invitationModel.acceptInvitationAtomic(
+                competitionId,
+                invitation.id,
+                user.id
+            );
 
             // results[0] is the setOpponent UPDATE — if changes === 0, opponent was already set (race lost)
             const setOpponentResult = results[0] as { meta: { changes: number } };
@@ -1172,23 +1026,16 @@ if (!invitation) {
             const user = this.getCurrentUser(c);
             const competitionId = this.getParamInt(c, 'id');
 
+            const invitationModel = new CompetitionInvitationModel(c.env.DB);
+
             // Fetch invitation + inviter info BEFORE updating (needed for real-time push)
-            const invitation = await c.env.DB.prepare(`
-                SELECT ci.id, ci.inviter_id, c.title
-                FROM competition_invitations ci
-                JOIN competitions c ON c.id = ci.competition_id
-                WHERE ci.competition_id = ? AND ci.invitee_id = ? AND ci.status = 'pending'
-            `).bind(competitionId, user.id).first<any>();
+            const invitation = await invitationModel.findPendingWithCompetitionTitle(competitionId, user.id);
 
             if (!invitation) return this.error(c, this.t('competition_errors.no_pending_invitation', c));
 
-            const result = await c.env.DB.prepare(`
-                UPDATE competition_invitations 
-                SET status = 'declined', responded_at = datetime('now')
-                WHERE id = ?
-            `).bind(invitation.id).run();
+            const declined = await invitationModel.markDeclined(invitation.id);
 
-            if (result.meta.changes === 0) {
+            if (!declined) {
                 return this.error(c, this.t('competition_errors.no_pending_invitation', c));
             }
 
@@ -1216,6 +1063,9 @@ if (!invitation) {
      */
     private async handleAutoDeleteOnJoin(c: AppContext, userId: number, joinedCompetition: any): Promise<number> {
         const notificationModel = new NotificationModel(c.env.DB);
+        const model = new CompetitionModel(c.env.DB);
+        const requestModel = new CompetitionRequestModel(c.env.DB);
+        const invitationModel = new CompetitionInvitationModel(c.env.DB);
         let deletedCount = 0;
 
         const isImmediate = !joinedCompetition.scheduled_at;
@@ -1223,13 +1073,10 @@ if (!invitation) {
 
         if (isImmediate) {
             // Immediate competition: delete all immediate competitions user created that don't have opponent
-            const userImmediateComps = await c.env.DB.prepare(`
-                SELECT id, title FROM competitions 
-                WHERE creator_id = ? AND id != ? AND scheduled_at IS NULL AND opponent_id IS NULL AND status = 'pending'
-            `).bind(userId, joinedCompetition.id).all();
+            const userImmediateComps = await model.findPendingImmediateByCreator(userId, joinedCompetition.id);
 
-            for (const comp of userImmediateComps.results as any[]) {
-                await c.env.DB.prepare('DELETE FROM competitions WHERE id = ?').bind(comp.id).run();
+            for (const comp of userImmediateComps) {
+                await model.delete(comp.id);
                 deletedCount++;
 
                 await notificationModel.create({
@@ -1243,32 +1090,25 @@ if (!invitation) {
             }
 
             // Delete pending requests user made on other immediate competitions
-            await c.env.DB.prepare(`
-                DELETE FROM competition_requests 
-                WHERE requester_id = ? 
-                AND competition_id IN (SELECT id FROM competitions WHERE scheduled_at IS NULL)
-            `).bind(userId).run();
+            await requestModel.deletePendingImmediate(userId);
 
             // Delete pending invitations user received for other immediate competitions
-            await c.env.DB.prepare(`
-                UPDATE competition_invitations SET status = 'expired'
-                WHERE invitee_id = ? AND status = 'pending'
-                AND competition_id IN (SELECT id FROM competitions WHERE scheduled_at IS NULL)
-            `).bind(userId).run();
+            await invitationModel.expirePendingImmediate(userId);
 
         } else {
             // Scheduled competition: delete conflicts within 2 hours
             const twoHours = 2 * 60 * 60; // seconds
 
             // Delete user's scheduled competitions that conflict
-            const conflictingComps = await c.env.DB.prepare(`
-                SELECT id, title FROM competitions 
-                WHERE creator_id = ? AND id != ? AND scheduled_at IS NOT NULL AND opponent_id IS NULL
-                AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < ?
-            `).bind(userId, joinedCompetition.id, scheduledAt, twoHours).all();
+            const conflictingComps = await model.findPendingTimeConflicts(
+                userId,
+                joinedCompetition.id,
+                scheduledAt,
+                twoHours
+            );
 
-            for (const comp of conflictingComps.results as any[]) {
-                await c.env.DB.prepare('DELETE FROM competitions WHERE id = ?').bind(comp.id).run();
+            for (const comp of conflictingComps) {
+                await model.delete(comp.id);
                 deletedCount++;
 
                 await notificationModel.create({
@@ -1282,15 +1122,7 @@ if (!invitation) {
             }
 
             // Delete conflicting requests
-            await c.env.DB.prepare(`
-                DELETE FROM competition_requests 
-                WHERE requester_id = ?
-                AND competition_id IN (
-                    SELECT id FROM competitions 
-                    WHERE scheduled_at IS NOT NULL 
-                    AND ABS(strftime('%s', scheduled_at) - strftime('%s', ?)) < ?
-                )
-            `).bind(userId, scheduledAt, twoHours).run();
+            await requestModel.deletePendingInTimeWindow(userId, scheduledAt, twoHours);
         }
 
         return deletedCount;

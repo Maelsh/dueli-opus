@@ -264,6 +264,17 @@ export class RatingModel extends BaseModel<Rating> {
         // Ratings are immutable by design — no updates allowed.
         return null;
     }
+
+    /**
+     * Count all ratings of a competition (competition detail payload).
+     * عدد تقييمات منافسة
+     */
+    async countByCompetition(competitionId: number): Promise<number> {
+        const row = await this.db.prepare(
+            'SELECT COUNT(*) AS n FROM ratings WHERE competition_id = ?'
+        ).bind(competitionId).first<{ n: number }>();
+        return row?.n || 0;
+    }
 }
 
 export default RatingModel;

@@ -9,6 +9,8 @@ export { BaseModel, QueryOptions } from './base/BaseModel';
 // Domain Models
 export { UserModel, CreateUserData, UpdateUserData } from './UserModel';
 export { CompetitionModel, CompetitionFilters, CompetitionWithDetails, CreateCompetitionData } from './CompetitionModel';
+export { CompetitionRequestModel } from './CompetitionRequestModel';
+export { CompetitionInvitationModel } from './CompetitionInvitationModel';
 export { CategoryModel, CategoryWithSubcategories } from './CategoryModel';
 export { CommentModel, CommentWithUser } from './CommentModel';
 export { NotificationModel, CreateNotificationData } from './NotificationModel';

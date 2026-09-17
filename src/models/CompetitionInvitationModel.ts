@@ -1,3 +1,4 @@
+import type { D1Result } from '@cloudflare/workers-types';
 import { BaseModel } from './base/BaseModel';
 import { ConflictError, NotFoundError, AuthorizationError } from '../lib/errors/AppError';
 import { UserBlockModel } from './UserBlockModel';
@@ -227,6 +228,129 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
         `).run();
 
         return result.meta.changes || 0;
+    }
+
+    /**
+     * Whether a pending invitation already exists for this invitee.
+     * هل توجد دعوة معلقة لهذا المدعو
+     */
+    async hasPendingInvitation(competitionId: number, inviteeId: number): Promise<boolean> {
+        const row = await this.db.prepare(`
+            SELECT id FROM competition_invitations 
+            WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
+        `).bind(competitionId, inviteeId).first();
+        return row !== null;
+    }
+
+    /**
+     * Insert a pending invitation (lightweight insert used by CompetitionController).
+     * إدراج دعوة معلقة
+     */
+    async insertPendingInvitation(
+        competitionId: number,
+        inviterId: number,
+        inviteeId: number,
+        message?: string
+    ): Promise<{ id: number }> {
+        const result = await this.db.prepare(`
+            INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, message, status, created_at)
+            VALUES (?, ?, ?, ?, 'pending', datetime('now'))
+        `).bind(competitionId, inviterId, inviteeId, message || null).run();
+        return { id: result.meta.last_row_id as number };
+    }
+
+    /**
+     * Pending invitation of an invitee on a competition.
+     * الدعوة المعلقة للمدعو
+     */
+    async findPendingByInvitee(competitionId: number, inviteeId: number): Promise<CompetitionInvitation | null> {
+        return await this.db.prepare(`
+            SELECT * FROM competition_invitations 
+            WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
+        `).bind(competitionId, inviteeId).first<CompetitionInvitation>();
+    }
+
+    /**
+     * Pending invitation + competition title (the inviter push needs the title).
+     * دعوة معلقة مع عنوان المنافسة
+     */
+    async findPendingWithCompetitionTitle(
+        competitionId: number,
+        inviteeId: number
+    ): Promise<{ id: number; inviter_id: number; title: string } | null> {
+        return await this.db.prepare(`
+            SELECT ci.id, ci.inviter_id, c.title
+            FROM competition_invitations ci
+            JOIN competitions c ON c.id = ci.competition_id
+            WHERE ci.competition_id = ? AND ci.invitee_id = ? AND ci.status = 'pending'
+        `).bind(competitionId, inviteeId).first<{ id: number; inviter_id: number; title: string }>();
+    }
+
+    /**
+     * Mark an invitation as declined. Returns false when nothing was updated.
+     * تعليم الدعوة كمرفوضة
+     */
+    async markDeclined(invitationId: number): Promise<boolean> {
+        const result = await this.db.prepare(`
+            UPDATE competition_invitations 
+            SET status = 'declined', responded_at = datetime('now') 
+            WHERE id = ?
+        `).bind(invitationId).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Expire a user's pending invitations on immediate (unscheduled) competitions.
+     * إنهاء الدعوات المعلقة على المنافسات الفورية
+     */
+    async expirePendingImmediate(inviteeId: number): Promise<number> {
+        const result = await this.db.prepare(`
+            UPDATE competition_invitations SET status = 'expired' 
+            WHERE invitee_id = ? AND status = 'pending' 
+            AND competition_id IN (SELECT id FROM competitions WHERE scheduled_at IS NULL)
+        `).bind(inviteeId).run();
+        return result.meta.changes;
+    }
+
+    /**
+     * Accept an invitation atomically: guarded setOpponent + accept this
+     * invitation + decline the competing invitations/requests — ONE serialized
+     * db.batch(). The caller inspects results[0].meta.changes to detect a lost
+     * race; the dependent steps re-check competitions.opponent_id because
+     * db.batch() never short-circuits on changes = 0.
+     */
+    async acceptInvitationAtomic(
+        competitionId: number,
+        invitationId: number,
+        inviteeId: number
+    ): Promise<D1Result[]> {
+        return this.db.batch([
+            // 1. Atomically set opponent (only if opponent_id IS NULL)
+            this.db.prepare(
+                'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
+            ).bind(inviteeId, competitionId),
+            // 2. Accept this invitation — ONLY if step 1 actually won the opponent slot
+            this.db.prepare(
+                `UPDATE competition_invitations SET status = 'accepted', responded_at = datetime('now')
+                 WHERE id = ? AND EXISTS (
+                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                 )`
+            ).bind(invitationId, competitionId, inviteeId),
+            // 3. Decline all other pending invitations for this competition — same guard
+            this.db.prepare(
+                `UPDATE competition_invitations SET status = 'declined'
+                 WHERE competition_id = ? AND id != ? AND status = 'pending' AND EXISTS (
+                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                 )`
+            ).bind(competitionId, invitationId, competitionId, inviteeId),
+            // 4. Decline all pending requests for this competition — same guard
+            this.db.prepare(
+                `UPDATE competition_requests SET status = 'auto_declined'
+                 WHERE competition_id = ? AND status = 'pending' AND EXISTS (
+                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                 )`
+            ).bind(competitionId, competitionId, inviteeId),
+        ]);
     }
 
     /**
