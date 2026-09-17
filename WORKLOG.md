@@ -1,3 +1,18 @@
+## 2026-09-17 — B16
+
+- `[B16]` E2E خفيف واحد لمسار Beta Core Done (فرع `test/core-beta-e2e` — بلا دمج):
+  - سيناريو E2E واحد يغطي الـ14 خطوة كاملة: (1) تسجيل المستخدم A عبر الواجهة، (2) إكمال إعدادات Profile لـ A عبر PUT /api/settings والتحقق من سمات `dir` و `lang` في الـ DOM، (3) التحقق من التوصيات المخصصة لـ A عبر /api/recommendations، (4) إنشاء منافسة من صفحة /create عبر الـ UI والتنقل لصفحة المنافسة، (5+6) تسجيل ودخول الخصم B والمشاهد C واكتشاف B بالبحث الحقيقي، (7) إرسال A لدعوة B، (8) قبول B للدعوة (batch ذري status='accepted')، (9) بدء A للمنافسة (accepted -> live)، (10) إرسال رسالة من A إلى B والتحقق من وصول المحتوى لمحادثة B، (11) إضافة A لتعليق وظهوره في المنافسة، (12) إنهاء المنافسة (live -> completed)، (13) تقييم المشاهد C للمتنافسين وظهور الفائز وملخص التقييمات، (14) وصول الإشعارات للطرفين (دعوة لـ B، وقبول لـ A).
+  - مشروعان في Playwright config: `ar` (RTL) و `en` (LTR) بنفس كود الاختبار مع عزل أسماء المستخدمين بحسب المشروع لمنع تضارب بيانات قاعدة البيانات المتتالية.
+  - مسار حقيقي: تواصل كامل بين المتصفح وHono API وقاعدة بيانات D1 المحلية المعزولة عبر `wrangler pages dev`. صفر mocks لمنطق الأعمال المختبر.
+  - لا توجد أي استدعاءات لـ `waitForTimeout` أو `sleep(` في ملف الاختبار.
+  - ثبات التشغيل: اجتياز كامل 3 مرات متتالية لمشروعي ar و en معاً، بزمن إجمالي ~2.2 دقيقة (أقل من 3 دقائق).
+  - إثبات الاختبار الأحمر / الحساسية: تعمد كسر مسار قبول الدعوة (تغيير الـ URL إلى نقطة غير موجودة) وأعطى فشلاً صريحاً `B accepting the invite should succeed: expected true, received false` ثم استُعيد الكود الصحيح فوراً.
+  - خارج النطاق (مُستثنى عمداً): لا تعديل على CI / .github/workflows، لا تبعيات إضافية باستثناء `@playwright/test`، لا لمس لـ src business logic.
+  / Files: playwright.config.ts, tests/e2e/beta-core-path.spec.ts, package.json, package-lock.json, PLAN-STATUS.md, WORKLOG.md
+  / نفذ: Antigravity (B16 LOCAL agent)
+  / Verify: Playwright 2/2 (ar+en) 3 consecutive passes ✅ + npm test 188/188 ✅ + npx tsc --noEmit ✅ + npm run build ✅ + git diff -- .github/ فارغ ✅
+  / PR: test/core-beta-e2e (بلا دمج)
+
 ## 2026-09-16 — B15
 
 - `[B15]` RTL/dark/mobile polish لمسار Beta (فرع `fix/core-rtl-dark-mobile-polish` — بلا دمج):

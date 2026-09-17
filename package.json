@@ -19,7 +19,8 @@
     "routes:inventory": "node dev-tools/route-inventory.mjs",
     "test": "vitest run",
     "test:integration": "vitest run -c vitest.integration.config.ts",
-    "test:all": "npm test && npm run test:integration"
+    "test:all": "npm test && npm run test:integration",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hono/vite-cloudflare-pages": "^0.4.2",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260905.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/cli": "^4.1.17",
     "autoprefixer": "^10.4.22",
     "marked": "^17.0.1",
