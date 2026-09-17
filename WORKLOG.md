@@ -1,3 +1,16 @@
+## 2026-09-17 — F-5B: FollowModel extraction
+
+- 🔧 In progress on `refactor/core-models-inside-controllers`, based on origin/main `0afc20e8b21846f9cf319bc451cd63eb0606e1a6`.
+- Scope confirmed by task owner: move only the existing inline FollowModel to the Model layer. All other controller SQL, F-5A, F-5C, F-5D and route-local models remain untouched.
+- Preserve the existing OOP class and database-injected constructor, including its lack of BaseModel inheritance: this is a relocation of an existing model, not a new CRUD model. Adding BaseModel's required create/update API would exceed this behavior-preserving extraction.
+- Local validation: before extraction, the new API behavior pins passed 5/5; after extraction, FollowModel tests 7/7 and API pins 5/5 passed. `npm test`: 27 files, 208/208 passed. `npx tsc --noEmit`: exit 0. `npm run build`: exit 0. The initial model-test fixture omitted required display_name; corrected the fixture only, then all passed.
+- Affected real-D1 integration suite: 6/8 passed, including updated follow-location check; 2 pre-existing failures (case 6: null comment result; case 7: Failed to create conversation). Reproduced both using the origin/main test with identical CommentModel, MessageModel and Wrangler helper, selecting only those cases: 0 passed / 2 failed / 6 skipped. The helper only forwards CLI-provided last_row_id, while model create methods rely on that metadata; no unrelated code was changed. An intermediate overlapping retry also hit workerd SQLITE_IOERR_TRUNCATE during migration; the subsequent completed run reproduced the same two baseline failures. No lingering test processes remained.
+- Exact-body verification against origin/main: all five FollowModel methods, constructor, SQL, bindings, return/error behavior and the entire UserController class are unchanged (newline-normalized comparison). Therefore authorization, validation, i18n, responses, Promise.all ordering and notifications stay in place. In particular, duplicate follows still produce one relation but a notification per call, and caught insert errors still return false while the controller reports success and sends a notification. These existing behaviors are intentionally pinned, not fixed. No transaction or race-condition behavior changed.
+- Final scope: only FollowModel relocation, its import, regression tests and this documentation. No other controller SQL, F-5A, F-5C, F-5D, route-local models, schema/migrations, dependencies or UI changes. Build-generated CSS restored. Rollback: revert the F-5B commit; no data migration needed.
+- Files: src/controllers/UserController.ts, src/models/FollowModel.ts, tests/models/FollowModel.test.ts, tests/api/follow-extraction.test.ts, tests/integration/block-enforcement.test.ts, PLAN-STATUS.md, WORKLOG.md.
+- Local implementation validated; remote review/staging pending. Status remains 🔧 under G1–G8; no full quality-gate completion claim.
+
+
 ## 2026-09-17 — B16
 
 - `[B16]` E2E خفيف واحد لمسار Beta Core Done (فرع `test/core-beta-e2e` — بلا دمج):

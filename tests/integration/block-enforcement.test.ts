@@ -119,8 +119,11 @@ describe('B6 central block enforcement (real D1 + real models)', () => {
         expect(rows[0].n).toBe(0);
     });
 
-    it('5. Follow guard is wired centrally through UserBlockModel.isBlockedBetween in UserController', async () => {
-        const src = await ctrlSrc('src/controllers/UserController.ts');
+    it('5. Follow guard is wired centrally through UserBlockModel.isBlockedBetween in FollowModel', async () => {
+        const controller = await ctrlSrc('src/controllers/UserController.ts');
+        expect(controller).toContain("import { FollowModel } from '../models/FollowModel'");
+        expect(controller).not.toContain('class FollowModel');
+        const src = await ctrlSrc('src/models/FollowModel.ts');
         expect(src).toContain('isBlockedBetween(followerId, followingId)');
         expect(src).toContain('BlockedInteractionError');
         const guardIdx = src.indexOf('isBlockedBetween(followerId, followingId)');

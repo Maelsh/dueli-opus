@@ -9,6 +9,11 @@
 > مرجع التعريفات الكاملة: `docs/COMPLETE_PROJECT_PLANS.md` (تاريخي) — مرجع البوابة الحاكمة: `docs/11-DEFINITION-OF-DONE.md`
 > خارطة الطريق المصححة والأولويات الفعلية: `docs/15-ROADMAP.md`
 
+## F-5B — Controller-local FollowModel (2026-09-17)
+
+- 🔧 Local extraction validated, remote review/staging pending: only FollowModel moved from UserController to src/models/FollowModel.ts, preserving the constructor and five methods unchanged. New tests: 7 model + 5 API passed (API pins also passed 5/5 before extraction); npm test 208/208, tsc and build exit 0. Affected D1 integration: 6 passed / 2 pre-existing failures (comment/conversation creation), reproduced with origin/main test/dependencies. See WORKLOG.md for baseline evidence and the retained inheritance exception. No full G1–G8 completion claim.
+
+
 ## المرحلة 0 — التنظيف الكبير
 
 | ID | المهمة | الحالة | الملفات | اختبار القبول | التاريخ |
