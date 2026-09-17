@@ -136,7 +136,7 @@ export class CommentModel extends BaseModel<Comment> {
         // T3.3: nested replies — validate the parent belongs to the same competition
         if (data.parent_id) {
             const parent = await this.findById(data.parent_id);
-            if (!parent || (parent as any).competition_id !== data.competition_id) {
+            if (!parent || parent.competition_id !== data.competition_id) {
                 throw new Error('Invalid parent comment');
             }
         }

@@ -82,21 +82,9 @@ export class MatchmakingController extends BaseController {
 
             // Build search clause
             let searchClause = '';
-            const params: any[] = [
-                user.id,    // exclude self
-                user.id,    // block check 1
-                user.id,    // block check 2
-                competitionId, // already invited check
-                competition.language || lang,  // language scoring
-                competition.country || 'SA',   // country scoring
-            ];
-
             if (search && search.trim()) {
                 searchClause = `AND (u.display_name LIKE ? OR u.username LIKE ?)`;
-                params.push(`%${search.trim()}%`, `%${search.trim()}%`);
             }
-
-            params.push(limit, offset);
 
             const query = `
                 SELECT 

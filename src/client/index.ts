@@ -306,12 +306,12 @@ if (typeof window !== 'undefined') {
     window.loadMoreCompetitions = () => HomePage.loadMoreCompetitions();
 
     // Bind Competition Card Renderer (uses shared View component)
-    window.renderCompetitionCard = (item: CompetitionCardProps, lang: string = State.lang) => getCompetitionCard(item, lang as any);
-    window.renderCompetitionCards = (items: CompetitionCardProps[], lang: string = State.lang) => items.map(item => getCompetitionCard(item, lang as any)).join('');
+    window.renderCompetitionCard = (item: CompetitionCardProps, lang: string = State.lang) => getCompetitionCard(item, lang);
+    window.renderCompetitionCards = (items: CompetitionCardProps[], lang: string = State.lang) => items.map(item => getCompetitionCard(item, lang)).join('');
 
     // Bind User Card Renderer (uses shared View component)
-    window.renderUserCard = (user: UserCardProps, lang: string = State.lang) => getUserCard(user, lang as any);
-    window.renderUserCards = (users: UserCardProps[], lang: string = State.lang) => getUserCards(users, lang as any);
+    window.renderUserCard = (user: UserCardProps, lang: string = State.lang) => getUserCard(user, lang);
+    window.renderUserCards = (users: UserCardProps[], lang: string = State.lang) => getUserCards(users, lang);
 
     // Bind Streaming Services (for live room page)
     window.P2PConnection = P2PConnection;
