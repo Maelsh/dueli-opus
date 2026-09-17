@@ -1,3 +1,17 @@
+## 2026-09-18 — F-5C: SQL extracted from Pages
+
+- 🔧 In progress on `refactor/core-sql-inside-pages`, based on origin/main `0440b7881f046805780937013278b065ad0a24ee`.
+- Scope confirmed by task owner: move only the F-4-identified SQL inside `src/modules/pages/profile-page.ts` and `src/modules/pages/live/main.ts` into the existing Models. F-5A, F-5B, F-5D, F-6, controllers, other models, services, API routes, migrations, schema and dependencies untouched.
+- Extraction is behavior-preserving and reuses existing model methods (no new models, no model changes):
+  - profile-page: the two inline `SELECT COUNT(*) FROM follows ...` statements now run via `FollowModel.getFollowersCount/getFollowingCount` (same SQL and `bind(user.id)` parameter; identical null→0 semantics inside the model). Follow counts still run in the same `Promise.all` with `CompetitionModel.findByUser` (limit 10, `.catch([])`), so exact counts, failure isolation and rendered stats are unchanged.
+  - live/main (host + guest): the inline `SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime("now")` now runs via `SessionModel.findBySessionId` — the identical SQL/predicate, without `findValidSession`'s extra user/is_active lookups — and the inline `SELECT creator_id|opponent_id FROM competitions WHERE id = ?` now runs via `CompetitionModel.findOne('id', compId)` (`SELECT * FROM competitions WHERE id = ?` with the same string binding). Expiration check, host/guest determination, null/not-found redirects, i18n and page output unchanged.
+- New behavioral pins written to run against the real migrations and real Hono app (per docs/13): `tests/api/profile-sql-extraction.test.ts` (9 tests: exact directional SSR counts per language with self-fetch blocked, zero-count profile, session resolution via Bearer/sessionId/session_id, 401 missing/expired session, 404 unknown profile with original log, outer error handler defaults when a follow query rejects, competition-lookup failure isolation) and `tests/api/live-page-sql-extraction.test.ts` (25 tests across host/guest: role rendering in ar/en, exact login redirects for missing/unknown/expired sessions including the strict `datetime('now')` boundary, `not_authorized` redirect for wrong role/missing/nonmatching competition IDs, string-binding preservation for SQLite numeric affinity like `09002`, guest NULL-opponent handling). All pins passed before and after the extraction.
+- Local validation: focused suites 50/50 before extraction and 58/58 after (including the F-5A/F-5B regression pins). `npx tsc --noEmit`: exit 0. `npm run build`: exit 0 (build-generated CSS drift from the toolchain restored, as in F-5B).
+- Final scope: the two page files, two regression test files and this documentation. Rollback: revert the F-5C commit; no data migration needed.
+- Files: src/modules/pages/profile-page.ts, src/modules/pages/live/main.ts, tests/api/profile-sql-extraction.test.ts, tests/api/live-page-sql-extraction.test.ts, PLAN-STATUS.md, WORKLOG.md.
+- Local implementation validated; remote review/staging pending. Status remains 🔧 under G1–G8; no full quality-gate completion claim.
+
+
 ## 2026-09-17 — F-5B: FollowModel extraction
 
 - 🔧 In progress on `refactor/core-models-inside-controllers`, based on origin/main `0afc20e8b21846f9cf319bc451cd63eb0606e1a6`.

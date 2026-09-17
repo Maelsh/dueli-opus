@@ -11,6 +11,7 @@ import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 import { UserModel, SessionModel, CompetitionModel } from '../../models';
+import { FollowModel } from '../../models/FollowModel';
 
 const profilePageRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -64,16 +65,17 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 console.error(`[Profile] user not found: username=${username} origin=${origin}`);
             } else {
                 const competitionModel = new CompetitionModel(DB);
-                const [followersRow, followingRow, userCompetitions] = await Promise.all([
-                    DB.prepare('SELECT COUNT(*) as count FROM follows WHERE following_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
-                    DB.prepare('SELECT COUNT(*) as count FROM follows WHERE follower_id = ?').bind(user.id).first() as Promise<{ count: number } | null>,
+                const followModel = new FollowModel(DB);
+                const [followersCount, followingCount, userCompetitions] = await Promise.all([
+                    followModel.getFollowersCount(user.id as number),
+                    followModel.getFollowingCount(user.id as number),
                     competitionModel.findByUser(Number(user.id), { limit: 10 }).catch(() => [] as unknown[])
                 ]);
                 competitions = Array.isArray(userCompetitions) ? userCompetitions : [];
                 stats = {
                     competitions: (user.total_competitions as number) || competitions.length || 0,
-                    followers: followersRow?.count || 0,
-                    following: followingRow?.count || 0,
+                    followers: followersCount,
+                    following: followingCount,
                     wins: (user.total_wins as number) || (user.wins as number) || 0
                 };
             }

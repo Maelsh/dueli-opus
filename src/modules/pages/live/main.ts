@@ -9,6 +9,7 @@ import type { Bindings, Variables, Language } from '../../../config/types';
 import { translations, getUILanguage } from '../../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../../shared/components';
 import { generateHTML } from '../../../shared/templates/layout';
+import { SessionModel, CompetitionModel } from '../../../models';
 
 // استيراد مباشر من Views
 import { getLandingContent, getLandingScript } from './views/landing';
@@ -128,17 +129,13 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
     // Verify session and role
     if (compId) {
         try {
-            const session = await c.env.DB.prepare(
-                'SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime("now")'
-            ).bind(sessionId).first<{ user_id: number }>();
+            const session = await new SessionModel(c.env.DB).findBySessionId(sessionId);
 
             if (!session) {
                 return c.redirect('/login?redirect=/live/host?comp=' + compId + '&lang=' + lang);
             }
 
-            const competition = await c.env.DB.prepare(
-                'SELECT creator_id FROM competitions WHERE id = ?'
-            ).bind(compId).first<{ creator_id: number }>();
+            const competition = await new CompetitionModel(c.env.DB).findOne('id', compId);
 
             if (!competition || competition.creator_id !== session.user_id) {
                 return c.redirect('/competition/' + compId + '?lang=' + lang + '&error=not_authorized');
@@ -171,17 +168,13 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
     // Verify session and role
     if (compId) {
         try {
-            const session = await c.env.DB.prepare(
-                'SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime("now")'
-            ).bind(sessionId).first<{ user_id: number }>();
+            const session = await new SessionModel(c.env.DB).findBySessionId(sessionId);
 
             if (!session) {
                 return c.redirect('/login?redirect=/live/guest?comp=' + compId + '&lang=' + lang);
             }
 
-            const competition = await c.env.DB.prepare(
-                'SELECT opponent_id FROM competitions WHERE id = ?'
-            ).bind(compId).first<{ opponent_id: number }>();
+            const competition = await new CompetitionModel(c.env.DB).findOne('id', compId);
 
             if (!competition || competition.opponent_id !== session.user_id) {
                 return c.redirect('/competition/' + compId + '?lang=' + lang + '&error=not_authorized');
