@@ -10,7 +10,7 @@ export class HomePage {
     static currentMainTab: 'live' | 'upcoming' | 'recorded' = 'live';
     static currentSubTab: string = 'all';
     static currentOffset: number = 0;
-    static searchTimeout: any;
+    static searchTimeout: ReturnType<typeof setTimeout>;
 
     static init() {
         // Show upcoming tab if user is logged in
@@ -50,7 +50,7 @@ export class HomePage {
                 params.category = this.currentSubTab;
             }
 
-            const data = await CompetitionService.list(params) as any;
+            const data = await CompetitionService.list(params);
 
             if (!data.success || !data.data?.length) {
                 container.innerHTML = this.renderEmptyState(tr);
@@ -69,7 +69,7 @@ export class HomePage {
                     CompetitionService.list({ status: statusParam, subcategory: subcat, limit: 15 })
                 );
 
-                const results = await Promise.all(subcategoryPromises) as any[];
+                const results = await Promise.all(subcategoryPromises);
 
                 // Render each subcategory that has data
                 subcategories.forEach((subcat, index) => {
@@ -92,7 +92,7 @@ export class HomePage {
                     CompetitionService.list({ status: statusParam, category: 'dialogue', limit: 15 }),
                     CompetitionService.list({ status: statusParam, category: 'science', limit: 15 }),
                     CompetitionService.list({ status: statusParam, category: 'talents', limit: 15 })
-                ]) as any[];
+                ]);
 
                 // Always render all 4 sections using fixed colors from constants
                 if (recommendedRes.success && recommendedRes.data?.length > 0) {
@@ -225,7 +225,7 @@ export class HomePage {
                 params.category = this.currentSubTab;
             }
 
-            const data = await CompetitionService.list(params) as any;
+            const data = await CompetitionService.list(params);
 
             if (data.success && data.data?.length > 0) {
                 if (btn && btn.parentElement) btn.parentElement.remove();
@@ -416,7 +416,7 @@ export class HomePage {
             const wrapper = container.parentElement;
             if (!wrapper) return;
 
-            let scrollInterval: any = null;
+            let scrollInterval: ReturnType<typeof setInterval> | null = null;
             const scrollSpeed = 8; // Pixels per frame
 
             wrapper.addEventListener('mousemove', (e: Event) => {

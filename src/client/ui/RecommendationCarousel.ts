@@ -133,7 +133,7 @@ export class RecommendationCarousel {
                     }
 
                     newItems.forEach((item: CompetitionCardProps) => {
-                        const cardHtml = getCompetitionCard(item, State.lang as any);
+                        const cardHtml = getCompetitionCard(item, State.lang);
                         const wrapper = document.createElement('div');
                         wrapper.className = 'snap-start flex-shrink-0 w-72';
                         wrapper.innerHTML = cardHtml;
@@ -249,7 +249,7 @@ export class CompetitorsMiniStatsCard {
                     ${top_categories && top_categories.length > 0 ? `
                         <div class="space-y-1.5">
                             <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">${t('recommendations.top_categories', lang)}</div>
-                            ${top_categories.map((cat: any) => {
+                            ${top_categories.map((cat) => {
                                 const name = lang === 'ar' ? cat.name_ar : cat.name_en;
                                 return `
                                     <div class="flex items-center gap-2">
