@@ -79,6 +79,18 @@ export const ar = {
         talents: 'مسرح المواهب'
     },
 
+    // مفاتيح الأقسام الفرعية (تستخدم بواسطة getCategoryName عند البحث بمفتاح الـ slug)
+    religions: 'الأديان',
+    sects: 'المذاهب',
+    politics: 'السياسة',
+    economics: 'الاقتصاد',
+    physics: 'الفيزياء',
+    biology: 'الأحياء',
+    chemistry: 'الكيمياء',
+    math: 'الرياضيات',
+    technology: 'التقنية',
+    poetry: 'الشعر',
+
     // المنافسات
     competition: {
         self: 'منافسة',
