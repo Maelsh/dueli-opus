@@ -1,4 +1,11 @@
 
+## F-9 — Dot-Folders / Agent Artifacts Policy (2026-09-18)
+
+- 🔧 Local policy on `docs/dot-folders-policy`, based on origin/main `002d887` (merge of PR #29, F-8). Docs only: no code, migration, schema, API, test, dot-folder create/delete/move/rename, plan, cleanup or merge changes.
+- New `docs/17-DOT-FOLDERS-POLICY.md`: full inventory of the 7 agent artifacts found (`.agent`, `.blackbox`, `.claude`, `.gemini`, `.plan`, `.specify`, `.testsprite`) + explicit non-scope list (`.git/.github/.vscode/.wrangler/dotfiles` + `specs//testsprite_tests/` without dot) + the 6 binding rules (historical unless proven otherwise; not Sources of Truth; no planning/arch decisions on them; no new dot-folders without explicit permission; existence ≠ delete now; final cleanup not part of F-9). No new architectural decision, no F-10.
+- Linked from F-8 sources: `docs/00-OVERVIEW.md` (policy pointer), `docs/16-KNOWN-ISSUES.md` (§4 pointer), `AGENTS.md` (reading-list item 3 pointer).
+- Remote review pending. Status remains 🔧 under G1–G8; no APPROVE/MERGE claim.
+
 ## F-8 — Documentation Consolidation (2026-09-18)
 
 - 🔧 Local consolidation on `docs/consolidate-documentation`, based on origin/main `fbee0cc` (PR #28 merge). Docs only: no code, migration, schema, API, test or dot-folder changes.
