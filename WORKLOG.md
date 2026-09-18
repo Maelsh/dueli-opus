@@ -1,3 +1,12 @@
+## 2026-09-18 — F-9: Dot-Folders / Agent Artifacts Policy
+
+- 🔧 In progress on `docs/dot-folders-policy`, based on origin/main `002d887` (merge of PR #29, F-8).
+- Scope: F-9 only — document a binding policy for dot-folders/agent artifacts. No deletion, move, rename, code, migration/schema, API, test, new plan, new dot-folder, F-10, final cleanup or merge.
+- Inventory verified on disk (root + recursive depth 3, excluding `node_modules/` and `.git/`): 7 agent artifacts — `.agent/` (speckit commands/rules/skills), `.blackbox/` (6 root MDs + `agents/` 8 files + `docs/` 9 files), `.claude/` (7 files), `.gemini/` (3 MDs), `.plan/` (2 files), `.specify/` (memory/scripts/specs/templates + init-options.json), `.testsprite/` (config.json). No unlisted names recorded. Explicit non-scope: `.git/.github/.vscode/.wrangler(-test)/` + standard dotfiles + `specs//testsprite_tests/` (no dot).
+- Changes: new `docs/17-DOT-FOLDERS-POLICY.md` (6 binding rules, inventory, truth-source links, scope confirmations); pointers in `docs/00-OVERVIEW.md`, `docs/16-KNOWN-ISSUES.md`, `AGENTS.md`; F-9 entries in `PLAN-STATUS.md` + this file.
+- Validation: docs-only diff check + `npm run build` (see report). Local policy done; remote review pending, no merge.
+- Files: docs/17-DOT-FOLDERS-POLICY.md, docs/00-OVERVIEW.md, docs/16-KNOWN-ISSUES.md, AGENTS.md, PLAN-STATUS.md, WORKLOG.md.
+
 ## 2026-09-18 — F-8: Documentation Consolidation
 
 - 🔧 In progress on `docs/consolidate-documentation`, based on origin/main `fbee0cc` (merge of PR #28).

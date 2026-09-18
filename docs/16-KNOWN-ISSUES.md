@@ -40,6 +40,8 @@
 
 ## 4. ما ليس مصدر حقيقة (رغم مظهره)
 
+> الجرد الكامل ل dot-folders والسياسة الملزمة: `docs/17-DOT-FOLDERS-POLICY.md` (F-9).
+
 - `docs/archive/` — تاريخي غير موثوق (انظر `docs/archive/README.md`).
 - `.blackbox/` و`.gemini/` و`.claude/` و`.plan/` — مخلفات وكلاء/خطط سابقة
   (ملفات `*_PLAN.md` و`TODO*` و`SRS*`)؛ لها قيمة تاريخية فقط، **ليست** خطط عمل.
