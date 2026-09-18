@@ -9,6 +9,8 @@
  * - Rule C (Live Limit): Live broadcasts auto-terminate after exactly 2 hours max
  */
 
+import { t } from '../../i18n';
+
 export class ScheduledTaskService {
     constructor(private db: D1Database) { }
 
@@ -195,10 +197,17 @@ export class ScheduledTaskService {
             WHERE id = ?
         `).bind(competition.creator_id).run();
 
+        // F-7: user-facing notification copy goes through i18n (stored snapshot
+        // stays English via t(key, 'en'), so lifecycle/SQL behavior is unchanged).
         await this.db.prepare(`
             INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                        VALUES (?, 'system', 'Competition Deleted', 'Your instant competition was deleted because no opponent joined within 1 hour.', 'competition', ?, datetime('now'))
-                `).bind(competition.creator_id, competitionId).run();
+                        VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
+                `).bind(
+                    competition.creator_id,
+                    t('notification.comp_deleted_title', 'en'),
+                    t('notification.comp_deleted', 'en'),
+                    competitionId
+                ).run();
     }
 
     /**
@@ -233,10 +242,16 @@ export class ScheduledTaskService {
             DELETE FROM competition_invitations WHERE competition_id = ?
         `).bind(competitionId).run();
 
+        // F-7: i18n (stored snapshot stays English; behavior unchanged).
         await this.db.prepare(`
             INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-            VALUES (?, 'system', 'Competition Cancelled', 'Your scheduled competition was cancelled because no opponent joined within 1 hour of the scheduled time.', 'competition', ?, datetime('now'))
-                `).bind(competition.creator_id, competitionId).run();
+            VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
+                `).bind(
+                    competition.creator_id,
+                    t('notification.comp_cancelled', 'en'),
+                    t('notification.comp_cancelled_no_opponent', 'en'),
+                    competitionId
+                ).run();
     }
 
     /**
@@ -265,10 +280,16 @@ export class ScheduledTaskService {
 
         const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
         for (const userId of userIds) {
+            // F-7: i18n (stored snapshot stays English; behavior unchanged).
             await this.db.prepare(`
                 INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                VALUES (?, 'system', 'Competition Cancelled', 'The scheduled competition was cancelled because it did not start within 1 hour of the scheduled time.', 'competition', ?, datetime('now'))
-            `).bind(userId, competitionId).run();
+                VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
+            `).bind(
+                userId,
+                t('notification.comp_cancelled', 'en'),
+                t('notification.comp_cancelled_not_started', 'en'),
+                competitionId
+            ).run();
         }
     }
 
@@ -311,10 +332,16 @@ export class ScheduledTaskService {
 
         const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
         for (const userId of userIds) {
+            // F-7: i18n (stored snapshot stays English; behavior unchanged).
             await this.db.prepare(`
                 INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                VALUES (?, 'system', 'Competition Ended', 'The live competition was automatically ended after reaching the 2-hour maximum duration.', 'competition', ?, datetime('now'))
-            `).bind(userId, competitionId).run();
+                VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
+            `).bind(
+                userId,
+                t('notification.comp_ended_title', 'en'),
+                t('notification.comp_ended', 'en'),
+                competitionId
+            ).run();
         }
 
         return true;
@@ -354,13 +381,14 @@ export class ScheduledTaskService {
 
             const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
             for (const userId of userIds) {
+                // F-7: i18n (stored snapshot stays English; behavior unchanged).
                 await this.db.prepare(`
                     INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
                     VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
                 `).bind(
                     userId,
-                    'Competition Cancelled',
-                    'The competition was cancelled because it did not start in time.',
+                    t('notification.comp_cancelled', 'en'),
+                    t('notification.comp_cancelled_generic', 'en'),
                     task.competition_id
                 ).run();
             }
@@ -389,13 +417,14 @@ export class ScheduledTaskService {
     private async handleReminder(task: any): Promise<void> {
         const userIds = [task.creator_id, task.opponent_id].filter(Boolean);
         for (const userId of userIds) {
+            // F-7: i18n (stored snapshot stays English; behavior unchanged).
             await this.db.prepare(`
                 INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
                 VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
             `).bind(
                 userId,
-                'Competition Reminder',
-                'The competition will start soon!',
+                t('notification.comp_reminder_title', 'en'),
+                t('notification.comp_reminder', 'en'),
                 task.competition_id
             ).run();
         }

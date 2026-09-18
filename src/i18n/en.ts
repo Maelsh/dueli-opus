@@ -396,6 +396,17 @@ export const en = {
         new_rating_body: '{actor} rated the competition',
         system_notice: 'System notice',
         generic: 'You have a new notification',
+        // F-7: Competition lifecycle notifications — every user-facing string via i18n
+        comp_deleted_title: 'Competition Deleted',
+        comp_deleted: 'Your instant competition was deleted because no opponent joined within 1 hour.',
+        comp_cancelled: 'Competition Cancelled',
+        comp_cancelled_no_opponent: 'Your scheduled competition was cancelled because no opponent joined within 1 hour of the scheduled time.',
+        comp_cancelled_not_started: 'The scheduled competition was cancelled because it did not start within 1 hour of the scheduled time.',
+        comp_cancelled_generic: 'The competition was cancelled because it did not start in time.',
+        comp_ended_title: 'Competition Ended',
+        comp_ended: 'The live competition was automatically ended after reaching the 2-hour maximum duration.',
+        comp_reminder_title: 'Competition Reminder',
+        comp_reminder: 'The competition will start soon!',
     },
 
     // Messages
