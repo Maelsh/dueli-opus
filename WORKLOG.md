@@ -1,3 +1,11 @@
+## 2026-09-18 — F-10: Repository Change Policy
+
+- 🔧 In progress on `docs/repository-change-policy`, based on origin/main `042cbb5` (merge of PR #30, F-9).
+- Scope: F-10 only — generalize the F-9 no-new-artifacts principle into a binding Repository Change Policy for any new file/folder outside task scope. No deletion, move, rename, code (`src/`), migration/schema, API, test, new plan, new dot-folder/artifact, F-11 or merge.
+- Changes: new `docs/18-REPOSITORY-CHANGE-POLICY.md` (general rule + two lawful paths + prohibited list + F-9 relation + truth-source links + scope confirmations); enforcement quick rule in `AGENTS.md`; pointers in `docs/00-OVERVIEW.md` and `docs/17-DOT-FOLDERS-POLICY.md`; F-10 entries in `PLAN-STATUS.md` + this file. Compatible with the F-8 Source-of-Truth hierarchy and F-9; no new architectural decision; OOP/MVC/SoC/i18n untouched.
+- Validation: docs-only diff check + `npm run build` (see report). Local policy done; remote review pending, no merge.
+- Files: docs/18-REPOSITORY-CHANGE-POLICY.md, AGENTS.md, docs/00-OVERVIEW.md, docs/17-DOT-FOLDERS-POLICY.md, PLAN-STATUS.md, WORKLOG.md.
+
 ## 2026-09-18 — F-9: Dot-Folders / Agent Artifacts Policy
 
 - 🔧 In progress on `docs/dot-folders-policy`, based on origin/main `002d887` (merge of PR #29, F-8).

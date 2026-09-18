@@ -1,4 +1,11 @@
 
+## F-10 — Repository Change Policy (2026-09-18)
+
+- 🔧 Local policy on `docs/repository-change-policy`, based on origin/main `042cbb5` (merge of PR #30, F-9). Docs only: no code, migration, schema, API, test, dot-folder/artifact create/delete/move/rename, plan, F-11 or merge changes.
+- New `docs/18-REPOSITORY-CHANGE-POLICY.md`: general rule (no new file/folder outside task scope without explicit documented permission; allowed only if in-scope + justified in task report, or with explicit approval) + binding non-exhaustive list (planning files/plan copies, agent-artifact folders, temp reports, temp test files, personal agent tools, `.agent/.claude/.gemini` and similar) + F-9 relation (generalization, no deletion/move decision) + truth-source links + scope confirmations (OOP/MVC/SoC/i18n preserved, untouched).
+- Enforced via new "تغيير المستودع (F-10)" quick rule in `AGENTS.md`; pointers in `docs/00-OVERVIEW.md` and `docs/17-DOT-FOLDERS-POLICY.md` (§4).
+- Remote review pending. Status remains 🔧 under G1–G8; no APPROVE/MERGE claim.
+
 ## F-9 — Dot-Folders / Agent Artifacts Policy (2026-09-18)
 
 - 🔧 Local policy on `docs/dot-folders-policy`, based on origin/main `002d887` (merge of PR #29, F-8). Docs only: no code, migration, schema, API, test, dot-folder create/delete/move/rename, plan, cleanup or merge changes.
