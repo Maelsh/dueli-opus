@@ -1,4 +1,12 @@
 
+## F-8 — Documentation Consolidation (2026-09-18)
+
+- 🔧 Local consolidation on `docs/consolidate-documentation`, based on origin/main `fbee0cc` (PR #28 merge). Docs only: no code, migration, schema, API, test or dot-folder changes.
+- Source-of-Truth map added in `docs/00-OVERVIEW.md` (categories A–G); new `docs/16-KNOWN-ISSUES.md` (duplicate 0012 numbering, corrected assumptions, non-sources list).
+- Updated to match F-1 → F-7 reality: `docs/01` (governance refs + F-5A–F-5D SQL-free rule + FollowModel exception + G1–G8 workflow), `docs/02` (migrations 0014–0018 + duplicate-0012 note), `docs/03` (cron Bearer POST-only, SEC-11 pointer, B10/B11 endpoints), `docs/05` (F-6 STS SSOT + F-7 i18n), `AGENTS.md` (cron truth, F-5/F-6 pointers, reading list 1–11).
+- Archived clearly (not deleted): `docs/COMPLETE_PROJECT_PLANS.md` bannered historical, `docs/10` bannered dated snapshot, `docs/archive/README.md` pointer fixed to governance docs.
+- Remote review pending. Status remains 🔧 under G1–G8; no APPROVE/MERGE claim.
+
 ## F-5D — SQL inside AdminController (2026-09-18)
 
 - 🔧 Local extraction validated, remote review/staging pending: every direct SQL statement inside `src/controllers/AdminController.ts` moved to the Model layer, behavior-preserving (same SQL, bindings, WHERE, sorting/pagination, error handling and response contracts; authorization and i18n untouched).

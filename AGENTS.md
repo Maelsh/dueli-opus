@@ -7,18 +7,20 @@
 > ⚠️ **تحديث حاكم:** تدقيق لاحق (`docs/10-ARCHITECTURE-ASSESSMENT.md`) وجد أن
 > `PLAN-STATUS.md` صنّف 20+ مهمة "✅ مكتملة ومختبرة" بينما المشروع يحتوي **صفر
 > اختبارات آلية** وفيه ثغرات مالية/أمنية نشطة. عند التعارض بين `COMPLETE_PROJECT_PLANS.md`
-> والوثائق 10–15 أدناه، **الوثائق 10–15 هي الصائبة** — راجع `docs/15-ROADMAP.md` قبل
+> والوثائق 00 و10–16 أدناه، **تلك الوثائق هي الصائبة** — راجع `docs/15-ROADMAP.md` قبل
 > `COMPLETE_PROJECT_PLANS.md` لأي عمل جديد.
 
 1. `docs/11-DEFINITION-OF-DONE.md` — **بوابة الجودة الحاكمة** — لا تُعلن مهمة "✅ مكتملة" قبل اجتيازها (8 شروط G1–G8، + M1–M6 للمسارات المالية)
-2. `docs/15-ROADMAP.md` — خارطة الطريق التنفيذية المصححة (المراحل 0–9، بالترتيب الملزم)
-3. `docs/12-SECURITY-REMEDIATION.md` — كل ثغرة أمنية/مالية معروفة (SEC-01 → SEC-15) بالملف والسطر والتوجيه ومعيار القبول
-4. `docs/13-TEST-STRATEGY.md` — استراتيجية الاختبار (Vitest/Playwright) وبنية `tests/` قبل كتابة أي اختبار
-5. `docs/14-ROUTE-INVENTORY.md` — جرد المسارات (مولَّد: `npm run routes:inventory`) — لا تفترض حماية مسار بلا التحقق منه هنا
-6. `docs/01-ARCHITECTURE-RULES.md` — القواعد المعمارية الملزمة (لا تزال سارية)
-7. `docs/COMPLETE_PROJECT_PLANS.md` — الأرشيف التاريخي لمعرّف المهام (P?-T??) — **حالة "مكتملة" فيه غير موثوقة**، اعتمد `PLAN-STATUS.md` + G1–G8 بدلاً منها
-8. `PLAN-STATUS.md` — حالة المهام (حدّثها بعد كل مهمة، بالرموز المصحَّحة: ☐ / 🔧 / 🧪 مُتحقَّقة يدوياً بلا اختبار / ✅ اجتازت G1–G8 / ⛔)
-9. `WORKLOG.md` — سجل التغييرات (سجّل فيه بعد كل مهمة)
+2. `docs/00-OVERVIEW.md` — **خريطة مصادر الحقيقة** (أي وثيقة تدّعي أنها "الحالية" خارجها = تاريخية)
+3. `docs/16-KNOWN-ISSUES.md` — تصحيحات ملزمة (ترقيم 0012 المكرر، افتراضات ثبت خطؤها، ما ليس مصدر حقيقة) — اقرأه قبل افتراض أي شيء قديم
+4. `docs/15-ROADMAP.md` — خارطة الطريق التنفيذية المصححة (المراحل 0–9، بالترتيب الملزم)
+5. `docs/12-SECURITY-REMEDIATION.md` — كل ثغرة أمنية/مالية معروفة (SEC-01 → SEC-15) بالملف والسطر والتوجيه ومعيار القبول
+6. `docs/13-TEST-STRATEGY.md` — استراتيجية الاختبار (Vitest/Playwright) وبنية `tests/` قبل كتابة أي اختبار
+7. `docs/14-ROUTE-INVENTORY.md` — جرد المسارات (مولَّد: `npm run routes:inventory`) — لا تفترض حماية مسار بلا التحقق منه هنا
+8. `docs/01-ARCHITECTURE-RULES.md` — القواعد المعمارية الملزمة (لا تزال سارية)
+9. `docs/COMPLETE_PROJECT_PLANS.md` — الأرشيف التاريخي لمعرّف المهام (P?-T??) — **حالة "مكتملة" فيه غير موثوقة**، اعتمد `PLAN-STATUS.md` + G1–G8 بدلاً منها
+10. `PLAN-STATUS.md` — حالة المهام (حدّثها بعد كل مهمة، بالرموز المصحَّحة: ☐ / 🔧 / 🧪 مُتحقَّقة يدوياً بلا اختبار / ✅ اجتازت G1–G8 / ⛔)
+11. `WORKLOG.md` — سجل التغييرات (سجّل فيه بعد كل مهمة)
 
 ## قواعد سريعة
 
@@ -41,6 +43,7 @@
 - ad-blocks, ad-reports, donations, payment-methods مربوطة في `main.ts` (خطة 4) — لكن راجع `docs/14-ROUTE-INVENTORY.md` قبل افتراض أنها محمية؛ عدّة مسارات فيها بلا `authMiddleware` (SEC-13)
 - **لا تعدّل الملفات العربية عبر PowerShell Set-Content** — يفسد الترميز. أدوات تحرير الملفات فقط
 - المصادقة: Bearer header أو `?token=` أو cookie sessionId — **⚠ `?token=` مرفوض هندسياً (SEC-11): يُسجَّل في سجلات الطرف الثالث. الإزالة مجدولة بالمرحلة 4 من `15-ROADMAP.md`، لا تعتمد عليه في كود جديد**
-- cron: لا يوجد cron أصلي في Pages — المجدول الخارجي يضرب `/api/cron/run?key=CRON_SECRET` كل دقيقة — **⚠ سرّ في query string (SEC-04): يُنقل لترويسة `Authorization: Bearer` بالمرحلة 1**
+- cron: لا يوجد cron أصلي في Pages — المجدول الخارجي يضرب `POST /api/cron/run` بترويسة `Authorization: Bearer <CRON_SECRET>` كل دقيقة (SEC-04 مُنفّذة في الكود؛ `?key=` مرفوضة) — منطق الدورة SSOT في `ScheduledTaskService` و`CronHandler` يفوّض له (F-6)
+- **MVC مُطبّق (F-5A → F-5D):** `CompetitionController` و`AdminController` وصفحتا `profile-page` و`live/main` بلا SQL مباشر — أي SQL جديد فيها مرفوض. الاستثناء الوحيد: `FollowModel` لا يرث `BaseModel` عمداً (نُقل كما هو في F-5B — لا "تصلحه")
 - الدخول يفحص `is_verified` (وليس `email_verified` غير المستخدم) — تعارض مخطط مؤجل لـT3.x
 - CI: `.github/workflows/quality-gate.yml` يفرض جزءاً من `docs/11-DEFINITION-OF-DONE.md` — بعض الفحوص لا تزال `continue-on-error: true` (فترة سماح أسبوع من أول تشغيل ناجح) ثم تصبح مانعة — راجع تعليقات الملف قبل تعديله
