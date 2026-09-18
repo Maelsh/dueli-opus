@@ -145,6 +145,183 @@ export class ScheduledTaskService {
     }
 
     /**
+     * ====================================================================
+     * F-6: Single Source of Truth for Competition lifecycle operations.
+     *
+     * CronHandler.handleLifecycleTimers (scan-driven, for competitions with
+     * no scheduled-task rows) and the private task handlers below
+     * (task-driven) both used to carry their own raw-SQL copies of these
+     * operations, which had drifted apart. The operations themselves now
+     * live ONLY here; callers keep their own trigger eligibility (scan
+     * queries / task due times) and delegate the transition + side effects
+     * to these methods.
+     * ====================================================================
+     */
+
+    /**
+     * Rule A (Instant): delete an instant competition that never got an
+     * opponent. Order: requests → invitations → competition → free creator
+     * → notify creator.
+     */
+    async expireInstantWithoutOpponent(competitionId: number): Promise<void> {
+        const competition = await this.db.prepare(`
+            SELECT id, creator_id, opponent_id, competition_type, status, created_at
+            FROM competitions WHERE id = ?
+        `).bind(competitionId).first() as any;
+
+        if (!competition) return;
+
+        await this.db.prepare(`
+            DELETE FROM competition_requests WHERE competition_id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            DELETE FROM competition_invitations WHERE competition_id = ?
+        `).bind(competitionId).run();
+
+        // Clean up any scheduled tasks before deleting the competition
+        // (necessary when FK enforcement is ON: competition_scheduled_tasks
+        // references competitions.id without ON DELETE CASCADE)
+        await this.db.prepare(`
+            DELETE FROM competition_scheduled_tasks WHERE competition_id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            DELETE FROM competitions WHERE id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
+            WHERE id = ?
+        `).bind(competition.creator_id).run();
+
+        await this.db.prepare(`
+            INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
+                        VALUES (?, 'system', 'Competition Deleted', 'Your instant competition was deleted because no opponent joined within 1 hour.', 'competition', ?, datetime('now'))
+                `).bind(competition.creator_id, competitionId).run();
+    }
+
+    /**
+     * Rule B (Scheduled, no opponent): free the creator, cancel with reason
+     * 'scheduled_no_opponent_1hr', delete requests/invitations and notify the
+     * creator. No-op if scheduled_at is missing or less than 1 hour past.
+     */
+    async cancelScheduledWithoutOpponent(competitionId: number): Promise<void> {
+        const competition = await this.db.prepare(`
+            SELECT id, creator_id, scheduled_at FROM competitions WHERE id = ?
+        `).bind(competitionId).first() as any;
+
+        if (!competition || !competition.scheduled_at) return;
+
+        const scheduledTime = new Date(competition.scheduled_at).getTime();
+        if ((Date.now() - scheduledTime) / (1000 * 60 * 60) < 1) return;
+
+        await this.db.prepare(`
+            UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
+            WHERE id = ?
+        `).bind(competition.creator_id).run();
+
+        await this.db.prepare(`
+            UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_no_opponent_1hr', updated_at = datetime('now') WHERE id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            DELETE FROM competition_requests WHERE competition_id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            DELETE FROM competition_invitations WHERE competition_id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
+            VALUES (?, 'system', 'Competition Cancelled', 'Your scheduled competition was cancelled because no opponent joined within 1 hour of the scheduled time.', 'competition', ?, datetime('now'))
+                `).bind(competition.creator_id, competitionId).run();
+    }
+
+    /**
+     * Rule B (Scheduled, has opponent but not started): free all bound users,
+     * cancel with reason 'scheduled_not_started_1hr' and notify both
+     * participants. No-op if scheduled_at is missing or less than 1 hour past.
+     */
+    async cancelScheduledNotStarted(competitionId: number): Promise<void> {
+        const competition = await this.db.prepare(`
+            SELECT id, creator_id, opponent_id, scheduled_at FROM competitions WHERE id = ?
+        `).bind(competitionId).first() as any;
+
+        if (!competition || !competition.scheduled_at) return;
+
+        const scheduledTime = new Date(competition.scheduled_at).getTime();
+        if ((Date.now() - scheduledTime) / (1000 * 60 * 60) < 1) return;
+
+        await this.db.prepare(`
+            UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
+            WHERE current_competition_id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_not_started_1hr', updated_at = datetime('now') WHERE id = ?
+        `).bind(competitionId).run();
+
+        const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
+        for (const userId of userIds) {
+            await this.db.prepare(`
+                INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
+                VALUES (?, 'system', 'Competition Cancelled', 'The scheduled competition was cancelled because it did not start within 1 hour of the scheduled time.', 'competition', ?, datetime('now'))
+            `).bind(userId, competitionId).run();
+        }
+    }
+
+    /**
+     * Rule C (Live limit): complete a live competition that has been live for
+     * at least `minLiveHours` hours: set completed + 'live_max_2hr', free all
+     * bound users, delete chunk_keys and notify both participants.
+     * Returns true if the competition was ended. The threshold is supplied by
+     * the trigger (scan path: 2h exact; scheduled-task path: 1.9h skew
+     * tolerance) — the operation itself is shared.
+     */
+    async endLiveMaxDuration(competitionId: number, minLiveHours: number = 2): Promise<boolean> {
+        const competition = await this.db.prepare(`
+            SELECT id, creator_id, opponent_id, started_at FROM competitions WHERE id = ?
+        `).bind(competitionId).first() as any;
+
+        if (!competition) return false;
+
+        if (competition.started_at) {
+            const startedAt = new Date(competition.started_at).getTime();
+            const hoursLive = (Date.now() - startedAt) / (1000 * 60 * 60);
+            if (hoursLive < minLiveHours) return false;
+        }
+
+        await this.db.prepare(`
+            UPDATE competitions
+            SET status = 'completed', ended_at = datetime('now'), updated_at = datetime('now'),
+                auto_deleted_reason = 'live_max_2hr'
+            WHERE id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
+            WHERE current_competition_id = ?
+        `).bind(competitionId).run();
+
+        await this.db.prepare(`
+            DELETE FROM chunk_keys WHERE competition_id = ?
+        `).bind(competitionId).run();
+
+        const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
+        for (const userId of userIds) {
+            await this.db.prepare(`
+                INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
+                VALUES (?, 'system', 'Competition Ended', 'The live competition was automatically ended after reaching the 2-hour maximum duration.', 'competition', ?, datetime('now'))
+            `).bind(userId, competitionId).run();
+        }
+
+        return true;
+    }
+
+
+    /**
      * Rule A (Instant): "Instant" open competitions get deleted entirely
      * (with requests) if 1 hour passes without an opponent.
      */
@@ -162,46 +339,13 @@ export class ScheduledTaskService {
 
         if (competition.competition_type === 'instant' && !competition.opponent_id) {
             // Rule A: Instant competition without opponent for 1 hour -> DELETE entirely
-            const userIds = [competition.creator_id].filter(Boolean);
-            for (const userId of userIds) {
-                await this.db.prepare(`
-                    INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                    VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
-                `).bind(
-                    userId,
-                    'Competition Deleted',
-                    'Your instant competition was deleted because no opponent joined within 1 hour.',
-                    task.competition_id
-                ).run();
-            }
-
-            // Delete all associated requests
-            await this.db.prepare(`
-                DELETE FROM competition_requests WHERE competition_id = ?
-            `).bind(task.competition_id).run();
-
-            // Delete all associated invitations
-            await this.db.prepare(`
-                DELETE FROM competition_invitations WHERE competition_id = ?
-            `).bind(task.competition_id).run();
-
-            // Delete the competition entirely
-            await this.db.prepare(`
-                DELETE FROM competitions WHERE id = ?
-            `).bind(task.competition_id).run();
-
-            // Free the creator
-            await this.db.prepare(`
-                UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
-                WHERE id = ?
-            `).bind(competition.creator_id).run();
-
+            await this.expireInstantWithoutOpponent(competition.id);
         } else if (competition.competition_type === 'scheduled' && !competition.opponent_id) {
             // Rule B: Scheduled competition - free the creator and cancel if 1 hour passes post-schedule
-            await this.handleScheduledNoOpponent(task, competition);
+            await this.cancelScheduledWithoutOpponent(competition.id);
         } else if (competition.opponent_id && competition.status !== 'live' && competition.status !== 'completed') {
             // Has opponent but hasn't started - cancel after 1 hour post-schedule
-            await this.handleScheduledNotStarted(task, competition);
+            await this.cancelScheduledNotStarted(competition.id);
         } else {
             // Generic: cancel old pending competitions
             await this.db.prepare(`
@@ -229,92 +373,6 @@ export class ScheduledTaskService {
     }
 
     /**
-     * Rule B (Scheduled): Scheduled competition without opponent -
-     * free the creator and cancel 1 hour after scheduled time
-     */
-    private async handleScheduledNoOpponent(task: any, competition: any): Promise<void> {
-        const scheduledAt = competition.scheduled_at;
-        if (!scheduledAt) return;
-
-        const scheduledTime = new Date(scheduledAt).getTime();
-        const now = Date.now();
-        const hoursSinceScheduled = (now - scheduledTime) / (1000 * 60 * 60);
-
-        if (hoursSinceScheduled < 1) return;
-
-        // Free the creator
-        await this.db.prepare(`
-            UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
-            WHERE id = ?
-        `).bind(competition.creator_id).run();
-
-        // Cancel the competition
-        await this.db.prepare(`
-            UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_no_opponent_1hr', updated_at = datetime('now') WHERE id = ?
-        `).bind(task.competition_id).run();
-
-        // Delete associated requests and invitations
-        await this.db.prepare(`
-            DELETE FROM competition_requests WHERE competition_id = ?
-        `).bind(task.competition_id).run();
-
-        await this.db.prepare(`
-            DELETE FROM competition_invitations WHERE competition_id = ?
-        `).bind(task.competition_id).run();
-
-        // Notify creator
-        await this.db.prepare(`
-            INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-            VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
-        `).bind(
-            competition.creator_id,
-            'Competition Cancelled',
-            'Your scheduled competition was cancelled because no opponent joined within 1 hour of the scheduled time.',
-            task.competition_id
-        ).run();
-    }
-
-    /**
-     * Rule B (Scheduled): Scheduled competition with opponent but not started -
-     * free both users and cancel 1 hour post-schedule
-     */
-    private async handleScheduledNotStarted(task: any, competition: any): Promise<void> {
-        const scheduledAt = competition.scheduled_at;
-        if (!scheduledAt) return;
-
-        const scheduledTime = new Date(scheduledAt).getTime();
-        const now = Date.now();
-        const hoursSinceScheduled = (now - scheduledTime) / (1000 * 60 * 60);
-
-        if (hoursSinceScheduled < 1) return;
-
-        // Free both users
-        await this.db.prepare(`
-            UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
-            WHERE current_competition_id = ?
-        `).bind(task.competition_id).run();
-
-        // Cancel the competition
-        await this.db.prepare(`
-            UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_not_started_1hr', updated_at = datetime('now') WHERE id = ?
-        `).bind(task.competition_id).run();
-
-        // Notify participants
-        const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
-        for (const userId of userIds) {
-            await this.db.prepare(`
-                INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
-            `).bind(
-                userId,
-                'Competition Cancelled',
-                'The scheduled competition was cancelled because it did not start within 1 hour of the scheduled time.',
-                task.competition_id
-            ).run();
-        }
-    }
-
-    /**
      * Rule C (Live Limit): Live broadcasts auto-terminate after exactly 2 hours max
      */
     private async handleAutoEnd(task: any): Promise<void> {
@@ -322,55 +380,7 @@ export class ScheduledTaskService {
             return;
         }
 
-        const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, started_at FROM competitions WHERE id = ?
-        `).bind(task.competition_id).first() as any;
-
-        if (!competition) return;
-
-        // Verify it has actually been live for >= 2 hours
-        if (competition.started_at) {
-            const startedAt = new Date(competition.started_at).getTime();
-            const now = Date.now();
-            const hoursLive = (now - startedAt) / (1000 * 60 * 60);
-
-            if (hoursLive < 1.9) {
-                return;
-            }
-        }
-
-        // End the competition
-        await this.db.prepare(`
-            UPDATE competitions
-            SET status = 'completed', ended_at = datetime('now'), updated_at = datetime('now'),
-                auto_deleted_reason = 'live_max_2hr'
-            WHERE id = ?
-        `).bind(task.competition_id).run();
-
-        // Free both users
-        await this.db.prepare(`
-            UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
-            WHERE current_competition_id = ?
-        `).bind(task.competition_id).run();
-
-        // Delete chunk keys
-        await this.db.prepare(`
-            DELETE FROM chunk_keys WHERE competition_id = ?
-        `).bind(task.competition_id).run();
-
-        // Notify participants
-        const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
-        for (const userId of userIds) {
-            await this.db.prepare(`
-                INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                VALUES (?, 'system', ?, ?, 'competition', ?, datetime('now'))
-            `).bind(
-                userId,
-                'Competition Ended',
-                'The live competition was automatically ended after reaching the 2-hour maximum duration.',
-                task.competition_id
-            ).run();
-        }
+        await this.endLiveMaxDuration(task.competition_id, 1.9);
     }
 
     /**

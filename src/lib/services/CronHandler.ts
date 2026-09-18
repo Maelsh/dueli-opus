@@ -7,6 +7,12 @@
  * - Rule A: Instant competitions without opponent for 1+ hour
  * - Rule B: Scheduled competitions not started 1+ hour post-schedule
  * - Rule C: Live competitions exceeding 2 hours
+ *
+ * F-6: The actual lifecycle *transitions + side effects* now live only in
+ * ScheduledTaskService as the Single Source of Truth. CronHandler keeps the
+ * scan queries (its unique job: catching competitions with no scheduled-task
+ * row that the task engine would never fire) and delegates each transition to
+ * those shared operations, instead of duplicating the raw-SQL writes.
  */
 
 import { ScheduledTaskService } from './ScheduledTaskService';
@@ -77,18 +83,25 @@ export async function handleCron(event: { cron: string }, env: CronEnv): Promise
 }
 
 /**
- * Task 8: Process lifecycle timer rules every minute
- * - Rule A: Instant competitions deleted after 1 hour without opponent
- * - Rule B: Scheduled competitions cancelled 1 hour post-schedule without starting
+ * F-6 (Task 8): Process lifecycle timer rules every minute.
+ *
+ * This scan is CronHandler's unique responsibility — it catches competitions
+ * that have NO scheduled-task row (the ScheduledTaskService task engine never
+ * fires for them). The transition + side effects are delegated to the shared
+ * operations in ScheduledTaskService so the two paths cannot drift apart:
+ *
+ * - Rule A: Instant competitions deleted after 1 hour without an opponent
+ * - Rule B: Scheduled competitions cancelled 1 hour post-schedule w/o starting
  * - Rule C: Live competitions auto-terminated after 2 hours
  */
 async function handleLifecycleTimers(env: CronEnv): Promise<void> {
     const db = env.DB;
+    const taskService = new ScheduledTaskService(db);
 
     // Rule A: Delete instant competitions that have been pending without opponent for 1+ hour
     try {
         const instantExpired = await db.prepare(`
-            SELECT id, creator_id FROM competitions
+            SELECT id FROM competitions
             WHERE competition_type = 'instant'
             AND status = 'pending'
             AND opponent_id IS NULL
@@ -96,19 +109,7 @@ async function handleLifecycleTimers(env: CronEnv): Promise<void> {
         `).all();
 
         for (const comp of (instantExpired.results || []) as any[]) {
-            // Delete requests
-            await db.prepare(`DELETE FROM competition_requests WHERE competition_id = ?`).bind(comp.id).run();
-            await db.prepare(`DELETE FROM competition_invitations WHERE competition_id = ?`).bind(comp.id).run();
-            // Delete competition entirely
-            await db.prepare(`DELETE FROM competitions WHERE id = ?`).bind(comp.id).run();
-            // Free creator
-            await db.prepare(`UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL WHERE id = ?`).bind(comp.creator_id).run();
-            // Notify creator
-            await db.prepare(`
-                INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                VALUES (?, 'system', 'Competition Deleted', 'Your instant competition was deleted because no opponent joined within 1 hour.', 'competition', ?, datetime('now'))
-            `).bind(comp.creator_id, comp.id).run();
-
+            await taskService.expireInstantWithoutOpponent(comp.id);
             console.log(`[CRON] Rule A: Deleted instant competition ${comp.id}`);
         }
     } catch (e) {
@@ -118,7 +119,7 @@ async function handleLifecycleTimers(env: CronEnv): Promise<void> {
     // Rule B: Cancel scheduled competitions not started 1+ hour post-schedule
     try {
         const scheduledExpired = await db.prepare(`
-            SELECT id, creator_id, opponent_id FROM competitions
+            SELECT id, opponent_id FROM competitions
             WHERE competition_type = 'scheduled'
             AND status IN ('pending', 'accepted')
             AND scheduled_at IS NOT NULL
@@ -126,22 +127,11 @@ async function handleLifecycleTimers(env: CronEnv): Promise<void> {
         `).all();
 
         for (const comp of (scheduledExpired.results || []) as any[]) {
-            await db.prepare(`
-                UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_not_started_1hr', updated_at = datetime('now') WHERE id = ?
-            `).bind(comp.id).run();
-
-            // Free users
-            await db.prepare(`UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL WHERE current_competition_id = ?`).bind(comp.id).run();
-
-            // Notify participants
-            const userIds = [comp.creator_id, comp.opponent_id].filter(Boolean);
-            for (const userId of userIds) {
-                await db.prepare(`
-                    INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                    VALUES (?, 'system', 'Competition Cancelled', 'The scheduled competition was cancelled because it did not start within 1 hour of the scheduled time.', 'competition', ?, datetime('now'))
-                `).bind(userId, comp.id).run();
+            if (comp.opponent_id) {
+                await taskService.cancelScheduledNotStarted(comp.id);
+            } else {
+                await taskService.cancelScheduledWithoutOpponent(comp.id);
             }
-
             console.log(`[CRON] Rule B: Cancelled scheduled competition ${comp.id}`);
         }
     } catch (e) {
@@ -151,30 +141,13 @@ async function handleLifecycleTimers(env: CronEnv): Promise<void> {
     // Rule C: Auto-end live competitions that have been live for 2+ hours
     try {
         const liveExpired = await db.prepare(`
-            SELECT id, creator_id, opponent_id FROM competitions
+            SELECT id FROM competitions
             WHERE status = 'live'
             AND started_at < datetime('now', '-2 hours')
         `).all();
 
         for (const comp of (liveExpired.results || []) as any[]) {
-            await db.prepare(`
-                UPDATE competitions
-                SET status = 'completed', ended_at = datetime('now'), updated_at = datetime('now'), auto_deleted_reason = 'live_max_2hr'
-                WHERE id = ?
-            `).bind(comp.id).run();
-
-            await db.prepare(`UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL WHERE current_competition_id = ?`).bind(comp.id).run();
-
-            await db.prepare(`DELETE FROM chunk_keys WHERE competition_id = ?`).bind(comp.id).run();
-
-            const userIds = [comp.creator_id, comp.opponent_id].filter(Boolean);
-            for (const userId of userIds) {
-                await db.prepare(`
-                    INSERT INTO notifications (user_id, type, title, message, reference_type, reference_id, created_at)
-                    VALUES (?, 'system', 'Competition Ended', 'The live competition was automatically ended after reaching the 2-hour maximum duration.', 'competition', ?, datetime('now'))
-                `).bind(userId, comp.id).run();
-            }
-
+            await taskService.endLiveMaxDuration(comp.id, 2);
             console.log(`[CRON] Rule C: Auto-ended live competition ${comp.id}`);
         }
     } catch (e) {
