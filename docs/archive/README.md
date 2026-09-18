@@ -1,4 +1,5 @@
 ﻿# ⚠️ أرشيف التوثيق القديم
 
 هذه الملفات تاريخية وغير موثوقة — تحتوي ادعاءات خاطئة (مثل اكتمال ميزات غير مكتملة).
-المصدر الوحيد الصحيح: docs/COMPLETE_PROJECT_PLANS.md و docs/01-ARCHITECTURE-RULES.md
+خريطة مصادر الحقيقة الحالية: `docs/00-OVERVIEW.md`.
+المصادر الحاكمة: `docs/11-DEFINITION-OF-DONE.md` و`docs/15-ROADMAP.md` (لا `docs/COMPLETE_PROJECT_PLANS.md` — هو نفسه أرشيف تاريخي).

@@ -1,6 +1,8 @@
 ﻿# 03 — مرجع الـAPI الحقيقي
 
-> مُحدّث يدوياً من `main.ts` — **الحقيقة الوحيد**. أي مسار غير مربوط هنا = 404 فعلياً.
+> مُحدّث يدوياً من `main.ts` — مرجع بشرى للمسارات المربوطة. أي مسار غير مربوط هنا = 404 فعلياً.
+> الجرد الآلي المولَّد (بما فيه تصنيف الحماية): `docs/14-ROUTE-INVENTORY.md` (`npm run routes:inventory`).
+> عند التعارض في وجود مسار: الكود (`src/main.ts`) هو الفيصل.
 > آخر تحديث: 2026-08-23
 
 ## ✅ مربوطة وتعمل في main.ts
@@ -27,7 +29,7 @@
 | `/api/recommendations` | modules/api/recommendations | ✅ مربوطة (T1.2) — شاملة competitor-stats/:userId |
 | `/api/leaderboard` | modules/api/leaderboard | ✅ مربوطة (T1.2) |
 | `/api/analytics` | modules/api/analytics | ✅ مربوطة (T1.2) |
-| `/api/cron/run?key=` | modules/api/cron | ✅ (T1.5) — محمية بـCRON_SECRET، تُستدعى من مجدول خارجي كل دقيقة |
+| `/api/cron/run` | modules/api/cron | ✅ (T1.5، حُصّن لاحقاً SEC-04) — `POST` فقط + `Authorization: Bearer <CRON_SECRET>` فقط (لا `?key=`)، تُستدعى من مجدول خارجي كل دقيقة |
 | `/api/users/delete-account` (+`/verify`) | modules/api/users/delete-account | ✅ مربوطة (T3.2) — حذف GDPR مع إخفاء الهوية |
 | `/api/admin/*` | modules/api/admin | ✅ (T3.4) — رُكّب authMiddleware؛ أفعال البلاغات تُنفذ فعلياً مع سجل تدقيق |
 | `/api/reports`, `/api/likes` | mounted at /api | ✅ (T3.4) — أُضيف authMiddleware الاختياري (كانت 401 للأبد) |
@@ -53,6 +55,18 @@
 - الحظر المركزي (B6) مطبَّق على الفعلين: زوج محظور ⇒ 403 `errors.blocked_interaction` بلا كتابة أي صف.
 - لا ترحيل جديد: الجدولان `likes` و`dislikes` موجودان في `0001_initial_schema.sql`.
 
+## B10/B11 — التقييم: الأهلية والملخص والسحب
+
+- `POST /api/competitions/:id/rate` — للمشاهدين فقط (لا تقييم ذاتي)، `completed` فقط،
+  وجود سجل `watch_history`، نافذة 24h من `ended_at`، بلا تكرار (تعارض متزامن ⇒ 409).
+  التفاصيل في `docs/05-COMPETITION-LIFECYCLE.md` (أهلية التقييم).
+- `GET /api/competitions/:id/ratings/summary` — متوسط/count/توزيع 1–5 لكل مشارك
+  (`average=null` عند الصفر) + `result:{status,label}`؛ **بلا أي هوية مقيّم**.
+- `DELETE /api/competitions/:id/rate?competitor_id=` — سحب التقييم داخل النافذة فقط
+  (خارجها ⇒ 409)؛ الحذف + إعادة حساب المجاميع في `db.batch()` واحد.
+- الفائز/ELO ذرّيان (B12): `winner_id` يُحسم بعد إغلاق النافذة، وELO مرة واحدة عبر
+  مطالبة `elo_applied_at` (0018) — انظر `docs/05` (النتيجة النهائية).
+
 ## ❌ موجودة ككود لكنها غير مربوطة (404)
 
 | البادئة | الوحدة | الخطة |
@@ -63,6 +77,7 @@
 
 - `POST /api/competitions/:id/end` — يجب أن يستدعي التقييم←الفائز←الأرباح (T1.5)
 - ~~`POST /api/competitions/:id/invite` ينشئ إشعار DB صامت~~ — ✅ يدفع SSE الآن (T2.2)
-- المصادقة: Bearer header **أو** `?token=` **أو** cookie sessionId (مطلوب لـEventSource)
+- المصادقة: Bearer header **أو** `?token=` **أو** cookie sessionId (مطلوب لـEventSource) —
+  `?token=` دين أمني مؤقت (SEC-11، انظر `AGENTS.md`): لا تعتمد عليه في كود جديد.
 
 > ⚠️ لا تعدّل هذا الملف عبر PowerShell (`Set-Content`) — يفسد ترميز العربية.

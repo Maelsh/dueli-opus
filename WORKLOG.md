@@ -1,3 +1,12 @@
+## 2026-09-18 — F-8: Documentation Consolidation
+
+- 🔧 In progress on `docs/consolidate-documentation`, based on origin/main `fbee0cc` (merge of PR #28).
+- Scope: F-8 only — unify the documentation source of truth after F-1 → F-7. No code, refactor, migration/schema, API, test, dot-folder, plan or merge changes.
+- Audit found: `docs/01` pointed to COMPLETE_PROJECT_PLANS as parent + stale P?-T??/✅ workflow; `docs/02` stopped at 0013 (actual 0018 + duplicate 0012 filenames); `docs/03` showed cron `?key=` (code is Bearer POST-only) and undocumented B10/B11 endpoints; `docs/05` lacked the F-6 STS SSOT statement; `AGENTS.md` repeated the stale cron `?key=` claim; `docs/archive/README.md` pointed to COMPLETE_PROJECT_PLANS as truth; `docs/10` numbers read as current; dot-folders (`.blackbox/.gemini/.claude/.plan`) contain competing historical plans with no non-source label; no unified Known Issues doc existed.
+- Changes: `docs/00` (Source-of-Truth map A–G); new `docs/16-KNOWN-ISSUES.md`; updated `docs/01/02/03/05`, `AGENTS.md`; bannered `docs/COMPLETE_PROJECT_PLANS.md` (historical) and `docs/10` (dated snapshot); fixed `docs/archive/README.md` pointer. Old docs archived in place, none deleted.
+- Validation: `npm run build` + competing-claim grep (see report). Local consolidation done; remote review pending, no merge.
+- Files: docs/00-OVERVIEW.md, docs/01-ARCHITECTURE-RULES.md, docs/02-DATABASE.md, docs/03-API-REFERENCE.md, docs/05-COMPETITION-LIFECYCLE.md, docs/10-ARCHITECTURE-ASSESSMENT.md, docs/16-KNOWN-ISSUES.md (new), docs/COMPLETE_PROJECT_PLANS.md, docs/archive/README.md, AGENTS.md, PLAN-STATUS.md, WORKLOG.md.
+
 ## 2026-09-18 — F-5D: SQL extracted from AdminController
 
 - 🔧 In progress on `refactor/admin-controller-models`, based on origin/main `5ccee8e` (merge of PR #25).
