@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-15T18:47:07.542Z
+> تاريخ التوليد: 2026-09-19T20:41:55.500Z
 
-## الإجمالي: 174 مسار
+## الإجمالي: 176 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 82 |
+| PUBLIC(auth-optional, in-handler check required) | 84 |
 | UNGUARDED ⚠ | 44 |
 | AUTHENTICATED | 48 |
 
@@ -115,7 +115,9 @@
 | GET | `/api/competitions/:id/like` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/likes/routes.ts` |
 | POST | `/api/competitions/:id/like` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/likes/routes.ts` |
 | GET | `/api/competitions/:id/likes` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/likes/routes.ts` |
+| DELETE | `/api/competitions/:id/rate` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/rate` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| GET | `/api/competitions/:id/ratings/summary` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | DELETE | `/api/competitions/:id/remind` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |
 | GET | `/api/competitions/:id/remind` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |
 | POST | `/api/competitions/:id/remind` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |

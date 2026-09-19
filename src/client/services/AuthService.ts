@@ -48,6 +48,14 @@ export class AuthService {
                     credentials: 'include'
                 });
 
+                // Rate-limited (429): the session is NOT invalid — keep local
+                // auth state untouched so a throttled check never logs the user
+                // out. Return false without clearing.
+                if (res.status === 429) {
+                    this.updateAuthUI();
+                    return false;
+                }
+
                 const data = await res.json() as ApiResponse;
                 const user = data.user || data.data?.user || data;
 
@@ -76,8 +84,10 @@ export class AuthService {
                     this.clearAuth();
                 }
             } catch (err) {
+                // Network/parse failure: transient, NOT proof the session is
+                // invalid. Preserve local auth state (do not clearAuth) and
+                // report unauthenticated for this check only.
                 console.error('Auth check failed:', err);
-                this.clearAuth();
             }
         }
 

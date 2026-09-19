@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-15T18:47:07.542Z",
-  "total": 174,
+  "generatedAt": "2026-09-19T20:41:55.500Z",
+  "total": 176,
   "routes": [
     {
       "method": "GET",
@@ -640,8 +640,22 @@
       "file": "src/modules/api/likes/routes.ts"
     },
     {
+      "method": "DELETE",
+      "path": "/api/competitions/:id/rate",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
       "method": "POST",
       "path": "/api/competitions/:id/rate",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/:id/ratings/summary",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/competitions/routes.ts"

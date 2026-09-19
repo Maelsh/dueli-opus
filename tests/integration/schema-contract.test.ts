@@ -48,6 +48,10 @@ const EXPECTED_MIGRATIONS = [
     '0012_reports_ad_target.sql',
     '0013_chunk_key_binding.sql',
     '0014_messages_conversation_alignment.sql',
+    '0015_content_length_bounds.sql',
+    '0016_comments_soft_delete.sql',
+    '0017_ratings_competition_competitor_idx.sql',
+    '0018_competitions_elo_applied_at.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -138,8 +142,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 15 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(15);
+    it('has exactly 19 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(19);
     });
 
     it('matches the full expected migration file name list', () => {
