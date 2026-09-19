@@ -35,8 +35,40 @@
 
 - دُمجت F-1 → F-7 دون سطور `PLAN-STATUS.md` لبعضها (F-1/F-2/F-3/F-7 بلا إدخال
   مخصص) — الدليل سجل الدمج في `git log`، لا تُعِد فتحها ولا تُلفّق لها حالات.
-- عدّاد `schema-contract` التكاملي قد يتخلف عن عدد ملفات `migrations/` بعد إضافة
-  ترحيل جديد — تحديث القائمة مهمة منفصلة، لا تُوسّع نطاق مهمتك لإصلاحه صامتاً.
+- ~~عدّاد `schema-contract` التكاملي قد يتخلف عن عدد ملفات `migrations/` بعد إضافة
+  ترحيل جديد — تحديث القائمة مهمة منفصلة، لا تُوسّع نطاق مهمتك لإصلاحه صامتاً.~~
+  **مُصحَّح 2026-09-19 (Beta Core Gate):** عُدّاد `schema-contract` حُدِّث إلى
+  **19 ملف migration** (0015→0018) ويطابق `migrations/` فعلياً. أي فشل جديد في
+  العدّاد بعد ترحيل مستقبلي = drift متوقع يُصلَح بتحديث القائمة فقط (لا حذف
+  ولا إعادة ترقيم migrations).
+- **Route inventory drift (موثق، ليس ثغرة — 2026-09-19):** الجرد المولَّد قد
+  يتخلف عن `src/modules/api/*/routes.ts` بعد إضافة مسارات (مثال: ‏B11 أضاف
+  `DELETE /api/competitions/:id/rate` و`GET /api/competitions/:id/ratings/summary`
+  فارتفع الإجمالي 174 → 176). الحل دائماً `node dev-tools/route-inventory.mjs`
+  (يُحدِّث `docs/14-ROUTE-INVENTORY.md` + `dev-tools/route-inventory.json` معاً) —
+  لا تغيير routes/صلاحيات لمطابقة الأرقام. `docs/14` مولَّدة آلياً وهي الحاكمة
+  لعدد المسارات؛ لا تنسخ العدد في وثيقة ثانية.
+
+## 5. Beta Core Gate — حقائق مثبتة (2026-09-19، لا تُعَد فتحها)
+
+- **Block Enforcement:** منطق الحظر (`UserBlockModel.isBlockedBetween` عبر
+  Comment/Rating/Message/Follow models) سليم. فشل الـ integration harness كان
+  tooling فقط: إصدار Wrangler المحلي لا يعيد `meta.last_row_id` في writes،
+  فأُضيف fallback داخل الاختبار (`SELECT MAX(id)` بعد الـ INSERT) —
+  بلا أي تغيير في production code.
+- **B16 Beta Core E2E:** ناجحة وموثقة في `PLAN-STATUS.md` (سطر B16: ‏2/2 ‏ar+en
+  ثلاث مرات متتالية + إثبات الحساسية الأحمر). لا تُعِد تشغيلها إلا إذا مسّ
+  تغييرك مسار Beta فعلياً.
+- **Auth rate-limit (إصلاح منتج حقيقي):** ‏`checkAuth()` كان يمسح الجلسة عند
+  أي `user` مفقود — بما فيه `429` — فتسبب rate limit ‏(`10/15min/IP` على
+  `/api/auth/*`) في forced logout. الإصلاح: `429` يُبقي الجلسة (return false
+  بلا clearAuth)، وأخطاء الشبكة لا تمسح أيضاً؛ الفشل الحقيقي (`user:null`)
+  ما زال يمسح. الاختبار: `tests/api/auth-ratelimit-session.test.ts`.
+- **getCategoryName fallback:** الحقول الصريحة (`category_name_<lang>` /
+  `name_<lang>`) تسبق الآن slug-key lookup، والـ slug يُحل عبر المفتاح
+  المسمّى `categories.<slug>` أولاً (الـ bare slug legacy فقط للتوافق).
+  هذا يمنع عودة `Physics` في سياق عربي رغم وجود `name_ar`. الاختبار المباشر
+  في `tests/api/auth-ratelimit-session.test.ts` (قسم getCategoryName).
 
 ## 4. ما ليس مصدر حقيقة (رغم مظهره)
 

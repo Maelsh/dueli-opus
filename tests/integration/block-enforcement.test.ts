@@ -38,7 +38,26 @@ function makeRealD1(): D1Database {
                     const m = runD1Write(fill(sql, params));
                     const meta: Record<string, unknown> = {};
                     if (typeof m.changes === 'number') meta['changes'] = m.changes;
-                    if (typeof m.lastRowId === 'number') meta['last_row_id'] = m.lastRowId;
+                    if (typeof m.lastRowId === 'number') {
+                        meta['last_row_id'] = m.lastRowId;
+                    } else if (/^\s*insert\s+into/i.test(sql)) {
+                        // Tooling fallback: this Wrangler CLI version omits
+                        // meta.last_row_id for writes. Resolve the inserted id
+                        // via a follow-up SELECT MAX(id) on the inserted table
+                        // so product code (result.meta.last_row_id) keeps
+                        // working without any production-code change.
+                        const tableMatch = sql.match(/^\s*insert\s+into\s+["'`\[]?(\w+)/i);
+                        const table = tableMatch ? tableMatch[1] : null;
+                        if (table) {
+                            try {
+                                const rows = queryD1(
+                                    `SELECT MAX(id) as id FROM ${table}`
+                                ) as Record<string, unknown>[];
+                                const id = rows[0]?.id;
+                                if (typeof id === 'number') meta['last_row_id'] = id;
+                            } catch { /* leave meta without last_row_id */ }
+                        }
+                    }
                     return { success: true, meta };
                 },
                 async first() {

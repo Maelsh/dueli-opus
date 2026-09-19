@@ -1,3 +1,10 @@
+## 2026-09-19 — Beta Core Gate Remediation (فرع `fix/beta-core-gate-remediation`)
+
+- النطاق: (1) route inventory drift = توثيقي فقط — أُعيد توليد الجرد (`node dev-tools/route-inventory.mjs`: ‏174 → ‏176 بإضافة مساري B11 ‏`DELETE /api/competitions/:id/rate` + ‏`GET .../ratings/summary`) بلا أي تغيير routes/صلاحيات؛ (2) schema-contract stale expectation — حُدِّثت القائمة إلى 19 migration ‏(0015→0018) بلا حذف/إعادة ترقيم؛ (3) Beta E2E — نجاح B16 موثق أصلاً في `PLAN-STATUS.md` فلم يُعَد بناؤه؛ (4) block-enforcement harness — إصلاح اختبار فقط (fallback ‏`SELECT MAX(id)` لغياب `meta.last_row_id` في Wrangler المحلي) بلا تغيير production؛ (5) auth rate-limit forced logout — **إصلاح منتج**: ‏`checkAuth()` لم يعد يمسح الجلسة عند `429`/خطأ شبكة، والفشل الحقيقي ما زال يمسح؛ (6) i18n ‏`getCategoryName` — الحقول الصريحة أولاً + slug مسمّى `categories.<slug>` + نسخة العميل في competition-page مطابقة + regression test مباشر.
+- الملفات: dev-tools/route-inventory.json، docs/14-ROUTE-INVENTORY.md، tests/integration/schema-contract.test.ts، tests/integration/block-enforcement.test.ts، src/client/services/AuthService.ts، src/i18n/index.ts، src/modules/pages/competition-page.ts، tests/api/auth-ratelimit-session.test.ts (جديد)، docs/16-KNOWN-ISSUES.md، WORKLOG.md.
+- التحقق: `npm test` ‏343/343 ✅ (منها auth-ratelimit-session ‏7/7)؛ `npx tsc --noEmit` ✅؛ `npm run build` ✅؛ `npm run db:reset` ✅ (‏19 migration + ‏seed 299)؛ wrangler migrations على حالة معزولة ✅ ‏19/19؛ block-enforcement integration ‏8/8 ✅؛ schema-contract integration: العدّاد/القائمة مُصحَّحة لكن التشغيل المحلي يتعثر على قفل `.wrangler-test` في Windows ‏(EBUSY rmdir cache) — قيد tooling بيئي لا علاقة له بالعقد نفسه (التحقق البديل: migrations تُطبق 19/19 + ‏db:reset + فحص القائمة برمجياً).
+- خارج النطاق عمداً: F-11/F-12، المالية/الإعلانات، تغيير APIs/routes/schema، ‏dependencies، ‏global middleware، ‏CI.
+
 ## 2026-09-18 — F-10: Repository Change Policy
 
 - 🔧 In progress on `docs/repository-change-policy`, based on origin/main `042cbb5` (merge of PR #30, F-9).

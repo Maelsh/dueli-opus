@@ -47,24 +47,32 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       const tr = ${JSON.stringify(tr)};
       let competitionData = null;
       
-      // Client-side getCategoryName function
+      // Client-side getCategoryName function (mirrors src/i18n/index.ts):
+      // explicit DB fields (category_name_<lang>/name_<lang>) first, then
+      // namespaced i18n key categories.<slug>, then English fallback.
       function getCategoryName(category, language) {
-        // 1. Try category_slug as translation key (convert 'current-affairs' to 'current_affairs')
+        const reqLang = language === 'ar' ? 'ar' : 'en';
+        const catReq = 'category_name_' + reqLang;
+        if (category[catReq]) return category[catReq];
+        const nameReq = 'name_' + reqLang;
+        if (category[nameReq]) return category[nameReq];
+        // Namespaced i18n pack lookup
         const slug = category.category_slug || category.slug;
         if (slug) {
           const slugKey = slug.replace(/-/g, '_');
+          if (tr.categories && tr.categories[slugKey]) return tr.categories[slugKey];
           if (tr[slugKey]) return tr[slugKey];
         }
-        
-        // 2. Fallback to category_name based on language
+
+        // Fallback to category_name based on language
         const langKey = language === 'ar' ? 'category_name_ar' : 'category_name_en';
         if (category[langKey]) return category[langKey];
-        
-        // 3. Fallback to name based on language
+
+        // Fallback to name based on language
         const nameKey = language === 'ar' ? 'name_ar' : 'name_en';
         if (category[nameKey]) return category[nameKey];
-        
-        // 4. Fallback to English
+
+        // Fallback to English
         return category.category_name_en || category.name_en || '';
       }
       

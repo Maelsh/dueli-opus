@@ -141,33 +141,53 @@ export function getLocalizedName(item: Record<string, any>, lang: Language): str
 
 /**
  * Get localized category name
- * Priority: name_key (i18n) → slug as key → category_name_${lang}/name_${lang} → English → any available
+ * Priority: category_name_${lang}/name_${lang} (explicit DB fields) →
+ * name_key (i18n) → slug as namespaced key (categories.<slug>/bare slug) →
+ * English → any available.
+ *
+ * NOTE: explicit DB fields win over slug-key lookup on purpose. A bare slug
+ * key (e.g. `physics`) may resolve to a DIFFERENT i18n pack (the legacy flat
+ * block) than the caller's language, which previously returned English
+ * "Physics" in an Arabic context despite name_ar being present. Slug lookup
+ * is namespaced (categories.<slug> first, bare slug only as back-compat) so
+ * flat-pack mismatches can never shadow the requested language again.
  */
 export function getCategoryName(category: Record<string, any>, lang: Language): string {
     const uiLang = getUILanguage(lang);
+    const requestedLang = TRANSLATED_LANGUAGES.includes(lang as TranslatedLanguage)
+        ? (lang as TranslatedLanguage)
+        : uiLang;
 
-    // 1. Try name_key first (i18n translation lookup)
+    // 1. Explicit DB fields in the REQUESTED language first (never English-first).
+    const catReqKey = `category_name_${requestedLang}`;
+    if (category[catReqKey]) return category[catReqKey];
+    const nameReqKey = `name_${requestedLang}`;
+    if (category[nameReqKey]) return category[nameReqKey];
+
+    // 2. Try name_key first (i18n translation lookup)
     if (category.name_key) {
         const translated = t(category.name_key, uiLang);
         // If translation found (not returning the key itself)
         if (translated !== category.name_key) return translated;
     }
 
-    // 2. Try slug as translation key (convert 'current-affairs' to 'current_affairs')
-    // Check both 'slug' and 'category_slug' (API uses category_slug)
+    // 3. Try slug as a NAMESPACED translation key (convert 'current-affairs' to 'current_affairs').
+    // Check both 'slug' and 'category_slug' (API uses category_slug).
+    // 'categories.<slug>' is authoritative; the bare slug is back-compat only
+    // (it can hit legacy flat packs in the wrong language, so it comes last).
     const slug = category.slug || category.category_slug;
     if (slug) {
         const slugKey = slug.replace(/-/g, '_');
+        const namespaced = t(`categories.${slugKey}`, uiLang);
+        if (namespaced !== `categories.${slugKey}`) return namespaced;
         const translated = t(slugKey, uiLang);
-        // If translation found (not returning the key itself)
         if (translated !== slugKey) return translated;
     }
 
-    // 3. Try category_name_${lang} first
+    // 4. Explicit DB fields in the resolved UI language (uiLang may differ
+    // from requestedLang only for untranslated languages → English anyway).
     const catLangKey = `category_name_${uiLang}`;
     if (category[catLangKey]) return category[catLangKey];
-
-    // 4. Try name_${lang}
     const nameLangKey = `name_${uiLang}`;
     if (category[nameLangKey]) return category[nameLangKey];
 
