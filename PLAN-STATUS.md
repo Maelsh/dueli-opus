@@ -1,5 +1,17 @@
 
-## Phase 7.D — TURN/STUN وشبكات مقيّدة (2026-09-20)
+
+## 8.A — دفتر الأستاذ والثابت المحاسبي · فرع `feat/money-ledger-invariant`
+
+- ✅ تمّ الإنشاء محلياً من `feat/live-turn-config` (الرأس 69f30ae). النطاق: جدول `ledger_entries` (migration 0019) + `LedgerService` + i18n محفظة + اختبارات (api + integration). **بناء محلي فقط — بلا API مسار جديد، بلا تغيير على `user_earnings`/`withdrawal_requests` الحالي (بلا سلوك مالي موجود).**
+  - **Migration 0019**: `ledger_entries(id, tx_id, account, direction(debit|credit), amount_cents INTEGER CHECK(>0), currency, ref_type, ref_id, created_at, created_by)` — لا `REAL/FLOAT`؛ `UNIQUE(tx_id, account)` للعدمية (M4); `CHECK` على `direction` و`amount_cents` و`length(currency)=3` (M3); مشغلات `RAISE(ABORT)` append-only للـ `UPDATE/DELETE` (M5، M3). لا `FOREIGN KEY` على `ref_type/ref_id` (مرجع متعدد الأنواع — نفس نموذج 0002 السابق). الرصيد **بتجميع من ledger فقط** — لا عمود مكرر (M2).
+  - **LedgerService**: `post()` يكتب مجموعة قيود متوازنة في `db.batch()` واحد (M1+M2)؛ `withdraw()` يُفرض عدم السلبية **بشرط SQL** داخل `INSERT…SELECT…WHERE balance>=amount` (M3، لا فحص JS)؛ `balance()`/`verifyInvariant()` تجميع مباشر؛ idempotent على `tx_id` (M4)؛ `created_by`+`ref` لكل قيد (M5).
+  - **i18n**: `wallet.balance`/`insufficient_funds`/`transaction_failed` في `ar.ts`+`en.ts` (مختلفان).
+  - **اختبارات**: `tests/api/ledger-invariant.test.ts` (9/9 على `SqliteD1` حقيقي يحمل الـ migrations) و`tests/integration/ledger.test.ts` (15/15 على D1 حقيقية عبر Wrangler CLI)؛ `schema-contract.test.ts` حُدَّثتعداده migration إلى 20 + أعمدة/فهرس ledger.
+  - **البوابات M1–M6**: M1 ✅ (verifyInvariant دائماً 0 بعد 100 حركة عشوائية و20 متزامنة)؛ M2 ✅ (كل الحركة في `db.batch()` واحد)؛ M3 ✅ (guard شرط SQL + `CHECK` محرك)؛ M4 ✅ (نفس tx_id ⇒ صف واحد)؛ M5 ✅ (مشغلات رفض UPDATE/DELETE؛ `created_by`+`ref` لكل قيد)؛ M6 ✅ (إنشاءات مالية فقط، بدون مسار عام يُغيّر حالة — والموجودة ملتزمة M6).
+  - **أوامر التحقّق V1–V6**: V1 `npm run build` ✅؛ V2 `npx tsc --noEmit` ✅ (بدون `any` جديد؛ العدد 144 ≤ 308)؛ V3 `npm test` 388/388 ✅؛ V4 `npm run db:reset` يطبق 0019 من قاعدة فارغة ✅؛ V5 `npm run test:integration` ledger 15/15 ✅ (فشل واحد بيئي في `messages-schema.test.ts` — انقضاء 120s بسبب بطء `wrangler CLI` على هذا الجهاز، غير مرتبط بـ ledger ولا بتغييراتي)؛ V6 عدّاد `any` لا يرتفع ✅.
+  - **التسريب (G8)**: التراجع = حذف ملف 0019 + `LedgerService.ts` + الإزالة من `index.ts`/i18n + التراجع عن تحديثات `schema-contract.test.ts`؛ لا حاجة لتراجع بيانات (جدول جديد لا يُلامسه migrations سابقة).
+  - **معروف (docs/16 §4)**: لا يوجد مسار علني يكتب الرصيد — فقط دالة خدمة داخلية جاهزة للأولوية المالية المنصوحة بها في مرحلة لاحقة.
+
 
 - 🔧 Local implementation on `feat/live-turn-config` (from 7.C branch head `6cd01f9`). Scope: TURN عبر env فقط (لا سر في المستودع) + اعتمادات TURN مؤقتة قصيرة العمر مُولَّدة خادمياً لكل جلسة + تدهور رشيق (رسالة مترجمة + بديل STUN، لا شاشة سوداء).
 - جديد `src/lib/services/TurnCredentialService.ts`: خلفيتان عبر env — (A) `TURN_URL`+`TURN_SECRET` → coturn REST auth (HMAC-SHA1 ephemeral، `username = <expiry>:<userId>`، TTL 3600s، مع نسخة `transport=tcp` تلقائية للشبكات المقيّدة)، (B) `TURN_TOKEN_ID`+`TURN_API_TOKEN` → Cloudflare Calls بطلب لكل جلسة (TTL 3600s) — أُلغيت ذاكرة Cache API المشتركة ~6h (سر مشترك سابق). غير مُعدَّ → STUN-only (`turn_available:false`). فشل خلفية مُعدَّة → `TurnCredentialError` → 502 برسالة مترجمة.

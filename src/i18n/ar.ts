@@ -590,6 +590,13 @@ export const ar = {
     min_withdrawal: 'الحد الأدنى للسحب: 50 دولار',
     request_withdrawal: 'طلب سحب',
 
+    // المحفظة (دفتر الأستاذ 8.A)
+    wallet: {
+        balance: 'رصيد المحفظة',
+        insufficient_funds: 'الرصيد غير كافٍ لإتمام هذه العملية',
+        transaction_failed: 'فشلت عملية المحفظة — يرجى المحاولة مرة أخرى',
+    },
+
     // صفحة الشكاوى
     report_type: 'نوع البلاغ',
     report_inappropriate_desc: 'محتوى مسيء أو ضار',

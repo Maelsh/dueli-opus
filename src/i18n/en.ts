@@ -614,6 +614,13 @@ export const en = {
     min_withdrawal: 'Minimum withdrawal: $50.00',
     request_withdrawal: 'Request Withdrawal',
 
+    // Wallet (ledger 8.A)
+    wallet: {
+        balance: 'Wallet balance',
+        insufficient_funds: 'Insufficient funds for this transaction',
+        transaction_failed: 'Wallet transaction failed — please try again',
+    },
+
     // Reports Page
     report_type: 'Report Type',
     report_inappropriate_desc: 'Offensive or harmful content',

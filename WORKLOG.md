@@ -1,3 +1,16 @@
+## 2026-09-20 — 8.A: دفتر الأستاذ والثابت المحاسبي (فرع `feat/money-ledger-invariant`)
+
+- النطاق (مجموعات بحركة): جدول `ledger_entries` الجديد + `LedgerService` داخلي + i18n محفظة + اختبارات. **بناء محلي فقط — بلا مسار API جديد، بدون تعديل `user_earnings`/`withdrawal_requests` أو سلوك مالي موجود، ولا API مسجل في الجرد** (الموجودة ملتزمة M6؛ إنشاؤه سيُخضع لمراجعة مستقبلية).
+- `migrations/0019_ledger_entries.sql`: الأعمدة المطلوبة تماماً (`id, tx_id, account, direction(debit|credit), amount_cents INTEGER CHECK(>0), currency CHECK length=3, ref_type, ref_id, created_at, created_by TEXT NOT NULL`) — **بدون REAL/FLOAT**؛ `UNIQUE(tx_id, account)` (M4؛ لا يمكن `UNIQUE(tx_id)` وحده لأن الحركة الواحدة تُنتج قيدين — موثق في التعليقات)؛ `CHECK` على `direction` ومضاد السلبية (M3)؛ مشغلات `RAISE(ABORT)` تمنع `UPDATE/DELETE` (M5؛ append-only). لا `FOREIGN KEY` على `ref_type/ref_id` (مرجع متعدد الأنواع — نموذج 0002).
+- `src/lib/services/LedgerService.ts`: `post()` يكتب قيوداً متوازنة في `db.batch()` واحد (M1+M2)؛ `withdraw()` يمنع السلبية **بشرط SQL** داخل `INSERT…SELECT…WHERE balance>=amount` (M3، لا فحص JS؛ فحص وكتابة في عبارة واحدة — لا TOCTOU)؛ `balance()`/`verifyInvariant()` تجميع مباشر من ledger — **بلا عمود رصيد مكرر**؛ idempotent على `tx_id` (M4)؛ كل قيد يحتوي `created_by`+`ref` (M5). صادر من `src/lib/services/index.ts`.
+- i18n: أضيف `wallet: { balance, insufficient_funds, transaction_failed }` مختلف بين `ar.ts`/`en.ts` (G6 — نص ظاهر جديد).
+- اختبارات: `tests/api/ledger-invariant.test.ts` (9 اختبارات، كلها ✅ على `SqliteD1` الذي يحمل الـ migrations الحقيقية — القيود والمشغلات تعمل بمحرك SQLite الحقيقي، لا mocks) و`tests/integration/ledger.test.ts` (15 اختباراً، كلهم ✅ على D1 حقيقية عبر Wrangler CLI). حُدَّث `tests/integration/schema-contract.test.ts` (قائمة 0019 + العدّاد 19→20 + `ledger_entries` في EXPECTED_TABLES).
+- صيانة `tests/helpers/sqlite-d1.ts`: أضفت تسلسل الـ `batch()` (queue promise) كما في FakeD1 لضمان دفعات متسلسة لا تتداخل — يُتيح اختبار 20 حركة متزامنة.
+- **أوامر التحقّق (V1–V6)**: V1 `npm run build` ✅؛ V2 `npx tsc --noEmit` ✅ (بدون `any` جديد؛ العدد 144 ≤ 308)؛ V3 `npm test` 388/388 ✅؛ V4 `npm run db:reset` يطبق 20 migration — بما فيها 0019 — من قاعدة فارغة ويدعم seed ✅؛ V5 ledger integration 15/15 ✅ (لاحظ: فشل بيئي واحد في `messages-schema.test.ts` — انقصاء 120s بسبب بطء استدعاءات `wrangler d1 execute` الفردية على هذا الجهاز Windows؛ غير مرتبط ولا بتغييراتي ولا بـ ledger، ويدوياً على D1 حقيقية).
+- **M1–M6**: كلها مُبرَّرة باختبارات ✅.
+- **G8 التسريح**: التراجع = إزالة 0019 + LedgerService + إزالة الـ exports/i18n + إلغاء تعديث schema-contract؛ لا تراجع بيانات (جدول جديد غير مرتبط بجدول سابق).
+- معروف (docs/16 §4): لا يوجد مسار علني يكتب الرصيد — فقط خدمة داخلية جاهزة للأولوية المالية المنصوحة بها.
+
 ## 2026-09-20 — Phase 7.D: TURN/STUN وشبكات مقيّدة (فرع `feat/live-turn-config`)
 
 - النطاق: إعداد TURN عبر متغيرات البيئة فقط (لا سر في المستودع إطلاقاً)، اعتماد TURN مؤقت قصير الأجل يُولَّد خادمياً لكل جلسة (لا سر ثابت مشترك)، وتدهور رشيق برسائل مترجمة + بديل STUN بلا شاشة سوداء. لم تُمس الماليات/الإعلانات، ولا بوابة البث الحي (7.A–7.E exchange)، ولا migrations، ولا dependencies، ولا CI.
