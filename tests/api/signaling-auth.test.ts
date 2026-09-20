@@ -125,7 +125,14 @@ describe('7.A signaling auth + offer/answer/ICE', () => {
         }
     });
 
-    it('i18n live.* signaling keys exist in ar+en', () => {
+    it('i18n live.* signaling keys exist in ar+en (no new String)', async () => {
+        const { ar } = await import('../../src/i18n/ar');
+        const { en } = await import('../../src/i18n/en');
+        // `live` stays a plain string — the blocker was `new String()`.
+        expect(typeof (ar as any).live).toBe('string');
+        expect(typeof (en as any).live).toBe('string');
+        expect(t('live', 'ar')).toBe('بث مباشر');
+        expect(t('live', 'en')).toBe('Live Stream');
         for (const lang of ['ar', 'en'] as const) {
             for (const key of ['live.connecting', 'live.connected', 'live.connection_failed', 'live.permission_denied']) {
                 expect(typeof t(key, lang)).toBe('string');
@@ -133,5 +140,38 @@ describe('7.A signaling auth + offer/answer/ICE', () => {
             }
         }
         expect(t('live.connecting', 'ar')).not.toBe(t('live.connecting', 'en'));
+    });
+
+    it('guest cannot create room → 403; host can (mocked forward)', async () => {
+        const guestCreate = await req('/api/signaling/room/create', 'POST', guestSid, { competition_id: COMP });
+        expect(guestCreate.status).toBe(403);
+        const thirdCreate = await req('/api/signaling/room/create', 'POST', thirdSid, { competition_id: COMP });
+        expect(thirdCreate.status).toBe(403);
+        const anonCreate = await req('/api/signaling/room/create', 'POST', undefined, { competition_id: COMP });
+        expect(anonCreate.status).toBe(401);
+        // Host passes the gate — the external forward is mocked to succeed.
+        const origFetch = globalThis.fetch;
+        (globalThis as any).fetch = async () => new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
+        try {
+            const hostCreate = await req('/api/signaling/room/create', 'POST', hostSid, { competition_id: COMP });
+            expect(hostCreate.status).toBe(200);
+        } finally {
+            (globalThis as any).fetch = origFetch;
+        }
+    });
+
+    it('real client path uses platform endpoints (no external worker fetch)', async () => {
+        const { readFileSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const shared = readFileSync(join(process.cwd(), 'src/modules/pages/live/scripts/client/shared.ts'), 'utf8');
+        expect(shared).not.toMatch(/this\.signalingUrl\s*\+\s*['"`]\/api\/signaling/);
+        expect(shared).toContain('/api/signaling/verify');
+        expect(shared).toContain('/api/signaling/offer');
+        expect(shared).toContain('/api/signaling/answer');
+        expect(shared).toContain('/api/signaling/ice');
+        expect(shared).toContain('/api/signaling/poll');
+        const host = readFileSync(join(process.cwd(), 'src/modules/pages/live/scripts/client/host.ts'), 'utf8');
+        expect(host).not.toMatch(/streamServerUrl\s*\+\s*['"`]\/api\/signaling/);
+        expect(host).toContain("fetch('/api/signaling/room/create'");
     });
 });

@@ -141,12 +141,9 @@ export function getGuestScript(lang: Language): string {
                 debugLog('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
             };
             
-            // Setup signaling (HTTP polling)
+            // Setup signaling (HTTP polling via platform /api/signaling/*)
             signalingManager = new window.SignalingManager({
-                // Signaling URL is server-injected from STREAMING_URL env / DEFAULT_STREAMING_URL
-                // (see src/modules/pages/live/scripts/server/core.ts) — single source of truth,
-                // do not hardcode a literal URL here.
-                signalingUrl: streamServerUrl,
+                // 7.A: platform endpoints only — signalingUrl inert (shared.ts).
                 roomId: actualRoom,
                 role: 'opponent',
                 token: token,
@@ -191,9 +188,9 @@ export function getGuestScript(lang: Language): string {
                     log('❌ خطأ في الاتصال', 'error');
                 },
                 onConnected: function() {
-                    // طلب Offer من المضيف بعد اكتمال الاتصال
-                    debugLog('[DEBUG] Connected - requesting offer from host');
-                    sendSignal('request_offer', {});
+                    // 7.A: host pushes its offer on connect — no request_offer
+                    // round-trip; the guest answers on receipt.
+                    debugLog('[DEBUG] Connected - waiting for host offer');
                 }
             });
             

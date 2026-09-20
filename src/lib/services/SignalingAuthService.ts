@@ -86,7 +86,13 @@ export class SignalingAuthService {
         }
 
         // Client role is informational only — mismatch is spoofing.
-        if (claimedRole !== undefined && claimedRole !== null && claimedRole !== '' && claimedRole !== role) {
+        // 'opponent' is accepted as an alias of the canonical 'guest' role
+        // (legacy live client scripts use 'opponent').
+        const normalizedClaim =
+            claimedRole === 'opponent' ? 'guest'
+            : claimedRole === 'host' ? 'host'
+            : claimedRole;
+        if (normalizedClaim !== undefined && normalizedClaim !== null && normalizedClaim !== '' && normalizedClaim !== role) {
             return { ok: false, code: 403, error: 'role_mismatch' };
         }
 

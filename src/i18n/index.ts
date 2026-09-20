@@ -63,7 +63,17 @@ export function getUILanguage(lang: Language): TranslatedLanguage {
 }
 
 export function t(key: string, lang: Language): string {
-    const keys = key.split('.');
+    // 7.A compat: the task contract names the keys `live.*`, but `live` must
+    // stay a plain string (all existing `tr.live` usages). Canonical storage
+    // is `live_signaling.*`; accept the `live.*` alias for the four keys.
+    const LIVE_ALIAS: Record<string, string> = {
+        'live.connecting': 'live_signaling.connecting',
+        'live.connected': 'live_signaling.connected',
+        'live.connection_failed': 'live_signaling.connection_failed',
+        'live.permission_denied': 'live_signaling.permission_denied',
+    };
+    const resolvedKey = LIVE_ALIAS[key] ?? key;
+    const keys = resolvedKey.split('.');
     const uiLang = getUILanguage(lang);
     let value: any = translations[uiLang];
 

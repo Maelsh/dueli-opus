@@ -89,9 +89,12 @@ window.fetchIceServers = fetchIceServers;
  */
 class SignalingManager {
     constructor(config) {
-        this.signalingUrl = config.signalingUrl;
+        // 7.A correction: platform endpoints are the only signaling path.
+        // signalingUrl/roomId are kept as inert constructor fields for
+        // backward-compat callers but are never fetched.
+        this.signalingUrl = null;
         this.roomId = config.roomId;
-        this.competitionId = config.roomId.replace('comp_', '');
+        this.competitionId = String(config.roomId).replace('comp_', '');
         this.role = config.role;
         this.token = config.token;
         this.onSignal = config.onSignal || function() {};
@@ -107,72 +110,77 @@ class SignalingManager {
     
     async connect() {
         testLog('🔌 Connecting to signaling (Polling)...', 'info');
-        
+
         try {
-            const res = await fetch(this.signalingUrl + '/api/signaling/room/join', {
+            // 7.A correction: the ONLY signaling path is the platform
+            // (/api/signaling/*, gated by SignalingAuthService). The external
+            // worker URL is no longer used for auth or SDP/ICE exchange.
+            const res = await fetch('/api/signaling/verify', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.token
+                },
                 body: JSON.stringify({
-                    competition_id: this.competitionId,
-                    role: this.role,
-                    token: this.token
+                    session_token: this.token,
+                    competition_id: Number(this.competitionId),
+                    claimed_role: this.role
                 })
             });
-            
+
             const data = await res.json();
-            
-            if (!data.success) {
+
+            if (!data.valid) {
                 testLog('❌ Join failed: ' + (data.error || 'Unknown'), 'error');
                 this.onError(new Error(data.error));
                 return;
             }
-            
+
             testLog('✅ Joined room as ' + this.role, 'success');
             this.isConnected = true;
             this.onConnected();
             this.startPolling();
-            
+
         } catch (err) {
             testLog('❌ Connection error: ' + err.message, 'error');
             this.onError(err);
         }
     }
-    
+
     startPolling() {
         if (this.pollInterval) clearInterval(this.pollInterval);
-        
+
+        // 7.A: platform poll — session auth via Bearer, role re-derived
+        // server-side per request. Peer role labels shown to the user.
+        const peerLabel = this.role === 'host' ? 'opponent' : 'host';
+        const authHeaders = function(token) {
+            return { 'Authorization': 'Bearer ' + token };
+        };
+
         this.pollInterval = setInterval(async () => {
             if (!this.isConnected) return;
-            
+
             try {
-                const res = await fetch(this.signalingUrl + '/api/signaling/poll', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        room_id: this.roomId,
-                        role: this.role,
-                        token: this.token,
-                        last_timestamp: this.lastTimestamp
-                    })
-                });
-                
+                const res = await fetch(
+                    '/api/signaling/poll?competition_id=' + encodeURIComponent(this.competitionId)
+                    + '&since=' + encodeURIComponent(String(this.lastTimestamp || 0)),
+                    { headers: authHeaders(this.token) }
+                );
+
                 const data = await res.json();
                 if (!data.success) return;
-                
-                if (data.data.peer_connected && !this.peerWasConnected) {
-                    this.peerWasConnected = true;
-                    testLog('👋 Peer connected', 'info');
-                    this.onPeerJoined({ role: this.role === 'host' ? 'opponent' : 'host' });
-                } else if (!data.data.peer_connected && this.peerWasConnected) {
-                    this.peerWasConnected = false;
-                    testLog('👋 Peer disconnected', 'warn');
-                    this.onPeerLeft({ role: this.role === 'host' ? 'opponent' : 'host' });
-                }
-                
+
                 if (data.data.signals && data.data.signals.length > 0) {
+                    let sawPeer = false;
                     for (const signal of data.data.signals) {
-                        this.lastTimestamp = Math.max(this.lastTimestamp, signal.timestamp);
-                        this.onSignal({ signalType: signal.signalType, signalData: signal.signalData });
+                        this.lastTimestamp = Math.max(this.lastTimestamp, signal.id || 0);
+                        if (signal.from && signal.from !== this.role) sawPeer = true;
+                        this.onSignal({ signalType: signal.type, signalData: signal.payload });
+                    }
+                    if (sawPeer && !this.peerWasConnected) {
+                        this.peerWasConnected = true;
+                        testLog('👋 Peer connected', 'info');
+                        this.onPeerJoined({ role: peerLabel });
                     }
                 }
             } catch (err) {
@@ -180,39 +188,44 @@ class SignalingManager {
             }
         }, 1000);
     }
-    
+
     async sendSignal(signalType, signalData) {
         if (!this.isConnected) return;
+        // 7.A: offer/answer/ice go to the platform endpoints, never to the
+        // external worker. request_offer is a local-only hint (the host sends
+        // its offer on connect); it is not forwarded as an authorized signal.
+        const endpoint =
+            signalType === 'offer' ? '/api/signaling/offer'
+            : signalType === 'answer' ? '/api/signaling/answer'
+            : signalType === 'ice' ? '/api/signaling/ice'
+            : null;
+        if (!endpoint) return;
         try {
-            await fetch(this.signalingUrl + '/api/signaling/signal', {
+            await fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.token
+                },
                 body: JSON.stringify({
-                    room_id: this.roomId,
-                    role: this.role,
-                    token: this.token,
-                    signal_type: signalType,
-                    signal_data: signalData
+                    competition_id: Number(this.competitionId),
+                    payload: signalData
                 })
             });
         } catch (err) {
             console.error('Send signal error:', err);
         }
     }
-    
+
     async disconnect() {
         this.isConnected = false;
         if (this.pollInterval) {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
         }
-        try {
-            await fetch(this.signalingUrl + '/api/signaling/room/leave', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ room_id: this.roomId, role: this.role, token: this.token })
-            });
-        } catch (err) { console.error('Leave error:', err); }
+        // 7.A: no external leave call — platform signals expire with the
+        // SSE log; the room lifecycle ends with the competition.
+        try { await Promise.resolve(); } catch (err) { console.error('Leave error:', err); }
         testLog('🔌 Signaling disconnected', 'warn');
     }
 }

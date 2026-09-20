@@ -274,10 +274,8 @@ signalingRoutes.post('/verify', async (c) => {
             }, 400);
         }
 
-        // 7.A: route the actual decision through SignalingAuthService (single
-        // point of authority) while preserving this endpoint's {valid} contract
-        // for the external signaling server. 'opponent' is normalized to the
-        // canonical 'guest' role name.
+        // 7.A correction: SignalingAuthService is the SOLE authority.
+        // No duplicated SQL/authorization below this point.
         const sessionModel = new SessionModel(DB);
         const found = await sessionModel.findValidSession(session_token);
         if (!found) {
@@ -295,57 +293,15 @@ signalingRoutes.post('/verify', async (c) => {
             return c.json({ valid: false, error }, status);
         }
 
-        // 1. Verify session token and get user
-        const session = await DB.prepare(
-            `SELECT s.user_id, u.username, u.display_name 
-             FROM sessions s 
-             JOIN users u ON s.user_id = u.id 
-             WHERE s.id = ? AND s.expires_at > datetime('now')`
-        ).bind(session_token).first();
-
-        if (!session) {
-            return c.json({ valid: false, error: 'invalid_session' }, 401);
-        }
-
-        // 2. Get competition and verify status
-        const competition = await DB.prepare(
-            `SELECT id, creator_id, opponent_id, status 
-             FROM competitions WHERE id = ?`
-        ).bind(competition_id).first();
-
-        if (!competition) {
-            return c.json({ valid: false, error: 'competition_not_found' }, 403);
-        }
-
-        if (competition.status !== 'live' && competition.status !== 'accepted') {
-            return c.json({ valid: false, error: 'competition_not_active' }, 409);
-        }
-
-        // 3. Verify role
-        let actualRole: string | null = null;
-        if (session.user_id === competition.creator_id) {
-            actualRole = 'host';
-        } else if (session.user_id === competition.opponent_id) {
-            actualRole = 'opponent';
-        }
-
-        if (!actualRole) {
-            return c.json({ valid: false, error: 'not_participant' }, 403);
-        }
-
-        if (claimed_role !== actualRole && !(claimed_role === 'guest' && actualRole === 'opponent')) {
-            return c.json({ valid: false, error: 'role_mismatch' }, 403);
-        }
-
-        // 4. Success - user is verified
+        // Success — role/eligibility already decided by the service above.
         return c.json({
             valid: true,
             data: {
-                user_id: session.user_id,
-                username: session.username,
-                display_name: session.display_name,
-                role: actualRole,
-                competition_id: competition.id
+                user_id: found.user.id,
+                username: found.user.username,
+                display_name: found.user.display_name,
+                role: gate.role,
+                competition_id: gate.competitionId
             }
         });
 
@@ -360,8 +316,8 @@ signalingRoutes.post('/verify', async (c) => {
  * Create a room on the streaming server
  * إنشاء غرفة على سيरفر البث
  *
- * 7.A: requires an authenticated participant session (401/403) and an
- * eligible competition (409); the forward to the external streaming server
+ * 7.A correction: room creation is HOST-ONLY. Guest/non-participant → 403,
+ * ineligible competition → 409; the forward to the external streaming server
  * is unchanged. A forward failure is a transport error (502), never an
  * authorization success.
  */
@@ -379,7 +335,7 @@ signalingRoutes.post('/room/create', authMiddleware({ required: true }), async (
             }, 400);
         }
 
-        // 7.A: derive authority server-side from the session user.
+        // 7.A correction: derive authority server-side; room creation is HOST-ONLY.
         const user = c.get('user');
         const gate = await new SignalingAuthService(c.env.DB).authorize(
             user ? user.id : null, Number(competition_id)
@@ -390,6 +346,9 @@ signalingRoutes.post('/room/create', authMiddleware({ required: true }), async (
                 : gate.code === 409 ? 'competition_errors.not_eligible_to_start'
                 : 'forbidden';
             return c.json({ success: false, error: t(key, lang), code: gate.error }, gate.code as 401 | 403 | 409);
+        }
+        if (gate.role !== 'host') {
+            return c.json({ success: false, error: t('forbidden', lang), code: 'role_mismatch' }, 403);
         }
 
         // Get streaming server URL

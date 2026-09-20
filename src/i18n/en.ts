@@ -7,14 +7,14 @@ export const en = {
     app_subtitle: 'Connect via Competition',
     home: 'Home',
     explore: 'Explore',
-    // 7.A: see ar.ts — `live` is a String object (renders as 'Live Stream')
-    // with nested WebRTC signaling keys attached.
-    live: Object.assign(new String('Live Stream'), {
+    live: 'Live Stream',
+    // 7.A: WebRTC signaling subkeys (dedicated namespace, no new String).
+    live_signaling: {
         connecting: 'Connecting...',
         connected: 'Connected',
         connection_failed: 'Connection failed',
         permission_denied: 'Permission denied',
-    }),
+    },
     recorded: 'Recorded',
     upcoming: 'Upcoming',
     profile: 'Profile',

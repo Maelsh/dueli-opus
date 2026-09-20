@@ -8,16 +8,14 @@ export const ar = {
     app_subtitle: 'تواصل عبر التنافس',
     home: 'الرئيسية',
     explore: 'استكشف',
-    // 7.A: `live` stays a string for the ~20 existing `tr.live` usages AND
-    // carries the nested WebRTC keys — a String object with own props, so
-    // `t('live', lang)` still returns 'بث مباشر' via the String wrapper while
-    // `t('live.connecting', lang)` traverses into its properties.
-    live: Object.assign(new String('بث مباشر'), {
+    live: 'بث مباشر',
+    // 7.A: إشارات WebRTC — مفاتيح فرعية تحت مساحة مخصصة (لا new String)
+    live_signaling: {
         connecting: 'جارٍ الاتصال...',
         connected: 'متصل',
         connection_failed: 'فشل الاتصال',
         permission_denied: 'تم رفض الإذن',
-    }),
+    },
     recorded: 'مسجل',
     upcoming: 'اللاحقة',
     profile: 'الملف الشخصي',
