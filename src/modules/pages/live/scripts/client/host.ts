@@ -405,6 +405,11 @@ export function getHostScript(lang: Language): string {
             
             ms.pc.oniceconnectionstatechange = function() {
                 debugLog('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
+                // 7.C: transient ICE loss → controlled ICE restart (re-offer with
+                // iceRestart); hard failure → bounded signaling reconnect.
+                if (signalingManager && signalingManager.handlePeerState) {
+                    signalingManager.handlePeerState(ms.pc.iceConnectionState);
+                }
             };
             
             // Setup signaling (HTTP polling; will send offer after connected)
@@ -582,6 +587,38 @@ export function getHostScript(lang: Language): string {
                     await ms.pc.setLocalDescription(offer);
                     sendSignal('offer', offer);
                     debugLog('[DEBUG] Offer sent');
+                },
+                // 7.C: reconnect/resilience hooks.
+                onIceRestartNeeded: async function() {
+                    // Transient ICE loss: controlled ICE restart of the
+                    // participant link — same mechanism as the viewer peers.
+                    if (!ms.pc || ms.pc.signalingState === 'closed') return;
+                    try {
+                        const offer = await ms.pc.createOffer({ iceRestart: true });
+                        await ms.pc.setLocalDescription(offer);
+                        sendSignal('offer', offer);
+                    } catch (err) {
+                        debugLog('[DEBUG] ICE restart failed:', err);
+                    }
+                },
+                onReconnecting: function() {
+                    updateStatus('${tr.reconnecting}', 'yellow');
+                },
+                onRecovered: async function() {
+                    updateStatus('${tr.reconnected}', 'green');
+                    // Re-push the offer so a recovering guest/viewer can rejoin
+                    // without waiting for its own request_offer.
+                    try {
+                        const offer = await ms.pc.createOffer({ iceRestart: true });
+                        await ms.pc.setLocalDescription(offer);
+                        sendSignal('offer', offer);
+                    } catch (err) {
+                        debugLog('[DEBUG] post-recovery re-offer failed:', err);
+                    }
+                },
+                onReconnectFailed: function(info) {
+                    updateStatus('${tr.reconnect_failed}', 'red');
+                    log('❌ Reconnect failed: ' + (info && info.reason), 'error');
                 }
             });
             

@@ -23,6 +23,7 @@ import {
     type SignalingSignalKind,
 } from '../../../lib/services/SignalingAuthService';
 import { SignalingSessionService, type SignalingSessionState } from '../../../lib/services/SignalingSessionService';
+import { SignalingReconnectService } from '../../../lib/services/SignalingReconnectService';
 import { SseEventLogModel, type SseEventLog } from '../../../models/SseEventLogModel';
 
 const signalingRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -638,6 +639,50 @@ signalingRoutes.get('/viewer/poll', authMiddleware({ required: true }), async (c
     });
 });
 
+/**
+ * 7.C: POST /api/signaling/reconnect — bounded recovery after a WebRTC or
+ * signaling/network interruption. Authorization is the SAME single authority
+ * (`authorizeViewer`): role/peer are re-derived server-side, so a reconnect
+ * can never change host/guest/viewer or spoof an identity. The handler only
+ * re-announces presence (heartbeat refresh) via SignalingReconnectService and
+ * returns the session state + retry bounds — no peer connection is touched.
+ */
+signalingRoutes.post('/reconnect', authMiddleware({ required: true }), async (c) => {
+    const lang = (c.get('lang') || 'en') as Language;
+    const user = c.get('user');
+    const body = await c.req.json().catch(() => ({} as Record<string, unknown>));
+    const raw = body as Record<string, unknown>;
+    const claim = raw.claimed_role ?? raw.role;
+    const claimedRole = typeof claim === 'string' ? claim : undefined;
+
+    const auth = new SignalingAuthService(c.env.DB);
+    let gate: SignalingAccessResult;
+    try {
+        gate = await auth.authorizeViewer(user ? user.id : null, Number(raw.competition_id), claimedRole);
+    } catch {
+        return serviceUnavailable(c, lang);
+    }
+    if (!gate.ok) {
+        return accessFailure(c, gate, lang);
+    }
+
+    try {
+        const result = await new SignalingReconnectService(c.env.DB).reconnect(gate);
+        return c.json({
+            success: true,
+            data: {
+                ...sessionPayload(result.state),
+                action: 'reconnect',
+                resumed_at_event_id: result.resumedAtEventId,
+                retry_policy: result.policy,
+            },
+        });
+    } catch {
+        return serviceUnavailable(c, lang);
+    }
+});
+
+signalingRoutes.get('/session', authMiddleware({ required: true }), async (c) => handleSession(c, 'describe'));
 signalingRoutes.get('/session', authMiddleware({ required: true }), async (c) => handleSession(c, 'describe'));
 signalingRoutes.post('/session/join', authMiddleware({ required: true }), async (c) => handleSession(c, 'join'));
 signalingRoutes.post('/session/leave', authMiddleware({ required: true }), async (c) => handleSession(c, 'leave'));
