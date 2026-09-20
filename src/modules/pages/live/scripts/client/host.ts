@@ -255,11 +255,14 @@ export function getHostScript(lang: Language): string {
                     log('❌ يجب تسجيل الدخول أولاً', 'error');
                     return false;
                 }
-                
-                const res = await fetch(streamServerUrl + '/api/signaling/room/create', {
+
+                // 7.A correction: room creation goes through the PLATFORM
+                // (/api/signaling/room/create, host-only, session Bearer auth),
+                // never directly to the external worker.
+                const res = await fetch('/api/signaling/room/create', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ competition_id: competitionId.toString() })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ competition_id: Number(competitionId) })
                 });
                 const data = await res.json();
                 if (data.success && data.data.room_id) {
@@ -411,10 +414,8 @@ export function getHostScript(lang: Language): string {
         
         function setupSignaling(roomData) {
             signalingManager = new window.SignalingManager({
-                // Signaling URL is server-injected from STREAMING_URL env / DEFAULT_STREAMING_URL
-                // (see src/modules/pages/live/scripts/server/core.ts) — single source of truth,
-                // do not hardcode a literal URL here.
-                signalingUrl: streamServerUrl,
+                // 7.A: platform endpoints are the only signaling path —
+                // signalingUrl is inert (see shared.ts), room is comp_<id>.
                 roomId: roomData.roomId,
                 role: 'host',
                 token: roomData.token,
@@ -437,11 +438,6 @@ export function getHostScript(lang: Language): string {
                                 pendingIceCandidates.push(data.signalData);
                                 debugLog('[DEBUG] Queued ICE candidate (waiting for answer)');
                             }
-                        } else if (data.signalType === 'request_offer') {
-                            debugLog('[DEBUG] Guest requested offer - Renegotiating...');
-                            const offer = await ms.pc.createOffer();
-                            await ms.pc.setLocalDescription(offer);
-                            sendSignal('offer', offer);
                         }
                     } catch (err) {
                         console.error('[Signaling] Error processing signal:', err);

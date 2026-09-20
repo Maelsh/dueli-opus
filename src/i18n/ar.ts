@@ -9,6 +9,13 @@ export const ar = {
     home: 'الرئيسية',
     explore: 'استكشف',
     live: 'بث مباشر',
+    // 7.A: إشارات WebRTC — مفاتيح فرعية تحت مساحة مخصصة (لا new String)
+    live_signaling: {
+        connecting: 'جارٍ الاتصال...',
+        connected: 'متصل',
+        connection_failed: 'فشل الاتصال',
+        permission_denied: 'تم رفض الإذن',
+    },
     recorded: 'مسجل',
     upcoming: 'اللاحقة',
     profile: 'الملف الشخصي',

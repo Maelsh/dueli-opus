@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-19T20:41:55.500Z",
-  "total": 176,
+  "generatedAt": "2026-09-20T05:49:24.100Z",
+  "total": 180,
   "routes": [
     {
       "method": "GET",
@@ -327,29 +327,29 @@
     {
       "method": "GET",
       "path": "/api/analytics/admin/dashboard",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/analytics/routes.ts"
     },
     {
       "method": "GET",
       "path": "/api/analytics/public",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/analytics/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/analytics/track",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/analytics/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/analytics/view",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/analytics/routes.ts"
     },
     {
@@ -474,15 +474,15 @@
     {
       "method": "DELETE",
       "path": "/api/chunks/:key",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "SERVICE(origin-only ⚠)",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/chunks/routes.ts"
     },
     {
       "method": "GET",
       "path": "/api/chunks/playlist/:id",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "SERVICE(origin-only ⚠)",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/chunks/routes.ts"
     },
     {
@@ -495,8 +495,8 @@
     {
       "method": "GET",
       "path": "/api/chunks/verify",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "SERVICE(origin-only ⚠)",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/chunks/routes.ts"
     },
     {
@@ -782,8 +782,8 @@
     {
       "method": "POST",
       "path": "/api/donations",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
@@ -796,29 +796,29 @@
     {
       "method": "GET",
       "path": "/api/donations/my",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "GET",
       "path": "/api/donations/top-supporters",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "GET",
       "path": "/api/donations/total",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/donations/webhook",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
@@ -887,8 +887,8 @@
     {
       "method": "GET",
       "path": "/api/messages/unread",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/messages/routes.ts"
     },
     {
@@ -1067,10 +1067,24 @@
       "file": "src/modules/api/settings/routes.ts"
     },
     {
+      "method": "POST",
+      "path": "/api/signaling/answer",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
       "method": "GET",
       "path": "/api/signaling/config",
       "classification": "UNGUARDED ⚠",
       "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/signaling/ice",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/signaling/routes.ts"
     },
     {
@@ -1082,9 +1096,23 @@
     },
     {
       "method": "POST",
+      "path": "/api/signaling/offer",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/signaling/poll",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/signaling/routes.ts"
+    },
+    {
+      "method": "POST",
       "path": "/api/signaling/room/create",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/signaling/routes.ts"
     },
     {
@@ -1167,8 +1195,8 @@
     {
       "method": "POST",
       "path": "/api/users/:id/message",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/messages/routes.ts"
     },
     {

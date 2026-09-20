@@ -8,6 +8,13 @@ export const en = {
     home: 'Home',
     explore: 'Explore',
     live: 'Live Stream',
+    // 7.A: WebRTC signaling subkeys (dedicated namespace, no new String).
+    live_signaling: {
+        connecting: 'Connecting...',
+        connected: 'Connected',
+        connection_failed: 'Connection failed',
+        permission_denied: 'Permission denied',
+    },
     recorded: 'Recorded',
     upcoming: 'Upcoming',
     profile: 'Profile',

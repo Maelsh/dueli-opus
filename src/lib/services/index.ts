@@ -12,4 +12,5 @@ export { EventPusher } from './EventPusher';
 export { Sanitize } from './Sanitize';
 export { ScheduledTaskService } from './ScheduledTaskService';
 export { RecommendationEngine } from './RecommendationEngine';
+export { SignalingAuthService } from './SignalingAuthService';
 

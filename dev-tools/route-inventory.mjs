@@ -56,20 +56,49 @@ while ((m = mountRe.exec(mainSrc))) {
 }
 
 // ---- 4. For each mounted router file, parse its own routes + middleware ----
-function classify(fileSrc) {
-    const hasRequiredAuth = /authMiddleware\(\s*\{\s*required:\s*true/.test(fileSrc);
-    const hasOptionalAuth = /authMiddleware\(\s*\{\s*required:\s*false/.test(fileSrc);
-    const hasOriginOnly = /Origin['"]\)/.test(fileSrc) && !hasRequiredAuth && !hasOptionalAuth;
-    if (hasRequiredAuth) return 'AUTHENTICATED';
-    if (hasOptionalAuth) return 'PUBLIC(auth-optional, in-handler check required)';
+// 7.A correction: classification is PER-ROUTE (text preceding that route's
+// registration), never file-wide. A single authMiddleware({required:true})
+// for /offer must not mark /ice-servers or /verify as AUTHENTICATED.
+function classifyRoute(fileSrc, routeIndex) {
+    const before = fileSrc.slice(0, routeIndex);
+    const useRe = /(\w+)\.use\(\s*(['"`])([^'"`]*)\2\s*,\s*authMiddleware\(\s*\{\s*required:\s*(true|false)/g;
+    let m;
+    let requiredPaths = [];
+    let optionalPaths = [];
+    while ((m = useRe.exec(before))) {
+        const mwPath = m[3];
+        const required = m[4] === 'true';
+        // Hono .use('/offer', ...) prefixes that path (and sub-paths).
+        const prefix = mwPath === '*' || mwPath === '/*' ? '' : mwPath;
+        (required ? requiredPaths : optionalPaths).push(prefix);
+    }
+    // Also honor router-wide guards (.use('*') / .use('/*')).
+    const hasRequiredAuth = (subPath) =>
+        requiredPaths.some((p) => p === '' || subPath === p || subPath.startsWith(p + '/'));
+    const hasOptionalAuth = (subPath) =>
+        optionalPaths.some((p) => p === '' || subPath === p || subPath.startsWith(p + '/'));
+    // Per-route inline guard: router.post('/x', authMiddleware({required:true}), ...)
+    const inlineRe = (subPath) => new RegExp(
+        `\\.\\s*(get|post|put|delete|patch)\\s*\\(\\s*['"\`]${subPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]\\s*,\\s*authMiddleware\\(\\s*\\{\\s*required:\\s*true`
+    );
+    return { hasRequiredAuth, hasOptionalAuth, inlineRe };
+}
+
+function classify(fileSrc, subPath, routeIndex) {
+    const per = classifyRoute(fileSrc, routeIndex);
+    const inlineGuarded = per.inlineRe(subPath).test(fileSrc);
+    if (inlineGuarded || per.hasRequiredAuth(subPath)) return 'AUTHENTICATED';
+    if (per.hasOptionalAuth(subPath)) return 'PUBLIC(auth-optional, in-handler check required)';
+    const hasOriginOnly = /Origin['"]\)/.test(fileSrc);
     if (hasOriginOnly) return 'SERVICE(origin-only ⚠)';
     return 'UNGUARDED ⚠';
 }
 
-function guardsFor(fileSrc) {
+function guardsFor(fileSrc, subPath, routeIndex) {
+    const per = classifyRoute(fileSrc, routeIndex);
     const guards = [];
-    if (/authMiddleware\(\s*\{\s*required:\s*true/.test(fileSrc)) guards.push('router:auth');
-    else if (/authMiddleware\(\s*\{\s*required:\s*false/.test(fileSrc)) guards.push('router:auth-optional');
+    if (per.inlineRe(subPath).test(fileSrc) || per.hasRequiredAuth(subPath)) guards.push('router:auth');
+    else if (per.hasOptionalAuth(subPath)) guards.push('router:auth-optional');
     guards.push('group:rateLimit', 'group:csrf');
     return guards.join(', ');
 }
@@ -96,8 +125,8 @@ for (const mount of mounts) {
         routes.push({
             method,
             path: fullPath,
-            classification: classify(fileSrc),
-            guards: guardsFor(fileSrc),
+            classification: classify(fileSrc, subPath, rm.index),
+            guards: guardsFor(fileSrc, subPath, rm.index),
             file: path.relative(ROOT, mount.file).replace(/\\/g, '/'),
         });
     }
