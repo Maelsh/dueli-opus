@@ -14,8 +14,118 @@ import { Hono } from 'hono';
 import type { Bindings, Variables, Language } from '../../../config/types';
 import { DEFAULT_STREAMING_URL } from '../../../config/defaults';
 import { t } from '../../../i18n';
+import { authMiddleware } from '../../../middleware/auth';
+import { SessionModel } from '../../../models/SessionModel';
+import { SignalingAuthService, type SignalingRole } from '../../../lib/services/SignalingAuthService';
+import { SseEventLogModel } from '../../../models/SseEventLogModel';
 
 const signalingRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// 7.A: platform-authored signaling exchange. Requires session auth; the
+// per-request role is re-derived server-side in SignalingAuthService (never
+// trusted from the client). Existing unauthenticated helper endpoints
+// (ice-servers/config/verify/room-create) keep their current contract.
+signalingRoutes.use('/offer', authMiddleware({ required: true }));
+signalingRoutes.use('/answer', authMiddleware({ required: true }));
+signalingRoutes.use('/ice', authMiddleware({ required: true }));
+signalingRoutes.use('/poll', authMiddleware({ required: true }));
+
+/** Max signaling payload (SDP / ICE) accepted per request — abuse cap, not a protocol limit. */
+const MAX_SIGNAL_PAYLOAD_CHARS = 20000;
+
+type SignalKind = 'offer' | 'answer' | 'ice';
+
+/**
+ * Shared handler for POST /api/signaling/{offer,answer,ice} + poll reads.
+ * POST: authorize → role-match → persist to the EXISTING sse_event_log table
+ * (channel `signaling:<competitionId>`, event `signal_offer|signal_answer|signal_ice`).
+ * GET (poll): authorize → read back events after `since` id for the peer.
+ * No new storage, no new auth layer — reuses SessionModel/authMiddleware,
+ * SignalingAuthService, and SseEventLogModel/EventPusher infra.
+ */
+async function handleSignal(
+    c: any,
+    kind: SignalKind | 'poll',
+    body: { competition_id?: unknown; role?: unknown; payload?: unknown; since?: unknown }
+): Promise<Response> {
+    const lang = (c.get('lang') || 'en') as Language;
+    const user = c.get('user');
+    const competitionId = Number(body.competition_id);
+    const claimedRole = typeof body.role === 'string' ? body.role : undefined;
+
+    const auth = new SignalingAuthService(c.env.DB);
+    let gate;
+    try {
+        gate = await auth.authorize(user ? user.id : null, competitionId, claimedRole);
+    } catch {
+        // DB/transport failure → 502, never an authorization success.
+        return c.json({ success: false, error: t('errors.service_unavailable', lang) }, 502);
+    }
+    if (!gate.ok) {
+        const key =
+            gate.code === 401 ? 'login_required'
+            : gate.code === 409 ? 'competition_errors.not_eligible_to_start'
+            : 'forbidden';
+        return c.json({ success: false, error: t(key, lang), code: gate.error }, gate.code as 401 | 403 | 409);
+    }
+
+    // Direction guard: only host sends offers, only guest sends answers.
+    // ICE flows both ways. Spoofed direction → 403.
+    if (kind === 'offer' && gate.role !== 'host') {
+        return c.json({ success: false, error: t('forbidden', lang), code: 'role_mismatch' }, 403);
+    }
+    if (kind === 'answer' && gate.role !== 'guest') {
+        return c.json({ success: false, error: t('forbidden', lang), code: 'role_mismatch' }, 403);
+    }
+
+    const channel = `signaling:${gate.competitionId}`;
+    const model = new SseEventLogModel(c.env.DB);
+
+    if (kind === 'poll') {
+        const since = Number(body.since ?? 0);
+        const events = await model.getAfter(channel, Number.isFinite(since) && since > 0 ? since : 0, 50);
+        return c.json({
+            success: true,
+            data: {
+                role: gate.role,
+                competition_id: gate.competitionId,
+                // Peer-visible signals only (offer↔answer, both ICE directions).
+                signals: events.map((e) => ({
+                    id: e.id,
+                    type: e.event_type.replace('signal_', ''),
+                    payload: JSON.parse(e.payload).payload ?? null,
+                    from: JSON.parse(e.payload).from ?? null,
+                })),
+            },
+        });
+    }
+
+    const payloadText = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? null);
+    if (payloadText.length > MAX_SIGNAL_PAYLOAD_CHARS) {
+        return c.json({ success: false, error: t('errors.content_too_long', lang) }, 413);
+    }
+    if (kind !== 'ice' && payloadText.length < 2) {
+        return c.json({ success: false, error: t('errors.missing_fields', lang) }, 400);
+    }
+
+    const eventType = kind === 'offer' ? 'signal_offer' : kind === 'answer' ? 'signal_answer' : 'signal_ice';
+    let row;
+    try {
+        row = await model.publish(channel, eventType, {
+            competition_id: gate.competitionId,
+            from: gate.role,
+            payload: body.payload ?? null,
+        });
+    } catch {
+        return c.json({ success: false, error: t('errors.service_unavailable', lang) }, 502);
+    }
+
+    return c.json({
+        success: true,
+        data: { id: row.id, role: gate.role satisfies SignalingRole, competition_id: gate.competitionId },
+    });
+}
+
 
 /**
  * Fetch short-lived Cloudflare Calls TURN/STUN credentials.
@@ -164,6 +274,27 @@ signalingRoutes.post('/verify', async (c) => {
             }, 400);
         }
 
+        // 7.A: route the actual decision through SignalingAuthService (single
+        // point of authority) while preserving this endpoint's {valid} contract
+        // for the external signaling server. 'opponent' is normalized to the
+        // canonical 'guest' role name.
+        const sessionModel = new SessionModel(DB);
+        const found = await sessionModel.findValidSession(session_token);
+        if (!found) {
+            return c.json({ valid: false, error: 'invalid_session' }, 401);
+        }
+        const normalizedClaim = claimed_role === 'opponent' ? 'guest' : claimed_role;
+        const auth = new SignalingAuthService(DB);
+        const gate = await auth.authorize(found.user.id, Number(competition_id), normalizedClaim);
+        if (!gate.ok) {
+            const status = gate.code === 401 ? 401 : gate.code === 409 ? 409 : 403;
+            const error =
+                gate.error === 'competition_not_eligible' ? 'competition_not_active'
+                : gate.error === 'role_mismatch' ? 'role_mismatch'
+                : 'not_participant';
+            return c.json({ valid: false, error }, status);
+        }
+
         // 1. Verify session token and get user
         const session = await DB.prepare(
             `SELECT s.user_id, u.username, u.display_name 
@@ -173,7 +304,7 @@ signalingRoutes.post('/verify', async (c) => {
         ).bind(session_token).first();
 
         if (!session) {
-            return c.json({ valid: false, error: 'invalid_session' });
+            return c.json({ valid: false, error: 'invalid_session' }, 401);
         }
 
         // 2. Get competition and verify status
@@ -183,11 +314,11 @@ signalingRoutes.post('/verify', async (c) => {
         ).bind(competition_id).first();
 
         if (!competition) {
-            return c.json({ valid: false, error: 'competition_not_found' });
+            return c.json({ valid: false, error: 'competition_not_found' }, 403);
         }
 
         if (competition.status !== 'live' && competition.status !== 'accepted') {
-            return c.json({ valid: false, error: 'competition_not_active' });
+            return c.json({ valid: false, error: 'competition_not_active' }, 409);
         }
 
         // 3. Verify role
@@ -199,11 +330,11 @@ signalingRoutes.post('/verify', async (c) => {
         }
 
         if (!actualRole) {
-            return c.json({ valid: false, error: 'not_participant' });
+            return c.json({ valid: false, error: 'not_participant' }, 403);
         }
 
-        if (claimed_role !== actualRole) {
-            return c.json({ valid: false, error: 'role_mismatch' });
+        if (claimed_role !== actualRole && !(claimed_role === 'guest' && actualRole === 'opponent')) {
+            return c.json({ valid: false, error: 'role_mismatch' }, 403);
         }
 
         // 4. Success - user is verified
@@ -228,8 +359,13 @@ signalingRoutes.post('/verify', async (c) => {
  * POST /api/signaling/room/create
  * Create a room on the streaming server
  * إنشاء غرفة على سيरفر البث
+ *
+ * 7.A: requires an authenticated participant session (401/403) and an
+ * eligible competition (409); the forward to the external streaming server
+ * is unchanged. A forward failure is a transport error (502), never an
+ * authorization success.
  */
-signalingRoutes.post('/room/create', async (c) => {
+signalingRoutes.post('/room/create', authMiddleware({ required: true }), async (c) => {
     const lang = (c.get('lang') || 'en') as Language;
 
     try {
@@ -243,16 +379,37 @@ signalingRoutes.post('/room/create', async (c) => {
             }, 400);
         }
 
+        // 7.A: derive authority server-side from the session user.
+        const user = c.get('user');
+        const gate = await new SignalingAuthService(c.env.DB).authorize(
+            user ? user.id : null, Number(competition_id)
+        );
+        if (!gate.ok) {
+            const key =
+                gate.code === 401 ? 'login_required'
+                : gate.code === 409 ? 'competition_errors.not_eligible_to_start'
+                : 'forbidden';
+            return c.json({ success: false, error: t(key, lang), code: gate.error }, gate.code as 401 | 403 | 409);
+        }
+
         // Get streaming server URL
         const streamingUrl = c.env.STREAMING_URL || DEFAULT_STREAMING_URL;
         const roomId = `comp_${competition_id}`;
 
         // Forward to streaming server
-        const response = await fetch(`${streamingUrl}/api/signaling/room/create`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ competition_id })
-        });
+        let response: Response;
+        try {
+            response = await fetch(`${streamingUrl}/api/signaling/room/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ competition_id })
+            });
+        } catch {
+            return c.json({ success: false, error: t('errors.service_unavailable', lang) }, 502);
+        }
+        if (!response.ok) {
+            return c.json({ success: false, error: t('errors.service_unavailable', lang) }, 502);
+        }
 
         const data = await response.json() as Record<string, unknown>;
 
@@ -272,6 +429,38 @@ signalingRoutes.post('/room/create', async (c) => {
             error: 'Failed to create room'
         }, 500);
     }
+});
+
+/**
+ * POST /api/signaling/offer — host publishes an SDP offer (7.A, auth required).
+ * POST /api/signaling/answer — guest publishes an SDP answer (7.A, auth required).
+ * POST /api/signaling/ice — either participant publishes an ICE candidate (7.A).
+ * GET  /api/signaling/poll?competition_id=&since= — participant reads peer signals.
+ *
+ * All four re-derive the role server-side via SignalingAuthService and persist
+ * to / read from the EXISTING sse_event_log table (no new storage).
+ */
+signalingRoutes.post('/offer', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    return handleSignal(c, 'offer', body);
+});
+
+signalingRoutes.post('/answer', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    return handleSignal(c, 'answer', body);
+});
+
+signalingRoutes.post('/ice', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    return handleSignal(c, 'ice', body);
+});
+
+signalingRoutes.get('/poll', async (c) => {
+    return handleSignal(c, 'poll', {
+        competition_id: c.req.query('competition_id'),
+        role: c.req.query('role'),
+        since: c.req.query('since'),
+    });
 });
 
 export default signalingRoutes;

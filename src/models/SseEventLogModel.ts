@@ -26,7 +26,10 @@ export type SseEventType =
     | 'competition_suspended'
     | 'competition_status'
     | 'notification'
-    | 'withdrawal_status';
+    | 'withdrawal_status'
+    | 'signal_offer'
+    | 'signal_answer'
+    | 'signal_ice';
 
 export interface SseEventLog {
     id: number;

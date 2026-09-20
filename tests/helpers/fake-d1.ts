@@ -347,6 +347,11 @@ class FakeStmt {
             return hit ?? null;
         }
 
+        // --- 7.A: signaling SSE log point-read (SseEventLogModel.create → findById) ---
+        if (q.startsWith('select * from sse_event_log where id = ?')) {
+            return this.db.sseEvents.find((e) => e.id === p[0]) ?? null;
+        }
+
         // --- user_blocks ---
         if (q.startsWith('select 1 from user_blocks')) {
             const [a, b, c2, d] = p;
@@ -491,6 +496,16 @@ class FakeStmt {
                     const comp = this.db.competitions.find((c) => c.id === t.competition_id) ?? {};
                     return { ...t, competition_status: comp.status ?? null, creator_id: comp.creator_id ?? null, opponent_id: comp.opponent_id ?? null };
                 });
+            return { results: rows };
+        }
+
+        // --- 7.A: signaling SSE log channel read (SseEventLogModel.getAfter) ---
+        // SELECT * FROM sse_event_log WHERE channel = ? AND id > ? ORDER BY id ASC LIMIT ?
+        if (q.startsWith('select * from sse_event_log')) {
+            const rows = this.db.sseEvents
+                .filter((e) => e.channel === p[0] && e.id > (p[1] as number))
+                .sort((a, b) => a.id - b.id)
+                .slice(0, (p[2] as number) || 50);
             return { results: rows };
         }
 
