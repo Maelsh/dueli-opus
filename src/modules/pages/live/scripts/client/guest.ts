@@ -45,6 +45,9 @@ export function getGuestScript(lang: Language): string {
         // تخزين ICE candidates حتى يتم setRemoteDescription
         let pendingIceCandidates = [];
         let hasRemoteDescription = false;
+        // 7.B late join: if the host's offer already passed before we joined,
+        // ask for a fresh one instead of waiting forever.
+        let offerWatchdog = null;
 
         // ===== Join Room =====
         window.joinRoom = async function() {
@@ -151,6 +154,7 @@ export function getGuestScript(lang: Language): string {
                     try {
                         if (data.signalType === 'offer') {
                             debugLog('[DEBUG] Processing OFFER signal');
+                            if (offerWatchdog) { clearTimeout(offerWatchdog); offerWatchdog = null; }
                             await ms.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
                             hasRemoteDescription = true;
                             
@@ -191,6 +195,17 @@ export function getGuestScript(lang: Language): string {
                     // 7.A: host pushes its offer on connect — no request_offer
                     // round-trip; the guest answers on receipt.
                     debugLog('[DEBUG] Connected - waiting for host offer');
+                    // 7.B late join: if no offer arrives (we joined after the host
+                    // started), ask the host for a fresh one. The host re-offers
+                    // without rebuilding its connection.
+                    if (offerWatchdog) clearTimeout(offerWatchdog);
+                    offerWatchdog = setTimeout(function() {
+                        offerWatchdog = null;
+                        if (!hasRemoteDescription) {
+                            log('⏳ ${tr.live_signaling.late_join_request}', 'info');
+                            sendSignal('request_offer');
+                        }
+                    }, 3000);
                 }
             });
             

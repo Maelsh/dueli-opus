@@ -13,4 +13,5 @@ export { Sanitize } from './Sanitize';
 export { ScheduledTaskService } from './ScheduledTaskService';
 export { RecommendationEngine } from './RecommendationEngine';
 export { SignalingAuthService } from './SignalingAuthService';
+export { SignalingSessionService } from './SignalingSessionService';
 

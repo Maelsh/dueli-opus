@@ -16,8 +16,14 @@ import { DEFAULT_STREAMING_URL } from '../../../config/defaults';
 import { t } from '../../../i18n';
 import { authMiddleware } from '../../../middleware/auth';
 import { SessionModel } from '../../../models/SessionModel';
-import { SignalingAuthService, type SignalingRole } from '../../../lib/services/SignalingAuthService';
-import { SseEventLogModel } from '../../../models/SseEventLogModel';
+import {
+    SignalingAuthService,
+    type SignalingAccessResult,
+    type SignalingRole,
+    type SignalingSignalKind,
+} from '../../../lib/services/SignalingAuthService';
+import { SignalingSessionService, type SignalingSessionState } from '../../../lib/services/SignalingSessionService';
+import { SseEventLogModel, type SseEventLog } from '../../../models/SseEventLogModel';
 
 const signalingRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -33,20 +39,117 @@ signalingRoutes.use('/poll', authMiddleware({ required: true }));
 /** Max signaling payload (SDP / ICE) accepted per request — abuse cap, not a protocol limit. */
 const MAX_SIGNAL_PAYLOAD_CHARS = 20000;
 
-type SignalKind = 'offer' | 'answer' | 'ice';
+/** 7.B signal kinds published on the existing channel. */
+type SignalKind = SignalingSignalKind;
+
+const SIGNAL_EVENT_TYPES: Record<SignalKind, SseEventLog['event_type']> = {
+    offer: 'signal_offer',
+    answer: 'signal_answer',
+    ice: 'signal_ice',
+    request_offer: 'signal_request_offer',
+};
+
+const SIGNAL_EVENT_KINDS: Record<string, SignalKind> = {
+    signal_offer: 'offer',
+    signal_answer: 'answer',
+    signal_ice: 'ice',
+    signal_request_offer: 'request_offer',
+};
+
+/** Localized HTTP failure mapping shared by every signaling handler. */
+function accessFailure(c: any, gate: Extract<SignalingAccessResult, { ok: false }>, lang: Language): Response {
+    const key =
+        gate.code === 401 ? 'login_required'
+        : gate.code === 409 ? 'competition_errors.not_eligible_to_start'
+        : 'forbidden';
+    return c.json({ success: false, error: t(key, lang), code: gate.error }, gate.code as 401 | 403 | 409);
+}
+
+/** Store/transport failure must never look like an authorization success. */
+function serviceUnavailable(c: any, lang: Language): Response {
+    return c.json({ success: false, error: t('errors.service_unavailable', lang) }, 502);
+}
 
 /**
- * Shared handler for POST /api/signaling/{offer,answer,ice} + poll reads.
- * POST: authorize → role-match → persist to the EXISTING sse_event_log table
- * (channel `signaling:<competitionId>`, event `signal_offer|signal_answer|signal_ice`).
- * GET (poll): authorize → read back events after `since` id for the peer.
+ * 7.B: resolve the target peer of a signal — server-side, per role.
+ *  - host  → null (broadcast to participants) | 'guest' | 'viewer:<userId>'
+ *  - guest → null | 'host'
+ *  - viewer → REQUIRED, participant target only ('host' | 'guest')
+ * A client can never retarget a signal outside its role's reach.
+ */
+function resolveTarget(
+    kind: SignalKind,
+    role: 'host' | 'guest' | 'viewer',
+    rawTo: unknown
+): { ok: true; to: string | null } | { ok: false; reason: 'invalid' | 'required' } {
+    const to = typeof rawTo === 'string' && rawTo.length > 0 ? rawTo : null;
+    if (role === 'viewer') {
+        if (to === null) return { ok: false, reason: 'required' };
+        return SignalingAuthService.isParticipantPeer(to)
+            ? { ok: true, to }
+            : { ok: false, reason: 'invalid' };
+    }
+    if (to === null) return { ok: true, to: null };
+    if (role === 'guest') {
+        // The guest answers the host (broadcast = legacy 7.A behaviour).
+        return to === 'host' ? { ok: true, to } : { ok: false, reason: 'invalid' };
+    }
+    // host: participant broadcast, guest target, or a present viewer peer.
+    if (to === 'guest') return { ok: true, to };
+    if (SignalingAuthService.isViewerPeer(to) && (kind === 'offer' || kind === 'ice')) {
+        return { ok: true, to };
+    }
+    return { ok: false, reason: 'invalid' };
+}
+
+function parseEventPayload(event: SseEventLog): Record<string, any> | null {
+    try {
+        const parsed = JSON.parse(event.payload);
+        return parsed && typeof parsed === 'object' ? parsed as Record<string, any> : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Map persisted signal events to the peer-visible shape.
+ * Presence events (session_join/leave) are never returned as signals, and a
+ * signal is only visible to (a) participants for broadcast/participant
+ * targets, or (b) the exact viewer peer it is addressed to.
+ */
+function visibleSignals(events: SseEventLog[], targetPeer: string | null, ownPeer: string) {
+    const out: Array<{ id: number; type: SignalKind | string; payload: unknown; from: string | null; peer: string | null; to: string | null }> = [];
+    for (const event of events) {
+        const kind = SIGNAL_EVENT_KINDS[event.event_type];
+        if (!kind) continue;
+        const body = parseEventPayload(event);
+        const from = typeof body?.from === 'string' ? body.from : null;
+        const peer = typeof body?.peer === 'string' ? body.peer : from;
+        const to = typeof body?.to === 'string' ? body.to : null;
+        if (targetPeer !== null) {
+            // viewer view: only signals addressed to this exact peer
+            if (to !== targetPeer) continue;
+        } else if (to !== null && to !== ownPeer) {
+            // participant view: broadcast + own-peer signals only
+            continue;
+        }
+        out.push({ id: event.id, type: kind, payload: body?.payload ?? null, from, peer, to });
+    }
+    return out;
+}
+
+/**
+ * Shared handler for POST /api/signaling/{offer,answer,ice,request-offer} + poll reads.
+ * POST: authorize → capability matrix → target resolution → persist to the EXISTING
+ * sse_event_log table (channel `signaling:<competitionId>`).
+ * GET (poll): participant-only — authorize → read back peer-visible signals.
  * No new storage, no new auth layer — reuses SessionModel/authMiddleware,
  * SignalingAuthService, and SseEventLogModel/EventPusher infra.
  */
 async function handleSignal(
     c: any,
     kind: SignalKind | 'poll',
-    body: { competition_id?: unknown; role?: unknown; payload?: unknown; since?: unknown }
+    body: { competition_id?: unknown; role?: unknown; payload?: unknown; since?: unknown; to?: unknown }
 ): Promise<Response> {
     const lang = (c.get('lang') || 'en') as Language;
     const user = c.get('user');
@@ -54,75 +157,102 @@ async function handleSignal(
     const claimedRole = typeof body.role === 'string' ? body.role : undefined;
 
     const auth = new SignalingAuthService(c.env.DB);
-    let gate;
+    let gate: SignalingAccessResult;
     try {
-        gate = await auth.authorize(user ? user.id : null, competitionId, claimedRole);
+        gate = await auth.authorizeViewer(user ? user.id : null, competitionId, claimedRole);
     } catch {
         // DB/transport failure → 502, never an authorization success.
-        return c.json({ success: false, error: t('errors.service_unavailable', lang) }, 502);
+        return serviceUnavailable(c, lang);
     }
     if (!gate.ok) {
-        const key =
-            gate.code === 401 ? 'login_required'
-            : gate.code === 409 ? 'competition_errors.not_eligible_to_start'
-            : 'forbidden';
-        return c.json({ success: false, error: t(key, lang), code: gate.error }, gate.code as 401 | 403 | 409);
+        return accessFailure(c, gate, lang);
+    }
+    // 7.A boundary: reading the participant signal stream stays participant-only.
+    // Viewers use GET /api/signaling/viewer/poll instead (their publishes are
+    // decided by the capability matrix below).
+    if (kind === 'poll' && gate.role === 'viewer') {
+        return c.json({ success: false, error: t('forbidden', lang), code: 'participant_required' }, 403);
     }
 
-    // Direction guard: only host sends offers, only guest sends answers.
-    // ICE flows both ways. Spoofed direction → 403.
-    if (kind === 'offer' && gate.role !== 'host') {
-        return c.json({ success: false, error: t('forbidden', lang), code: 'role_mismatch' }, 403);
-    }
-    if (kind === 'answer' && gate.role !== 'guest') {
-        return c.json({ success: false, error: t('forbidden', lang), code: 'role_mismatch' }, 403);
-    }
-
-    const channel = `signaling:${gate.competitionId}`;
+    const channel = SignalingSessionService.channelFor(gate.competitionId);
     const model = new SseEventLogModel(c.env.DB);
 
     if (kind === 'poll') {
         const since = Number(body.since ?? 0);
-        const events = await model.getAfter(channel, Number.isFinite(since) && since > 0 ? since : 0, 50);
+        let events: SseEventLog[];
+        try {
+            events = await model.getAfter(channel, Number.isFinite(since) && since > 0 ? since : 0, 50);
+        } catch {
+            return serviceUnavailable(c, lang);
+        }
         return c.json({
             success: true,
             data: {
                 role: gate.role,
+                peer: gate.peer,
                 competition_id: gate.competitionId,
-                // Peer-visible signals only (offer↔answer, both ICE directions).
-                signals: events.map((e) => ({
-                    id: e.id,
-                    type: e.event_type.replace('signal_', ''),
-                    payload: JSON.parse(e.payload).payload ?? null,
-                    from: JSON.parse(e.payload).from ?? null,
-                })),
+                signals: visibleSignals(events, null, gate.peer),
             },
         });
+    }
+
+    // 7.B capability matrix: viewers are receive-only peers (they may answer an
+    // offer + exchange ICE, but can never offer as a participant).
+    if (!SignalingAuthService.canPublish(gate.role, kind)) {
+        return c.json({ success: false, error: t('forbidden', lang), code: 'role_mismatch' }, 403);
+    }
+
+    const target = resolveTarget(kind, gate.role, body.to);
+    if (!target.ok) {
+        if (target.reason === 'required') {
+            return c.json({ success: false, error: t('errors.missing_fields', lang), code: 'target_required' }, 400);
+        }
+        return c.json({ success: false, error: t('forbidden', lang), code: 'invalid_target' }, 403);
+    }
+
+    // A host may only address viewers that are actually present in this
+    // session — never arbitrary or foreign user ids.
+    if (SignalingAuthService.isViewerPeer(target.to)) {
+        try {
+            const presence = await new SignalingSessionService(c.env.DB).getPresence(gate.competitionId);
+            if (!presence.viewers.includes(target.to)) {
+                return c.json({ success: false, error: t('forbidden', lang), code: 'target_not_present' }, 403);
+            }
+        } catch {
+            return serviceUnavailable(c, lang);
+        }
     }
 
     const payloadText = typeof body.payload === 'string' ? body.payload : JSON.stringify(body.payload ?? null);
     if (payloadText.length > MAX_SIGNAL_PAYLOAD_CHARS) {
         return c.json({ success: false, error: t('errors.content_too_long', lang) }, 413);
     }
-    if (kind !== 'ice' && payloadText.length < 2) {
+    if (kind !== 'ice' && kind !== 'request_offer' && payloadText.length < 2) {
         return c.json({ success: false, error: t('errors.missing_fields', lang) }, 400);
     }
 
-    const eventType = kind === 'offer' ? 'signal_offer' : kind === 'answer' ? 'signal_answer' : 'signal_ice';
-    let row;
+    let row: SseEventLog;
     try {
-        row = await model.publish(channel, eventType, {
+        row = await model.publish(channel, SIGNAL_EVENT_TYPES[kind], {
             competition_id: gate.competitionId,
             from: gate.role,
+            peer: gate.peer,
+            to: target.to,
             payload: body.payload ?? null,
         });
     } catch {
-        return c.json({ success: false, error: t('errors.service_unavailable', lang) }, 502);
+        return serviceUnavailable(c, lang);
     }
 
     return c.json({
         success: true,
-        data: { id: row.id, role: gate.role satisfies SignalingRole, competition_id: gate.competitionId },
+        data: {
+            id: row.id,
+            role: gate.role satisfies SignalingRole | 'viewer',
+            peer: gate.peer,
+            to: target.to,
+            competition_id: gate.competitionId,
+        },
     });
 }
 
@@ -390,14 +520,139 @@ signalingRoutes.post('/room/create', authMiddleware({ required: true }), async (
     }
 });
 
+/** Wire shape (snake_case, like every other API payload) for session state. */
+function sessionPayload(state: SignalingSessionState) {
+    return {
+        competition_id: state.competitionId,
+        role: state.role,
+        peer: state.peer,
+        live: state.live,
+        competition_status: state.competitionStatus,
+        started_at: state.startedAt,
+        presence: {
+            host: state.presence.host,
+            guest: state.presence.guest,
+            viewers: state.presence.viewers,
+            viewer_count: state.presence.viewerCount,
+            last_event_id: state.presence.lastEventId,
+        },
+        presence_ttl_seconds: state.presenceTtlSeconds,
+        last_event_id: state.lastEventId,
+    };
+}
+
+/**
+ * 7.B: live session discovery/state + presence (late join).
+ * GET  /api/signaling/session?competition_id=&claimed_role= — read-only state.
+ * POST /api/signaling/session/join   — announce presence (also the heartbeat).
+ * POST /api/signaling/session/leave  — announce departure.
+ *
+ * Authorization is the same single authority (`authorizeViewer`): host/guest
+ * for a participant, `viewer` for any authenticated user while the session is
+ * live, 401/403/409 otherwise. Announcing presence never touches an existing
+ * peer connection.
+ */
+async function handleSession(c: any, action: 'describe' | 'join' | 'leave'): Promise<Response> {
+    const lang = (c.get('lang') || 'en') as Language;
+    const user = c.get('user');
+
+    let competitionIdRaw: unknown;
+    let claimedRole: string | undefined;
+    if (action === 'describe') {
+        competitionIdRaw = c.req.query('competition_id');
+        const claim = c.req.query('claimed_role') ?? c.req.query('role');
+        claimedRole = typeof claim === 'string' ? claim : undefined;
+    } else {
+        const body = await c.req.json().catch(() => ({} as Record<string, unknown>));
+        competitionIdRaw = (body as Record<string, unknown>).competition_id;
+        const claim = (body as Record<string, unknown>).claimed_role ?? (body as Record<string, unknown>).role;
+        claimedRole = typeof claim === 'string' ? claim : undefined;
+    }
+
+    const auth = new SignalingAuthService(c.env.DB);
+    let gate: SignalingAccessResult;
+    try {
+        gate = await auth.authorizeViewer(user ? user.id : null, Number(competitionIdRaw), claimedRole);
+    } catch {
+        return serviceUnavailable(c, lang);
+    }
+    if (!gate.ok) {
+        return accessFailure(c, gate, lang);
+    }
+
+    const sessions = new SignalingSessionService(c.env.DB);
+    try {
+        if (action === 'describe') {
+            return c.json({ success: true, data: sessionPayload(await sessions.describe(gate)) });
+        }
+        const { eventId, state } = await sessions.announce(gate, action);
+        return c.json({ success: true, data: { ...sessionPayload(state), action, event_id: eventId } });
+    } catch {
+        return serviceUnavailable(c, lang);
+    }
+}
+
+/**
+ * GET /api/signaling/viewer/poll?competition_id=&since=
+ * Viewer-only read of the signals addressed to this exact viewer peer.
+ * Participants keep using /poll; a viewer can never read participant traffic.
+ */
+signalingRoutes.get('/viewer/poll', authMiddleware({ required: true }), async (c) => {
+    const lang = (c.get('lang') || 'en') as Language;
+    const user = c.get('user');
+
+    const auth = new SignalingAuthService(c.env.DB);
+    let gate: SignalingAccessResult;
+    try {
+        gate = await auth.authorizeViewer(user ? user.id : null, Number(c.req.query('competition_id')), c.req.query('claimed_role') ?? undefined);
+    } catch {
+        return serviceUnavailable(c, lang);
+    }
+    if (!gate.ok) {
+        return accessFailure(c, gate, lang);
+    }
+    if (gate.role !== 'viewer') {
+        return c.json({ success: false, error: t('forbidden', lang), code: 'viewer_required' }, 403);
+    }
+
+    const since = Number(c.req.query('since') ?? 0);
+    let events: SseEventLog[];
+    try {
+        events = await new SseEventLogModel(c.env.DB).getAfter(
+            SignalingSessionService.channelFor(gate.competitionId),
+            Number.isFinite(since) && since > 0 ? since : 0,
+            50
+        );
+    } catch {
+        return serviceUnavailable(c, lang);
+    }
+
+    return c.json({
+        success: true,
+        data: {
+            role: gate.role,
+            peer: gate.peer,
+            competition_id: gate.competitionId,
+            signals: visibleSignals(events, gate.peer, gate.peer),
+        },
+    });
+});
+
+signalingRoutes.get('/session', authMiddleware({ required: true }), async (c) => handleSession(c, 'describe'));
+signalingRoutes.post('/session/join', authMiddleware({ required: true }), async (c) => handleSession(c, 'join'));
+signalingRoutes.post('/session/leave', authMiddleware({ required: true }), async (c) => handleSession(c, 'leave'));
+
 /**
  * POST /api/signaling/offer — host publishes an SDP offer (7.A, auth required).
- * POST /api/signaling/answer — guest publishes an SDP answer (7.A, auth required).
- * POST /api/signaling/ice — either participant publishes an ICE candidate (7.A).
+ * POST /api/signaling/answer — guest (or viewer) publishes an SDP answer.
+ * POST /api/signaling/ice — any authorized peer publishes an ICE candidate.
+ * POST /api/signaling/request-offer — late-joining guest/viewer asks the host
+ *     for a fresh offer (7.B late join).
  * GET  /api/signaling/poll?competition_id=&since= — participant reads peer signals.
  *
- * All four re-derive the role server-side via SignalingAuthService and persist
- * to / read from the EXISTING sse_event_log table (no new storage).
+ * All re-derive the role server-side via SignalingAuthService (single
+ * authority), apply the 7.B capability matrix, and persist to / read from the
+ * EXISTING sse_event_log table (no new storage).
  */
 signalingRoutes.post('/offer', async (c) => {
     const body = await c.req.json().catch(() => ({}));
@@ -412,6 +667,11 @@ signalingRoutes.post('/answer', async (c) => {
 signalingRoutes.post('/ice', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     return handleSignal(c, 'ice', body);
+});
+
+signalingRoutes.post('/request-offer', authMiddleware({ required: true }), async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    return handleSignal(c, 'request_offer', body);
 });
 
 signalingRoutes.get('/poll', async (c) => {

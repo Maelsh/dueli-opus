@@ -38,6 +38,11 @@ export function getHostScript(lang: Language): string {
         // تخزين ICE candidates حتى يتم setRemoteDescription
         let pendingIceCandidates = [];
         let hasRemoteDescription = false;
+
+        // 7.B: receive-only viewer peers (each present viewer gets its own
+        // PeerConnection; the host↔guest connection is never rebuilt or dropped).
+        let viewerPeers = {};
+        let viewerIceServers = null;
         
         // قراءة رقم المنافسة من URL أو إنشاء عشوائي
         const urlParams = new URLSearchParams(window.location.search);
@@ -344,6 +349,7 @@ export function getHostScript(lang: Language): string {
             
             // Fetch ICE servers dynamically
             const dynamicIceServers = await window.fetchIceServers();
+            viewerIceServers = dynamicIceServers;
             
             // Create PeerConnection inside window.mediaState
             ms.pc = new RTCPeerConnection({
@@ -406,10 +412,99 @@ export function getHostScript(lang: Language): string {
         }
         
         // ===== Signaling (HTTP Polling) =====
-        function sendSignal(type, data) {
+        function sendSignal(type, data, target) {
             if (signalingManager) {
-                signalingManager.sendSignal(type, data);
+                // 7.B: 'target' addresses a specific viewer peer (server-validated).
+                return signalingManager.sendSignal(type, data, target);
             }
+            return null;
+        }
+
+        // ===== 7.B: Viewer Peers (receive-only watchers) =====
+        function closeViewerPeer(peerId) {
+            const entry = viewerPeers[peerId];
+            if (!entry) return;
+            try { if (entry.pc) entry.pc.close(); } catch (e) { debugLog('[DEBUG] viewer pc close failed:', e); }
+            delete viewerPeers[peerId];
+        }
+
+        function createViewerPeer(peerId) {
+            if (viewerPeers[peerId]) return viewerPeers[peerId];
+            const entry = { pc: null, pendingIce: [], hasRemote: false, connecting: false };
+            const vpc = new RTCPeerConnection({ iceServers: viewerIceServers || iceServers });
+            entry.pc = vpc;
+
+            // The host publishes its own capture, and forwards the guest's media
+            // when available, so viewers watch both competitors.
+            if (ms.localStream) {
+                ms.localStream.getTracks().forEach(function(track) { vpc.addTrack(track, ms.localStream); });
+            }
+            if (remoteStream && remoteStream.getTracks().length > 0) {
+                remoteStream.getTracks().forEach(function(track) {
+                    try { vpc.addTrack(track, remoteStream); } catch (e) { debugLog('[DEBUG] viewer track forward failed:', e); }
+                });
+            }
+
+            vpc.onicecandidate = async function(event) {
+                if (event.candidate) await sendSignal('ice', event.candidate, peerId);
+            };
+            vpc.onconnectionstatechange = function() {
+                debugLog('[DEBUG] viewer ' + peerId + ' state:', vpc.connectionState);
+                if (vpc.connectionState === 'failed' || vpc.connectionState === 'closed') {
+                    closeViewerPeer(peerId);
+                }
+            };
+
+            viewerPeers[peerId] = entry;
+            log('👁️ ${tr.live_signaling.viewer_joined}: ' + peerId, 'info');
+            return entry;
+        }
+
+        /** Send a fresh offer to one viewer peer (late join safe). */
+        async function offerToViewer(peerId) {
+            const entry = createViewerPeer(peerId);
+            if (entry.connecting) return;
+            entry.connecting = true;
+            try {
+                const offer = await entry.pc.createOffer(entry.hasRemote ? { iceRestart: true } : undefined);
+                await entry.pc.setLocalDescription(offer);
+                const result = await sendSignal('offer', offer, peerId);
+                if (result && result.success === false) closeViewerPeer(peerId);
+            } catch (err) {
+                log('${tr.error}: ' + err.message, 'error');
+                closeViewerPeer(peerId);
+            } finally {
+                entry.connecting = false;
+            }
+        }
+
+        /** Fresh offer for the guest (late join) without rebuilding the link. */
+        async function offerToGuest() {
+            if (!ms.pc || ms.pc.signalingState === 'closed') return;
+            try {
+                const offer = await ms.pc.createOffer(hasRemoteDescription ? { iceRestart: true } : undefined);
+                await ms.pc.setLocalDescription(offer);
+                sendSignal('offer', offer);
+            } catch (err) {
+                log('${tr.error}: ' + err.message, 'error');
+            }
+        }
+
+        async function handleViewerAnswer(peerId, data) {
+            const entry = viewerPeers[peerId];
+            if (!entry) return;
+            await entry.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
+            entry.hasRemote = true;
+            while (entry.pendingIce.length > 0) {
+                await entry.pc.addIceCandidate(new RTCIceCandidate(entry.pendingIce.shift()));
+            }
+        }
+
+        async function handleViewerIce(peerId, candidate) {
+            const entry = viewerPeers[peerId];
+            if (!entry) return;
+            if (entry.hasRemote) await entry.pc.addIceCandidate(new RTCIceCandidate(candidate));
+            else entry.pendingIce.push(candidate);
         }
         
         function setupSignaling(roomData) {
@@ -421,6 +516,25 @@ export function getHostScript(lang: Language): string {
                 token: roomData.token,
                 onSignal: async function(data) {
                     try {
+                        const peerId = data.from || '';
+                        const isViewerPeer = peerId.indexOf('viewer:') === 0;
+
+                        if (data.signalType === 'request_offer') {
+                            // 7.B late join: a guest or a viewer asks for a fresh
+                            // offer instead of waiting for one that already passed.
+                            if (peerId === 'guest') await offerToGuest();
+                            else if (isViewerPeer) await offerToViewer(peerId);
+                            return;
+                        }
+
+                        if (isViewerPeer) {
+                            // Viewer traffic is isolated per peer: the host↔guest
+                            // connection is never touched by a viewer.
+                            if (data.signalType === 'answer') await handleViewerAnswer(peerId, data);
+                            else if (data.signalType === 'ice') await handleViewerIce(peerId, data.signalData);
+                            return;
+                        }
+
                         if (data.signalType === 'answer') {
                             debugLog('[DEBUG] Processing ANSWER signal');
                             await ms.pc.setRemoteDescription(new RTCSessionDescription(data.signalData));
@@ -451,6 +565,15 @@ export function getHostScript(lang: Language): string {
                 },
                 onError: function(error) {
                     log('❌ خطأ في الاتصال', 'error');
+                },
+                onSessionState: function(state) {
+                    // 7.B: session/presence sync — drop viewer peers that left
+                    // (heartbeat expiry), never the guest connection.
+                    const present = (state && state.presence && state.presence.viewers) ? state.presence.viewers : [];
+                    Object.keys(viewerPeers).forEach(function(peerId) {
+                        if (present.indexOf(peerId) === -1) closeViewerPeer(peerId);
+                    });
+                    debugLog('[DEBUG] session state:', state);
                 },
                 onConnected: async function() {
                     // إرسال Offer بعد اكتمال الاتصال
@@ -737,6 +860,9 @@ export function getHostScript(lang: Language): string {
             if (segmentInterval) clearInterval(segmentInterval);
             if (drawInterval) clearInterval(drawInterval);
             if (mediaRecorder) mediaRecorder.stop();
+            // 7.B: withdraw presence + close every viewer peer (host was the offerer).
+            if (signalingManager) signalingManager.disconnect();
+            Object.keys(viewerPeers).forEach(function(peerId) { closeViewerPeer(peerId); });
             if (ms.pollingInterval) clearInterval(ms.pollingInterval);
             if (ms.pc) ms.pc.close();
             if (ms.localStream) ms.localStream.getTracks().forEach(function(t) { t.stop(); });
