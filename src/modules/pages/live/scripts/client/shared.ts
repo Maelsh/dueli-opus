@@ -95,17 +95,30 @@ class SignalingManager {
         this.signalingUrl = null;
         this.roomId = config.roomId;
         this.competitionId = String(config.roomId).replace('comp_', '');
+        // 7.A/7.B: 'role' is only a CLAIM used for verification. The authoritative
+        // role always comes back from the server (this.serverRole / this.peer).
         this.role = config.role;
+        // 7.B: 'participant' (host/guest) or 'viewer' (receive-only watcher).
+        // A viewer never claims a role — the server derives 'viewer'.
+        this.mode = config.mode === 'viewer' ? 'viewer' : 'participant';
         this.token = config.token;
         this.onSignal = config.onSignal || function() {};
         this.onPeerJoined = config.onPeerJoined || function() {};
         this.onPeerLeft = config.onPeerLeft || function() {};
         this.onError = config.onError || function() {};
         this.onConnected = config.onConnected || function() {};
+        // 7.B: session state / presence sync (competition status, peers, viewers).
+        this.onSessionState = config.onSessionState || function() {};
+        this.onViewerJoined = config.onViewerJoined || function() {};
         this.pollInterval = null;
+        this.heartbeatInterval = null;
         this.lastTimestamp = 0;
         this.peerWasConnected = false;
         this.isConnected = false;
+        // 7.B: server-derived identity (never client-supplied).
+        this.serverRole = null;
+        this.peer = null;
+        this.sessionState = null;
     }
     
     async connect() {
@@ -115,31 +128,41 @@ class SignalingManager {
             // 7.A correction: the ONLY signaling path is the platform
             // (/api/signaling/*, gated by SignalingAuthService). The external
             // worker URL is no longer used for auth or SDP/ICE exchange.
-            const res = await fetch('/api/signaling/verify', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + this.token
-                },
-                body: JSON.stringify({
-                    session_token: this.token,
-                    competition_id: Number(this.competitionId),
-                    claimed_role: this.role
-                })
-            });
+            // 7.B: viewers never verify a role claim — /api/signaling/session/join
+            // derives 'viewer' server-side for any authorized watcher.
+            if (this.mode !== 'viewer') {
+                const res = await fetch('/api/signaling/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + this.token
+                    },
+                    body: JSON.stringify({
+                        session_token: this.token,
+                        competition_id: Number(this.competitionId),
+                        claimed_role: this.role
+                    })
+                });
 
-            const data = await res.json();
+                const data = await res.json();
 
-            if (!data.valid) {
-                testLog('❌ Join failed: ' + (data.error || 'Unknown'), 'error');
-                this.onError(new Error(data.error));
-                return;
+                if (!data.valid) {
+                    testLog('❌ Join failed: ' + (data.error || 'Unknown'), 'error');
+                    this.onError(new Error(data.error));
+                    return;
+                }
             }
 
-            testLog('✅ Joined room as ' + this.role, 'success');
+            // 7.B: announce presence (also the late-join entry point) and read the
+            // current session state — role/peer below are SERVER-derived.
+            const state = await this.announcePresence('join');
+            if (!state) return;
+
+            testLog('✅ Joined room as ' + (this.serverRole || this.role), 'success');
             this.isConnected = true;
-            this.onConnected();
+            this.onConnected(state);
             this.startPolling();
+            this.startHeartbeat();
 
         } catch (err) {
             testLog('❌ Connection error: ' + err.message, 'error');
@@ -147,24 +170,79 @@ class SignalingManager {
         }
     }
 
+    /**
+     * 7.B: announce (or withdraw) presence on the live session and sync state.
+     * Joined 'join' calls double as the presence heartbeat, so a late joiner is
+     * discovered by the host/other participants without touching any existing
+     * peer connection.
+     */
+    async announcePresence(action) {
+        const body = { competition_id: Number(this.competitionId) };
+        // Only participants have a role claim; viewers are derived server-side.
+        if (action === 'join' && this.mode !== 'viewer' && this.role) {
+            body.claimed_role = this.role;
+        }
+        try {
+            const res = await fetch('/api/signaling/session/' + action, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + this.token
+                },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!data.success) {
+                if (action === 'join') {
+                    testLog('❌ Session join failed: ' + (data.error || 'Unknown'), 'error');
+                    this.onError(new Error(data.error || 'session_join_failed'));
+                }
+                return null;
+            }
+            this.serverRole = data.data.role;
+            this.peer = data.data.peer;
+            this.sessionState = data.data;
+            this.onSessionState(data.data);
+            return data.data;
+        } catch (err) {
+            testLog('⚠️ Presence sync error: ' + err.message, 'warn');
+            if (action === 'join') this.onError(err);
+            return null;
+        }
+    }
+
+    /** 7.B: keep presence alive so the session state stays accurate. */
+    startHeartbeat() {
+        if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = setInterval(async () => {
+            if (!this.isConnected) return;
+            await this.announcePresence('join');
+        }, 15000);
+    }
+
     startPolling() {
         if (this.pollInterval) clearInterval(this.pollInterval);
 
         // 7.A: platform poll — session auth via Bearer, role re-derived
         // server-side per request. Peer role labels shown to the user.
-        const peerLabel = this.role === 'host' ? 'opponent' : 'host';
+        // 7.B: viewers use the viewer-scoped read (own-peer signals only).
+        const endpoint = this.mode === 'viewer' ? '/api/signaling/viewer/poll' : '/api/signaling/poll';
+        const peerLabel = this.serverRole === 'viewer'
+            ? 'host'
+            : (this.serverRole === 'host' ? 'opponent' : 'host');
         const authHeaders = function(token) {
             return { 'Authorization': 'Bearer ' + token };
         };
+        const self = this;
 
         this.pollInterval = setInterval(async () => {
-            if (!this.isConnected) return;
+            if (!self.isConnected) return;
 
             try {
                 const res = await fetch(
-                    '/api/signaling/poll?competition_id=' + encodeURIComponent(this.competitionId)
-                    + '&since=' + encodeURIComponent(String(this.lastTimestamp || 0)),
-                    { headers: authHeaders(this.token) }
+                    endpoint + '?competition_id=' + encodeURIComponent(self.competitionId)
+                    + '&since=' + encodeURIComponent(String(self.lastTimestamp || 0)),
+                    { headers: authHeaders(self.token) }
                 );
 
                 const data = await res.json();
@@ -173,14 +251,23 @@ class SignalingManager {
                 if (data.data.signals && data.data.signals.length > 0) {
                     let sawPeer = false;
                     for (const signal of data.data.signals) {
-                        this.lastTimestamp = Math.max(this.lastTimestamp, signal.id || 0);
-                        if (signal.from && signal.from !== this.role) sawPeer = true;
-                        this.onSignal({ signalType: signal.type, signalData: signal.payload });
+                        self.lastTimestamp = Math.max(self.lastTimestamp, signal.id || 0);
+                        // 7.B: signals addressed to another peer are never for us.
+                        if (signal.to && signal.to !== self.peer) continue;
+                        const sender = signal.peer || signal.from;
+                        if (sender && sender !== self.peer) sawPeer = true;
+                        self.onSignal({
+                            signalType: signal.type,
+                            signalData: signal.payload,
+                            from: sender,
+                            fromRole: signal.from,
+                            to: signal.to || null
+                        });
                     }
-                    if (sawPeer && !this.peerWasConnected) {
-                        this.peerWasConnected = true;
+                    if (sawPeer && !self.peerWasConnected) {
+                        self.peerWasConnected = true;
                         testLog('👋 Peer connected', 'info');
-                        this.onPeerJoined({ role: peerLabel });
+                        self.onPeerJoined({ role: peerLabel });
                     }
                 }
             } catch (err) {
@@ -189,31 +276,50 @@ class SignalingManager {
         }, 1000);
     }
 
-    async sendSignal(signalType, signalData) {
+    /**
+     * 7.B: ask the host for a fresh offer (late join) — guest or viewer only.
+     * The server stamps the sender identity; 'to' may only be a participant.
+     */
+    async requestOffer(target) {
+        return this.sendSignal('request_offer', null, target);
+    }
+
+    async sendSignal(signalType, signalData, target) {
         if (!this.isConnected) return;
-        // 7.A: offer/answer/ice go to the platform endpoints, never to the
-        // external worker. request_offer is a local-only hint (the host sends
-        // its offer on connect); it is not forwarded as an authorized signal.
+        // 7.A/7.B: offer/answer/ice/request_offer go to the platform endpoints,
+        // never to the external worker. request_offer is the 7.B late-join hint
+        // (guest/viewer → host); its target is validated server-side.
         const endpoint =
             signalType === 'offer' ? '/api/signaling/offer'
             : signalType === 'answer' ? '/api/signaling/answer'
             : signalType === 'ice' ? '/api/signaling/ice'
+            : signalType === 'request_offer' ? '/api/signaling/request-offer'
             : null;
         if (!endpoint) return;
+        const body = {
+            competition_id: Number(this.competitionId),
+            payload: signalData
+        };
+        // A viewer must always address a participant; the server rejects anything else.
+        if (target) body.to = target;
+        else if (this.mode === 'viewer') body.to = 'host';
         try {
-            await fetch(endpoint, {
+            const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + this.token
                 },
-                body: JSON.stringify({
-                    competition_id: Number(this.competitionId),
-                    payload: signalData
-                })
+                body: JSON.stringify(body)
             });
+            const data = await res.json().catch(function() { return {}; });
+            if (!data.success) {
+                testLog('⚠️ Signal rejected (' + signalType + '): ' + (data.code || data.error || 'error'), 'warn');
+            }
+            return data;
         } catch (err) {
             console.error('Send signal error:', err);
+            return null;
         }
     }
 
@@ -223,9 +329,14 @@ class SignalingManager {
             clearInterval(this.pollInterval);
             this.pollInterval = null;
         }
-        // 7.A: no external leave call — platform signals expire with the
-        // SSE log; the room lifecycle ends with the competition.
-        try { await Promise.resolve(); } catch (err) { console.error('Leave error:', err); }
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        // 7.B: withdraw presence so other peers see the session state update.
+        // 7.A: no external leave call — platform signals live in the SSE log;
+        // the room lifecycle ends with the competition.
+        try { await this.announcePresence('leave'); } catch (err) { console.error('Leave error:', err); }
         testLog('🔌 Signaling disconnected', 'warn');
     }
 }

@@ -29,7 +29,11 @@ export type SseEventType =
     | 'withdrawal_status'
     | 'signal_offer'
     | 'signal_answer'
-    | 'signal_ice';
+    | 'signal_ice'
+    | 'signal_request_offer'
+    // 7.B: live session presence (same storage, no new table)
+    | 'session_join'
+    | 'session_leave';
 
 export interface SseEventLog {
     id: number;
@@ -102,6 +106,24 @@ export class SseEventLogModel extends BaseModel<SseEventLog> {
             ORDER BY id ASC
             LIMIT ?
         `).bind(channel, lastId, limit).all<SseEventLog>();
+
+        return res.results || [];
+    }
+
+    /**
+     * 7.B: read the newest events of a channel (newest first).
+     * Used for live session presence/state — same table, no new storage.
+     */
+    async getRecent(
+        channel: string,
+        limit = 200
+    ): Promise<SseEventLog[]> {
+        const res = await this.db.prepare(`
+            SELECT * FROM ${this.tableName}
+            WHERE channel = ?
+            ORDER BY id DESC
+            LIMIT ?
+        `).bind(channel, limit).all<SseEventLog>();
 
         return res.results || [];
     }

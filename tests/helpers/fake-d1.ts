@@ -158,6 +158,19 @@ class FakeStmt {
                 ? { id: comp.id, creator_id: comp.creator_id, opponent_id: comp.opponent_id ?? null, status: comp.status, ended_at: comp.ended_at ?? null, elo_applied_at: comp.elo_applied_at ?? null }
                 : null;
         }
+        // 7.A/7.B: SignalingAuthService loader (status + started_at for session state).
+        if (q.startsWith('select id, creator_id, opponent_id, status, started_at from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp
+                ? {
+                    id: comp.id,
+                    creator_id: comp.creator_id,
+                    opponent_id: comp.opponent_id ?? null,
+                    status: comp.status,
+                    started_at: comp.started_at ?? null,
+                }
+                : null;
+        }
         if (q.startsWith('select id, creator_id, opponent_id, status from competitions where id = ?')) {
             const comp = this.db.competitions.find((c) => c.id === p[0]);
             return comp
@@ -496,6 +509,16 @@ class FakeStmt {
                     const comp = this.db.competitions.find((c) => c.id === t.competition_id) ?? {};
                     return { ...t, competition_status: comp.status ?? null, creator_id: comp.creator_id ?? null, opponent_id: comp.opponent_id ?? null };
                 });
+            return { results: rows };
+        }
+
+        // --- 7.B: signaling SSE log newest-first read (SseEventLogModel.getRecent) ---
+        // SELECT * FROM sse_event_log WHERE channel = ? ORDER BY id DESC LIMIT ?
+        if (q.startsWith('select * from sse_event_log') && q.includes('order by id desc')) {
+            const rows = this.db.sseEvents
+                .filter((e) => e.channel === p[0])
+                .sort((a, b) => b.id - a.id)
+                .slice(0, (p[1] as number) || 200);
             return { results: rows };
         }
 
