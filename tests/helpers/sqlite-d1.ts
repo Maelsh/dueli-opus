@@ -116,6 +116,21 @@ export class SqliteD1 {
     async batch(
         statements: SqliteStatement[]
     ): Promise<Array<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: unknown[] }>> {
+        // Serialize batches exactly like D1's serialized write transactions:
+        // two concurrent batches must never interleave their statements
+        // (same pattern as tests/helpers/fake-d1.ts since B12).
+        const p = (this.batchQueue = this.batchQueue.catch(() => undefined)).then(() =>
+            this.runBatch(statements)
+        );
+        this.batchQueue = p.catch(() => undefined);
+        return p;
+    }
+
+    private batchQueue: Promise<unknown> = Promise.resolve();
+
+    private async runBatch(
+        statements: SqliteStatement[]
+    ): Promise<Array<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: unknown[] }>> {
         const results: Array<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: unknown[] }> = [];
         this.db.exec('BEGIN');
         try {

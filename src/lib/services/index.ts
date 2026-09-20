@@ -17,4 +17,6 @@ export { SignalingSessionService } from './SignalingSessionService';
 export { SignalingReconnectService } from './SignalingReconnectService';
 export { TurnCredentialService, TurnCredentialError, DEFAULT_STUN_SERVERS } from './TurnCredentialService';
 export type { TurnResolution, TurnIceServer, TurnServiceEnv } from './TurnCredentialService';
+export { LedgerService, LedgerError } from './LedgerService';
+export type { LedgerTx, LedgerEntrySpec, LedgerRef, LedgerInvariant, LedgerPostResult, LedgerDirection, LedgerAccountType } from './LedgerService';
 
