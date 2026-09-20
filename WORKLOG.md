@@ -1,3 +1,13 @@
+## 2026-09-20 — Phase 7.D: TURN/STUN وشبكات مقيّدة (فرع `feat/live-turn-config`)
+
+- النطاق: إعداد TURN عبر متغيرات البيئة فقط (لا سر في المستودع إطلاقاً)، اعتماد TURN مؤقت قصير الأجل يُولَّد خادمياً لكل جلسة (لا سر ثابت مشترك)، وتدهور رشيق برسائل مترجمة + بديل STUN بلا شاشة سوداء. لم تُمس الماليات/الإعلانات، ولا بوابة البث الحي (7.A–7.E exchange)، ولا migrations، ولا dependencies، ولا CI.
+- جديد: `src/lib/services/TurnCredentialService.ts` (OOP) — خلفيتان: (A) coturn عبر `TURN_URL`+`TURN_SECRET` (HMAC-SHA1 ephemeral: `username = <expiry>:<userId>`، TTL 3600s، + نسخة `transport=tcp` تلقائية)، (B) Cloudflare Calls عبر `TURN_TOKEN_ID`+`TURN_API_TOKEN` بطلب لكل جلسة TTL 3600s — أُزيلت ذاكرة Cache API المشتركة ~6h (اعتماد مشترك سابق). غير مُعدَّ → STUN-only؛ فشل خلفية مُعدَّة → 502 برسالة مترجمة.
+- `GET /api/signaling/ice-servers` محمي الآن بالمصادقة (401) ويعيد `iceServers + turn_available + ttl_seconds + expires_at` دون أي سر سوى الاعتماد المؤقت. `src/config/types.ts` أُضيف إليه `TURN_URL`/`TURN_SECRET` (اختياريان)، و`.dev.vars.example` بقيم فارغة فقط.
+- i18n: `live.network_restricted` + `live.turn_unavailable` في ar+en (تحت `live_signaling.*` مع alias في `i18n/index.ts`)؛ عميل `shared.ts` يرسل Bearer الجلسة ويعرض الرسائل مع fallback STUN (`main.ts` يمرر `lang` إلى `getClientSharedScript`).
+- الاختبار: `tests/api/turn-credentials.test.ts` (7 اختبارات) ✅ — مؤقت+انتهاء وربط userId، 401 لغير المصادق، لا سر في الاستجابة (مسارا coturn وCloudflare مع mock fetch)، فشل TURN ⇒ 502 برسالة مترجمة ar/en، fallback STUN، مفاتيح i18n.
+- الجرد: `npm run routes:inventory` أعاد التوليد (186 مساراً؛ ice-servers → AUTHENTICATED). docs/04 §2 وdocs/07 (جدول env) حُدِّثا.
+- التحقق: انظر التقرير النهائي (npm test / tsc / build).
+
 ## 2026-09-19 — Beta Core Gate Remediation (فرع `fix/beta-core-gate-remediation`)
 
 - النطاق: (1) route inventory drift = توثيقي فقط — أُعيد توليد الجرد (`node dev-tools/route-inventory.mjs`: ‏174 → ‏176 بإضافة مساري B11 ‏`DELETE /api/competitions/:id/rate` + ‏`GET .../ratings/summary`) بلا أي تغيير routes/صلاحيات؛ (2) schema-contract stale expectation — حُدِّثت القائمة إلى 19 migration ‏(0015→0018) بلا حذف/إعادة ترقيم؛ (3) Beta E2E — نجاح B16 موثق أصلاً في `PLAN-STATUS.md` فلم يُعَد بناؤه؛ (4) block-enforcement harness — إصلاح اختبار فقط (fallback ‏`SELECT MAX(id)` لغياب `meta.last_row_id` في Wrangler المحلي) بلا تغيير production؛ (5) auth rate-limit forced logout — **إصلاح منتج**: ‏`checkAuth()` لم يعد يمسح الجلسة عند `429`/خطأ شبكة، والفشل الحقيقي ما زال يمسح؛ (6) i18n ‏`getCategoryName` — الحقول الصريحة أولاً + slug مسمّى `categories.<slug>` + نسخة العميل في competition-page مطابقة + regression test مباشر.

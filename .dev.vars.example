@@ -28,10 +28,14 @@ STREAMING_URL="https://signaling-server.maelshspro.workers.dev"   # signaling se
 UPLOAD_URL="https://example.com/ffmpeg"
 FFMPEG_SERVER_URL=""              # optional override for UPLOAD_URL used by /api/chunks
 
-# TURN — Cloudflare Calls (rtc.live.cloudflare.com). Get these from the Cloudflare
-# dashboard > Calls > TURN. If unset, /api/signaling/ice-servers falls back to STUN-only.
+# TURN — 7.D: all values via environment only, NEVER committed to the repo.
+# Backend A: self-hosted coturn (TURN REST auth — ephemeral per-session creds):
+TURN_URL=""                       # e.g. "turn:turn.example.com:3478" (comma-separated list allowed)
+TURN_SECRET=""                    # SECRET — coturn "static-auth-secret" (wrangler secret put TURN_SECRET)
+# Backend B: Cloudflare Calls (rtc.live.cloudflare.com) — per-session short-lived creds:
 TURN_TOKEN_ID=""                  # not secret
 TURN_API_TOKEN=""                 # SECRET — never commit a real value here
+# If neither backend is set, /api/signaling/ice-servers falls back to STUN-only.
 
 # --- Payments (confirm exact var names against src/modules/api/donations & payments) ---
 STRIPE_SECRET_KEY=""

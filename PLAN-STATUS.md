@@ -1,4 +1,14 @@
 
+## Phase 7.D — TURN/STUN وشبكات مقيّدة (2026-09-20)
+
+- 🔧 Local implementation on `feat/live-turn-config` (from 7.C branch head `6cd01f9`). Scope: TURN عبر env فقط (لا سر في المستودع) + اعتمادات TURN مؤقتة قصيرة العمر مُولَّدة خادمياً لكل جلسة + تدهور رشيق (رسالة مترجمة + بديل STUN، لا شاشة سوداء).
+- جديد `src/lib/services/TurnCredentialService.ts`: خلفيتان عبر env — (A) `TURN_URL`+`TURN_SECRET` → coturn REST auth (HMAC-SHA1 ephemeral، `username = <expiry>:<userId>`، TTL 3600s، مع نسخة `transport=tcp` تلقائية للشبكات المقيّدة)، (B) `TURN_TOKEN_ID`+`TURN_API_TOKEN` → Cloudflare Calls بطلب لكل جلسة (TTL 3600s) — أُلغيت ذاكرة Cache API المشتركة ~6h (سر مشترك سابق). غير مُعدَّ → STUN-only (`turn_available:false`). فشل خلفية مُعدَّة → `TurnCredentialError` → 502 برسالة مترجمة.
+- `GET /api/signaling/ice-servers` أصبح محمياً بـ `authMiddleware({required:true})` (401 لغير المصادق)، ويعيد `iceServers + turn_available + ttl_seconds + expires_at` — لا يكشف أي سر سوى الاعتماد المؤقت. `fetchCloudflareIceServers` القديمة حُذفت.
+- i18n: `live.network_restricted` + `live.turn_unavailable` (محفوظتان `live_signaling.*` مع alias في `i18n/index.ts` كما في 7.A). العميل `shared.ts fetchIceServers()` يرسل Bearer الجلسة ويعرض الرسائل المترجمة مع fallback STUN.
+- bindings: `TURN_URL`/`TURN_SECRET` (اختياريان) في `src/config/types.ts` + `.dev.vars.example` بقيم فارغة فقط؛ docs/04 + docs/07 حُدِّثا؛ الجرد أعيد توليده (مسار أصبح AUTHENTICATED).
+- الاختبار: `tests/api/turn-credentials.test.ts` (7) — مؤقت+انتهاء، 401، لا سر في الاستجابة (مسارا coturn وCloudflare)، فشل TURN ⇒ رسالة مترجمة ar/en، fallback STUN، مفاتيح i18n. الحالة 🧪 (تحقق محلي) ريثما تُستكمل G1–G8 بالمراجعة الخارجية.
+
+
 ## F-10 — Repository Change Policy (2026-09-18)
 
 - 🔧 Local policy on `docs/repository-change-policy`, based on origin/main `042cbb5` (merge of PR #30, F-9). Docs only: no code, migration, schema, API, test, dot-folder/artifact create/delete/move/rename, plan, F-11 or merge changes.

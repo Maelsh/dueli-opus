@@ -1,15 +1,15 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-20T05:49:24.100Z
+> تاريخ التوليد: 2026-09-20T10:13:15.494Z
 
-## الإجمالي: 180 مسار
+## الإجمالي: 186 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 89 |
-| UNGUARDED ⚠ | 49 |
-| AUTHENTICATED | 39 |
+| UNGUARDED ⚠ | 48 |
+| AUTHENTICATED | 46 |
 | SERVICE(origin-only ⚠) | 3 |
 
 ## الحماية على مستوى المجموعات (main.ts)
@@ -180,11 +180,17 @@
 | POST | `/api/signaling/answer` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | GET | `/api/signaling/config` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | POST | `/api/signaling/ice` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
-| GET | `/api/signaling/ice-servers` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
+| GET | `/api/signaling/ice-servers` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | POST | `/api/signaling/offer` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | GET | `/api/signaling/poll` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
+| POST | `/api/signaling/reconnect` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
+| POST | `/api/signaling/request-offer` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | POST | `/api/signaling/room/create` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
+| GET | `/api/signaling/session` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
+| POST | `/api/signaling/session/join` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
+| POST | `/api/signaling/session/leave` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | POST | `/api/signaling/verify` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
+| GET | `/api/signaling/viewer/poll` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | GET | `/api/sse` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/sse/routes.ts` |
 | GET | `/api/transparency` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
 | GET | `/api/transparency/audit` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |

@@ -14,6 +14,9 @@ export const en = {
         connected: 'Connected',
         connection_failed: 'Connection failed',
         permission_denied: 'Permission denied',
+        // 7.D: restricted networks / TURN
+        network_restricted: 'Your network may be restricted — trying to connect through a relay server',
+        turn_unavailable: 'TURN relay is unavailable right now — please retry or switch networks',
     },
     recorded: 'Recorded',
     upcoming: 'Upcoming',

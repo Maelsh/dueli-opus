@@ -54,12 +54,19 @@
 - سجلات `[DEBUG]` في هذه الملفات تمر عبر `debugLog()` المشروط
   (`localStorage.setItem('dueli_debug','1')` لتفعيلها).
 
-### 2. ICE/TURN (`GET /api/signaling/ice-servers`)
-- `fetchCloudflareIceServers()` تطلب بيانات اعتماد قصيرة العمر (TTL 24h)
-  من Cloudflare Calls وتخزنها في Cache API ~6h.
-- **بدون `TURN_TOKEN_ID` + `TURN_API_TOKEN`**: رجوع STUN-only
-  (Google + Cloudflare STUN) — يعمل على الشبكات المفتوحة ويفشل غالباً
-  خلف symmetric NAT. هذا سبب عطل "الكاميرا لا تعمل" على Preview.
+### 2. ICE/TURN (`GET /api/signaling/ice-servers`) — 7.D
+- المسار محمي بالمصادقة (401 لغير المصادق) ويعيد اعتمادات TURN مؤقتة
+  قصيرة العمر (TTL 3600s) مُولَّدة خادمياً **لكل جلسة** — لا سر ثابت مشترك
+  ولا cache مشترك. المرجع: `TurnCredentialService`.
+- **الخلفيات (env فقط — لا قيم حقيقية في المستودع):**
+  - `TURN_URL` + `TURN_SECRET` → coturn ذاتي الاستضافة (اعتمادات HMAC-SHA1
+    ephemeral بصيغة `username = <expiry>:<userId>`)، مع نسخة `transport=tcp`
+    تلقائية للشبكات المقيّدة.
+  - `TURN_TOKEN_ID` + `TURN_API_TOKEN` → Cloudflare Calls (طلب لكل جلسة).
+- **بدون أي خلفية**: رجوع STUN-only (`turn_available: false`) — يعمل على
+  الشبكات المفتوحة ويفشل غالباً خلف symmetric NAT.
+- **فشل خلفية TURN**: 502 مع رسالة مترجمة `live.turn_unavailable` (والعميل
+  يعرض `live.network_restricted` ويرجع STUN — لا شاشة سوداء).
 - `Permissions-Policy` يجب أن يسمح: `camera=(self), microphone=(self)`
   (`src/middleware/security.ts`) — القيمة `camera=()` كانت تمنع البث تماماً.
 

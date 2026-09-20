@@ -87,7 +87,7 @@ export function generateTestPage(
         
         <!-- Client Shared Script -->
         <script>
-            ${getClientSharedScript()}
+            ${getClientSharedScript(lang)}
         </script>
         
         <!-- Page Specific Script -->

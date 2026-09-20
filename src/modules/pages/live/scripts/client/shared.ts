@@ -8,12 +8,20 @@ const FFMPEG_URL = 'https://maelshpro.com/ffmpeg';
 
 // 7.C: retry bounds embedded into the client — single source of truth is the TS policy.
 import { SignalingReconnectPolicy } from '../../../../../lib/services/SignalingReconnectService';
+import type { Language } from '../../../../../config/types';
+import { translations, getUILanguage } from '../../../../../i18n';
 const RECONNECT_POLICY_JSON = JSON.stringify(new SignalingReconnectPolicy().limits);
 
 /**
  * Get Client Shared Script - توليد الـ JavaScript المشترك
+ * @param lang UI language — used to bake translated TURN/network messages
+ *             (7.D: TURN failure must never produce a black screen).
  */
-export function getClientSharedScript(): string {
+export function getClientSharedScript(lang: Language = 'en'): string {
+    const tr = translations[getUILanguage(lang)];
+    const TURN_UNAVAILABLE = tr.live_signaling.turn_unavailable;
+    const NETWORK_RESTRICTED = tr.live_signaling.network_restricted;
+
     return `
 // ===== Utility Functions =====
 
@@ -65,18 +73,41 @@ window.getSessionToken = getSessionToken;
 
 /**
  * fetchIceServers - جلب إعدادات ICE من المنصة
+ * 7.D: credentials are short-lived and per-session — the request must be
+ * authenticated. Any failure degrades gracefully to STUN with translated,
+ * understandable messages (never a black screen).
  */
 async function fetchIceServers() {
+    const TURN_UNAVAILABLE_MSG = '${TURN_UNAVAILABLE}';
+    const NETWORK_RESTRICTED_MSG = '${NETWORK_RESTRICTED}';
     try {
-        const response = await fetch('/api/signaling/ice-servers');
+        const headers = {};
+        const token = getSessionToken();
+        if (token) headers['Authorization'] = 'Bearer ' + token;
+        const response = await fetch('/api/signaling/ice-servers', { headers: headers });
         const data = await response.json();
-        if (data.success && data.data.iceServers) {
-            testLog('✅ ICE servers fetched (' + data.data.iceServers.length + ')', 'success');
+        if (response.ok && data.success && data.data && data.data.iceServers) {
+            window.DUELI_TURN_STATE = {
+                available: !!data.data.turn_available,
+                expires_at: data.data.expires_at || null
+            };
+            if (data.data.turn_available) {
+                testLog('✅ ICE servers fetched (' + data.data.iceServers.length + ') + TURN relay', 'success');
+            } else {
+                testLog('✅ ICE servers fetched (STUN only)', 'success');
+                testLog('⚠️ ' + TURN_UNAVAILABLE_MSG, 'warn');
+            }
             return data.data.iceServers;
         }
+        // 401 / 5xx — TURN backend failed or session expired: translated message
+        testLog('⚠️ ' + TURN_UNAVAILABLE_MSG, 'warn');
     } catch (error) {
-        testLog('⚠️ ICE servers fallback to STUN only', 'warn');
+        testLog('⚠️ ' + TURN_UNAVAILABLE_MSG, 'warn');
     }
+    window.DUELI_TURN_STATE = { available: false, expires_at: null };
+    // 7.D graceful degradation: understandable message + fallback option
+    // (direct STUN connection) instead of a dead/black stream.
+    testLog('ℹ️ ' + NETWORK_RESTRICTED_MSG, 'info');
     // Fallback
     return [
         { urls: 'stun:stun.l.google.com:19302' },

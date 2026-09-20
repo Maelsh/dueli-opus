@@ -14,4 +14,7 @@ export { ScheduledTaskService } from './ScheduledTaskService';
 export { RecommendationEngine } from './RecommendationEngine';
 export { SignalingAuthService } from './SignalingAuthService';
 export { SignalingSessionService } from './SignalingSessionService';
+export { SignalingReconnectService } from './SignalingReconnectService';
+export { TurnCredentialService, TurnCredentialError, DEFAULT_STUN_SERVERS } from './TurnCredentialService';
+export type { TurnResolution, TurnIceServer, TurnServiceEnv } from './TurnCredentialService';
 
