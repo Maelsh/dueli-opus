@@ -6,6 +6,10 @@
 
 const FFMPEG_URL = 'https://maelshpro.com/ffmpeg';
 
+// 7.C: retry bounds embedded into the client — single source of truth is the TS policy.
+import { SignalingReconnectPolicy } from '../../../../../lib/services/SignalingReconnectService';
+const RECONNECT_POLICY_JSON = JSON.stringify(new SignalingReconnectPolicy().limits);
+
 /**
  * Get Client Shared Script - توليد الـ JavaScript المشترك
  */
@@ -82,6 +86,19 @@ async function fetchIceServers() {
 
 window.fetchIceServers = fetchIceServers;
 
+// ===== 7.C Reconnect / Resilience (Phase 7.C) =====
+// The retry bounds come from the SERVER contract (SignalingReconnectPolicy via
+// RECONNECT_POLICY_JSON) so the client can never retry unbounded. The recovery
+// action mapping mirrors SignalingReconnectPolicy.actionForPeerState.
+const RECONNECT_POLICY = ${RECONNECT_POLICY_JSON};
+const RECONNECT_ACTIONS = { disconnected: 'ice_restart', failed: 'reconnect', closed: 'reconnect' };
+
+/** Deterministic backoff delay (ms) before the given 1-based attempt. */
+function reconnectDelayFor(attempt) {
+    return Math.min(RECONNECT_POLICY.baseDelayMs * Math.pow(2, attempt - 1), RECONNECT_POLICY.maxDelayMs);
+}
+window.reconnectDelayFor = reconnectDelayFor;
+
 // ===== Signaling Manager (HTTP Polling with Verification) =====
 
 /**
@@ -110,6 +127,12 @@ class SignalingManager {
         // 7.B: session state / presence sync (competition status, peers, viewers).
         this.onSessionState = config.onSessionState || function() {};
         this.onViewerJoined = config.onViewerJoined || function() {};
+        // 7.C: reconnect/resilience hooks.
+        this.onReconnecting = config.onReconnecting || function() {};
+        this.onRecovered = config.onRecovered || function() {};
+        this.onReconnectFailed = config.onReconnectFailed || function() {};
+        this.onIceRestartNeeded = config.onIceRestartNeeded || function() {};
+        this.reconnecting = false;
         this.pollInterval = null;
         this.heartbeatInterval = null;
         this.lastTimestamp = 0;
@@ -321,6 +344,85 @@ class SignalingManager {
             console.error('Send signal error:', err);
             return null;
         }
+    }
+
+    /**
+     * 7.C: feed a WebRTC peer-connection state through the bounded recovery
+     * policy. 'disconnected' → one controlled ICE restart via the page's
+     * onIceRestartNeeded hook; 'failed'/'closed' → full signaling reconnect.
+     * Healthy states clear any in-flight recovery. Idempotent per episode.
+     */
+    handlePeerState(state) {
+        const action = RECONNECT_ACTIONS[state] || 'none';
+        if (state === 'connected' || state === 'checking') {
+            this.reconnecting = false;
+            return 'none';
+        }
+        if (action === 'ice_restart') {
+            if (!this.reconnecting) this.onIceRestartNeeded();
+            return action;
+        }
+        if (action === 'reconnect') {
+            if (!this.reconnecting) this.reconnectAfterInterruption();
+            return action;
+        }
+        return action;
+    }
+
+    /**
+     * 7.C: bounded, deterministic reconnect loop after a signaling/network
+     * interruption. Authorization stays server-side: POST /api/signaling/
+     * reconnect re-derives role/peer via SignalingAuthService — a client can
+     * never reconnect as (or become) a different role. 4xx authorizations are
+     * terminal; transient failures retry on the embedded backoff schedule and
+     * stop after RECONNECT_POLICY.maxAttempts.
+     */
+    async reconnectAfterInterruption() {
+        if (this.reconnecting) return null;
+        this.reconnecting = true;
+        this.isConnected = false; // polling/heartbeat pause while recovering
+        this.onReconnecting();
+        for (let attempt = 1; attempt <= RECONNECT_POLICY.maxAttempts; attempt++) {
+            try {
+                const body = { competition_id: Number(this.competitionId) };
+                if (this.mode !== 'viewer' && this.role) body.claimed_role = this.role;
+                const res = await fetch('/api/signaling/reconnect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + this.token
+                    },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json().catch(function() { return {}; });
+                if (data.success) {
+                    // Role/peer below are SERVER-derived — the session identity
+                    // is preserved exactly as it was before the interruption.
+                    this.serverRole = data.data.role;
+                    this.peer = data.data.peer;
+                    this.sessionState = data.data;
+                    this.onSessionState(data.data);
+                    this.isConnected = true;
+                    this.reconnecting = false;
+                    this.startPolling();
+                    this.startHeartbeat();
+                    this.onRecovered(data.data);
+                    return data.data;
+                }
+                if (res.status === 401 || res.status === 403 || res.status === 409) {
+                    // Authorization rejection — retrying can never fix it.
+                    this.reconnecting = false;
+                    this.onReconnectFailed({ reason: 'unauthorized', status: res.status });
+                    return null;
+                }
+            } catch (err) {
+                // Transient network error → next bounded attempt.
+            }
+            await new Promise(function(r) { setTimeout(r, reconnectDelayFor(attempt)); });
+        }
+        this.reconnecting = false;
+        this.onReconnectFailed({ reason: 'exhausted', attempts: RECONNECT_POLICY.maxAttempts });
+        return null;
     }
 
     async disconnect() {

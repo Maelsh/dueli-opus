@@ -142,6 +142,11 @@ export function getGuestScript(lang: Language): string {
             
             ms.pc.oniceconnectionstatechange = function() {
                 debugLog('[DEBUG] ICE connection state:', ms.pc.iceConnectionState);
+                // 7.C: transient ICE loss → controlled ICE restart (ask the host
+                // for a fresh offer); hard failure → bounded signaling reconnect.
+                if (signalingManager && signalingManager.handlePeerState) {
+                    signalingManager.handlePeerState(ms.pc.iceConnectionState);
+                }
             };
             
             // Setup signaling (HTTP polling via platform /api/signaling/*)
@@ -190,6 +195,22 @@ export function getGuestScript(lang: Language): string {
                 },
                 onError: function(error) {
                     log('❌ خطأ في الاتصال', 'error');
+                },
+                // 7.C: reconnect/resilience hooks.
+                onIceRestartNeeded: function() {
+                    // Transient ICE loss: guest answers a fresh host offer —
+                    // request it through the existing late-join signal.
+                    sendSignal('request_offer', {});
+                },
+                onReconnecting: function() {
+                    updateStatus('${tr.reconnecting}', 'yellow');
+                },
+                onRecovered: function() {
+                    updateStatus('${tr.reconnected}', 'green');
+                },
+                onReconnectFailed: function(info) {
+                    updateStatus('${tr.reconnect_failed}', 'red');
+                    log('❌ Reconnect failed: ' + (info && info.reason), 'error');
                 },
                 onConnected: function() {
                     // 7.A: host pushes its offer on connect — no request_offer
