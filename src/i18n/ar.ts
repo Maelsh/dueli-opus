@@ -15,6 +15,9 @@ export const ar = {
         connected: 'متصل',
         connection_failed: 'فشل الاتصال',
         permission_denied: 'تم رفض الإذن',
+        // 7.D: شبكات مقيّدة / TURN
+        network_restricted: 'قد تكون شبكتك مقيّدة — جارٍ محاولة الاتصال عبر خادم ترحيل',
+        turn_unavailable: 'تعذّر الوصول إلى خادم الترحيل (TURN) حالياً — أعد المحاولة أو استخدم شبكة مختلفة',
     },
     recorded: 'مسجل',
     upcoming: 'اللاحقة',

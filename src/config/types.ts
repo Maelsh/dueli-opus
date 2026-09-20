@@ -33,8 +33,12 @@ export type Bindings = {
   // Streaming Services
   STREAMING_URL: string;      // https://stream.maelshpro.com
   UPLOAD_URL: string;         // https://maelshpro.com/ffmpeg
-  // Cloudflare Calls TURN (rtc.live.cloudflare.com) — used by
-  // src/modules/api/signaling/routes.ts fetchCloudflareIceServers().
+  // 7.D TURN/STUN for restricted networks — all of these stay in wrangler
+  // secrets / Pages env. Nothing here is ever committed with a real value.
+  // Backend A: self-hosted coturn (TURN REST auth, ephemeral HMAC creds):
+  TURN_URL?: string;          // e.g. "turn:turn.example.com:3478" (comma-separated list allowed)
+  TURN_SECRET?: string;       // SECRET — coturn "static-auth-secret" (wrangler secret)
+  // Backend B: Cloudflare Calls TURN (rtc.live.cloudflare.com):
   // TURN_TOKEN_ID is not secret; TURN_API_TOKEN is a secret. Both optional here
   // (not `string`) because the code treats them as optional and falls back to
   // STUN-only ICE servers when either is missing.

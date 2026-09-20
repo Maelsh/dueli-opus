@@ -16,7 +16,7 @@ npm test                         # vitest — يجب أن يكون أخضر
 | المتغير | سري؟ | الغرض | بدونها ماذا يحدث؟ |
 |---------|------|-------|-------------------|
 | `EMAIL_API_URL` / `EMAIL_API_KEY` / `EMAIL_FROM` | الثانية سرية | إرسال التفعيل/الاستعادة عبر PHP على استضافتك | التسجيل **ينجح** مع `warning: email_not_configured` + زر "إعادة الإرسال" (لا 500 بعد الإصلاح) |
-| `TURN_TOKEN_ID` / `TURN_API_TOKEN` | الثانية سرية | بيانات Cloudflare Calls TURN | `/api/signaling/ice-servers` يرجع **STUN-only** — البث يفشل خلف NAT |
+| `TURN_URL` / `TURN_SECRET` / `TURN_TOKEN_ID` / `TURN_API_TOKEN` | الثانية سرية | 7.D: خلفيات TURN (coturn أو Cloudflare Calls) عبر wrangler secrets/Pages env — لا قيم حقيقية في المستودع | `/api/signaling/ice-servers` (محمي بالمصادقة) يعيد اعتمادات TURN مؤقتة لكل جلسة؛ بدون أي خلفية يرجع **STUN-only** — البث يفشل خلف NAT؛ فشل الخلفية يرجع 502 برسالة مترجمة |
 | `STREAMING_URL` | لا | سيرفر الإشارة (Worker+DO) | الافتراضي `DEFAULT_STREAMING_URL` |
 | `UPLOAD_URL` / `FFMPEG_SERVER_URL` | لا | رفع القطع والـ finalize | الافتراضي `maelshpro.com/ffmpeg` |
 | OAuth (`GOOGLE_*`, `FACEBOOK_*`, `MICROSOFT_*`, `TIKTOK_*`) | سرية | الدخول الاجتماعي | أزرار الدخول تفشل فقط |

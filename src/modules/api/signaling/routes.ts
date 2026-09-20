@@ -22,6 +22,7 @@ import {
     type SignalingRole,
     type SignalingSignalKind,
 } from '../../../lib/services/SignalingAuthService';
+import { TurnCredentialService, type TurnResolution } from '../../../lib/services/TurnCredentialService';
 import { SignalingSessionService, type SignalingSessionState } from '../../../lib/services/SignalingSessionService';
 import { SignalingReconnectService } from '../../../lib/services/SignalingReconnectService';
 import { SseEventLogModel, type SseEventLog } from '../../../models/SseEventLogModel';
@@ -259,95 +260,41 @@ async function handleSignal(
 
 
 /**
- * Fetch short-lived Cloudflare Calls TURN/STUN credentials.
- * تجلب بيانات اعتماد TURN/STUN قصيرة العمر من Cloudflare Calls
+ * 7.D: GET /api/signaling/ice-servers — short-lived TURN/STUN credentials,
+ * generated server-side per authenticated session. No static shared secret.
  *
- * Endpoint: POST /v1/turn/keys/{TURN_TOKEN_ID}/credentials/generate-ice-servers
- * The API token is a secret stored in env; the result is cached in the
- * Cloudflare Cache API for ~6h to avoid hammering the API on every request.
+ * Config (env only — never in the repo):
+ *   TURN_URL + TURN_SECRET    → self-hosted coturn, ephemeral HMAC credentials
+ *   TURN_TOKEN_ID + TURN_API_TOKEN → Cloudflare Calls TURN (per-session creds)
+ * Unconfigured → STUN-only fallback; configured-but-failing backend →
+ * 502 with the translated `live.turn_unavailable` message (no black screen).
  */
-async function fetchCloudflareIceServers(env: {
-    TURN_TOKEN_ID?: string;
-    TURN_API_TOKEN?: string;
-}): Promise<{ iceServers: RTCIceServer[] }> {
-    const tokenId = env.TURN_TOKEN_ID;
-    const apiToken = env.TURN_API_TOKEN;
+signalingRoutes.get('/ice-servers', authMiddleware({ required: true }), async (c) => {
+    const lang = (c.get('lang') || 'en') as Language;
+    const user = c.get('user');
 
-    if (!tokenId || !apiToken) {
-        return { iceServers: [] };
-    }
-
-    const cacheKey = new Request(`https://rtc.live.cloudflare.com/turn-key/${tokenId}`);
-    // NOTE: tsconfig's "DOM" lib shadows @cloudflare/workers-types' CacheStorage.default
-    // typing, so `caches` is cast to any here — this still runs against the real Workers
-    // Cache API at runtime (Pages/Workers only, unrelated to the DOM lib's browser types).
-    const workerCaches: any = caches;
-
-    // Serve from cache when available
+    const turn = new TurnCredentialService(c.env, user ? user.id : null);
+    let resolution: TurnResolution;
     try {
-        const cached = await workerCaches.default.match(cacheKey);
-        if (cached) {
-            const body = await cached.json() as { iceServers: RTCIceServer[] };
-            if (body && Array.isArray(body.iceServers)) {
-                return body;
-            }
-        }
+        resolution = await turn.resolve();
     } catch {
-        // Cache read failed - fall through to fetch
+        // Configured TURN backend failed — translated message + retry option,
+        // never a raw provider error or any secret material.
+        return c.json({
+            success: false,
+            error: t('live.turn_unavailable', lang),
+            code: 'turn_unavailable',
+        }, 502);
     }
-
-    const res = await fetch(
-        `https://rtc.live.cloudflare.com/v1/turn/keys/${tokenId}/credentials/generate-ice-servers`,
-        {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ ttl: 86400 })
-        }
-    );
-
-    if (!res.ok) {
-        console.error('Cloudflare TURN API error:', res.status, await res.text());
-        return { iceServers: [] };
-    }
-
-    const body = await res.json<{ iceServers: RTCIceServer[] }>();
-
-    // Cache for ~6h (credential TTL is 24h, so this stays valid with margin)
-    try {
-        await workerCaches.default.put(
-            cacheKey,
-            new Response(JSON.stringify(body), {
-                headers: { 'Cache-Control': 'public, max-age=21600' }
-            })
-        );
-    } catch {
-        // Caching is best-effort
-    }
-
-    return body;
-}
-
-/**
- * GET /api/signaling/ice-servers
- * Returns TURN/STUN server configuration with dynamic credentials
- * يُرجع إعدادات خوادم TURN/STUN مع بيانات اعتماد ديناميكية
- */
-signalingRoutes.get('/ice-servers', async (c) => {
-    const { iceServers } = await fetchCloudflareIceServers(c.env);
-
-    // If Cloudflare Calls is not configured, fall back to STUN-only servers
-    const result: RTCIceServer[] = iceServers.length > 0 ? iceServers : [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun.cloudflare.com:3478' }
-    ];
 
     return c.json({
         success: true,
-        data: { iceServers: result }
+        data: {
+            iceServers: resolution.iceServers,
+            turn_available: resolution.turn_available,
+            ttl_seconds: resolution.ttl_seconds ?? null,
+            expires_at: resolution.expires_at ?? null,
+        },
     });
 });
 
