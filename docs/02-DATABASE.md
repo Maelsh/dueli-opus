@@ -67,3 +67,14 @@ erDiagram
   غير ثابتة — الأعمدة الجديدة nullable مع backfill، والكود يكتبها صراحةً.
 - **الجلسات**: `sessions.id` نص UUID، تنتهي بعد 30 يوماً
   (`SessionModel.create`). المستخدم المحظور (`is_active=0`) تُمسح جلساته فوراً.
+## سياسة التوزيع المالية (8.B)
+
+> المصادر canonical للسياسة: `migrations/0003` (يSeed `platform_share_percentage=20`)،
+> `src/models/PlatformSettingsModel.ts::getPlatformSharePercentage()`، و`src/lib/services/LivePayoutEngine.ts`
+> (تعليق العلوي). لا توجد نسبة 70/25/5 في أي مصدر فعلي.
+
+- **نسبة المنصة**: 20% من إجمالي أرباح الإعلانات (قابلة للتعديل عبر `platform_settings.platform_share_percentage`، الافتراضي 20).
+- **مجموع المتنافسين (competitor pool)**: 80% المتبقية تُقسَّم بين المنشئ والخصم حسب نسبة متوسط تقييمات المشاهدين لكل منهما.
+- **التعادل/غياب التقييمات**: إذا كان مجموع التقييمات صفراً (لا تقييمات أو تعادل تام)، يُقسَّم الـpool بالتساوي بين المتنافسين.
+- **التقريب**: جميع الحسابات بـ integer cents (لا FLOAT/REAL). عند وجود باقٍ من القسمة، يُوزَّع deterministically: المنصة أولاً، ثم صاحب التقييم الأعلى، ثم الآخر. مجموع الحصص = المبلغ الأصلي بالضبط.
+- **المصدر الحقيقى للمال**: `ledger_entries` (8.A) فقط. `CompetitionRevenueLog` سجل لقطة للتدقيق (audit snapshot) وليس مصدراً مالياً.

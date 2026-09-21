@@ -44,6 +44,50 @@ describe('8.B earnings split (RED-FIRST) — real SQL via SqliteD1', () => {
         expect(s.platformCents + s.creatorCents + s.opponentCents).toBe(1001);
     });
 
+    // ── 8.B §4: مجموعة ≥17 مبلغ غير قابل للقسمة ──────────────────────────
+    // كل مبلغٍ يُقسَّم بـ20% منصة + 80% حسب التقييمات؛ التحقق من أن
+    // مجموع الحصص = المبلغ الأصلي بالضبط في كل حالة (لا سنت يضيع ولا يُخلق).
+    it('≥17 non-divisible amounts: sum of shares == original amount in every case', () => {
+        // مبالغ غير قابلة للقسمة على 100 (لوحة متنوعة: فردية، أولية،偶数 غير matrizable، إلخ)
+        const amounts = [
+            1, 2, 3, 7, 11, 13, // فردية صغيرة
+            99, 101, 199, 201, // حول العتبة 100
+            333, 667, // تقسيم غير متساوٍ
+            1001, 1003, 1007, 1009, // فوق 1000 مع باقٍ
+            12345, 67891, // أعداد كبيرة
+            999999, // قريب من مليون
+            1000001, // فوق مليون BAPاً 하나
+            1234567, // عشوائي كبير
+            9999999, // تقريبًا عشرة ملايين
+        ];
+        // متغيرات التقييم والـplatform percentage التي ستفحص:
+        const configs: Array<{ pct: number; creator: number; opponent: number }> = [
+            { pct: 20, creator: 3, opponent: 1 },
+            { pct: 20, creator: 1, opponent: 3 },
+            { pct: 20, creator: 1, opponent: 1 },
+            { pct: 20, creator: 0, opponent: 0 }, // لا تقييمات
+            { pct: 20, creator: 5, opponent: 0 }, // تقييمُ واحد فقط
+            { pct: 15, creator: 3, opponent: 1 }, // نسبة منصة مختلفة
+            { pct: 25, creator: 4, opponent: 2 }, // نسبة منصة 25%
+            { pct: 10, creator: 1, opponent: 0 }, // 10% منصة
+            { pct: 33, creator: 2, opponent: 1 }, // 33% منصة (غير صحيح)
+            { pct: 50, creator: 1, opponent: 1 }, // 50% منصة
+        ];
+
+        for (const amount of amounts) {
+            for (const cfg of configs) {
+                const s = splitPayoutCents(amount, cfg.pct, cfg.creator, cfg.opponent);
+                // كل الحصص صحيحة (integer cents)
+                expect(Number.isInteger(s.platformCents)).toBe(true);
+                expect(Number.isInteger(s.creatorCents)).toBe(true);
+                expect(Number.isInteger(s.opponentCents)).toBe(true);
+                // مجموع الحصص = المبلغ الأصلي بالضبط
+                const sum = s.platformCents + s.creatorCents + s.opponentCents;
+                expect(sum).toBe(amount);
+            }
+        }
+    });
+
     it('payout goes through LedgerService + idempotent on second run', async () => {
         await seedCompetition(db, { compId: 9001, creatorId: 901, opponentId: 902, creatorAvg: 4, opponentAvg: 2, impressions: 10, revenuePerViewCents: 100 });
         const engine = new LivePayoutEngine(db as unknown as D1Database);

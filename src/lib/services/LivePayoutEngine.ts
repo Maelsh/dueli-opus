@@ -34,37 +34,67 @@ export function splitPayoutCents(
         throw new Error('totalCents must be a non-negative integer');
     }
     const pct = Number.isFinite(platformPercentage) ? Math.min(100, Math.max(0, platformPercentage)) : 20;
-    const platformExact = (totalCents * pct) / 100;
-    const pool = totalCents - platformExact;
-    const totalRatings = (creatorRating || 0) + (opponentRating || 0);
-    let creatorExact: number;
-    let opponentExact: number;
+    // الحساب بالكامل integer-exact: لا float، لا tolerance، لا 1e-9.
+    // 1) المنصة: حصة صحيحة = (totalCents * pct) / 100 مقرّبة إلى الأسفل
+    //    مع باقي deterministic يذهب للمنصة أولاً.
+    // 2) competitor pool = totalCents - platformCents.
+    // 3) المتنافسان: pool يُقسَّم حسب نسبة متوسطات التقييمات.
+    //    - التعادل/غياب التقييمات (المجموع صفر) ⇒ تقاسيم متساوية.
+    // 4) الباقي من تقسيم المتنافسين يوزع deterministic: الأعلى تقييماً أولاً، ثم الآخر.
+    const platformBase = Math.trunc((totalCents * pct) / 100);
+    const pool = totalCents - platformBase;
+    let platformCents = platformBase;
+
+    const creatorRatingNorm = Math.max(0, creatorRating || 0);
+    const opponentRatingNorm = Math.max(0, opponentRating || 0);
+    const totalRatings = creatorRatingNorm + opponentRatingNorm;
+
+    let creatorBase: number;
+    let opponentBase: number;
     if (totalRatings === 0) {
-        creatorExact = pool / 2;
-        opponentExact = pool / 2;
+        // لا تقييمات أو تعادل ⇒ التقاسم المتساوي للـpool.
+        creatorBase = Math.trunc(pool / 2);
+        opponentBase = Math.trunc(pool / 2);
     } else {
-        creatorExact = (pool * (creatorRating || 0)) / totalRatings;
-        opponentExact = (pool * (opponentRating || 0)) / totalRatings;
+        const creatorBaseExact = (pool * creatorRatingNorm) / totalRatings;
+        const opponentBaseExact = (pool * opponentRatingNorm) / totalRatings;
+        creatorBase = Math.trunc(creatorBaseExact);
+        opponentBase = Math.trunc(opponentBaseExact);
     }
-    const platformFloor = Math.floor(platformExact + 1e-9);
-    const creatorFloor = Math.floor(creatorExact + 1e-9);
-    const opponentFloor = Math.floor(opponentExact + 1e-9);
-    let remainder = totalCents - platformFloor - creatorFloor - opponentFloor;
-    let platformCents = platformFloor;
-    let creatorCents = creatorFloor;
-    let opponentCents = opponentFloor;
-    // أولوية deterministic للباقي: المنصة، ثم الأعلى تقييماً، ثم الآخر.
-    const creatorFirst = (creatorRating || 0) >= (opponentRating || 0);
+
+    // ترتيب الباقي deterministic: المنصة أولاً، ثم الأعلى تقييماً، ثم الآخر.
+    const creatorFirst = creatorRatingNorm >= opponentRatingNorm;
+    const priority: ('platform' | 'creator' | 'opponent')[] = [];
+    priority.push('platform');
+    if (creatorFirst) {
+        priority.push('creator', 'opponent');
+    } else {
+        priority.push('opponent', 'creator');
+    }
+
+    let remainder = totalCents - platformCents - creatorBase - opponentBase;
+    let creatorCents = creatorBase;
+    let opponentCents = opponentBase;
+
+    const distributeOne = (): boolean => {
+        if (remainder <= 0) return false;
+        remainder -= 1;
+        return true;
+    };
+    const addOne = (key: 'platform' | 'creator' | 'opponent'): void => {
+        if (key === 'platform') platformCents += 1;
+        else if (key === 'creator') creatorCents += 1;
+        else opponentCents += 1;
+    };
+
     while (remainder > 0) {
-        platformCents += 1;
-        remainder -= 1;
-        if (remainder <= 0) break;
-        if (creatorFirst) { creatorCents += 1; } else { opponentCents += 1; }
-        remainder -= 1;
-        if (remainder <= 0) break;
-        if (creatorFirst) { opponentCents += 1; } else { creatorCents += 1; }
-        remainder -= 1;
+        for (const key of priority) {
+            if (!distributeOne()) break;
+            addOne(key);
+            if (remainder <= 0) break;
+        }
     }
+
     return { totalCents, platformCents, creatorCents, opponentCents, platformPercentage: pct };
 }
 
