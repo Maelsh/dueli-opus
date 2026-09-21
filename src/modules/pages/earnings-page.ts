@@ -319,8 +319,8 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const method   = document.getElementById('withdrawMethod').value;
                 const details  = document.getElementById('withdrawDetails').value.trim();
 
-                if (!amount || amount < 10) {
-                    errDiv.textContent = tr.min_withdrawal || 'Minimum withdrawal is $10.';
+                if (!amount || amount < 50) {
+                    errDiv.textContent = tr.min_withdrawal || 'Minimum withdrawal is $50.';
                     errDiv.classList.remove('hidden');
                     return;
                 }

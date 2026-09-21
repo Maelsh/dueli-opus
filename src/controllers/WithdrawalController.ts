@@ -1,18 +1,48 @@
 ﻿/**
  * @file src/controllers/WithdrawalController.ts
- * @description MVC Controller for withdrawal requests (Task 6)
+ * @description MVC Controller for withdrawal requests — documented lifecycle (8.D)
+ *              requested → approved → paid | rejected
  *              متحكم طلبات السحب - للمستخدم والإداري
  * @module controllers/WithdrawalController
+ *
+ * 8.D rules:
+ * - كل الأثر المالي عبر LedgerService فقط (الحجز لحظة الطلب، والتحرير العكسي
+ *   عند الرفض/الإلغاء). لا كتابة مباشرة في user_earnings.
+ * - الانتقالات محروسة في SQL داخل النموذج (UPDATE مشروط + changes).
+ * - الموافقة والدفع والرفض بأدمن فقط (M6) ومسجلة في admin_audit_log —
+ *   وكل انتقال في الدورة (بما فيه الطلب والإلغاء) مسجل مع صاحبه.
  */
 
 import { Context } from 'hono';
+import { D1Database } from '@cloudflare/workers-types';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
-import { WithdrawalRequestModel } from '../models/WithdrawalRequestModel';
+import { WithdrawalRequestModel, WithdrawalRequestError } from '../models/WithdrawalRequestModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
+import { LedgerService } from '../lib/services/LedgerService';
 import { EventPusher } from '../lib/services/EventPusher';
 
 export class WithdrawalController extends BaseController {
+
+    /** ترجمة رمز خطأ النموذج إلى رسالة i18n (withdrawals.*). */
+    private withdrawalErrorMessage(code: WithdrawalRequestError, c: Context<{ Bindings: Bindings; Variables: Variables }>): string {
+        switch (code) {
+            case 'min_amount':           return this.t('withdrawals.min_amount', c);
+            case 'insufficient_balance': return this.t('withdrawals.insufficient_balance', c);
+            default:                     return this.t('errors.invalid_request', c);
+        }
+    }
+
+    private async audit(
+        db: D1Database,
+        actorId: number,
+        action: string,
+        requestId: number,
+        details: string | null
+    ): Promise<void> {
+        const auditModel = new AdminAuditLogModel(db);
+        await auditModel.log(actorId, action, 'withdrawal_request', requestId, details);
+    }
 
     // =============================================
     // USER: own wallet
@@ -20,7 +50,8 @@ export class WithdrawalController extends BaseController {
 
     /**
      * GET /api/withdrawals
-     * Returns the authenticated user's withdrawal history + available balance.
+     * Returns the authenticated user's withdrawal history + wallet balance.
+     * الرصيد المتاح من دفتر الأستاذ (مصدر الحقيقة بعد الحجز) — 8.D.
      */
     async getMyWithdrawals(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
         try {
@@ -31,17 +62,19 @@ export class WithdrawalController extends BaseController {
             const offset = this.getQueryInt(c, 'offset', 0);
 
             const model = new WithdrawalRequestModel(c.env.DB);
+            const ledger = new LedgerService(c.env.DB);
 
-            const [requests, earnings] = await Promise.all([
+            const [requests, earnings, available] = await Promise.all([
                 model.getForUser(user.id, limit, offset),
                 c.env.DB.prepare(
                     `SELECT available, pending, on_hold, withdrawn, total FROM user_earnings WHERE user_id = ?`
-                ).bind(user.id).first<{ available: number; pending: number; on_hold: number; withdrawn: number; total: number }>()
+                ).bind(user.id).first<{ available: number; pending: number; on_hold: number; withdrawn: number; total: number }>(),
+                ledger.balance(`user:${user.id}`)
             ]);
 
             return this.success(c, {
                 wallet: {
-                    available:  earnings?.available  ?? 0,
+                    available:  available,
                     pending:    earnings?.pending    ?? 0,
                     on_hold:    earnings?.on_hold    ?? 0,
                     withdrawn:  earnings?.withdrawn  ?? 0,
@@ -78,7 +111,7 @@ export class WithdrawalController extends BaseController {
 
     /**
      * POST /api/withdrawals
-     * User submits a new withdrawal request.
+     * User submits a new withdrawal request (requested + ledger hold).
      *
      * Body: { amount, payment_method, payment_details }
      */
@@ -97,7 +130,7 @@ export class WithdrawalController extends BaseController {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
             if (typeof body.amount !== 'number' || body.amount <= 0) {
-                return this.validationError(c, this.t('errors.invalid_amount', c));
+                return this.validationError(c, this.t('errors.invalid_request', c));
             }
 
             const model  = new WithdrawalRequestModel(c.env.DB);
@@ -109,8 +142,18 @@ export class WithdrawalController extends BaseController {
             });
 
             if ('error' in result) {
-                return this.validationError(c, result.error);
+                return this.validationError(c, this.withdrawalErrorMessage(result.error, c));
             }
+
+            // تدقيق الانتقال requested (الفاعل = صاحب الطلب).
+            await this.audit(
+                c.env.DB, user.id, 'request_withdrawal', result.request.id,
+                `Withdrawal requested: $${result.request.amount} via ${result.request.payment_method}`
+            );
+
+            // Real-time notification to the user
+            const pusher = new EventPusher(c.env.DB, c.env);
+            await pusher.publishWithdrawalStatus(result.request.user_id, result.request.id, 'requested');
 
             return this.success(c, { request: result.request }, 201);
         } catch (error) {
@@ -120,7 +163,7 @@ export class WithdrawalController extends BaseController {
 
     /**
      * DELETE /api/withdrawals/:id
-     * User cancels a pending withdrawal request (refund).
+     * User cancels a requested withdrawal (releases the hold via ledger).
      */
     async cancelWithdrawal(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
         try {
@@ -132,8 +175,16 @@ export class WithdrawalController extends BaseController {
             const ok    = await model.cancelByUser(id, user.id);
 
             if (!ok) {
-                return this.error(c, this.t('errors.cannot_cancel', c), 400);
+                return this.error(c, this.t('errors.invalid_request', c), 400);
             }
+
+            await this.audit(
+                c.env.DB, user.id, 'cancel_withdrawal', id,
+                'Cancelled by user — hold released'
+            );
+
+            const pusher = new EventPusher(c.env.DB, c.env);
+            await pusher.publishWithdrawalStatus(user.id, id, 'rejected', 'Cancelled by user');
 
             return this.success(c, { cancelled: true });
         } catch (error) {
@@ -142,7 +193,7 @@ export class WithdrawalController extends BaseController {
     }
 
     // =============================================
-    // ADMIN: review queue
+    // ADMIN: review queue (M6 — admin only)
     // =============================================
 
     private async isAdmin(c: Context<{ Bindings: Bindings; Variables: Variables }>): Promise<boolean> {
@@ -152,7 +203,7 @@ export class WithdrawalController extends BaseController {
 
     /**
      * GET /api/admin/withdrawals
-     * Admin: list all withdrawal requests (filterable by status).
+     * Admin: list all withdrawal requests (filterable by lifecycle status).
      */
     async adminListWithdrawals(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
         try {
@@ -176,7 +227,9 @@ export class WithdrawalController extends BaseController {
 
     /**
      * PUT /api/admin/withdrawals/:id/approve
-     * Admin: approve a pending withdrawal request.
+     * Admin: approve a requested withdrawal AND record the payout
+     * (requested → approved → paid, both SQL-guarded in one batch).
+     * Approving twice ⇒ 409 with a single payment only.
      *
      * Body: { transaction_id, note? }
      */
@@ -195,18 +248,26 @@ export class WithdrawalController extends BaseController {
             const model  = new WithdrawalRequestModel(c.env.DB);
             const result = await model.approve(id, admin.id, body.transaction_id, body.note);
 
-            if (!result) return this.notFound(c);
+            if (!result) {
+                const existing = await model.findById(id);
+                if (!existing) return this.notFound(c);
+                // الحارس رفض الانتقال — الطلب عولج سلفاً (موافقة مكررة ⇒ لا دفع ثانٍ).
+                return this.error(c, this.t('errors.invalid_request', c), 409);
+            }
 
-            // Audit log
-            const auditModel = new AdminAuditLogModel(c.env.DB);
-            await auditModel.log(
-                admin.id, 'approve_withdrawal', 'withdrawal_request', id,
-                `Approved withdrawal of $${result.amount} | txn=${body.transaction_id}`
+            // تدقيق كل انتقال في الدورة.
+            await this.audit(
+                c.env.DB, admin.id, 'approve_withdrawal', id,
+                `Approved withdrawal of $${result.amount}`
+            );
+            await this.audit(
+                c.env.DB, admin.id, 'pay_withdrawal', id,
+                `Paid withdrawal of $${result.amount} | txn=${body.transaction_id}`
             );
 
             // Real-time notification to the user
             const pusher = new EventPusher(c.env.DB, c.env);
-            await pusher.publishWithdrawalStatus(result.user_id, id, 'completed', body.note);
+            await pusher.publishWithdrawalStatus(result.user_id, id, 'paid', body.note);
 
             return this.success(c, { request: result });
         } catch (error) {
@@ -216,7 +277,8 @@ export class WithdrawalController extends BaseController {
 
     /**
      * PUT /api/admin/withdrawals/:id/reject
-     * Admin: reject a pending withdrawal request (refund to user).
+     * Admin: reject a requested/approved withdrawal (releases the hold
+     * via reverse ledger entries).
      *
      * Body: { reason }
      */
@@ -235,12 +297,15 @@ export class WithdrawalController extends BaseController {
             const model  = new WithdrawalRequestModel(c.env.DB);
             const result = await model.reject(id, admin.id, body.reason);
 
-            if (!result) return this.notFound(c);
+            if (!result) {
+                const existing = await model.findById(id);
+                if (!existing) return this.notFound(c);
+                return this.error(c, this.t('errors.invalid_request', c), 409);
+            }
 
             // Audit log
-            const auditModel = new AdminAuditLogModel(c.env.DB);
-            await auditModel.log(
-                admin.id, 'reject_withdrawal', 'withdrawal_request', id,
+            await this.audit(
+                c.env.DB, admin.id, 'reject_withdrawal', id,
                 `Rejected withdrawal of $${result.amount} | reason="${body.reason}"`
             );
 

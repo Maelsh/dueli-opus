@@ -1,5 +1,16 @@
 
 
+## 8.D — السحوبات · فرع `feat/money-withdrawals`
+
+- 🔧 منفَّذ محلياً (من الرأس 976ab63 على `feat/money-stripe-payments`). النطاق: دورة `requested → approved → paid | rejected` بأثر مالي حصري عبر `LedgerService` — لا رصيد مباشر، لا مسار مالي موازٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService`، لا CI/dependencies، لا Production deployment/migration/merge.
+  - **Migration 0021**: إعادة بناء `withdrawal_requests` (حالات الدورة + `amount_cents` المعتمد + `fee_cents=0` + `hold_tx_id` + تعيين الحالات القديمة). تُطبَّق على قاعدة فارغة (22 migration) + `db:reset` ✅.
+  - **السياسة (ثوابت موثقة)**: الحد الأدنى 5000 سنت ($50 = seed ‏`min_withdrawal_amount`)؛ الرسوم 0 (لا سياسة رسوم في المشروع).
+  - **الدورة**: حجز لحظي عبر `ledger.withdraw()` الذري (سباق ⇒ واحد فقط)؛ موافقة `requested→approved→paid` بحراسة SQL (الثانية 409، دفع واحد)؛ رفض/إلغاء بتحرير عكسي idempotent (الرصيد يعود كاملاً، الثابت 0)؛ كل انتقال في `admin_audit_log`؛ الموافقة بأدمن (M6 ⇒ ‏403 لغيره).
+  - **i18n**: ‏`withdrawals.{requested,approved,rejected,min_amount,insufficient_balance}` في ar+en (مختلفان).
+  - **الاختبارات**: `tests/api/withdrawals-lifecycle.test.ts` (7 عبر Hono الحقيقي — الستة المطلوبة + i18n؛ سُلّمت حمراء أولاً 7/7 فشل ثم خضراء ×3). الصيانة: `schema-contract` (22) والجرد (186، بلا drift) ولوحة الأدمن/حد الواجهة.
+  - **التحقق**: `npm test` 426/426 ✅ + `tsc` ✅ + `build` ✅ + `db:reset` ✅. الحالة 🔧 (تحقق محلي) ريثما تكتمل G1–G8 بالمراجعة الخارجية — بلا دمج.
+  - **التسريب (G8)**: revert الـcommit؛ لا بيانات إنتاج.
+
 ## 8.C — مدفوعات Stripe · فرع `feat/money-stripe-payments`
 
 - 🔧 منفَّذ محلياً (من الرأس 6252ced على `feat/money-earnings-split`). النطاق: مسار الدفع الفعلي يربط Stripe webhook بـ`LedgerService` كمصدر وحيد للأثر المالي — لا مسار مالي موازٍ، لا تعديل لسياسة 8.B (20/80) ولا لـ`LedgerService` semantics، لا CI/dependencies، لا Production deployment/migration/merge.

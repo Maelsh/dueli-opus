@@ -613,6 +613,15 @@ export const ar = {
     donation_failed: 'لم تكتمل عملية التبرع',
     donation_refunded: 'تم استرداد مبلغ هذا التبرع',
 
+    // السحوبات — دورة الحياة الموثقة (8.D): requested → approved → paid | rejected
+    withdrawals: {
+        requested: 'طلب سحب جديد بانتظار مراجعة الإدارة',
+        approved: 'تمت الموافقة على طلب السحب من الإدارة',
+        rejected: 'تم رفض طلب السحب وأُعيد المبلغ المحجوز إلى رصيدك',
+        min_amount: 'الحد الأدنى لمبلغ السحب هو 50 دولاراً',
+        insufficient_balance: 'رصيدك المتاح لا يكفي مبلغ السحب المطلوب',
+    },
+
     // صفحة الشكاوى
     report_type: 'نوع البلاغ',
     report_inappropriate_desc: 'محتوى مسيء أو ضار',
