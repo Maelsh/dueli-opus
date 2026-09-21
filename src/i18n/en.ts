@@ -627,6 +627,16 @@ export const en = {
         transaction_failed: 'Wallet transaction failed — please try again',
     },
 
+    // Payments — Stripe ledger integration (8.C)
+    payment_min_amount: 'Minimum donation amount is $1',
+    payment_method_invalid: 'Invalid payment method',
+    payment_failed: 'Payment initialization failed — please try again later',
+    payment_success: 'Payment completed successfully',
+    payment_cancelled: 'Payment was cancelled',
+    donation_completed: 'Thank you — your donation was completed',
+    donation_failed: 'Your donation did not go through',
+    donation_refunded: 'This donation was refunded',
+
     // Reports Page
     report_type: 'Report Type',
     report_inappropriate_desc: 'Offensive or harmful content',

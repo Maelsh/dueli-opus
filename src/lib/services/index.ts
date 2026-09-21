@@ -19,4 +19,6 @@ export { TurnCredentialService, TurnCredentialError, DEFAULT_STUN_SERVERS } from
 export type { TurnResolution, TurnIceServer, TurnServiceEnv } from './TurnCredentialService';
 export { LedgerService, LedgerError } from './LedgerService';
 export type { LedgerTx, LedgerEntrySpec, LedgerRef, LedgerInvariant, LedgerPostResult, LedgerDirection, LedgerAccountType } from './LedgerService';
+export { StripeWebhookService } from './StripeWebhookService';
+export type { WebhookEventResult, StripeEventShape } from './StripeWebhookService';
 

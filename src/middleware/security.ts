@@ -91,6 +91,18 @@ export function csrfProtection() {
             return await next();
         }
 
+        // 8.C: Stripe webhook is a machine-to-machine call signed with
+        // Stripe-Signature (HMAC-SHA256 over the raw body). Stripe sends no
+        // Origin/Referer/CSRF token — browser CSRF proof is meaningless here,
+        // and requiring it would 403 every real webhook before the signature
+        // is even checked. The route verifies the HMAC signature itself
+        // (before any DB write), which is the correct authentication for this
+        // path. Excluding it here keeps the CSRF defense intact for every
+        // browser-driven route.
+        if (c.req.path === '/api/donations/webhook') {
+            return await next();
+        }
+
         const origin = c.req.header('Origin');
         const referer = c.req.header('Referer');
         const host = c.req.header('Host');

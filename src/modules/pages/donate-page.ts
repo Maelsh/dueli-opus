@@ -96,6 +96,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             
             document.addEventListener('DOMContentLoaded', () => {
                 loadSupporters();
+                showPaymentOutcome();
             });
             
             function selectAmount(amount) {
@@ -142,7 +143,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             async function processDonation() {
                 const amount = parseInt(document.getElementById('customAmount').value) || selectedAmount;
                 if (amount < 1) {
-                    window.dueli?.toast?.error?.('Please enter a valid amount');
+                    window.dueli?.toast?.error?.(tr.payment_min_amount);
                     return;
                 }
 
@@ -163,14 +164,24 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                             // T4.1: real Stripe Checkout — hosted payment page
                             window.location.href = data.data.payment_url;
                         } else {
-                            alert('Payments are not fully configured yet. Please try again later.');
+                            alert(tr.payment_failed);
                         }
                     } else {
-                        alert(data.error?.message || 'Failed to start donation');
+                        alert(data.error?.message || tr.payment_failed);
                     }
                 } catch (err) {
                     console.error(err);
-                    alert('Failed to start donation');
+                    alert(tr.payment_failed);
+                }
+            }
+
+            // 8.C: عرض نتيجة العودة من Stripe Checkout (?paid=1 / ?cancelled=1).
+            function showPaymentOutcome() {
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('paid') === '1') {
+                    window.dueli?.toast?.success?.(tr.donation_completed);
+                } else if (params.get('cancelled') === '1') {
+                    window.dueli?.toast?.error?.(tr.payment_cancelled);
                 }
             }
         </script>

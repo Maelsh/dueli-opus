@@ -603,6 +603,16 @@ export const ar = {
         transaction_failed: 'فشلت عملية المحفظة — يرجى المحاولة مرة أخرى',
     },
 
+    // المدفوعات — تكامل Stripe مع دفتر الأستاذ (8.C)
+    payment_min_amount: 'الحد الأدنى لمبلغ التبرع هو 1 دولار',
+    payment_method_invalid: 'طريقة الدفع غير صالحة',
+    payment_failed: 'فشل بدء عملية الدفع — يرجى المحاولة لاحقاً',
+    payment_success: 'تمت عملية الدفع بنجاح',
+    payment_cancelled: 'تم إلغاء عملية الدفع',
+    donation_completed: 'شكراً لك — اكتمل تبرعك',
+    donation_failed: 'لم تكتمل عملية التبرع',
+    donation_refunded: 'تم استرداد مبلغ هذا التبرع',
+
     // صفحة الشكاوى
     report_type: 'نوع البلاغ',
     report_inappropriate_desc: 'محتوى مسيء أو ضار',

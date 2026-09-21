@@ -8,6 +8,9 @@ import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { DonationModel } from '../../../models/DonationModel';
 import { authMiddleware } from '../../../middleware/auth';
+import { t } from '../../../i18n';
+import type { Language } from '../../../config/types';
+import type { StripeEventShape } from '../../../lib/services/StripeWebhookService';
 
 const donationsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -68,12 +71,13 @@ donationsRoutes.post('/', async (c) => {
     try {
         const body = await c.req.json();
         const { amount, payment_method, donor_name, donor_email, message, is_anonymous } = body;
+        const lang = (c.get('lang') || 'en') as Language;
 
         // Validate amount
         if (!amount || amount < 1) {
             return c.json({
                 success: false,
-                error: { message: 'Minimum donation amount is $1' }
+                error: { message: t('payment_min_amount', lang) }
             }, 400);
         }
 
@@ -82,7 +86,7 @@ donationsRoutes.post('/', async (c) => {
         if (!payment_method || !validMethods.includes(payment_method)) {
             return c.json({
                 success: false,
-                error: { message: 'Invalid payment method' }
+                error: { message: t('payment_method_invalid', lang) }
             }, 400);
         }
 
@@ -123,7 +127,7 @@ donationsRoutes.post('/', async (c) => {
                 console.error('[Donations] Stripe checkout failed:', stripeError);
                 return c.json({
                     success: false,
-                    error: { message: 'Payment initialization failed: ' + (stripeError?.message || 'unknown') }
+                    error: { message: t('payment_failed', lang) }
                 }, 502);
             }
         }
@@ -214,8 +218,15 @@ donationsRoutes.post('/:id/complete', authMiddleware({ required: true }), async 
 
 /**
  * POST /api/donations/webhook
- * T4.1: Stripe webhook — verifies the Stripe-Signature (HMAC-SHA256) then
- * marks the donation completed on checkout.session.completed.
+ * T4.1 / 8.C: Stripe webhook — verifies the Stripe-Signature (HMAC-SHA256)
+ * FIRST, then delegates every financial effect to StripeWebhookService which
+ * writes balanced ledger entries through LedgerService only.
+ *
+ * Idempotency: the same `event.id` processed 10 times produces exactly ONE
+ * financial effect (UNIQUE(event_id) + ledger tx_id guard). Unsupported event
+ * types return 200 with NO financial effect. A missing or forged signature
+ * returns 400 before any DB write.
+ *
  * Configure in Stripe Dashboard with STRIPE_WEBHOOK_SECRET env var.
  */
 donationsRoutes.post('/webhook', async (c) => {
@@ -228,6 +239,7 @@ donationsRoutes.post('/webhook', async (c) => {
         const rawBody = await c.req.text();
         const sigHeader = c.req.header('Stripe-Signature') || '';
 
+        // 8.C §2: signature verified BEFORE any processing or DB write.
         const { StripeService } = await import('../../../lib/services/StripeService');
         const check = await StripeService.verifyWebhookSignature(rawBody, sigHeader, secret);
         if (!check.valid) {
@@ -235,21 +247,21 @@ donationsRoutes.post('/webhook', async (c) => {
             return c.json({ success: false, error: { message: 'Invalid signature' } }, 400);
         }
 
-        const event = JSON.parse(rawBody);
-        if (event.type === 'checkout.session.completed') {
-            const session = event.data?.object;
-            const donationId = parseInt(
-                session?.metadata?.donation_id || session?.client_reference_id || '0',
-                10
-            );
-            if (donationId > 0) {
-                const donationModel = new DonationModel(c.env.DB);
-                await donationModel.markCompleted(donationId, session.payment_intent || session.id);
-                console.log(`[Donations] Donation ${donationId} completed via Stripe webhook`);
-            }
+        // Only now is the payload trusted enough to parse.
+        const event: StripeEventShape = JSON.parse(rawBody);
+
+        const { StripeWebhookService } = await import('../../../lib/services/StripeWebhookService');
+        const service = new StripeWebhookService(c.env.DB);
+        const result = await service.processEvent(c.env.DB, event);
+
+        if (!result.eventId) {
+            return c.json({ success: false, error: { message: 'Malformed event' } }, 400);
         }
 
-        return c.json({ received: true });
+        // 8.C §7: every outcome returns 200 so Stripe stops retrying, EXCEPT
+        // malformed events (no event.id) which are rejected above. Financial
+        // effects happen only for `applied: true`.
+        return c.json({ received: true, event_id: result.eventId, applied: result.applied });
     } catch (error) {
         console.error('Stripe webhook error:', error);
         return c.json({ success: false, error: { message: 'Webhook processing failed' } }, 500);
