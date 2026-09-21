@@ -571,7 +571,7 @@ export const ar = {
     notifications: 'الإشعارات',
     mark_all_read: 'تعليم الكل كمقروء',
     no_messages: 'لا توجد رسائل',
-    earnings: 'الأرباح',
+    earnings_nav: 'الأرباح',
     donate: 'دعم المنصة',
     contact_admin: 'مراسلة الإدارة',
     submit_report: 'تقديم شكوى',
@@ -589,6 +589,12 @@ export const ar = {
     withdraw: 'سحب',
     min_withdrawal: 'الحد الأدنى للسحب: 50 دولار',
     request_withdrawal: 'طلب سحب',
+    // Nested earnings keys for earnings split components (8.B)
+    earnings: {
+        total: 'الإجمالي',
+        pending: 'قيد الانتظار',
+        per_competition: 'لكل منافسة',
+    },
 
     // المحفظة (دفتر الأستاذ 8.A)
     wallet: {

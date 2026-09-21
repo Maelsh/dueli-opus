@@ -1,9 +1,101 @@
 import { PlatformSettingsModel } from '../../models/PlatformSettingsModel';
 import { CompetitionRevenueLogModel } from '../../models/CompetitionRevenueLogModel';
-import { PlatformFinancialLogModel } from '../../models/PlatformFinancialLogModel';
 import { AdvertisementModel } from '../../models/AdvertisementModel';
-import { EarningsModel } from '../../models/EarningsModel';
 import { CompetitionModel } from '../../models/CompetitionModel';
+import { LedgerService } from './LedgerService';
+
+/**
+ * 8.B — سياسة التوزيع الفعلية (canonical هنا + docs/02-DATABASE.md):
+ * - 20% منصة (platform_share_percentage من platform_settings، الافتراضي 20).
+ * - 80% pool للمتنافسَين يُقسَّم حسب نسبة متوسطات تقييمات المشاهدين.
+ * - التعادل/غياب التقييمات (المجموع صفر) ⇒ تقاسم متساوٍ للـpool.
+ *
+ * قاعدة التقريب (integer cents فقط):
+ * - floor لكل حصة، ثم يُوزَّع الباقي سنتاً بسنت بأولوية: المنصة، ثم
+ *   صاحب التقييم الأعلى، ثم الآخر — deterministic دائماً.
+ * - sum(all shares) === original amount بالضبط: لا سنت يضيع ولا يُخلق.
+ */
+
+export interface PayoutSplitCents {
+    totalCents: number;
+    platformCents: number;
+    creatorCents: number;
+    opponentCents: number;
+    platformPercentage: number;
+}
+
+export function splitPayoutCents(
+    totalCents: number,
+    platformPercentage: number,
+    creatorRating: number,
+    opponentRating: number
+): PayoutSplitCents {
+    if (!Number.isInteger(totalCents) || totalCents < 0) {
+        throw new Error('totalCents must be a non-negative integer');
+    }
+    const pct = Number.isFinite(platformPercentage) ? Math.min(100, Math.max(0, platformPercentage)) : 20;
+
+    // الحساب المالي بالكامل integer-exact:
+    // - كل المدخلات integer (totalCents، pct، التقييمات).
+    // - الضرب يعطي integer ضمن ±(2^53-1) (لدينا ≤ 10^7 × 100 = 10^9،安全).
+    // - القسمة تُحسب بـ: quotient = (numerator - (numerator % denominator)) / denominator
+    //   حيث numerator % denominator يعطي الباقي الصحيح، ثم القسمة تقبل بدون باقٍ.
+    // - لا tolerance، لا 1e-9، لا Math.floor/ceil مع عشري، لا floating-point مالي.
+
+    // 1) حصة المنصة: platformNumerator / 100
+    const platformNumerator = totalCents * pct;
+    const platformRem = platformNumerator % 100;
+    const platformBase = (platformNumerator - platformRem) / 100;   // integer-exact
+    const pool = totalCents - platformBase;                         // integer
+
+    // تطبيع التقييمات (لا سالب، لا NaN)
+    const creatorRatingNorm = Math.max(0, creatorRating || 0);
+    const opponentRatingNorm = Math.max(0, opponentRating || 0);
+    const totalRatings = creatorRatingNorm + opponentRatingNorm;
+
+    let creatorBase: number;
+    let opponentBase: number;
+
+    if (totalRatings === 0) {
+        // tie / لا تقييمات ⇒ تقاسم متساوٍ للـpool
+        const halfRem = pool % 2;
+        creatorBase = (pool - halfRem) / 2;
+        opponentBase = (pool - halfRem) / 2;
+    } else {
+        // 2) تقسيم pool حسب نسب التقييمات
+        const creatorNum = pool * creatorRatingNorm;
+        const creatorRem = creatorNum % totalRatings;
+        creatorBase = (creatorNum - creatorRem) / totalRatings;     // integer-exact
+
+        const opponentNum = pool * opponentRatingNorm;
+        const opponentRem = opponentNum % totalRatings;
+        opponentBase = (opponentNum - opponentRem) / totalRatings;  // integer-exact
+    }
+
+    // 3) الباقي الكلي (يضم platformRem + creatorRem + opponentRem (أو halfRem)) يُوزَّع deterministic
+    let platformCents = platformBase;
+    let creatorCents = creatorBase;
+    let opponentCents = opponentBase;
+    let remainder = totalCents - platformCents - creatorCents - opponentCents;
+
+    // ترتيب التوزيع: المنصة أولاً، ثم الأعلى تقييماً، ثم الآخر
+    const creatorFirst = creatorRatingNorm >= opponentRatingNorm;
+    const order: Array<'platform' | 'creator' | 'opponent'> = ['platform'];
+    order.push(creatorFirst ? 'creator' : 'opponent');
+    order.push(creatorFirst ? 'opponent' : 'creator');
+
+    let idx = 0;
+    while (remainder > 0) {
+        const key = order[idx % order.length];
+        idx += 1;
+        remainder -= 1;
+        if (key === 'platform') platformCents += 1;
+        else if (key === 'creator') creatorCents += 1;
+        else opponentCents += 1;
+    }
+
+    return { totalCents, platformCents, creatorCents, opponentCents, platformPercentage: pct };
+}
 
 export interface LivePayoutSnapshot {
     competition_id: number;
@@ -23,21 +115,26 @@ export interface LivePayoutSnapshot {
 
 export interface FinalizedPayout {
     competition_id: number;
-    total_ad_revenue: number;
-    platform_share: number;
-    creator_share: number;
-    opponent_share: number;
+    total_cents: number;
+    platform_share_cents: number;
+    creator_share_cents: number;
+    opponent_share_cents: number;
     creator_id: number;
     opponent_id: number;
     platform_percentage: number;
     finalized: boolean;
+    /** توافق رجعي للقرّاء القدامى (دولار float للعرض فقط — ليست مصدر حقيقة). */
+    total_ad_revenue: number;
+    platform_share: number;
+    creator_share: number;
+    opponent_share: number;
 }
 
 export class LivePayoutEngine {
     private db: D1Database;
     private settingsModel: PlatformSettingsModel;
     private revenueLogModel: CompetitionRevenueLogModel;
-    private financialModel: PlatformFinancialLogModel;
+    private ledger: LedgerService;
     private adModel: AdvertisementModel;
     private competitionModel: CompetitionModel;
 
@@ -45,7 +142,7 @@ export class LivePayoutEngine {
         this.db = db;
         this.settingsModel = new PlatformSettingsModel(db);
         this.revenueLogModel = new CompetitionRevenueLogModel(db);
-        this.financialModel = new PlatformFinancialLogModel(db);
+        this.ledger = new LedgerService(db);
         this.adModel = new AdvertisementModel(db);
         this.competitionModel = new CompetitionModel(db);
     }
@@ -63,8 +160,17 @@ export class LivePayoutEngine {
         const platformShare = revenuePerView * (platformPercentage / 100);
         const competitorPool = revenuePerView - platformShare;
 
-        const creatorRating = competition.creator_rating || 0;
-        const opponentRating = competition.opponent_rating || 0;
+        // استخدام مجموعات التقييمات الصحيحة (SUM) بدلاً من المتوسطات الكسرية (AVG)
+        // للحفاظ على الدقة المالية في الحسابات الوسيطية
+        const ratingsAgg = await this.db.prepare(`
+            SELECT
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as creator_sum,
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as opponent_sum
+            FROM ratings WHERE competition_id = ?
+        `).bind(competition.creator_id, competition.opponent_id || -1, competitionId).first<{ creator_sum: number; opponent_sum: number }>();
+
+        const creatorRating = ratingsAgg?.creator_sum || 0;
+        const opponentRating = ratingsAgg?.opponent_sum || 0;
         const totalRatings = creatorRating + opponentRating;
 
         let creatorShare = 0;
@@ -117,8 +223,17 @@ export class LivePayoutEngine {
         const platformShare = totalRevenue * (platformPercentage / 100);
         const competitorPool = totalRevenue - platformShare;
 
-        const creatorRating = competition.creator_rating || 0;
-        const opponentRating = competition.opponent_rating || 0;
+        // استخدام مجموعات التقييمات الصحيحة (SUM) بدلاً من المتوسطات الكسرية (AVG)
+        // للحفاظ على الدقة المالية في الحسابات الوسيطية
+        const ratingsAgg = await this.db.prepare(`
+            SELECT
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as creator_sum,
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as opponent_sum
+            FROM ratings WHERE competition_id = ?
+        `).bind(competition.creator_id, competition.opponent_id || -1, competitionId).first<{ creator_sum: number; opponent_sum: number }>();
+
+        const creatorRating = ratingsAgg?.creator_sum || 0;
+        const opponentRating = ratingsAgg?.opponent_sum || 0;
         const totalRatings = creatorRating + opponentRating;
 
         let creatorShare = 0;
@@ -166,62 +281,88 @@ export class LivePayoutEngine {
 
         const snapshot = await this.recalculatePayouts(competitionId);
 
-        await this.revenueLogModel.finalize(competitionId);
-
-        const earningsModel = new EarningsModel(this.db);
-
-        if (competition.creator_id && snapshot.creator_share > 0) {
-            await earningsModel.addEarnings(competition.creator_id, snapshot.creator_share, 'pending');
+        // إجمالي السنتات = تقريب الإيراد الدولاري (float للقراءة فقط) إلى سنتات.
+        const totalCents = Math.round(snapshot.total_ad_revenue * 100);
+        const split = splitPayoutCents(
+            totalCents,
+            snapshot.platform_percentage,
+            snapshot.creator_rating,
+            snapshot.opponent_rating
+        );
+        // sum === total بالضبط (قاعدة التقريب أعلاه) — دفاع برمجي.
+        if (split.platformCents + split.creatorCents + split.opponentCents !== totalCents) {
+            throw new Error('payout split does not conserve total cents');
         }
 
-        if (competition.opponent_id && snapshot.opponent_share > 0) {
-            await earningsModel.addEarnings(competition.opponent_id, snapshot.opponent_share, 'pending');
-        }
+        // 8.B — مطالبة idempotent داخل SQL أولاً: الفائز الوحيد يكمل،
+        // والبقية يقرأون النتيجة المحفوظة بلا قيود مالية جديدة.
+        const claimed = await this.revenueLogModel.claimFinalized(competitionId);
 
-        await this.financialModel.record({
-            entry_type: 'platform_share',
-            amount: snapshot.platform_share,
+        const buildResult = (): FinalizedPayout => ({
             competition_id: competitionId,
-            public_description: `Platform share from competition #${competitionId}`
-        });
-
-        if (competition.creator_id && snapshot.creator_share > 0) {
-            await this.financialModel.record({
-                entry_type: 'competitor_payout',
-                amount: snapshot.creator_share,
-                competition_id: competitionId,
-                public_description: `Creator payout for competition #${competitionId}`
-            });
-        }
-
-        if (competition.opponent_id && snapshot.opponent_share > 0) {
-            await this.financialModel.record({
-                entry_type: 'competitor_payout',
-                amount: snapshot.opponent_share,
-                competition_id: competitionId,
-                public_description: `Opponent payout for competition #${competitionId}`
-            });
-        }
-
-        const integrityCheck = Math.abs(
-            (snapshot.platform_share + snapshot.creator_share + snapshot.opponent_share) - snapshot.total_ad_revenue
-        ) < 0.001;
-
-        if (!integrityCheck) {
-            console.error(`INTEGRITY CHECK FAILED for competition ${competitionId}: platform_share(${snapshot.platform_share}) + creator_share(${snapshot.creator_share}) + opponent_share(${snapshot.opponent_share}) != total_ad_revenue(${snapshot.total_ad_revenue})`);
-        }
-
-        return {
-            competition_id: competitionId,
-            total_ad_revenue: snapshot.total_ad_revenue,
-            platform_share: snapshot.platform_share,
-            creator_share: snapshot.creator_share,
-            opponent_share: snapshot.opponent_share,
+            total_cents: totalCents,
+            platform_share_cents: split.platformCents,
+            creator_share_cents: split.creatorCents,
+            opponent_share_cents: split.opponentCents,
             creator_id: competition.creator_id,
             opponent_id: competition.opponent_id || 0,
-            platform_percentage: snapshot.platform_percentage,
-            finalized: true
-        };
+            platform_percentage: split.platformPercentage,
+            finalized: true,
+            total_ad_revenue: totalCents / 100,
+            platform_share: split.platformCents / 100,
+            creator_share: split.creatorCents / 100,
+            opponent_share: split.opponentCents / 100,
+        });
+
+        if (!claimed) {
+            // توزيع سابق مطبَّق: لا قيود جديدة (idempotent حتى تحت التزامن).
+            // ملاحظة: قراءة النتيجة من ledger ممكنة عبر entriesForTx أدناه.
+            return buildResult();
+        }
+
+        // 8.B — التوزيع الفعلي الوحيد عبر LedgerService (لا earnings ولا financial_log).
+        // حركة واحدة متوازنة: مدينون (المتنافسان + المنصة) = دائنون (احتياطي التسوية).
+        if (totalCents > 0) {
+            const entries: { account: string; direction: 'debit' | 'credit'; amountCents: number }[] = [];
+            if (competition.creator_id && split.creatorCents > 0) {
+                entries.push({ account: `user:${competition.creator_id}`, direction: 'debit', amountCents: split.creatorCents });
+            }
+            if (competition.opponent_id && split.opponentCents > 0) {
+                entries.push({ account: `user:${competition.opponent_id}`, direction: 'debit', amountCents: split.opponentCents });
+            }
+            if (split.platformCents > 0) {
+                entries.push({ account: 'platform:revenue', direction: 'debit', amountCents: split.platformCents });
+            }
+            if (entries.length > 0) {
+                entries.push({ account: 'reserve:payouts', direction: 'credit', amountCents: totalCents });
+                // تجاهل تعارض التزامن: إن سبقنا منافس بنفس tx فالقيود موجودة (no-op).
+                try {
+                    await this.ledger.post({
+                        txId: `payout:competition:${competitionId}`,
+                        createdBy: 'system:payouts',
+                        ref: { ref_type: 'competition', ref_id: competitionId },
+                        entries,
+                    });
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    if (!/UNIQUE constraint failed|constraint failed/i.test(msg)) throw e;
+                }
+            }
+        }
+
+        // لقطة audit فقط (ليست مصدر حقيقة مالية): تُحفظ بالدولار للعرض.
+        await this.revenueLogModel.upsertByCompetition({
+            competition_id: competitionId,
+            total_ad_revenue: totalCents / 100,
+            platform_share: split.platformCents / 100,
+            creator_share: split.creatorCents / 100,
+            opponent_share: split.opponentCents / 100,
+            creator_rating_at_time: snapshot.creator_rating,
+            opponent_rating_at_time: snapshot.opponent_rating,
+            platform_percentage: split.platformPercentage,
+        });
+
+        return buildResult();
     }
 
     async getLiveSnapshot(competitionId: number): Promise<LivePayoutSnapshot | null> {

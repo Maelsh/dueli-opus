@@ -87,10 +87,52 @@ export class CompetitionRevenueLogModel extends BaseModel<CompetitionRevenueLog>
         return this.findByCompetitionId(competitionId);
     }
 
+    /**
+     * 8.B — مطالبة التوزيع مرة واحدة فقط على مستوى قاعدة البيانات.
+     * تُعيد true للفائز الوحيد بالمطالبة، false لمن جاء بعده —
+     * الحماية داخل SQL (WHERE finalized = 0) لا بفحص JavaScript.
+     */
+    async claimFinalized(competitionId: number): Promise<boolean> {
+        const result = await this.db.prepare(`
+            UPDATE ${this.tableName} SET finalized = 1, finalized_at = datetime('now'), updated_at = datetime('now')
+            WHERE competition_id = ? AND finalized = 0
+        `).bind(competitionId).run();
+        return (result.meta as { changes?: number } | undefined)?.changes === 1;
+    }
+
     async upsertByCompetition(data: Partial<CompetitionRevenueLog>): Promise<CompetitionRevenueLog> {
+        // 8.B — إدراج شرطي واحد داخل SQL: إن وُجد صف للمنافسة حدّثه،
+        // وإلا أدرج صفاً واحداً فقط. هذا يمنع سباق إنشاء صفوف مكررة
+        // الذي كان يجعل claimFinalized يطابق N صفوف فيفشل الشرط ===1 للجميع.
         const existing = await this.findByCompetitionId(data.competition_id!);
         if (existing) {
             const updated = await this.update(existing.id, data);
+            return updated!;
+        }
+        const inserted = await this.db.prepare(`
+            INSERT INTO ${this.tableName}
+            (competition_id, total_ad_revenue, platform_share, creator_share, opponent_share,
+             creator_rating_at_time, opponent_rating_at_time, platform_percentage, finalized, created_at, updated_at)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'), datetime('now')
+            WHERE NOT EXISTS (SELECT 1 FROM ${this.tableName} WHERE competition_id = ?)
+        `).bind(
+            data.competition_id,
+            data.total_ad_revenue || 0,
+            data.platform_share || 0,
+            data.creator_share || 0,
+            data.opponent_share || 0,
+            data.creator_rating_at_time || 0,
+            data.opponent_rating_at_time || 0,
+            data.platform_percentage || 20,
+            data.competition_id
+        ).run();
+        if ((inserted.meta as { changes?: number } | undefined)?.changes === 1 && inserted.meta.last_row_id) {
+            return (await this.findById(inserted.meta.last_row_id))!;
+        }
+        // سبقنا متسابق آخر بالإدراج: حدّث الصف الموجود الوحيد.
+        const raced = await this.findByCompetitionId(data.competition_id!);
+        if (raced) {
+            const updated = await this.update(raced.id, data);
             return updated!;
         }
         return this.create(data);

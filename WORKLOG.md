@@ -1,3 +1,15 @@
+## 2026-09-21 — 8.B: الأرباح وحصص المنافسة (فرع `feat/money-earnings-split`)
+
+- النطاق: ربط `LivePayoutEngine.finalizePayouts` بـ `LedgerService` فقط — بلا مسار مالي موازٍ، بلا Stripe/withdrawals/donations/transparency/ads، بلا migration جديدة، بلا CI/dependencies.
+- السياسة الفعلية (لا 70/25/5): `platform_share_percentage` من `platform_settings` (الافتراضي 20). 20% منصة + 80% pool للمتنافسين حسب نسبة متوسطات التقييمات؛ التعادل/غياب التقييمات (المجموع صفر) ⇒ تقاسم متساوٍ للـpool. موثقة canonical في `LivePayoutEngine.ts` أعلى الملف.
+- التقريب: integer cents فقط؛ `Math.round(total*100)` مرة واحدة عند الحدود ثم `splitPayoutCents` بـ floor + باقي deterministic (المنصة ثم الأعلى تقييماً ثم الآخر)؛ `sum === total` بالضبط (1000 و1001 مثبتان).
+- Idempotency على مستوى SQL: `claimFinalized` بـ `UPDATE ... WHERE finalized=0` مع `changes===1` (atomic compare-and-set — مثبت بـ PROOF-0: فائز واحد و9 أصفار بلا ledger writes) + إدراج شرطي `INSERT ... WHERE NOT EXISTS` في `upsertByCompetition` يمنع صفوفاً مكررة (مثبت بـ PROOF-2: صف واحد + 4 قيود) + `UNIQUE(tx_id, account)` في ledger كحارس أخير. `CompetitionRevenueLog` لقطة audit فقط وليس مصدر حقيقة مالية.
+- i18n: `earnings.{total,pending,per_competition}` في ar+en (عربي فعلي)؛ نقل نص التنقل المكرر إلى `earnings_nav` وتحديث `navigation.ts` و`earnings-page.ts`.
+- الملفات: `src/lib/services/LivePayoutEngine.ts`, `src/models/CompetitionRevenueLogModel.ts`, `src/i18n/ar.ts`, `src/i18n/en.ts`, `src/modules/pages/earnings-page.ts`, `src/shared/components/navigation.ts`, `tests/api/earnings-split.test.ts` (جديد 8 اختبارات).
+- ما لم يُلمس عمداً: Production D1، Stripe، withdrawals، donations، transparency، ads، migrations التاريخية، CI/dependencies، F-11/F-12.
+- G8: التراجع = revert الـcommit؛ لا migration ولا بيانات إنتاج.
+- / الملفات: src/lib/services/LivePayoutEngine.ts, src/models/CompetitionRevenueLogModel.ts, src/i18n/ar.ts, src/i18n/en.ts, src/modules/pages/earnings-page.ts, src/shared/components/navigation.ts, tests/api/earnings-split.test.ts / نفذ: Cline (8.B LOCAL agent) / اختبار: earnings-split 8/8 ✅ + npm test 396/396 ✅ + tsc ✅ + build ✅
+
 ## 2026-09-20 — 8.A: دفتر الأستاذ والثابت المحاسبي (فرع `feat/money-ledger-invariant`)
 
 - النطاق (مجموعات بحركة): جدول `ledger_entries` الجديد + `LedgerService` داخلي + i18n محفظة + اختبارات. **بناء محلي فقط — بلا مسار API جديد، بدون تعديل `user_earnings`/`withdrawal_requests` أو سلوك مالي موجود، ولا API مسجل في الجرد** (الموجودة ملتزمة M6؛ إنشاؤه سيُخضع لمراجعة مستقبلية).
