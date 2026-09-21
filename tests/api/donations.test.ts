@@ -81,7 +81,9 @@ async function createDonation(
     token: string | undefined,
     body: Record<string, unknown>
 ) {
-    return app.request('/api/donations?lang=en', { method: 'POST', headers: headers(token), body: JSON.stringify(body) }, env(db));
+    // 8.G-F3: consent flags default on for pre-policy test bodies; tests for
+    // the consent gate itself pass explicit false/missing values.
+    return app.request('/api/donations?lang=en', { method: 'POST', headers: headers(token), body: JSON.stringify({ non_refundable_accepted: true, amount_confirmed: true, ...body }) }, env(db));
 }
 
 function capturePayload(donationId: number, amountCents: number, eventId: string): string {
@@ -344,7 +346,7 @@ describe('8.E competitor donations (RED-FIRST) — route-level via real Hono app
         expect(payload['net_cents']).toBe(20_00);
     });
 
-    it('8. refund ⇒ mirror reversal via the trusted path, invariant 0', async () => {
+    it('8. refund ⇒ rejected under the non-refundable policy (8.G-F3), no reversal', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, {
             amount: 40,
@@ -361,20 +363,20 @@ describe('8.E competitor donations (RED-FIRST) — route-level via real Hono app
 
         const ref = await postWebhook(db, refundPayload(donationId, 40_00, 'evt_8e_ref_1'));
         expect(ref.status).toBe(200);
-        expect(((await ref.json()) as { applied: boolean }).applied).toBe(true);
+        expect(((await ref.json()) as { applied: boolean }).applied).toBe(false);
 
-        // العكس المرآتي: 3 قيود تعيد الصافي والرسوم معاً — لا Ledger بديل.
+        // No mirror reversal: nothing posted, balances intact, still completed.
         const refundEntries = await ledger.entriesForTx('stripe:refund:evt_8e_ref_1');
-        expect(refundEntries).toHaveLength(3);
-        expect(await ledger.balance('user:2')).toBe(0);
-        expect(await ledger.balance('platform:revenue')).toBe(0);
+        expect(refundEntries).toHaveLength(0);
+        expect(await ledger.balance('user:2')).toBe(32_00);
+        expect(await ledger.balance('platform:revenue')).toBe(8_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
 
         const model = new DonationModel(db as unknown as D1Database);
-        expect((await model.findById(donationId))?.payment_status).toBe('refunded');
+        expect((await model.findById(donationId))?.payment_status).toBe('completed');
     });
 
-    it('8b. partial refund of a competitor donation ⇒ split reversal on the refund amount', async () => {
+    it('8b. partial refund ⇒ rejected under the non-refundable policy (8.G-F3)', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, {
             amount: 100,
@@ -390,27 +392,19 @@ describe('8.E competitor donations (RED-FIRST) — route-level via real Hono app
         expect(await ledger.balance('user:2')).toBe(80_00);
         expect(await ledger.balance('platform:revenue')).toBe(20_00);
 
-        // استرداد جزئي 2500 سنت ⇒ رسوم 500 + صافي 2000 (نفس سياسة التقسيم).
+        // Partial refund attempt ⇒ rejected, balances untouched.
         const ref = await postWebhook(db, refundPayload(donationId, 25_00, 'evt_8e_prefund_1'));
         expect(ref.status).toBe(200);
-        expect(((await ref.json()) as { applied: boolean }).applied).toBe(true);
+        expect(((await ref.json()) as { applied: boolean }).applied).toBe(false);
 
         const refundEntries = await ledger.entriesForTx('stripe:refund:evt_8e_prefund_1');
-        expect(refundEntries).toHaveLength(3);
-        const sum = (dir: string, account: string) =>
-            refundEntries.filter((e) => e['direction'] === dir && e['account'] === account)
-                .reduce((a, e) => a + Number(e['amount_cents']), 0);
-        expect(sum('debit', 'reserve:gateway')).toBe(25_00);
-        expect(sum('credit', 'platform:revenue')).toBe(5_00);
-        expect(sum('credit', 'user:2')).toBe(20_00);
-
-        // لا جزء مسترد بقي منسوباً للمتنافس: رصيده انخفض بالصافي المسترد.
-        expect(await ledger.balance('user:2')).toBe(60_00);
-        expect(await ledger.balance('platform:revenue')).toBe(15_00);
+        expect(refundEntries).toHaveLength(0);
+        expect(await ledger.balance('user:2')).toBe(80_00);
+        expect(await ledger.balance('platform:revenue')).toBe(20_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 
-    it('8c. repeated partial refund webhook ⇒ exactly one financial effect', async () => {
+    it('8c. repeated refund webhook ⇒ zero financial effects (8.G-F3)', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, {
             amount: 100,
@@ -429,20 +423,20 @@ describe('8.E competitor donations (RED-FIRST) — route-level via real Hono app
             expect(res.status).toBe(200);
             results.push(((await res.json()) as { applied: boolean }).applied);
         }
-        // مرة واحدة فقط طبّقت الأثر المالي.
-        expect(results.filter(Boolean)).toHaveLength(1);
+        // All rejected — no financial effect at all.
+        expect(results.filter(Boolean)).toHaveLength(0);
 
         const ledger = new LedgerService(db as unknown as D1Database);
         const refundEntries = await ledger.entriesForTx('stripe:refund:evt_8e_prefund_dup');
-        expect(refundEntries).toHaveLength(3);
-        expect(await ledger.balance('user:2')).toBe(60_00);
+        expect(refundEntries).toHaveLength(0);
+        expect(await ledger.balance('user:2')).toBe(80_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 
     it('9. donations i18n keys exist in ar + en and differ', async () => {
         const { ar } = await import('../../src/i18n/ar');
         const { en } = await import('../../src/i18n/en');
-        for (const k of ['send', 'thanks', 'min', 'max', 'blocked'] as const) {
+        for (const k of ['send', 'thanks', 'min', 'max', 'blocked', 'non_refundable', 'non_refundable_accept', 'non_refundable_required', 'amount_confirm', 'amount_confirm_required'] as const) {
             const a = (ar.donations as Record<string, string>)[k];
             const e = (en.donations as Record<string, string>)[k];
             expect(a).toBeTruthy();
@@ -613,8 +607,8 @@ describe('8.E REMOTE corrections — five findings (RED-FIRST)', () => {
         expect(await captureCount(db)).toBe(3);
     });
 
-    // ── R2: حمولة الاسترداد الجزئي الحقيقية ──────────────────────────
-    it('R2a. amount=10000 + amount_refunded=2500 ⇒ refund 2500 only', async () => {
+    // ── R2: حمولة الاسترداد الجزئي الحقيقية (8.G-F3: كلها مرفوضة) ──────
+    it('R2a. amount=10000 + amount_refunded=2500 ⇒ rejected, no reversal', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 });
         const donationId = ((await created.json()) as { success: boolean; data: { donation_id: number } }).data.donation_id;
@@ -622,17 +616,15 @@ describe('8.E REMOTE corrections — five findings (RED-FIRST)', () => {
 
         const ref = await postWebhook(db, stripeRefundPayload(donationId, 100_00, 25_00, 'evt_r2_ref1'));
         expect(ref.status).toBe(200);
-        expect(((await ref.json()) as { applied: boolean }).applied).toBe(true);
+        expect(((await ref.json()) as { applied: boolean }).applied).toBe(false);
 
         const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(25_00);
-        expect(sums.comp).toBe(20_00);
-        expect(sums.plat).toBe(5_00);
+        expect(sums.total).toBe(0);
         const ledger = new LedgerService(db as unknown as D1Database);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 
-    it('R2b. cumulative 6000 after 2500 ⇒ only the new 3500 delta', async () => {
+    it('R2b. cumulative 6000 after 2500 ⇒ both rejected, nothing reversed', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 });
         const donationId = ((await created.json()) as { success: boolean; data: { donation_id: number } }).data.donation_id;
@@ -640,16 +632,16 @@ describe('8.E REMOTE corrections — five findings (RED-FIRST)', () => {
         await postWebhook(db, stripeRefundPayload(donationId, 100_00, 25_00, 'evt_r2b_ref1'));
 
         const ref2 = await postWebhook(db, stripeRefundPayload(donationId, 100_00, 60_00, 'evt_r2b_ref2'));
-        expect(((await ref2.json()) as { applied: boolean }).applied).toBe(true);
+        expect(((await ref2.json()) as { applied: boolean }).applied).toBe(false);
 
         const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(60_00);
+        expect(sums.total).toBe(0);
         const ledger = new LedgerService(db as unknown as D1Database);
-        expect(await ledger.balance('user:2')).toBe(80_00 - sums.comp);
+        expect(await ledger.balance('user:2')).toBe(80_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 
-    it('R2c. resending the same refund event ⇒ no extra effect', async () => {
+    it('R2c. resending the same refund event ⇒ still rejected, no effect', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 });
         const donationId = ((await created.json()) as { success: boolean; data: { donation_id: number } }).data.donation_id;
@@ -661,37 +653,33 @@ describe('8.E REMOTE corrections — five findings (RED-FIRST)', () => {
             const res = await postWebhook(db, raw);
             results.push(((await res.json()) as { applied: boolean }).applied);
         }
-        expect(results.filter(Boolean)).toHaveLength(1);
-        expect((await refundedSums(db, donationId)).total).toBe(25_00);
+        expect(results.filter(Boolean)).toHaveLength(0);
+        expect((await refundedSums(db, donationId)).total).toBe(0);
     });
 
-    // ── R3: منع Cumulative Over-Refund ───────────────────────────────
-    it('R3a. 100 ⇒ 60 ok, then 40 ok, then anything extra refused', async () => {
+    // ── R3: منع Cumulative Over-Refund (8.G-F3: الرفض شامل) ────────────
+    it('R3a. any refund on a 100 donation ⇒ rejected, balances intact', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 });
         const donationId = ((await created.json()) as { success: boolean; data: { donation_id: number } }).data.donation_id;
         await postWebhook(db, capturePayload(donationId, 100_00, 'evt_r3_cap'));
 
-        const r1 = await postWebhook(db, stripeRefundPayload(donationId, 100_00, 60_00, 'evt_r3_ref1'));
-        expect(((await r1.json()) as { applied: boolean }).applied).toBe(true);
-        const r2 = await postWebhook(db, stripeRefundPayload(donationId, 100_00, 100_00, 'evt_r3_ref2'));
-        expect(((await r2.json()) as { applied: boolean }).applied).toBe(true);
-
-        // أي استرداد إضافي (تراكمي فوق الأصل) ⇒ رفض بلا أثر.
-        const r3 = await postWebhook(db, stripeRefundPayload(donationId, 100_00, 100_00, 'evt_r3_ref3_dup'));
-        expect(((await r3.json()) as { applied: boolean }).applied).toBe(false);
+        for (const [cum, tag] of [[60_00, 'evt_r3_ref1'], [100_00, 'evt_r3_ref2'], [100_00, 'evt_r3_ref3_dup']] as Array<[number, string]>) {
+            const r = await postWebhook(db, stripeRefundPayload(donationId, 100_00, cum, tag));
+            expect(((await r.json()) as { applied: boolean }).applied).toBe(false);
+        }
         const r4 = await postWebhook(db, refundPayload(donationId, 1_00, 'evt_r3_ref4_extra'));
         expect(((await r4.json()) as { applied: boolean }).applied).toBe(false);
 
         const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(100_00);
+        expect(sums.total).toBe(0);
         const ledger = new LedgerService(db as unknown as D1Database);
-        expect(await ledger.balance('user:2')).toBe(0);
-        expect(await ledger.balance('platform:revenue')).toBe(0);
+        expect(await ledger.balance('user:2')).toBe(80_00);
+        expect(await ledger.balance('platform:revenue')).toBe(20_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 
-    it('R3b. concurrent 60+60 ⇒ overspend impossible, balances never negative', async () => {
+    it('R3b. concurrent refunds ⇒ all rejected, nothing reversed', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 });
         const donationId = ((await created.json()) as { success: boolean; data: { donation_id: number } }).data.donation_id;
@@ -702,18 +690,16 @@ describe('8.E REMOTE corrections — five findings (RED-FIRST)', () => {
             postWebhook(db, stripeRefundPayload(donationId, 100_00, 100_00, 'evt_r3b_b')),
         ]);
         const applied = [((await h1.json()) as { applied: boolean }).applied, ((await h2.json()) as { applied: boolean }).applied];
-        // الفائز الأول يستهلك حصته؛ الثاني إما فرق مشروع أو مرفوض — لكن
-        // المجموع لا يتجاوز الأصل أبداً.
+        expect(applied.filter(Boolean)).toHaveLength(0);
         const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBeLessThanOrEqual(100_00);
+        expect(sums.total).toBe(0);
         const ledger = new LedgerService(db as unknown as D1Database);
-        expect(await ledger.balance('user:2')).toBeGreaterThanOrEqual(0);
-        expect(await ledger.balance('platform:revenue')).toBeGreaterThanOrEqual(0);
+        expect(await ledger.balance('user:2')).toBe(80_00);
+        expect(await ledger.balance('platform:revenue')).toBe(20_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
-        expect(applied.filter(Boolean).length).toBeGreaterThanOrEqual(1);
     });
 
-    it('R3c. 10 race rounds ⇒ never exceeds the original total', async () => {
+    it('R3c. 10 race rounds ⇒ zero reversals in every round', async () => {
         const { donorToken } = await seedActors(db);
         for (let round = 0; round < 10; round++) {
             const created = await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 });
@@ -724,48 +710,46 @@ describe('8.E REMOTE corrections — five findings (RED-FIRST)', () => {
                 postWebhook(db, stripeRefundPayload(donationId, 100_00, 100_00, `evt_r3c_b_${round}`)),
             ]);
             const sums = await refundedSums(db, donationId);
-            expect(sums.total).toBeLessThanOrEqual(100_00);
+            expect(sums.total).toBe(0);
         }
         const ledger = new LedgerService(db as unknown as D1Database);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 
-    // ── R4: تسوية التقريب عبر استردادات متعددة ───────────────────────
-    it('R4a. three partials to exactly full ⇒ original allocation restored', async () => {
+    // ── R4: تسوية التقريب (8.G-F3: لا عكسيات إطلاقاً) ───────────────────
+    it('R4a. three partial attempts ⇒ all rejected, allocation untouched', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 });
         const donationId = ((await created.json()) as { success: boolean; data: { donation_id: number } }).data.donation_id;
         await postWebhook(db, capturePayload(donationId, 100_00, 'evt_r4_cap'));
 
-        await postWebhook(db, stripeRefundPayload(donationId, 100_00, 33_33, 'evt_r4_r1'));
-        await postWebhook(db, stripeRefundPayload(donationId, 100_00, 66_66, 'evt_r4_r2'));
-        await postWebhook(db, stripeRefundPayload(donationId, 100_00, 100_00, 'evt_r4_r3'));
+        for (const [cum, tag] of [[33_33, 'evt_r4_r1'], [66_66, 'evt_r4_r2'], [100_00, 'evt_r4_r3']] as Array<[number, string]>) {
+            const res = await postWebhook(db, stripeRefundPayload(donationId, 100_00, cum, tag));
+            expect(((await res.json()) as { applied: boolean }).applied).toBe(false);
+        }
 
-        // الأصل: صافي 8000 + رسوم 2000 — يجب استعادتهما بالسنت.
         const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(100_00);
-        expect(sums.comp).toBe(80_00);
-        expect(sums.plat).toBe(20_00);
+        expect(sums.total).toBe(0);
         const ledger = new LedgerService(db as unknown as D1Database);
+        expect(await ledger.balance('user:2')).toBe(80_00);
+        expect(await ledger.balance('platform:revenue')).toBe(20_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 
-    it('R4b. many tiny refunds ⇒ exact reconciliation, no created/lost cents', async () => {
+    it('R4b. ten tiny refund attempts ⇒ all rejected, no cents move', async () => {
         const { donorToken } = await seedActors(db);
         const created = await createDonation(db, donorToken, { amount: 10, payment_method: 'stripe', competitor_id: 2 });
         const donationId = ((await created.json()) as { success: boolean; data: { donation_id: number } }).data.donation_id;
         await postWebhook(db, capturePayload(donationId, 10_00, 'evt_r4b_cap'));
 
-        // 10 استردادات صغيرة (100 سنت each تراكمياً) — الأصل صافي 800/رسوم 200.
         for (let i = 1; i <= 10; i++) {
             const res = await postWebhook(db, stripeRefundPayload(donationId, 10_00, i * 100, `evt_r4b_r${i}`));
-            expect(((await res.json()) as { applied: boolean }).applied).toBe(true);
+            expect(((await res.json()) as { applied: boolean }).applied).toBe(false);
         }
         const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(10_00);
-        expect(sums.comp).toBe(8_00);
-        expect(sums.plat).toBe(2_00);
+        expect(sums.total).toBe(0);
         const ledger = new LedgerService(db as unknown as D1Database);
+        expect(await ledger.balance('user:2')).toBe(8_00);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
     });
 

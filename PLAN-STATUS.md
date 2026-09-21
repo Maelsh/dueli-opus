@@ -1,6 +1,39 @@
 
 
 
+## 8.G — FINAL MONEY GATE correction pass · فرع `fix/money-gate-final-remediation`
+
+- 🔧 منفَّذ محلياً (من الرأس `b90ca08` على `feat/money-transparency` الذي يحمل 8.A–8.F).
+  ملاحظة: base الـREMOTE ‏(`5e7fcd6`) غير موجود في السجل المحلي — بدأ العمل من
+  `b90ca08` (رأس الفرع المحلي الحامل لكل عمل 8.A–8.F) وسُجَّل الفرق في تقرير المهمة.
+- **F1 (crash consistency) ✅ مُغلق**: الحارس التراكمي + نية الاسترداد (القيود الدقيقة
+  + tx الحتمي) في batch واحد ذري (migration ‏0024 `donation_refund_intents`)؛ أي crash
+  قبل `ledger.post()` تكمِله إعادة الإرسال أو reconciliation بنفس القيود (لا ضياع ولا تكرار).
+  RED: ضياع 200 سنت قبل الإصلاح ⇒ شفاء تام بعده + بدون duplicate.
+- **F2 (cumulative race) ✅ مُغلق**: مطالبة CAS على القيمة المتوقعة +
+  `UNIQUE(donation_id, cumulative_cents)` — فائز واحد لكل تقدّم والخاسر يعيد القراءة.
+  RED: ‏500 بدل 300 قبل الإصلاح ⇒ ‏300 بالضبط بعده (comp ‏240 + plat ‏60) + ‏10 أحداث
+  متزامنة ⇒ تسوية كاملة دقيقة + invariant ‏0.
+- **F3 ✅ مُغلق بقرار رسمي — التبرعات غير قابلة للاسترداد مطلقاً**: القرار: لا refund
+  (كامل/جزئي)، لا clawback، لا سالب، لا دين، لا عجز على المنصة — حتى قبل أي سحب.
+  الفرض: `DONATIONS_NON_REFUNDABLE` في `DonationModel` + رفض `charge.refunded` في
+  `processRefund` قبل أي أثر مالي (لا قيود/حارس/حالة، تسجيل الحدث بلا tx فقط) +
+  `POST /api/donations` يشترط `non_refundable_accepted === true` و`amount_confirmed === true`
+  معاً (400 بدونهما) + صفحة التبرع تعرض السياسة وتطلب موافقتين صريحتين (بلا افتراض) +
+  i18n ‏(5 مفاتيح ar+en) + التوثيق في `docs/02-DATABASE.md`.
+  الاختبارات: ‏F3A–G (رفض بلا سحب/بعد سحب جزئي مدفوع/تكرار + بوابتي الإنشاء + كلتاهما معاً + ‏i18n)
+  سُلّمت حمراء أولاً (6 فشلت) ثم خضراء؛ اختبارات الـrefund القديمة حُوّلت لتوكيد الرفض.
+- **F4 (SEC-01) ✅ مُغلق**: مسار `POST /api/donations/:id/complete` محذوف بالكامل +
+  `markCompleted()` محذوفة من `DonationModel` + الجرد المعاد توليده (187 مساراً) بلا
+  `complete` + اختبار يفرض 404 لكل المتغيرات. Stripe webhook سلطة الإكمال الوحيدة.
+- **الاختبارات**: `tests/api/money-gate-8g.test.ts` (13: ‏F1a/F1b/F2a/F2b/F2c/F3doc + ‏7 matrix)
+  سُلّمت حمراء أولاً (F1a/F1b/F2a/F4 فشلت كما هو متوقع) ثم خضراء؛ `donations-security`
+  (6/6 ‏404)؛ المالية ×3 (83/83 كل جولة)؛ `npm test` ‏477/477 ✅؛ `tsc` ✅ (بلا `any` جديد)؛
+  `build` ✅؛ `db:migrate:local` (0024 ✅)؛ تكامل `schema-contract` (25) ✅.
+  التكامل الكلي: ملفان يفشلان في إعداد wrangler (0014/runtime — بيئي، سابق، بلا علاقة بالمال).
+- **النطاق المحترَم**: بلا تعديل migrations تاريخية، بلا CI/dependencies، بلا production،
+  بلا سياسة مالية جديدة، بلا F-11/F-12. الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
+
 ## 8.F — شفافية الأموال من دفتر الأستاذ · فرع `feat/money-transparency`
 
 - 🔧 منفَّذ محلياً (من الرأس `c69c13a` على `feat/money-donations` الذي يحمل 8.A–8.E). النطاق: مجاميع عامة مشتقة من `ledger_entries` + تحقق مستقل + cache ببصمة — بلا جدول مالي موازٍ، بلا هوية شخصية، بلا تعديل `LedgerService` أو سياسة 8.A–8.E، بلا migration، بلا CI/dependencies، لا Production deployment/migration/merge.

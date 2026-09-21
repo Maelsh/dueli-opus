@@ -1,3 +1,22 @@
+## 2026-09-21 — 8.G-F3: non-refundable donation policy (same branch/PR #43)
+
+- Decision (lead): ALL Dueli donations non-refundable once completed, even pre-withdrawal. No full/partial refund, no clawback, no negative, no debt, no platform shortfall.
+- Enforcement: `DONATIONS_NON_REFUNDABLE` (DonationModel) + `processRefund` rejects with `donation_non_refundable` before any financial side effect (event recorded with null tx so Stripe stops retrying; no recovery run). Other Stripe functions untouched.
+- Consent gate: `POST /api/donations` requires `non_refundable_accepted === true` AND `amount_confirmed === true` (400 otherwise); donate-page shows policy + two unchecked boxes, blocks submit unless both checked, sends both flags. No defaults, no implicit consent.
+- i18n: 5 keys (`non_refundable`, `non_refundable_accept`, `non_refundable_required`, `amount_confirm`, `amount_confirm_required`) in ar+en, all differ.
+- Docs: policy section added to `docs/02-DATABASE.md` (no restructuring).
+- Tests: F3A-G RED-first (6 failed pre-fix) then green; old refund-applies tests converted to rejection assertions; creation helpers carry consent flags. Unit 485/485, financial x3 104/104, tsc + build clean. No migration/CI/dependency/prod changes; 20/80, min/max, withdrawals, LedgerService untouched.
+
+## 2026-09-21 — 8.G: FINAL MONEY GATE correction pass (branch `fix/money-gate-final-remediation`)
+
+- Base: local `b90ca08` (REMOTE base `5e7fcd6` absent from local history — documented in report).
+- F1: atomic batch (guard + intent) via migration 0024 + `recoverPendingRefunds` (intent replay + guard-vs-ledger heal). RED: lost 200c healed with no duplicate. Note: heal tx shape `stripe:refund:recovery:*` (required LIKE match for reversal accounting).
+- F2: CAS claim + `UNIQUE(donation_id, cumulative_cents)` + bounded retry (12). RED: 500 => exactly 300. Note: HTTP-level races serialize by luck (crypto staggering) — the decisive race test is service-level.
+- F3: no authoritative policy found => behaviour documented only (`user:2 = -6000`, invariant 0) + BLOCKED pending lead decision. No financial change.
+- F4/SEC-01: route + `markCompleted()` deleted, inventory regenerated (187), 404 enforced, docs/12 updated.
+- Files: `migrations/0024_*`, `DonationModel` (intent/CAS replacing `claimRefund/release`), `StripeWebhookService` (`processRefund` rewrite), `donations/routes`, `fake-d1` (intent support + batch rollback), `schema-contract` (25), new `money-gate-8g` test (13), `donations-security` (404).
+- Verify: unit 477/477 + financial x3 83/83 + tsc + build + local migrate OK. Integration: 2 wrangler-env suites fail at setup (0014/runtime, pre-existing, money-unrelated).
+
 ## 2026-09-21 — 8.F: شفافية الأموال من دفتر الأستاذ (فرع `feat/money-transparency`)
 
 - النتيجة: أي مستخدم يرى أين تذهب أموال المنصة (مجاميع عامة من ledger + بصمة تحقق)، ويتحقق مستقلاً من سلامة الدفتر عبر `GET /api/transparency/verify` — بلا أي هوية شخصية.

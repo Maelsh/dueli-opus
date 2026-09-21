@@ -20,8 +20,10 @@ import type { StripeEventShape } from '../../../lib/services/StripeWebhookServic
 const donationsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // Optional auth on every route in this router: donations can be made
-// anonymously, but when a session is present we attach the user so
-// /:id/complete can check ownership (SEC-01).
+// anonymously, but when a session is present we attach the user.
+// NOTE (SEC-01 closed, 8.G): there is NO manual completion route — the Stripe
+// webhook (POST /api/donations/webhook) is the only payment completion
+// authority. No client may ever set payment_status → completed.
 donationsRoutes.use('*', authMiddleware({ required: false }));
 
 /**
@@ -75,11 +77,16 @@ donationsRoutes.get('/total', async (c) => {
  * 8.E: يقبل `competitor_id` (المتنافس المستلم) و`competition_id` (سياق البث
  * اختياري) — بلا أي حساب رسوم في المسار أو العميل (التقسيم integer-cents
  * عند نجاح الدفع فقط عبر LedgerService). بلا مستلم = تبرع للمنصة (8.C).
+ *
+ * 8.G-F3: التبرعات غير قابلة للاسترداد (DONATIONS_NON_REFUNDABLE) — لا يُنشأ
+ * التبرع إلا بموافقتين صريحتين معاً: قبول سياسة عدم الاسترداد
+ * (`non_refundable_accepted === true`) + تأكيد المبلغ
+ * (`amount_confirmed === true`). لا قيم افتراضية ولا موافقة ضمنية.
  */
 donationsRoutes.post('/', async (c) => {
     try {
         const body = await c.req.json();
-        const { amount, payment_method, donor_name, donor_email, message, is_anonymous, competitor_id, competition_id } = body;
+        const { amount, payment_method, donor_name, donor_email, message, is_anonymous, competitor_id, competition_id, non_refundable_accepted, amount_confirmed } = body;
         const lang = (c.get('lang') || 'en') as Language;
         const donationModel = new DonationModel(c.env.DB);
 
@@ -90,6 +97,22 @@ donationsRoutes.post('/', async (c) => {
             return c.json({
                 success: false,
                 error: { message: checked.error === 'below_minimum' ? t('donations.min', lang) : t('payment_min_amount', lang) }
+            }, 400);
+        }
+
+        // 8.G-F3: موافقة صريحة على سياسة عدم الاسترداد — شرط إنشاء.
+        if (non_refundable_accepted !== true) {
+            return c.json({
+                success: false,
+                error: { message: t('donations.non_refundable_required', lang) }
+            }, 400);
+        }
+
+        // 8.G-F3: تأكيد صريح للمبلغ — شرط إنشاء مستقل (لا يُغني عنه قبول السياسة).
+        if (amount_confirmed !== true) {
+            return c.json({
+                success: false,
+                error: { message: t('donations.amount_confirm_required', lang) }
             }, 400);
         }
 
@@ -229,71 +252,6 @@ donationsRoutes.post('/', async (c) => {
         return c.json({
             success: false,
             error: { message: 'Failed to create donation' }
-        }, 500);
-    }
-});
-
-/**
- * POST /api/donations/:id/complete
- * SEC-01 (docs/12-SECURITY-REMEDIATION.md): legacy manual completion.
- * NO LONGER PUBLIC — requires auth and the caller must own the donation.
- * The supported path is the Stripe webhook (POST /api/donations/webhook);
- * this route stays for non-Stripe methods (e.g. manual bank transfer) where
- * there is no webhook, but it can never complete someone else's donation.
- */
-donationsRoutes.post('/:id/complete', authMiddleware({ required: true }), async (c) => {
-    try {
-        const user = c.get('user') as any;
-        const donationId = parseInt(c.req.param('id') || '0');
-        const body = await c.req.json();
-        const { transaction_id } = body;
-
-        if (!transaction_id) {
-            return c.json({
-                success: false,
-                error: { message: 'Transaction ID is required' }
-            }, 400);
-        }
-
-        const donationModel = new DonationModel(c.env.DB);
-        const existing = await donationModel.findById(donationId);
-
-        if (!existing) {
-            return c.json({
-                success: false,
-                error: { message: 'Donation not found' }
-            }, 404);
-        }
-
-        // Ownership check: only the donor (when the donation has an owner)
-        // may complete it manually.
-        if (existing.user_id != null && existing.user_id !== user?.id) {
-            console.warn(`[Donations] forbidden manual complete: user=${user?.id} donation=${donationId} owner=${existing.user_id}`);
-            return c.json({
-                success: false,
-                error: { message: 'Forbidden' }
-            }, 403);
-        }
-
-        console.warn(`[Donations] manual complete: user=${user?.id} donation=${donationId} (prefer Stripe webhook for stripe/card)`);
-        const donation = await donationModel.markCompleted(donationId, transaction_id);
-
-        if (!donation) {
-            return c.json({
-                success: false,
-                error: { message: 'Donation not found' }
-            }, 404);
-        }
-
-        return c.json({
-            success: true,
-            data: donation
-        });
-    } catch (error) {
-        console.error('Complete donation error:', error);
-        return c.json({
-            success: false,
-            error: { message: 'Failed to complete donation' }
         }, 500);
     }
 });

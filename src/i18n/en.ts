@@ -647,6 +647,7 @@ export const en = {
     },
 
     // Competitor donations (8.E) — $1 documented minimum, no Dueli-level maximum
+    // 8.G-F3 — donations are non-refundable once completed (see docs/02-DATABASE.md)
     donations: {
         send: 'Send donation',
         thanks: 'Thanks for supporting the competitor!',
@@ -654,6 +655,11 @@ export const en = {
         max: 'Dueli sets no maximum donation amount',
         blocked: 'You cannot donate to a user who blocked you',
         invalid_competition: 'Live donations require a live competition and a competitor in it',
+        non_refundable: 'Donations are non-refundable once completed',
+        non_refundable_accept: 'I understand and accept that this donation is non-refundable',
+        non_refundable_required: 'You must accept that donations are non-refundable',
+        amount_confirm: 'I confirm this donation amount',
+        amount_confirm_required: 'You must confirm the donation amount',
     },
 
     // Reports Page

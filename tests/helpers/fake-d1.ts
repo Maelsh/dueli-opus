@@ -35,6 +35,9 @@ export class FakeD1 implements D1Database {
     dislikes: Row[] = [];
     // B12: scheduled tasks (retry record for failed aggregate calculation)
     scheduledTasks: Row[] = [];
+    // 8.G: refund intents (recoverable pending-refund state, migration 0024)
+    refundIntents: Row[] = [];
+    refundIntentSeq = 0;
     userSeq = 0;
     likeSeq = 0;
     dislikeSeq = 0;
@@ -66,19 +69,29 @@ export class FakeD1 implements D1Database {
 
     async batch(statements: D1PreparedStatement[]): Promise<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[]> {
         const executeBatch = async (): Promise<{ success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[]> => {
-            const results: { success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[] = [];
-            for (const stmt of statements) {
-                const fakeStmt = stmt as unknown as FakeStmt;
-                const q = norm(fakeStmt.sql);
-                if (q.startsWith('select')) {
-                    const row = await fakeStmt.first();
-                    results.push({ success: true, meta: { changes: 0, last_row_id: null }, results: row ? [row] : [] });
-                } else {
-                    const result = await fakeStmt.run();
-                    results.push(result);
+            // 8.G: emulate D1's atomic batch — a failing statement rolls back
+            // the whole batch (needed for UNIQUE aborts in refund-intent claims).
+            const snapDonations = this.donations.map((d) => ({ ...d }));
+            const snapIntents = this.refundIntents.map((r) => ({ ...r }));
+            try {
+                const results: { success: boolean; meta: { changes: number; last_row_id: number | null }; results?: Row[] }[] = [];
+                for (const stmt of statements) {
+                    const fakeStmt = stmt as unknown as FakeStmt;
+                    const q = norm(fakeStmt.sql);
+                    if (q.startsWith('select')) {
+                        const row = await fakeStmt.first();
+                        results.push({ success: true, meta: { changes: 0, last_row_id: null }, results: row ? [row] : [] });
+                    } else {
+                        const result = await fakeStmt.run();
+                        results.push(result);
+                    }
                 }
+                return results;
+            } catch (e) {
+                this.donations = snapDonations;
+                this.refundIntents = snapIntents;
+                throw e;
             }
-            return results;
         };
         const p = this.batchQueue.then(executeBatch);
         this.batchQueue = p.catch(() => undefined);
@@ -145,6 +158,11 @@ class FakeStmt {
         // --- donations ---
         if (q.startsWith('select * from donations where id = ?')) {
             return this.db.donations.find((d) => d.id === p[0]) ?? null;
+        }
+        // 8.G: checkpoint re-read (SELECT refunded_cents FROM donations WHERE id = ?).
+        if (q.startsWith('select refunded_cents from donations where id = ?')) {
+            const donation = this.db.donations.find((d) => d.id === p[0]);
+            return donation ? { refunded_cents: donation.refunded_cents ?? 0 } : null;
         }
 
 // --- competitions (minimal: findById for B5-2 error-path tests) ---
@@ -535,6 +553,23 @@ class FakeStmt {
         // competitions / follows / anything else -> empty list
         if (q.includes('from competitions') || q.includes('from follows')) {
             return { results: [] };
+        }
+
+        // 8.G: pending refund intents for a donation (recovery scan).
+        if (q.includes('from donation_refund_intents') && q.includes('donation_id = ?')) {
+            const rows = this.db.refundIntents
+                .filter((r) => r.donation_id === p[0] && r.status === 'pending')
+                .sort((a, b) => a.id - b.id)
+                .map((r) => ({
+                    id: r.id,
+                    donation_id: r.donation_id,
+                    cumulative_cents: r.cumulative_cents,
+                    incremental_cents: r.incremental_cents,
+                    event_id: r.event_id,
+                    tx_id: r.tx_id,
+                    entries_json: r.entries_json,
+                }));
+            return { results: rows };
         }
 
         return { results: [] };
@@ -992,6 +1027,62 @@ class FakeStmt {
                 created_at: new Date().toISOString()
             });
             return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // 8.G: atomic CAS refund-intent claim (migration 0024) — must precede
+        // the legacy non-CAS handler below (same statement prefix).
+        // UPDATE donations SET refunded_cents = refunded_cents + ?
+        // WHERE id = ? AND refunded_cents = ? AND refunded_cents + ? <= amount_cents
+        if (q.startsWith('update donations set refunded_cents = refunded_cents +') && q.includes('and refunded_cents = ?')) {
+            const [delta, id, expected] = [p[0], p[1], p[2]];
+            const donation = this.db.donations.find((d) => d.id === id);
+            if (!donation) return ok({ last_row_id: null, changes: 0 });
+            const base = donation.refunded_cents ?? 0;
+            if (base === expected && base + delta <= (donation.amount_cents ?? 0)) {
+                donation.refunded_cents = base + delta;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
+        }
+
+        // 8.G: conditional intent insert (second statement of the claim batch).
+        // INSERT INTO donation_refund_intents (...) SELECT ?,?,?,?,?,?,'pending'
+        // WHERE (SELECT refunded_cents FROM donations WHERE id = ?) = ?
+        if (q.startsWith('insert into donation_refund_intents')) {
+            const [donationId, cumulative, incremental, eventId, txId, entriesJson, condId, condTarget] =
+                [p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]];
+            const donation = this.db.donations.find((d) => d.id === condId);
+            if (!donation || (donation.refunded_cents ?? 0) !== condTarget) {
+                return ok({ last_row_id: null, changes: 0 });
+            }
+            const dup = this.db.refundIntents.some(
+                (r) => r.event_id === eventId || r.tx_id === txId ||
+                    (r.donation_id === donationId && r.cumulative_cents === cumulative)
+            );
+            if (dup) throw new Error('UNIQUE constraint failed: donation_refund_intents');
+            const newId = ++this.db.refundIntentSeq;
+            this.db.refundIntents.push({
+                id: newId,
+                donation_id: donationId,
+                cumulative_cents: cumulative,
+                incremental_cents: incremental,
+                event_id: eventId,
+                tx_id: txId,
+                entries_json: entriesJson,
+                status: 'pending',
+                created_at: new Date().toISOString(),
+                applied_at: null,
+            });
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // 8.G: mark intent applied.
+        if (q.startsWith('update donation_refund_intents set status = \'applied\'')) {
+            const row = this.db.refundIntents.find((r) => r.event_id === p[0] && r.status === 'pending');
+            if (!row) return ok({ last_row_id: null, changes: 0 });
+            row.status = 'applied';
+            row.applied_at = new Date().toISOString();
+            return ok({ last_row_id: null, changes: 1 });
         }
 
         // 8.E REMOTE fix: atomic refund-allowance claim (migration 0023).

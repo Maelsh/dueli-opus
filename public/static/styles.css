@@ -2430,6 +2430,9 @@
   .placeholder-gray-400::placeholder {
     color: var(--color-gray-400);
   }
+  .accent-pink-600 {
+    accent-color: var(--color-pink-600);
+  }
   .accent-purple-500 {
     accent-color: var(--color-purple-500);
   }
