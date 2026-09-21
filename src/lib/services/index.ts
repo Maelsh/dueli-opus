@@ -21,4 +21,6 @@ export { LedgerService, LedgerError } from './LedgerService';
 export type { LedgerTx, LedgerEntrySpec, LedgerRef, LedgerInvariant, LedgerPostResult, LedgerDirection, LedgerAccountType } from './LedgerService';
 export { StripeWebhookService } from './StripeWebhookService';
 export type { WebhookEventResult, StripeEventShape } from './StripeWebhookService';
+export { MoneyTransparencyService, fingerprintSummary, TRANSPARENCY_CACHE_TTL_MS } from './MoneyTransparencyService';
+export type { MoneyTransparencySummary } from './MoneyTransparencyService';
 

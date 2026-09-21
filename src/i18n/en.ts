@@ -724,6 +724,11 @@ export const en = {
 
     // ── Task 4: Transparency Engine ────────────────────────────
     transparency: {
+        // 8.F: ledger-backed money transparency (public totals + verification)
+        total_in: 'Total In',
+        total_out: 'Total Out',
+        platform_share: 'Platform Share',
+        verified_at: 'Verified At',
         page_title: 'Transparency Ledger',
         page_subtitle: 'An open-book view of every dollar that flows through Dueli.',
         nav_link: 'Transparency',

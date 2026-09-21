@@ -1,3 +1,13 @@
+## 2026-09-21 — 8.F: شفافية الأموال من دفتر الأستاذ (فرع `feat/money-transparency`)
+
+- النتيجة: أي مستخدم يرى أين تذهب أموال المنصة (مجاميع عامة من ledger + بصمة تحقق)، ويتحقق مستقلاً من سلامة الدفتر عبر `GET /api/transparency/verify` — بلا أي هوية شخصية.
+- **التعريفات (مشتقة من semantics الحالية — بلا سياسة مخترعة)**: `total_in` = مجموع الأرجل الدائنة على `reserve:*` (كل تدفق إجمالي يكتب ساق reserve دائنة واحدة بالمبلغ الكامل: capture ‏8.C/8.E ← ‏`reserve:gateway`، توزيع 8.B ← ‏`reserve:payouts`)؛ `total_out` = مجموع الأرجل المدينة على `user:*` (حصص 8.B + صافي تبرع 8.E)؛ `platform_share` = صافي `platform:*` (مدين − دائن بدلالة `LedgerService.balance` — رسوم/حصص `platform:revenue` ناقص المردودات + صافي حجوزات `platform:withdrawals`). كلها integer cents، والفرق عن التجميع المستقل صفر سنت (مُختبر).
+- **الملفات**: `src/lib/services/MoneyTransparencyService.ts` (جديد — تجميع ledger فقط + cache داخلي TTL=60s + بصمة djb2 + إبطال بعدّ القيود؛ لا يكتب شيئاً)؛ `src/controllers/TransparencyController.ts` (جديد — يرث `BaseController`؛ `verify` يفوّض لـ`LedgerService.verifyInvariant()` مباشرة بلا خوارزمية ثانية)؛ `src/modules/api/transparency/routes.ts` (مساران عامّان جديدان `/summary` و`/verify` — نفس سياسة بقية `/api/transparency` العامة، بلا نظام صلاحيات جديد)؛ `src/lib/services/index.ts` (تصدير)؛ `src/i18n/ar.ts` + `en.ts` (`transparency.{total_in,total_out,platform_share,verified_at}` — مختلفان)؛ `tests/api/transparency.test.ts` (جديد، 7)؛ `docs/14-ROUTE-INVENTORY.md` + `dev-tools/route-inventory.json` (أُعيد التوليد: 188 مساراً).
+- **بلا migration** (لا بنية تخزين جديدة — لا KV/Cache API في المشروع؛ الذاكرة الداخلية تكفي)؛ بلا تعديل `LedgerService`؛ بلا لمس Stripe/donations/withdrawals/LivePayoutEngine/إعلانات/CI/dependencies؛ المسارات القديمة (`/`, `/audit`, `/feed`…) untouched.
+- RED-FIRST: سُلّمت حمراء أولاً (6/7 فشل: 404 للمسارين + مفاتيح i18n مفقودة) ثم خضراء 7/7.
+- التحقق: `tests/api/transparency.test.ts` 7/7 ✅ + `npm test` 464/464 ✅ + `npx tsc --noEmit` ✅ (بلا `any` جديد) + `npm run build` ✅ + `routes:inventory` 188 ✅. بلا `db:reset` (لا migration).
+- G8 التراجع: revert الـcommit (ملفان جديدان + مساران + 4 مفاتيح i18n + اختبار + جرد مولّد؛ لا بيانات/مخطط يُتراجع عنه).
+
 ## 2026-09-21 — 8.E تصحيحات REMOTE الخمسة (PR #41)
 
 - RED أولاً: ‏19 اختباراً جديداً سُلّمت حمراء (15 فشل يُظهر كل ثغرة: capture مزدوج [true,true]، قراءة amount الأصلي بدل التراكمي، إسراف 20000 > ‏10000، قبول سياق خاطئ) ثم خضراء.
