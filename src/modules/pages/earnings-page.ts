@@ -26,7 +26,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             <div class="container mx-auto px-4 py-8 max-w-4xl">
                 <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">
                     <i class="fas fa-wallet ${rtl ? 'ml-3' : 'mr-3'} text-emerald-500"></i>
-                    ${tr.earnings || 'Earnings & Wallet'}
+                    ${(tr as any).earnings_nav || 'Earnings & Wallet'}
                 </h1>
 
                 <div id="earningsContent">
@@ -383,7 +383,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, tr.earnings || 'Earnings'));
+    return c.html(generateHTML(content, lang, (tr as any).earnings_nav || 'Earnings'));
 };
 
 export default earningsPage;

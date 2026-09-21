@@ -1,5 +1,12 @@
 
 
+## 8.B — الأرباح وحصص المنافسة · فرع `feat/money-earnings-split`
+
+- 🔧 منفَّذ محلياً على `feat/money-ledger-invariant` (الرأس bd520e9). النطاق: `LivePayoutEngine.finalizePayouts` يوزع عبر `LedgerService` فقط (بلا earnings/financial_log كبديل)؛ `splitPayoutCents` بـ integer cents وقاعدة تقريب موثقة؛ idempotency داخل SQL (`claimFinalized` + إدراج شرطي + `UNIQUE(tx_id, account)`)؛ i18n `earnings.{total,pending,per_competition}` + `earnings_nav` ar+en؛ اختبار `tests/api/earnings-split.test.ts` (8/8). السياسة الفعلية: 20% منصة + 80% pool حسب التقييمات، والتساوي عند tie/no ratings (لا 70/25/5). التحقق: `npm test` 396/396 + `tsc` + `build` ✅ محلياً؛ بانتظار PR/مراجعة الوكيل الخارجي (بلا دمج، بلا Production D1).
+  - **البوابات M1–M6**: M1 ✅ (verifyInvariant=0 بعد كل payout بما فيه 10 متزامنة)؛ M2 ✅ (post واحد في `db.batch()`)؛ M3 ✅ (لا Float جديد في مسار payout؛ المجاميع integer)؛ M4 ✅ (PROOF-0 + PROOF-2 + تشغيل مزدوج)؛ M5 ✅ (created_by + ref لكل قيد، وrevenue_log لقطة فقط)؛ M6 ✅ (بلا مسار عام جديد).
+  - **التسريب (G8)**: التراجع = revert الـcommit؛ بلا migration وبلا بيانات إنتاج.
+
+
 ## 8.A — دفتر الأستاذ والثابت المحاسبي · فرع `feat/money-ledger-invariant`
 
 - ✅ تمّ الإنشاء محلياً من `feat/live-turn-config` (الرأس 69f30ae). النطاق: جدول `ledger_entries` (migration 0019) + `LedgerService` + i18n محفظة + اختبارات (api + integration). **بناء محلي فقط — بلا API مسار جديد، بلا تغيير على `user_earnings`/`withdrawal_requests` الحالي (بلا سلوك مالي موجود).**

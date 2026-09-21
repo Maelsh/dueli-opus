@@ -138,9 +138,9 @@ export function getNavigation(lang: Language): string {
                   <i class="fas fa-user text-gray-500"></i>
                   <span>${tr.profile || 'Profile'}</span>
                 </a>
-                <a href="/earnings?lang=${lang}" class="user-menu-item" title="${tr.earnings || 'Earnings'}">
+                <a href="/earnings?lang=${lang}" class="user-menu-item" title="${(tr as any).earnings_nav || 'Earnings'}">
                   <i class="fas fa-wallet text-gray-500"></i>
-                  <span>${tr.earnings || 'Earnings'}</span>
+                  <span>${(tr as any).earnings_nav || 'Earnings'}</span>
                 </a>
                 <a href="/my-competitions?lang=${lang}" class="user-menu-item" title="${tr.my_competitions || 'My Competitions'}">
                   <i class="fas fa-trophy text-gray-500"></i>

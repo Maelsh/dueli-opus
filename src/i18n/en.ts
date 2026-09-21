@@ -595,7 +595,7 @@ export const en = {
     notifications: 'Notifications',
     mark_all_read: 'Mark all read',
     no_messages: 'No messages',
-    earnings: 'Earnings',
+    earnings_nav: 'Earnings',
     donate: 'Support',
     contact_admin: 'Contact Admin',
     submit_report: 'Submit Report',
@@ -613,6 +613,12 @@ export const en = {
     withdraw: 'Withdraw',
     min_withdrawal: 'Minimum withdrawal: $50.00',
     request_withdrawal: 'Request Withdrawal',
+    // Nested earnings keys for earnings page components
+    earnings: {
+        total: 'Total',
+        pending: 'Pending',
+        per_competition: 'Per Competition',
+    },
 
     // Wallet (ledger 8.A)
     wallet: {
