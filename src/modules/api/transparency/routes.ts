@@ -10,10 +10,31 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { TransparencyAuditor } from '../../../lib/TransparencyAuditor';
+import { TransparencyController } from '../../../controllers/TransparencyController';
 import { PlatformFinancialLogModel } from '../../../models/PlatformFinancialLogModel';
 import { PlatformDonationsLedgerModel } from '../../../models/PlatformDonationsLedgerModel';
 
 const transparencyRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// ──────────────────────────────────────────────────────────────────
+// GET /api/transparency/summary (8.F — PUBLIC)
+// مجاميع مالية عامة مشتقة مباشرة من ledger_entries عبر
+// MoneyTransparencyService — بلا هوية شخصية، مع بصمة تحقق وcache.
+// ──────────────────────────────────────────────────────────────────
+transparencyRoutes.get('/summary', async (c) => {
+    const controller = new TransparencyController(c.env.DB);
+    return controller.summary(c);
+});
+
+// ──────────────────────────────────────────────────────────────────
+// GET /api/transparency/verify (8.F — PUBLIC)
+// يعيد نتيجة LedgerService.verifyInvariant() مباشرة —
+// difference === 0 في الحالة السليمة. بلا خوارزمية موازية.
+// ──────────────────────────────────────────────────────────────────
+transparencyRoutes.get('/verify', async (c) => {
+    const controller = new TransparencyController(c.env.DB);
+    return controller.verify(c);
+});
 
 // ──────────────────────────────────────────────────────────────────
 // GET /api/transparency

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-21T10:20:11.610Z",
-  "total": 186,
+  "generatedAt": "2026-09-21T15:25:24.163Z",
+  "total": 188,
   "routes": [
     {
       "method": "GET",
@@ -1209,6 +1209,20 @@
     {
       "method": "GET",
       "path": "/api/transparency/payroll",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency/summary",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/transparency/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/transparency/verify",
       "classification": "UNGUARDED ⚠",
       "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/transparency/routes.ts"

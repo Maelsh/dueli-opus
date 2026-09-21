@@ -1,14 +1,14 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-21T10:20:11.610Z
+> تاريخ التوليد: 2026-09-21T15:25:24.163Z
 
-## الإجمالي: 186 مسار
+## الإجمالي: 188 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 89 |
-| UNGUARDED ⚠ | 48 |
+| UNGUARDED ⚠ | 50 |
 | AUTHENTICATED | 46 |
 | SERVICE(origin-only ⚠) | 3 |
 
@@ -198,6 +198,8 @@
 | GET | `/api/transparency/donations-feed` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
 | GET | `/api/transparency/feed` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
 | GET | `/api/transparency/payroll` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
+| GET | `/api/transparency/summary` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
+| GET | `/api/transparency/verify` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
 | GET | `/api/users` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | DELETE | `/api/users/:id/follow` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | POST | `/api/users/:id/follow` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |

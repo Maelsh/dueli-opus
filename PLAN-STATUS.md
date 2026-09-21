@@ -1,6 +1,17 @@
 
 
 
+## 8.F — شفافية الأموال من دفتر الأستاذ · فرع `feat/money-transparency`
+
+- 🔧 منفَّذ محلياً (من الرأس `c69c13a` على `feat/money-donations` الذي يحمل 8.A–8.E). النطاق: مجاميع عامة مشتقة من `ledger_entries` + تحقق مستقل + cache ببصمة — بلا جدول مالي موازٍ، بلا هوية شخصية، بلا تعديل `LedgerService` أو سياسة 8.A–8.E، بلا migration، بلا CI/dependencies، لا Production deployment/migration/merge.
+  - **التعريفات (من semantics الحالية)**: `total_in` = دائن `reserve:*` (ساق الإجمالي الوحيدة لكل capture ‏8.C/8.E وتوزيع 8.B)؛ `total_out` = مدين `user:*` (حصص 8.B + صافي 8.E)؛ `platform_share` = صافي `platform:*` (مدين − دائن). integer cents، والفرق عن التجميع المستقل صفر سنت.
+  - **`MoneyTransparencyService`**: قراءة ledger فقط (bind فقط)؛ cache داخلي TTL=60s + بصمة djb2 + إبطال بعدّ القيود (append-only ⇒ أي كتابة تغيّر العدّ)؛ `clearCache()` للاختبار/الإبطال. **لا migration** (لا KV/Cache API في المشروع).
+  - **المساران** (عامّان كبقية `/api/transparency`): `GET /api/transparency/summary` (مجاميع + `fingerprint` + `cached` + `labels` مترجمة) و`GET /api/transparency/verify` (نتيجة `LedgerService.verifyInvariant()` مباشرة — `difference === 0`).
+  - **i18n**: `transparency.{total_in,total_out,platform_share,verified_at}` في ar+en (مختلفان).
+  - **الاختبارات**: `tests/api/transparency.test.ts` (7 عبر Hono الحقيقي — مطابقة مستقلة + لا هوية + verify + cache/إبطال + لا مصدر موازٍ (decoy في `platform_financial_logs` لا يغيّر شيئاً) + i18n + regression؛ سُلّمت حمراء أولاً 6/7 فشل ثم خضراء).
+  - **التحقق**: `npm test` 464/464 ✅ + `tsc` ✅ (بلا `any` جديد) + `build` ✅ + `routes:inventory` 188 ✅. الحالة 🔧 (تحقق محلي) ريثما يعيد الوكيل الخارجي التحقق المستقل — بلا دمج.
+  - **التسريب (G8)**: revert الـcommit؛ لا بيانات/مخطط.
+
 ## 8.E — التبرعات للمتنافسين · فرع `feat/money-donations`
 
 - 🔧 منفَّذ محلياً (من الرأس `f280ee6` على `feat/money-withdrawals` الذي يحمل 8.A–8.D). النطاق: تبرع المشاهد لمتنافس بأثر مالي حصري عبر `LedgerService` — لا رصيد موازٍ، لا مسار مالي ثانٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService`، لا CI/dependencies، لا Production deployment/migration/merge.
