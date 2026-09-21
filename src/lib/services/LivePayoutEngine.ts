@@ -160,8 +160,17 @@ export class LivePayoutEngine {
         const platformShare = revenuePerView * (platformPercentage / 100);
         const competitorPool = revenuePerView - platformShare;
 
-        const creatorRating = competition.creator_rating || 0;
-        const opponentRating = competition.opponent_rating || 0;
+        // استخدام مجموعات التقييمات الصحيحة (SUM) بدلاً من المتوسطات الكسرية (AVG)
+        // للحفاظ على الدقة المالية في الحسابات الوسيطية
+        const ratingsAgg = await this.db.prepare(`
+            SELECT
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as creator_sum,
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as opponent_sum
+            FROM ratings WHERE competition_id = ?
+        `).bind(competition.creator_id, competition.opponent_id || -1, competitionId).first<{ creator_sum: number; opponent_sum: number }>();
+
+        const creatorRating = ratingsAgg?.creator_sum || 0;
+        const opponentRating = ratingsAgg?.opponent_sum || 0;
         const totalRatings = creatorRating + opponentRating;
 
         let creatorShare = 0;
@@ -214,8 +223,17 @@ export class LivePayoutEngine {
         const platformShare = totalRevenue * (platformPercentage / 100);
         const competitorPool = totalRevenue - platformShare;
 
-        const creatorRating = competition.creator_rating || 0;
-        const opponentRating = competition.opponent_rating || 0;
+        // استخدام مجموعات التقييمات الصحيحة (SUM) بدلاً من المتوسطات الكسرية (AVG)
+        // للحفاظ على الدقة المالية في الحسابات الوسيطية
+        const ratingsAgg = await this.db.prepare(`
+            SELECT
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as creator_sum,
+                COALESCE(SUM(CASE WHEN competitor_id = ? THEN rating END), 0) as opponent_sum
+            FROM ratings WHERE competition_id = ?
+        `).bind(competition.creator_id, competition.opponent_id || -1, competitionId).first<{ creator_sum: number; opponent_sum: number }>();
+
+        const creatorRating = ratingsAgg?.creator_sum || 0;
+        const opponentRating = ratingsAgg?.opponent_sum || 0;
         const totalRatings = creatorRating + opponentRating;
 
         let creatorShare = 0;
