@@ -68,6 +68,23 @@ export function splitDonationCents(totalCents: number, platformPercentage: numbe
 }
 
 /**
+ * 8.G — نية استرداد معلّقة (migration ‏0024): الحارس التراكمي + القيود
+ * الدقيقة + tx الحتمي في سجل واحد قابل للاسترداد بعد الانهيار.
+ */
+export interface RefundIntent {
+    id: number;
+    donation_id: number;
+    cumulative_cents: number;
+    incremental_cents: number;
+    event_id: string;
+    tx_id: string;
+    entries_json: string;
+}
+
+/** نتيجة المطالبة الذرية بالحارس التراكمي (8.G). */
+export type RefundClaimResult = 'claimed' | 'conflict' | 'over_cap' | 'invalid';
+
+/**
  * Donation Interface
  */
 export interface Donation {
@@ -83,8 +100,9 @@ export interface Donation {
     competition_id: number | null;
     /**
      * المبلغ المسترد المعتمد تراكمياً بالسنت (8.E تصحيح REMOTE —
-     * migration ‏0023). حارس حجز ذري للسقف التراكمي، لا مصدر حقيقة مالية
-     * (الحقيقة في ledger) — يُحجَز عبر claimRefund() المشروط فقط.
+     * migration ‏0023). حارس حجز تراكمي، لا مصدر حقيقة مالية
+     * (الحقيقة في ledger) — يتقدّم حصراً عبر claimRefundIntent() الذرية
+     * (8.G: CAS + نية قابلة للاسترداد في نفس الـbatch).
      */
     refunded_cents: number;
     amount: number;
@@ -258,16 +276,6 @@ export class DonationModel extends BaseModel<Donation> {
     }
 
     /**
-     * Mark donation as completed
-     */
-    async markCompleted(id: number, transactionId: string): Promise<Donation | null> {
-        return this.update(id, {
-            payment_status: 'completed',
-            transaction_id: transactionId
-        });
-    }
-
-    /**
      * Mark donation as failed
      */
     async markFailed(id: number): Promise<Donation | null> {
@@ -297,32 +305,104 @@ export class DonationModel extends BaseModel<Donation> {
     }
 
     /**
-     * حجز allowance استرداد (إصلاح 3 — منع Cumulative Over-Refund).
-     * ذري بشرط SQL واحد: يُضاف R فقط حين لا يتجاوز المجموع الأصل —
-     * فيستحيل الإسراف حتى تحت التزامن (لا SELECT-then-INSERT عارٍ).
-     * يعيد true حين رُبح الحجز، false حين الرفض (تجاوز السقف).
+     * 8.G — مطالبة ذرية بحارس تراكمي مع نية قابلة للاسترداد (F1+F2).
+     *
+     * تحلّ محل claimRefund() العارية (SELECT-then-UPDATE بينهما نافذة سباق
+     * تسمح بدلتا مكررة — 500 بدل 300 — ونافذة انهيار تضيّع الاسترداد).
+     *
+     * batch واحد ذري (M2):
+     *  [0] تقدّم الحارس بشرط CAS: refunded_cents += R فقط حين القيمة
+     *      الحالية == المتوقعة (expectedRefunded) وحين لا يتجاوز السقف —
+     *      فيُسرلَز التزامن: فائز واحد لكل تقدّم، والخاسر يعيد القراءة.
+     *  [1] إدراج نية الاسترداد (entries الدقيقة + tx الحتمي) مشروطاً بنجاح
+     *      نفس الـbatch — فلا توجد حالة «حارس بلا نية» ولا «نية بلا حارس».
+     *      قيد UNIQUE(donation_id, cumulative_cents) يمنع نيتين لنفس نقطة
+     *      التفتيش (حدثان مختلفان بنفس التراكمي تحت التزامن).
+     *
+     * النتائج:
+     *  - 'claimed'  ⇒ رُبح الحارس والنية معاً (الخطوة التالية: ledger.post).
+     *  - 'conflict' ⇒ تقدّم متزامن آخر (أعد القراءة الطازجة وأعد الحساب).
+     *  - 'over_cap' ⇒ السقف يرفض (لا إعادة — تجاوز حقيقي للأصل).
+     *  - 'invalid'  ⇒ مدخلات غير متسقة (بلا أي كتابة).
      */
-    async claimRefund(id: number, amountCents: number): Promise<boolean> {
-        if (!Number.isInteger(amountCents) || amountCents <= 0) return false;
-        const res = await this.db.prepare(
-            `UPDATE ${this.tableName} SET refunded_cents = refunded_cents + ?
-             WHERE id = ? AND refunded_cents + ? <= amount_cents`
-        ).bind(amountCents, id, amountCents).run();
-        return ((res.meta as { changes?: number } | undefined)?.changes ?? 0) === 1;
+    async claimRefundIntent(params: {
+        donationId: number;
+        expectedRefunded: number;
+        cumulative: number;
+        incremental: number;
+        eventId: string;
+        txId: string;
+        entriesJson: string;
+    }): Promise<RefundClaimResult> {
+        const { donationId, expectedRefunded, cumulative, incremental, eventId, txId, entriesJson } = params;
+        if (
+            !Number.isInteger(donationId) || donationId <= 0 ||
+            !Number.isInteger(expectedRefunded) || expectedRefunded < 0 ||
+            !Number.isInteger(cumulative) || cumulative <= 0 ||
+            !Number.isInteger(incremental) || incremental <= 0 ||
+            incremental !== cumulative - expectedRefunded ||
+            typeof eventId !== 'string' || eventId.length === 0 ||
+            typeof txId !== 'string' || txId.length === 0 ||
+            typeof entriesJson !== 'string' || entriesJson.length === 0
+        ) {
+            return 'invalid';
+        }
+
+        let results: Array<{ success: boolean; meta: { changes?: number } }>;
+        try {
+            results = await this.db.batch([
+                this.db.prepare(
+                    `UPDATE ${this.tableName} SET refunded_cents = refunded_cents + ?
+                     WHERE id = ? AND refunded_cents = ? AND refunded_cents + ? <= amount_cents`
+                ).bind(incremental, donationId, expectedRefunded, incremental),
+                this.db.prepare(
+                    `INSERT INTO donation_refund_intents
+                         (donation_id, cumulative_cents, incremental_cents, event_id, tx_id, entries_json, status)
+                     SELECT ?, ?, ?, ?, ?, ?, 'pending'
+                     WHERE (SELECT refunded_cents FROM donations WHERE id = ?) = ?`
+                ).bind(donationId, cumulative, incremental, eventId, txId, entriesJson, donationId, cumulative),
+            ]) as Array<{ success: boolean; meta: { changes?: number } }>;
+        } catch (e) {
+            // تعارض UNIQUE (نية مكررة لنفس الحدث/المعاملة/التفتيش) ⇒
+            // تقدّم متزامن فاز — يعيد المتصل القراءة الطازجة.
+            const msg = e instanceof Error ? e.message : String(e);
+            if (/UNIQUE constraint failed|constraint failed/i.test(msg)) return 'conflict';
+            throw e;
+        }
+
+        const guardChanges = results[0]?.meta?.changes ?? 0;
+        const intentChanges = results[1]?.meta?.changes ?? 0;
+        if (guardChanges === 1 && intentChanges === 1) return 'claimed';
+
+        // الفشل مع بقاء القيمة == المتوقعة ⇒ شرط السقف هو الرافض (لا إعادة).
+        const fresh = await this.db.prepare(
+            `SELECT refunded_cents FROM ${this.tableName} WHERE id = ?`
+        ).bind(donationId).first<{ refunded_cents: number }>();
+        if (fresh !== null && fresh.refunded_cents === expectedRefunded) return 'over_cap';
+        return 'conflict';
     }
 
     /**
-     * تحرير حجز استرداد بعد فشل كتابة القيود (لا يُستدعى عند النجاح).
-     * الطرح يتبادل مع الحجوزات المتزامنة (نفس R يُطرح) فلا يفسد المجاميع —
-     * والاستدعاء فقط في مسار الخطأ قبل أي تسجيل حدث (فيعيد Stripe المحاولة
-     * فيحجز من جديد باتساق).
+     * 8.G — النوايا المعلّقة لتبرع (F1: الاسترداد بعد الانهيار).
      */
-    async releaseRefundClaim(id: number, amountCents: number): Promise<void> {
-        if (!Number.isInteger(amountCents) || amountCents <= 0) return;
+    async pendingRefundIntents(donationId: number): Promise<RefundIntent[]> {
+        const res = await this.db.prepare(
+            `SELECT id, donation_id, cumulative_cents, incremental_cents, event_id, tx_id, entries_json
+             FROM donation_refund_intents
+             WHERE donation_id = ? AND status = 'pending'
+             ORDER BY id`
+        ).bind(donationId).all<RefundIntent>();
+        return res.results ?? [];
+    }
+
+    /**
+     * 8.G — تعليم نية كـمطبّقة بعد كتابة قيودها في ledger (idempotent).
+     */
+    async markRefundIntentApplied(eventId: string): Promise<void> {
         await this.db.prepare(
-            `UPDATE ${this.tableName} SET refunded_cents = refunded_cents - ?
-             WHERE id = ? AND refunded_cents >= ?`
-        ).bind(amountCents, id, amountCents).run();
+            `UPDATE donation_refund_intents SET status = 'applied', applied_at = datetime('now')
+             WHERE event_id = ? AND status = 'pending'`
+        ).bind(eventId).run();
     }
 
     /**

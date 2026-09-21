@@ -32,8 +32,11 @@
  * - التبرع بلا مستلم يكتب شكله الأصلي حرفياً (سياسة 8.C untouched).
  * - تصحيحات REMOTE: capture قطعي لكل تبرع (`donation:capture:<id>` —
  *   نوعا Stripe لنفس الدفع = أثر واحد)؛ الاسترداد بدلالات Stripe
- *   الحقيقية (amount_refunded تراكمي ⇒ الفرق الجديد فقط) مع سقف تراكمي
- *   ذري (migration ‏0023) وتسوية تقريب من التخصيص الأصلي.
+ *   الحقيقية (amount_refunded تراكمي ⇒ الفرق الجديد فقط) مع حارس تراكمي
+ *   CAS + نية قابلة للاسترداد (migration ‏0024) وتسوية تقريب من التخصيص
+ *   الأصلي.
+ * - 8.G: لا حجز عارٍ ولا تحرير يُضيّع الحجز — الحارس والنية في batch واحد
+ *   ذري، والكتابة المالية تُستكمل بعد أي انهيار (recoverPendingRefunds).
  */
 
 import { DonationModel, splitDonationCents } from '../../models/DonationModel';
@@ -386,14 +389,22 @@ export class StripeWebhookService {
      * - R2 (دلالات Stripe الحقيقية): `amount` في Charge هو الأصل، و
      *   ‏`amount_refunded` هو التراكمي — فيُعكَس الفرق الجديد فقط
      *   ‏(R = التراكمي − ما سبق) لا مبلغ الـcharge.
-     * - R3 (السقف التراكمي): حجز ذري `refunded_cents + R <= amount_cents`
-     *   (migration ‏0023) — فيستحيل تجاوز الأصل تحت التزامن. الرفض بلا
-     *   تسجيل حدث (فيعيد Stripe المحاولة باتساق) وبلا أي أثر مالي.
      * - R4 (التسوية): أرجل كل استرداد تُشتق من التخصيص الأصلي الفعلي
      *   (C0/F0 من قيود الالتقاط) باستهداف تراكمي integer-exact —
      *   فتنتهي المجموعات بالضبط إلى الأصل عند الاكتمال (لا خلق/هدر سنتات).
      * - الاسترداد الكامل من الصفر يظل مرآة قيود الالتقاط الأصلية (الأدق —
      *   القيم المسجلة فعلاً لا المحسوبة).
+     *
+     * 8.G (F1+F2 — تحلّ محل R3 القديمة: الحجز العاري أُزيل):
+     * - F1 (crash consistency): الحارس التراكمي + نية الاسترداد (القيود
+     *   الدقيقة + tx الحتمي) يُكتبان في batch واحد ذري — فلا نافذة انهيار
+     *   بين الحجز والكتابة. أي crash قبل ledger.post() يترك نية معلّقة
+     *   تُكملها إعادة إرسال Stripe أو reconciliation (recoverPendingRefunds)
+     *   بنفس القيود تماماً: لا ضياع (heal) ولا تكرار (حارس tx).
+     * - F2 (سباق التراكمي): المطالبة CAS على القيمة المتوقعة — فائز واحد
+     *   لكل تقدّم، والخاسر يعيد القراءة الطازجة ويعيد حساب الدلتا (لا دلتا
+     *   من stale state). UNIQUE(donation_id, cumulative_cents) يمنع نيتين
+     *   لنفس نقطة التفتيش.
      *
      * Σ(debit) − Σ(credit) = 0 (M1) في كل الحالات.
      */
@@ -418,13 +429,6 @@ export class StripeWebhookService {
             return { applied: false, reason: 'invalid_refund_amount', eventId };
         }
 
-        // الزيادة الجديدة فقط فوق ما سبق اعتماده (لا إعادة عكس المعالَج).
-        const incremental = cumulative - donation.refundedCents;
-        if (incremental <= 0) {
-            await this.recordEvent(db, eventId, eventType, null);
-            return { applied: false, reason: 'no_new_refund', eventId };
-        }
-
         // Idempotency على الحدث قبل أي حجز (إعادة الإرسال ⇒ no-op).
         const already = await this.findProcessedEvent(db, eventId);
         if (already) {
@@ -433,45 +437,83 @@ export class StripeWebhookService {
 
         const txId = this.txIdFor(eventId, 'refund');
 
-        const existingTx = await this.ledger.entriesForTx(txId);
-        if (existingTx.length > 0) {
-            await this.recordEvent(db, eventId, eventType, txId);
-            return { applied: false, reason: 'tx_already_applied', eventId, txId };
-        }
+        // (F1) إكمال أي عمل معلّق من انهيار سابق قبل حساب الدلتا — فيُبنى
+        // كل قرار لاحق على قراءة طازجة متسقة مع ledger (مصدر الحقيقة).
+        await this.recoverPendingRefunds(db, donation.id);
 
-        // 8.E: مرآة الالتقاط للاسترداد الكامل من الصفر (القيم المسجلة فعلاً).
-        let entries: Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }> | null = null;
-        const captureTxId = `donation:capture:${donation.id}`;
-        if (donation.recipientUserId != null && donation.refundedCents === 0 && incremental === donation.amountCents) {
-            const captureEntries = await this.ledger.entriesForTx(captureTxId);
-            if (captureEntries.length > 0) {
-                entries = captureEntries.map((row) => ({
-                    account: String(row['account']),
-                    direction: (row['direction'] === 'debit' ? 'credit' : 'debit') as 'debit' | 'credit',
-                    amountCents: Number(row['amount_cents']),
-                }));
+        // (F2) حلقة مطالبة CAS محدودة: كل تكرار يقرأ الحارس الطازج ويحسب
+        // الدلتا منه، والفائز الوحيد يتقدّم — فالتسلسل مكافئ لـ
+        // «التراكمي الجديد − المثبَّت فعلاً» بلا نافذة سباق.
+        for (let attempt = 0; attempt < 12; attempt++) {
+            const fresh = await this.donations.findById(donation.id);
+            if (!fresh) {
+                await this.recordEvent(db, eventId, eventType, null);
+                return { applied: false, reason: 'donation_not_found', eventId };
             }
-        }
-        // (R4) تسوية الاسترداد من التخصيص الأصلي — تنتهي المجموعات إلى
-        // الأصل بالسنت عند الاكتمال (لا خلق/هدر من التقريب).
-        if (entries === null && donation.recipientUserId != null) {
-            entries = await this.buildReconciledRefundEntries(db, donation, incremental);
-        }
-        // المسار الموثوق 8.C (تبرعات المنصة): عكس عبر ساق المنصة/البوابة
-        // بالزيادة الجديدة.
-        entries ??= [
-            { account: RESERVE_ACCOUNT, direction: 'debit', amountCents: incremental },
-            { account: PLATFORM_DONATION_ACCOUNT, direction: 'credit', amountCents: incremental },
-        ];
+            const checkpoint = typeof fresh.refunded_cents === 'number' ? fresh.refunded_cents : 0;
 
-        // (R3) حجز السقف التراكمي ذرياً قبل الكتابة (تبرعات المتنافسين فقط —
-        // مسار 8.C بلا حجز كما كان). الفشل ⇒ رفض بلا تسجيل حدث (إعادة
-        // المحاولة لاحقاً تُعيد الحساب على أساس أحدث) وبلا أي أثر مالي.
-        const needsClaim = donation.recipientUserId != null;
-        if (needsClaim && !(await this.donations.claimRefund(donation.id, incremental))) {
-            return { applied: false, reason: 'refund_exceeds_total', eventId };
+            // الزيادة الجديدة فقط فوق ما سبق اعتماده (لا إعادة عكس المعالَج).
+            const incremental = cumulative - checkpoint;
+            if (incremental <= 0) {
+                await this.recordEvent(db, eventId, eventType, null);
+                return { applied: false, reason: 'no_new_refund', eventId };
+            }
+
+            const existingTx = await this.ledger.entriesForTx(txId);
+            if (existingTx.length > 0) {
+                await this.recordEvent(db, eventId, eventType, txId);
+                return { applied: false, reason: 'tx_already_applied', eventId, txId };
+            }
+
+            const entries = await this.buildRefundEntries(db, {
+                id: donation.id,
+                amountCents: donation.amountCents,
+                recipientUserId: donation.recipientUserId,
+                refundedCents: checkpoint,
+            }, incremental);
+
+            const claim = await this.donations.claimRefundIntent({
+                donationId: donation.id,
+                expectedRefunded: checkpoint,
+                cumulative,
+                incremental,
+                eventId,
+                txId,
+                entriesJson: JSON.stringify(entries),
+            });
+
+            if (claim === 'claimed') {
+                return this.postClaimedRefund(db, eventId, eventType, donation, txId, entries);
+            }
+            if (claim === 'over_cap') {
+                // تجاوز حقيقي للسقف — بلا تسجيل حدث (إعادة المحاولة لاحقاً
+                // تُعيد الحساب على أساس أحدث) وبلا أي أثر مالي.
+                return { applied: false, reason: 'refund_exceeds_total', eventId };
+            }
+            if (claim === 'invalid') {
+                await this.recordEvent(db, eventId, eventType, null);
+                return { applied: false, reason: 'invalid_refund_amount', eventId };
+            }
+            // 'conflict' ⇒ تقدّم متزامن فاز — أعد القراءة الطازجة وحاول.
         }
 
+        // ازدحام مستمر غير معقول — بلا تسجيل حدث فيعيد Stripe المحاولة.
+        return { applied: false, reason: 'refund_contention', eventId };
+    }
+
+    /**
+     * كتابة قيود استرداد مُطالَب به (F1): النية تضمن إكمالاً آمناً بعد أي
+     * انهيار — فشل الكتابة يُبقي النية معلّقة (لا تحرير يُضيّع الحجز) لتكملها
+     * recoverPendingRefunds أو إعادة الإرسال بنفس القيود تماماً.
+     */
+    private async postClaimedRefund(
+        db: D1Database,
+        eventId: string,
+        eventType: string,
+        donation: { id: number; amountCents: number; competitionId: number | null },
+        txId: string,
+        entries: Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }>
+    ): Promise<WebhookEventResult> {
         try {
             const result = await this.ledger.post({
                 txId,
@@ -482,23 +524,23 @@ export class StripeWebhookService {
             });
 
             if (!result.applied) {
+                await this.donations.markRefundIntentApplied(eventId);
                 await this.recordEvent(db, eventId, eventType, txId);
                 return { applied: false, reason: 'tx_already_applied', eventId, txId };
             }
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             if (/UNIQUE constraint failed|constraint failed/i.test(msg)) {
+                await this.donations.markRefundIntentApplied(eventId);
                 await this.recordEvent(db, eventId, eventType, txId);
                 return { applied: false, reason: 'tx_already_applied', eventId, txId };
             }
-            // فشل الكتابة ⇒ تحرير الحجز ثم إعادة الرمي (الحدث غير مسجَّل —
-            // إعادة المحاولة تحجز من جديد باتساق؛ لا مال تحرك).
-            if (needsClaim) {
-                await this.donations.releaseRefundClaim(donation.id, incremental);
-            }
+            // خطأ حقيقي ⇒ النية تبقى معلّقة (الحدث غير مسجَّل — إعادة
+            // المحاولة أو reconciliation تكمل بنفس القيود؛ لا مال تحرك).
             throw e;
         }
 
+        await this.donations.markRefundIntentApplied(eventId);
         await this.donations.markRefunded(donation.id);
 
         await this.recordEvent(db, eventId, eventType, txId);
@@ -511,6 +553,157 @@ export class StripeWebhookService {
             competitionId: donation.competitionId,
             amountCents: donation.amountCents,
         };
+    }
+
+    /**
+     * F1 — الاسترداد بعد الانهيار (reconciliation):
+     *  (1) إعادة تشغيل النوايا المعلّقة بقيودها الدقيقة نفسها (idempotent
+     *      عبر حارس tx) — ثم تعليمها مطبّقة وتسجيل أحداثها.
+     *  (2) شفاء الحارس مقابل ledger: إن تجاوز refunded_cents مجموع ما عُكس
+     *      فعلاً (صف قديم بلا نية — حالة الانهيار في الكود السابق) يُنشَر
+     *      الفرق المفقود بمعاملة شفاء حتمية (idempotent بإعادة التشغيل).
+     */
+    private async recoverPendingRefunds(db: D1Database, donationId: number): Promise<void> {
+        const intents = await this.donations.pendingRefundIntents(donationId);
+        for (const intent of intents) {
+            const entries = this.parseIntentEntries(intent.entries_json)
+                ?? await this.buildFallbackRefundEntries(db, donationId, intent.incremental_cents);
+            try {
+                await this.ledger.post({
+                    txId: intent.tx_id,
+                    currency: 'USD',
+                    createdBy: 'system:stripe',
+                    ref: { ref_type: 'donation', ref_id: donationId },
+                    entries,
+                });
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                if (!/UNIQUE constraint failed|constraint failed/i.test(msg)) throw e;
+            }
+            await this.donations.markRefundIntentApplied(intent.event_id);
+            await this.recordEvent(db, intent.event_id, 'charge.refunded', intent.tx_id);
+        }
+
+        // (2) شفاء الحارس مقابل مصدر الحقيقة (ledger).
+        const fresh = await this.donations.findById(donationId);
+        if (!fresh) return;
+        const checkpoint = typeof fresh.refunded_cents === 'number' ? fresh.refunded_cents : 0;
+        if (checkpoint <= 0) return;
+        const reversed = await this.totalReversedCents(db, donationId);
+        const missing = checkpoint - reversed;
+        if (missing <= 0) return;
+
+        const entries = await this.buildFallbackRefundEntries(db, donationId, missing);
+        // الشكل `stripe:refund:…` إلزامي — كل استعلامات التجميع السابقة
+        // (LIKE 'stripe:refund:%') تحتسب هذه الأرجل كعكسيات حقيقية، فيبقى
+        // الشفاء idempotent ولا يُعاد احتساب المفقود مرتين.
+        const healTxId = `stripe:refund:recovery:${donationId}:${checkpoint}`;
+        try {
+            await this.ledger.post({
+                txId: healTxId,
+                currency: 'USD',
+                createdBy: 'system:stripe',
+                ref: { ref_type: 'donation', ref_id: donationId },
+                entries,
+            });
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (!/UNIQUE constraint failed|constraint failed/i.test(msg)) throw e;
+        }
+    }
+
+    /** تحليل قيود النية المخزنة مع تحقق صارم — null ⇒ فاسدة (يُعاد بناؤها). */
+    private parseIntentEntries(
+        raw: string
+    ): Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }> | null {
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            if (!Array.isArray(parsed) || parsed.length < 2) return null;
+            const entries: Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }> = [];
+            let debit = 0;
+            let credit = 0;
+            for (const item of parsed) {
+                if (typeof item !== 'object' || item === null) return null;
+                const rec = item as Record<string, unknown>;
+                if (typeof rec['account'] !== 'string') return null;
+                if (rec['direction'] !== 'debit' && rec['direction'] !== 'credit') return null;
+                if (!Number.isInteger(rec['amountCents']) || (rec['amountCents'] as number) <= 0) return null;
+                const amount = rec['amountCents'] as number;
+                entries.push({ account: rec['account'] as string, direction: rec['direction'], amountCents: amount });
+                if (rec['direction'] === 'debit') debit += amount;
+                else credit += amount;
+            }
+            if (debit !== credit || debit <= 0) return null;
+            return entries;
+        } catch {
+            return null;
+        }
+    }
+
+    /** مجموع ما عُكس فعلاً لهذا التبرع في ledger (مصدر الحقيقة). */
+    private async totalReversedCents(db: D1Database, donationId: number): Promise<number> {
+        const prior = await db
+            .prepare(
+                `SELECT account, direction, COALESCE(SUM(amount_cents), 0) AS s FROM ledger_entries
+                 WHERE ref_type = 'donation' AND ref_id = ? AND tx_id LIKE 'stripe:refund:%'
+                 GROUP BY account, direction`
+            )
+            .bind(donationId)
+            .all<{ account: string; direction: string; s: number }>();
+        let total = 0;
+        for (const r of prior.results ?? []) {
+            if (r.direction === 'credit' && (r.account === PLATFORM_DONATION_ACCOUNT || r.account.startsWith('user:'))) {
+                total += r.s;
+            }
+        }
+        return total;
+    }
+
+    /**
+     * بناء قيود الاسترداد (يُوحّد مسار 8.E القديم: مرآة الالتقاط للاسترداد
+     * الكامل من الصفر، وإلا تسوية R4 — ومسار 8.C البسيط لتبرعات المنصة).
+     */
+    private async buildRefundEntries(
+        db: D1Database,
+        donation: { id: number; amountCents: number; recipientUserId: number | null; refundedCents: number },
+        incremental: number
+    ): Promise<Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }>> {
+        // 8.E: مرآة الالتقاط للاسترداد الكامل من الصفر (القيم المسجلة فعلاً).
+        const captureTxId = `donation:capture:${donation.id}`;
+        if (donation.recipientUserId != null && donation.refundedCents === 0 && incremental === donation.amountCents) {
+            const captureEntries = await this.ledger.entriesForTx(captureTxId);
+            if (captureEntries.length > 0) {
+                return captureEntries.map((row) => ({
+                    account: String(row['account']),
+                    direction: (row['direction'] === 'debit' ? 'credit' : 'debit') as 'debit' | 'credit',
+                    amountCents: Number(row['amount_cents']),
+                }));
+            }
+        }
+        // (R4) تسوية الاسترداد من التخصيص الأصلي — تنتهي المجموعات إلى
+        // الأصل بالسنت عند الاكتمال (لا خلق/هدر من التقريب).
+        if (donation.recipientUserId != null) {
+            return this.buildReconciledRefundEntries(db, donation, incremental);
+        }
+        // المسار الموثوق 8.C (تبرعات المنصة): عكس عبر ساق المنصة/البوابة
+        // بالزيادة الجديدة.
+        return [
+            { account: RESERVE_ACCOUNT, direction: 'debit', amountCents: incremental },
+            { account: PLATFORM_DONATION_ACCOUNT, direction: 'credit', amountCents: incremental },
+        ];
+    }
+
+    /** بديل الشفاء: يعيد تحميل التبرع ثم يبني القيود (للنية الفاسدة/الشفاء). */
+    private async buildFallbackRefundEntries(
+        db: D1Database,
+        donationId: number,
+        incremental: number
+    ): Promise<Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }>> {
+        const row = await this.donations.findById(donationId);
+        const recipient = row?.recipient_user_id ?? null;
+        const total = typeof row?.amount_cents === 'number' ? row.amount_cents : 0;
+        const checkpoint = typeof row?.refunded_cents === 'number' ? row.refunded_cents : 0;
+        return this.buildRefundEntries(db, { id: donationId, amountCents: total, recipientUserId: recipient, refundedCents: checkpoint }, incremental);
     }
 
     /**

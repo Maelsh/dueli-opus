@@ -20,8 +20,10 @@ import type { StripeEventShape } from '../../../lib/services/StripeWebhookServic
 const donationsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // Optional auth on every route in this router: donations can be made
-// anonymously, but when a session is present we attach the user so
-// /:id/complete can check ownership (SEC-01).
+// anonymously, but when a session is present we attach the user.
+// NOTE (SEC-01 closed, 8.G): there is NO manual completion route — the Stripe
+// webhook (POST /api/donations/webhook) is the only payment completion
+// authority. No client may ever set payment_status → completed.
 donationsRoutes.use('*', authMiddleware({ required: false }));
 
 /**
@@ -229,71 +231,6 @@ donationsRoutes.post('/', async (c) => {
         return c.json({
             success: false,
             error: { message: 'Failed to create donation' }
-        }, 500);
-    }
-});
-
-/**
- * POST /api/donations/:id/complete
- * SEC-01 (docs/12-SECURITY-REMEDIATION.md): legacy manual completion.
- * NO LONGER PUBLIC — requires auth and the caller must own the donation.
- * The supported path is the Stripe webhook (POST /api/donations/webhook);
- * this route stays for non-Stripe methods (e.g. manual bank transfer) where
- * there is no webhook, but it can never complete someone else's donation.
- */
-donationsRoutes.post('/:id/complete', authMiddleware({ required: true }), async (c) => {
-    try {
-        const user = c.get('user') as any;
-        const donationId = parseInt(c.req.param('id') || '0');
-        const body = await c.req.json();
-        const { transaction_id } = body;
-
-        if (!transaction_id) {
-            return c.json({
-                success: false,
-                error: { message: 'Transaction ID is required' }
-            }, 400);
-        }
-
-        const donationModel = new DonationModel(c.env.DB);
-        const existing = await donationModel.findById(donationId);
-
-        if (!existing) {
-            return c.json({
-                success: false,
-                error: { message: 'Donation not found' }
-            }, 404);
-        }
-
-        // Ownership check: only the donor (when the donation has an owner)
-        // may complete it manually.
-        if (existing.user_id != null && existing.user_id !== user?.id) {
-            console.warn(`[Donations] forbidden manual complete: user=${user?.id} donation=${donationId} owner=${existing.user_id}`);
-            return c.json({
-                success: false,
-                error: { message: 'Forbidden' }
-            }, 403);
-        }
-
-        console.warn(`[Donations] manual complete: user=${user?.id} donation=${donationId} (prefer Stripe webhook for stripe/card)`);
-        const donation = await donationModel.markCompleted(donationId, transaction_id);
-
-        if (!donation) {
-            return c.json({
-                success: false,
-                error: { message: 'Donation not found' }
-            }, 404);
-        }
-
-        return c.json({
-            success: true,
-            data: donation
-        });
-    } catch (error) {
-        console.error('Complete donation error:', error);
-        return c.json({
-            success: false,
-            error: { message: 'Failed to complete donation' }
         }, 500);
     }
 });

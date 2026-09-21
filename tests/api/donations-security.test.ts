@@ -58,7 +58,7 @@ describe('donations payment methods', () => {
     });
 });
 
-describe('POST /api/donations/:id/complete (SEC-01)', () => {
+describe('POST /api/donations/:id/complete (SEC-01 — route deleted)', () => {
     let db: FakeD1;
     let ownerSession: string;
     let strangerSession: string;
@@ -108,26 +108,30 @@ describe('POST /api/donations/:id/complete (SEC-01)', () => {
         );
     }
 
-    it('returns 401 without authentication (no longer public)', async () => {
+    // SEC-01 acceptance criterion (docs/12): the manual completion route no
+    // longer exists. The Stripe webhook is the only completion authority.
+    // Every variant — anonymous, stranger, owner, missing tx — must 404,
+    // and the donation must stay pending (no client-driven state change).
+    it('returns 404 without authentication (route gone, not merely guarded)', async () => {
         const res = await complete(undefined, 'tx-public');
-        expect(res.status).toBe(401);
-    });
-
-    it("returns 403 when the caller doesn't own the donation", async () => {
-        const res = await complete(strangerSession, 'tx-evil');
-        expect(res.status).toBe(403);
-        // donation must still be pending
+        expect(res.status).toBe(404);
         expect(db.donations[0].payment_status).toBe('pending');
     });
 
-    it('lets the owner complete with a transaction id', async () => {
-        const res = await complete(ownerSession, 'tx-legit');
-        expect(res.status).toBe(200);
-        expect(db.donations[0].payment_status).toBe('completed');
-        expect(db.donations[0].transaction_id).toBe('tx-legit');
+    it('returns 404 for a stranger (no ownership path exists anymore)', async () => {
+        const res = await complete(strangerSession, 'tx-evil');
+        expect(res.status).toBe(404);
+        expect(db.donations[0].payment_status).toBe('pending');
     });
 
-    it('returns 400 without a transaction id', async () => {
+    it('returns 404 even for the owner with a transaction id (no manual completion)', async () => {
+        const res = await complete(ownerSession, 'tx-legit');
+        expect(res.status).toBe(404);
+        expect(db.donations[0].payment_status).toBe('pending');
+        expect(db.donations[0].transaction_id).toBeNull();
+    });
+
+    it('returns 404 without a transaction id (no validation path — no route)', async () => {
         const res = await app.request(
             `/api/donations/${donationId}/complete`,
             {
@@ -137,6 +141,6 @@ describe('POST /api/donations/:id/complete (SEC-01)', () => {
             },
             env(db)
         );
-        expect(res.status).toBe(400);
+        expect(res.status).toBe(404);
     });
 });

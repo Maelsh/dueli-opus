@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-21T15:25:24.163Z",
-  "total": 188,
+  "generatedAt": "2026-09-21T16:59:07.410Z",
+  "total": 187,
   "routes": [
     {
       "method": "GET",
@@ -784,13 +784,6 @@
       "path": "/api/donations",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
-      "file": "src/modules/api/donations/routes.ts"
-    },
-    {
-      "method": "POST",
-      "path": "/api/donations/:id/complete",
-      "classification": "AUTHENTICATED",
-      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
     },
     {
