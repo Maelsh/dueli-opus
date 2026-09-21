@@ -83,8 +83,8 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                     </h2>
                     <select id="withdrawFilterStatus" onchange="loadWithdrawals()" class="px-3 py-1.5 text-sm rounded-lg border dark:border-gray-600 bg-transparent">
                         <option value="">All</option>
-                        <option value="pending" selected>Pending</option>
-                        <option value="completed">Completed</option>
+                        <option value="requested" selected>Requested</option>
+                        <option value="paid">Paid</option>
                         <option value="rejected">Rejected</option>
                     </select>
                 </div>
@@ -216,14 +216,14 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
             document.getElementById('withdrawQueueList').innerHTML = list.length === 0
                 ? '<p class="text-center text-gray-400 py-4">No withdrawal requests.</p>'
                 : list.map(r => {
-                    const statusColor = { pending: 'text-amber-500', processing: 'text-blue-500', completed: 'text-emerald-500', rejected: 'text-red-500' }[r.status] || '';
+                    const statusColor = { requested: 'text-amber-500', approved: 'text-blue-500', paid: 'text-emerald-500', rejected: 'text-red-500' }[r.status] || '';
                     return '<div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl">' +
                         '<div><p class="font-bold text-base">$' + parseFloat(r.amount).toFixed(2) + ' <span class="text-xs text-gray-400">· ' + r.payment_method + '</span></p>' +
                         '<p class="text-xs text-gray-500">' + (r.display_name || r.username) + ' · ' + new Date(r.created_at).toLocaleDateString() + '</p>' +
                         (r.payment_details ? '<p class="text-xs text-gray-400 truncate max-w-xs">' + r.payment_details + '</p>' : '') + '</div>' +
                         '<div class="flex items-center gap-2">' +
                         '<span class="font-bold text-sm ' + statusColor + ' capitalize">' + r.status + '</span>' +
-                        (r.status === 'pending' ?
+                        (r.status === 'requested' ?
                             '<button onclick="openApproveModal(' + r.id + ')" class="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>' +
                             '<button onclick="openRejectModal(' + r.id + ')" class="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700">Reject</button>'
                             : '') +

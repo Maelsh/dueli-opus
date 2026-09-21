@@ -637,6 +637,15 @@ export const en = {
     donation_failed: 'Your donation did not go through',
     donation_refunded: 'This donation was refunded',
 
+    // Withdrawals — documented lifecycle (8.D): requested → approved → paid | rejected
+    withdrawals: {
+        requested: 'New withdrawal request pending admin review',
+        approved: 'Withdrawal request approved by admin',
+        rejected: 'Withdrawal request rejected and the held amount returned to your balance',
+        min_amount: 'Minimum withdrawal amount is $50',
+        insufficient_balance: 'Your available balance does not cover the requested amount',
+    },
+
     // Reports Page
     report_type: 'Report Type',
     report_inappropriate_desc: 'Offensive or harmful content',
