@@ -1,3 +1,11 @@
+## 2026-09-21 — 8.E تصحيح: partial refund لتبرع المتنافس (PR #41)
+
+- الخلل: `processRefund()` للاسترداد الجزئي من تبرع مقسّم كان يستخدم fallback المنصة (مدين البوابة/دائن المنصة) — متوازن حسابياً لكنه يُبقي الصافي المسترد منسوباً للمتنافس خطأً.
+- الإصلاح (في `StripeWebhookService.processRefund` فقط): الاسترداد الجزئي (`recipientUserId != null` و`refundAmount < amountCents`) يعكس نفس سياسة التقسيم على مبلغ الاسترداد R عبر `splitDonationCents(R, pct)` بنفس `getPlatformSharePercentage()` — مدين البوابة R + دائن المنصة F(R) + دائن المتنافس N(R)، integer cents، بلا floating-point، بلا سياسة جديدة. الاسترداد الكامل ما زال مرآة قيود الـcapture الأصلية. الـidempotency (`stripe:refund:<eventId>`) محفوظة.
+- الاختبارات: ‏8b (جزئي 2500 من 10000 ⇒ ‏500/2000 + أرصدة 6000/1500 + ثابت 0) و8c (تكرار نفس الحدث 3× ⇒ أثر واحد) في `tests/api/donations.test.ts`؛ انحدار الاسترداد الكامل (8) سليم.
+- التحقق: donations ‏12/12 ✅ + `npm test` 438/438 ✅ + ‏`tsc` ✅ + ‏`build` ✅ + تكامل ‏`ledger` + ‏`schema-contract` 31/31 ✅.
+- بلا migration/CI/dependencies/سياسة — ملفان فقط: `src/lib/services/StripeWebhookService.ts` + `tests/api/donations.test.ts` (+ هذا السجل + `PLAN-STATUS.md`).
+
 ## 2026-09-21 — 8.E: التبرعات للمتنافسين (فرع `feat/money-donations`)
 
 - النطاق: المشاهد يتبرع لمتنافس (مستلم + سياق بث اختياري) بأثر مالي حصري عبر `LedgerService` — لا رصيد موازٍ، لا مسار مالي ثانٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService` (استُخدم `post()` كما هو)، لا CI/dependencies، لا Production deployment/migration/merge.

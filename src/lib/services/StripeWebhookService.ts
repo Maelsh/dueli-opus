@@ -372,8 +372,9 @@ export class StripeWebhookService {
      * تبرع لمتنافس (8.E): الاسترداد الكامل يعكس قيود الالتقاط الأصلية
      * قيداً بقيد (مرآة معكوسة الاتجاه من `stripe:capture:<event>` المخزّن
      * في `donations.transaction_id`) — فيعود الصافي للمتنافس والرسوم
-     * للمنصة بدقة السنت، والثابت 0. الاسترداد الجزئي لتبرع مقسّم يبقى على
-     * مسار 8.C (عكس عبر ساق المنصة/البوابة — متوازن وثابته 0).
+     * للمنصة بدقة السنت، والثابت 0. الاسترداد الجزئي يعكس نفس سياسة
+     * التقسيم على مبلغ الاسترداد R: مدين البوابة R + دائن المنصة F(R) +
+     * دائن المتنافس N(R) عبر `splitDonationCents` (لا fallback المنصة).
      *
      * Σ(debit) − Σ(credit) = 0 (M1) في كل الحالات.
      */
@@ -415,6 +416,23 @@ export class StripeWebhookService {
                     direction: (row['direction'] === 'debit' ? 'credit' : 'debit') as 'debit' | 'credit',
                     amountCents: Number(row['amount_cents']),
                 }));
+            }
+        }
+        // 8.E تصحيح: الاسترداد الجزئي لتبرع مقسّم يعكس نفس سياسة التقسيم
+        // الأصلية على مبلغ الاسترداد (لا fallback المنصة الذي يُبقي الصافي
+        // للمتنافس خطأً): مدين البوابة R + دائن المنصة F(R) + دائن المتنافس
+        // ‏N(R)، حيث F(R)+N(R) === R دائماً عبر splitDonationCents بنفس نسبة
+        // ‏platform_share_percentage. الأرجل الصفرية تُسقط (LedgerService
+        // يرفض غير الموجب) والتوازن محفوظ لأن R>0 مضمون من الاستخراج.
+        if (entries === null && donation.recipientUserId != null && refundAmount < donation.amountCents) {
+            const pct = await this.settings.getPlatformSharePercentage();
+            const split = splitDonationCents(refundAmount, pct);
+            entries = [{ account: RESERVE_ACCOUNT, direction: 'debit', amountCents: refundAmount }];
+            if (split.feeCents > 0) {
+                entries.push({ account: PLATFORM_DONATION_ACCOUNT, direction: 'credit', amountCents: split.feeCents });
+            }
+            if (split.netCents > 0) {
+                entries.push({ account: `user:${donation.recipientUserId}`, direction: 'credit', amountCents: split.netCents });
             }
         }
         // المسار الموثوق 8.C (تبرعات المنصة، أو احتياطي آمن لأي حالة حدّية):
