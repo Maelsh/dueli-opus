@@ -967,23 +967,24 @@ class FakeStmt {
             return ok({ last_row_id: newId, changes: 1 });
         }
 
-        // INSERT INTO donations (user_id, amount, currency, payment_method,
-        //  [payment_status='pending' literal], donor_name, donor_email,
-        //  message, is_anonymous, created_at)
+        // INSERT INTO donations (user_id, amount, amount_cents, currency,
+        //  payment_method, [payment_status='pending' literal], donor_name,
+        //  donor_email, message, is_anonymous, created_at)
         if (q.startsWith('insert into donations')) {
             const newId = ++this.db.donationSeq;
             this.db.donations.push({
                 id: newId,
                 user_id: p[0],
                 amount: p[1],
-                currency: p[2],
-                payment_method: p[3],
+                amount_cents: p[2],
+                currency: p[3],
+                payment_method: p[4],
                 payment_status: 'pending',
                 transaction_id: null,
-                donor_name: p[4],
-                donor_email: p[5],
-                message: p[6],
-                is_anonymous: !!p[7],
+                donor_name: p[5],
+                donor_email: p[6],
+                message: p[7],
+                is_anonymous: !!p[8],
                 created_at: new Date().toISOString()
             });
             return ok({ last_row_id: newId, changes: 1 });

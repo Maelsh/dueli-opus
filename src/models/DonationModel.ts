@@ -14,6 +14,11 @@ export interface Donation {
     id: number;
     user_id: number | null;
     amount: number;
+    /**
+     * المبلغ المالي المعتمد بالسنت (8.C). عدد صحيح فقط — هذا هو المصدر
+     * المالي للتبرع، بينما `amount` (REAL dollars) يبقى للعرض فقط.
+     */
+    amount_cents: number;
     currency: string;
     payment_method: string;
     payment_status: 'pending' | 'completed' | 'failed' | 'refunded';
@@ -52,16 +57,22 @@ export class DonationModel extends BaseModel<Donation> {
 
     /**
      * Create - required by BaseModel
+     *
+     * 8.C: `amount_cents` (integer cents) هو المبلغ المالي المعتمد. يُحسب
+     * مرة واحدة عند الإنشاء من `amount` الدولاري (مصدر العميل) — بعدها كل
+     * مسار الدفع يقرأ `amount_cents` فقط، فلا فاصلة عائمة في أي حساب مالي.
      */
     async create(data: Partial<Donation>): Promise<Donation> {
         const now = new Date().toISOString();
+        const amountCents = this.toCents(data.amount);
         const result = await this.db.prepare(`
             INSERT INTO ${this.tableName} 
-            (user_id, amount, currency, payment_method, payment_status, donor_name, donor_email, message, is_anonymous, created_at)
-            VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+            (user_id, amount, amount_cents, currency, payment_method, payment_status, donor_name, donor_email, message, is_anonymous, created_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         `).bind(
             data.user_id || null,
-            data.amount,
+            data.amount ?? 0,
+            amountCents,
             data.currency || 'USD',
             data.payment_method,
             data.donor_name || null,
@@ -75,6 +86,16 @@ export class DonationModel extends BaseModel<Donation> {
             return (await this.findById(result.meta.last_row_id))!;
         }
         throw new Error('Failed to create donation');
+    }
+
+    /**
+     * تحويل مبلغ دولاري (رقم العميل) إلى سنتات صحيحة مرة واحدة عند
+     * الإنشاء. `Math.round` هنا فقط (حدود العميل)، وليس داخل أي حساب مالي
+     * لاحق — كل المسارات اللاحقة تستهلك `amount_cents` كعدد صحيح.
+     */
+    private toCents(amount: number | undefined | null): number {
+        if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return 0;
+        return Math.round(amount * 100);
     }
 
     /**
@@ -134,6 +155,13 @@ export class DonationModel extends BaseModel<Donation> {
      */
     async markFailed(id: number): Promise<Donation | null> {
         return this.update(id, { payment_status: 'failed' });
+    }
+
+    /**
+     * Mark donation as refunded (8.C — refund ⇒ قيود عكسية في ledger)
+     */
+    async markRefunded(id: number): Promise<Donation | null> {
+        return this.update(id, { payment_status: 'refunded' });
     }
 
     /**

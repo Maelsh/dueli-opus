@@ -53,6 +53,7 @@ const EXPECTED_MIGRATIONS = [
     '0017_ratings_competition_competitor_idx.sql',
     '0018_competitions_elo_applied_at.sql',
     '0019_ledger_entries.sql',
+    '0020_donations_stripe_cents.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -69,6 +70,7 @@ const EXPECTED_TABLES = [
     'donations',
     'chunk_keys',
     'ledger_entries',
+    'stripe_webhook_events',
 ];
 
 let migrationOutput = '';
@@ -144,8 +146,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 20 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(20);
+    it('has exactly 21 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(21);
     });
 
     it('matches the full expected migration file name list', () => {

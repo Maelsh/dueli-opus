@@ -1,5 +1,18 @@
 
 
+## 8.C — مدفوعات Stripe · فرع `feat/money-stripe-payments`
+
+- 🔧 منفَّذ محلياً (من الرأس 6252ced على `feat/money-earnings-split`). النطاق: مسار الدفع الفعلي يربط Stripe webhook بـ`LedgerService` كمصدر وحيد للأثر المالي — لا مسار مالي موازٍ، لا تعديل لسياسة 8.B (20/80) ولا لـ`LedgerService` semantics، لا CI/dependencies، لا Production deployment/migration/merge.
+  - **Migration 0020**: `donations.amount_cents INTEGER NOT NULL CHECK(>=0)` (المبلغ المالي المعتمد؛ `amount` REAL يبقى للعرض) + جدول `stripe_webhook_events(event_id UNIQUE, event_type, processed_at, tx_id)` — **لا أي عمود مبلغ** (tx_id مرجع فقط). تُطبَّق على قاعدة فارغة وتُفرض قيودها فعلياً.
+  - **`StripeWebhookService`**: معالجة موقّعة → قيود ledger متوازنة عبر `LedgerService.post()` فقط. مدعوم: نجاح الدفع (capture)، refund (reversal معكوس متوازن)، فشل (بلا قيود دائنة)، غير مدعوم (200 بلا أثر). **idempotency بطبقتين**: `UNIQUE(event_id)` + فحص `tx_id` في ledger — نفس الحدث 10× ⇒ أثر مالي واحد.
+  - **عدم الثقة**: المبلغ يُطابَق دائماً مع `donations.amount_cents` — التعارض ⇒ رفض بلا أثر. كل المبالغ integer cents.
+  - **التحقق من التوقيع أولاً** (400 قبل أي كتابة)؛ **إصلاح حتمي**: `csrfProtection()` كان يحظر webhook الحقيقي (Stripe لا يرسل Origin/Referer/CSRF) — استثناء محصور بالمسار فقط.
+  - **i18n**: 8 مفاتيح ar+en للمدفوعات (مختلفان)؛ `donate-page.ts` يعرض النتيجة المترجمة بدل النصوص الحرفية.
+  - **الأمان**: لا أسرار Stripe في المستودع أو التاريخ. مسار webhook PUBLIC مع in-handler HMAC check (صحيح للـwebhook).
+  - **الاختبارات**: 22 جديدة (15 ledger-level + 7 route-level status codes + 1 CSRF reachability). التحديثات: `schema-contract` (21 migration + الجدول) و`fake-d1` (`amount_cents`).
+  - **التحقق**: `npm test` 419/419 ✅ + `tsc` ✅ + `build` ✅ + `routes:inventory` 186 ✅. الحالة 🔧 (تحقق محلي) ريثما تكتمل G1–G8 بالمراجعة الخارجية — بلا دمج.
+  - **التسريب (G8)**: revert الـcommit + حذف migration 0020 (جدول جديد لا يُلامسه migrations سابقة) + إزالة service/i18n/routes/tests.
+
 ## 8.B — الأرباح وحصص المنافسة · فرع `feat/money-earnings-split`
 
 - 🔧 منفَّذ محلياً على `feat/money-ledger-invariant` (الرأس bd520e9). النطاق: `LivePayoutEngine.finalizePayouts` يوزع عبر `LedgerService` فقط (بلا earnings/financial_log كبديل)؛ `splitPayoutCents` بـ integer cents وقاعدة تقريب موثقة؛ idempotency داخل SQL (`claimFinalized` + إدراج شرطي + `UNIQUE(tx_id, account)`)؛ i18n `earnings.{total,pending,per_competition}` + `earnings_nav` ar+en؛ اختبار `tests/api/earnings-split.test.ts` (8/8). السياسة الفعلية: 20% منصة + 80% pool حسب التقييمات، والتساوي عند tie/no ratings (لا 70/25/5). التحقق: `npm test` 396/396 + `tsc` + `build` ✅ محلياً؛ بانتظار PR/مراجعة الوكيل الخارجي (بلا دمج، بلا Production D1).
