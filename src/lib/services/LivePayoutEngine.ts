@@ -34,65 +34,64 @@ export function splitPayoutCents(
         throw new Error('totalCents must be a non-negative integer');
     }
     const pct = Number.isFinite(platformPercentage) ? Math.min(100, Math.max(0, platformPercentage)) : 20;
-    // الحساب بالكامل integer-exact: لا float، لا tolerance، لا 1e-9.
-    // 1) المنصة: حصة صحيحة = (totalCents * pct) / 100 مقرّبة إلى الأسفل
-    //    مع باقي deterministic يذهب للمنصة أولاً.
-    // 2) competitor pool = totalCents - platformCents.
-    // 3) المتنافسان: pool يُقسَّم حسب نسبة متوسطات التقييمات.
-    //    - التعادل/غياب التقييمات (المجموع صفر) ⇒ تقاسيم متساوية.
-    // 4) الباقي من تقسيم المتنافسين يوزع deterministic: الأعلى تقييماً أولاً، ثم الآخر.
-    const platformBase = Math.trunc((totalCents * pct) / 100);
-    const pool = totalCents - platformBase;
-    let platformCents = platformBase;
 
+    // الحساب المالي بالكامل integer-exact:
+    // - كل المدخلات integer (totalCents، pct، التقييمات).
+    // - الضرب يعطي integer ضمن ±(2^53-1) (لدينا ≤ 10^7 × 100 = 10^9،安全).
+    // - القسمة تُحسب بـ: quotient = (numerator - (numerator % denominator)) / denominator
+    //   حيث numerator % denominator يعطي الباقي الصحيح، ثم القسمة تقبل بدون باقٍ.
+    // - لا tolerance، لا 1e-9، لا Math.floor/ceil مع عشري، لا floating-point مالي.
+
+    // 1) حصة المنصة: platformNumerator / 100
+    const platformNumerator = totalCents * pct;
+    const platformRem = platformNumerator % 100;
+    const platformBase = (platformNumerator - platformRem) / 100;   // integer-exact
+    const pool = totalCents - platformBase;                         // integer
+
+    // تطبيع التقييمات (لا سالب، لا NaN)
     const creatorRatingNorm = Math.max(0, creatorRating || 0);
     const opponentRatingNorm = Math.max(0, opponentRating || 0);
     const totalRatings = creatorRatingNorm + opponentRatingNorm;
 
     let creatorBase: number;
     let opponentBase: number;
+
     if (totalRatings === 0) {
-        // لا تقييمات أو تعادل ⇒ التقاسم المتساوي للـpool.
-        creatorBase = Math.trunc(pool / 2);
-        opponentBase = Math.trunc(pool / 2);
+        // tie / لا تقييمات ⇒ تقاسم متساوٍ للـpool
+        const halfRem = pool % 2;
+        creatorBase = (pool - halfRem) / 2;
+        opponentBase = (pool - halfRem) / 2;
     } else {
-        const creatorBaseExact = (pool * creatorRatingNorm) / totalRatings;
-        const opponentBaseExact = (pool * opponentRatingNorm) / totalRatings;
-        creatorBase = Math.trunc(creatorBaseExact);
-        opponentBase = Math.trunc(opponentBaseExact);
+        // 2) تقسيم pool حسب نسب التقييمات
+        const creatorNum = pool * creatorRatingNorm;
+        const creatorRem = creatorNum % totalRatings;
+        creatorBase = (creatorNum - creatorRem) / totalRatings;     // integer-exact
+
+        const opponentNum = pool * opponentRatingNorm;
+        const opponentRem = opponentNum % totalRatings;
+        opponentBase = (opponentNum - opponentRem) / totalRatings;  // integer-exact
     }
 
-    // ترتيب الباقي deterministic: المنصة أولاً، ثم الأعلى تقييماً، ثم الآخر.
-    const creatorFirst = creatorRatingNorm >= opponentRatingNorm;
-    const priority: ('platform' | 'creator' | 'opponent')[] = [];
-    priority.push('platform');
-    if (creatorFirst) {
-        priority.push('creator', 'opponent');
-    } else {
-        priority.push('opponent', 'creator');
-    }
-
-    let remainder = totalCents - platformCents - creatorBase - opponentBase;
+    // 3) الباقي الكلي (يضم platformRem + creatorRem + opponentRem (أو halfRem)) يُوزَّع deterministic
+    let platformCents = platformBase;
     let creatorCents = creatorBase;
     let opponentCents = opponentBase;
+    let remainder = totalCents - platformCents - creatorCents - opponentCents;
 
-    const distributeOne = (): boolean => {
-        if (remainder <= 0) return false;
+    // ترتيب التوزيع: المنصة أولاً، ثم الأعلى تقييماً، ثم الآخر
+    const creatorFirst = creatorRatingNorm >= opponentRatingNorm;
+    const order: Array<'platform' | 'creator' | 'opponent'> = ['platform'];
+    order.push(creatorFirst ? 'creator' : 'opponent');
+    order.push(creatorFirst ? 'opponent' : 'creator');
+
+    let idx = 0;
+    while (remainder > 0) {
+        const key = order[idx % order.length];
+        idx += 1;
         remainder -= 1;
-        return true;
-    };
-    const addOne = (key: 'platform' | 'creator' | 'opponent'): void => {
         if (key === 'platform') platformCents += 1;
         else if (key === 'creator') creatorCents += 1;
         else opponentCents += 1;
-    };
-
-    while (remainder > 0) {
-        for (const key of priority) {
-            if (!distributeOne()) break;
-            addOne(key);
-            if (remainder <= 0) break;
-        }
     }
 
     return { totalCents, platformCents, creatorCents, opponentCents, platformPercentage: pct };
