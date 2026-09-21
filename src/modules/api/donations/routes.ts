@@ -136,7 +136,10 @@ donationsRoutes.post('/', async (c) => {
             }
         }
 
-        // 8.E: سياق البث (اختياري) — يجب أن يكون منافسة موجودة عند تمريره.
+        // 8.E + تصحيح REMOTE 5: سياق البث — المنافسة يجب أن تكون live
+        // والمستلم أحد متنافسَيها (creator/opponent)، والمستلم إلزامي مع
+        // سياق البث (حدث SSE يحتاج متنافساً). الرفض هنا قبل أي أثر: لا صف
+        // ولا مال ولا Stripe ولا SSE — برسالة i18n واحدة.
         let liveCompetitionId: number | null = null;
         if (competition_id !== undefined && competition_id !== null) {
             liveCompetitionId = Number.parseInt(String(competition_id), 10);
@@ -152,6 +155,16 @@ donationsRoutes.post('/', async (c) => {
                     success: false,
                     error: { message: t('not_found', lang) }
                 }, 404);
+            }
+            const contextOk =
+                recipientId !== null &&
+                competition.status === 'live' &&
+                (recipientId === competition.creator_id || recipientId === competition.opponent_id);
+            if (!contextOk) {
+                return c.json({
+                    success: false,
+                    error: { message: t('donations.invalid_competition', lang) }
+                }, 400);
             }
         }
 

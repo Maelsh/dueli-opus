@@ -988,9 +988,53 @@ class FakeStmt {
                 donor_email: p[8],
                 message: p[9],
                 is_anonymous: !!p[10],
+                refunded_cents: 0,
                 created_at: new Date().toISOString()
             });
             return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // 8.E REMOTE fix: atomic refund-allowance claim (migration 0023).
+        // UPDATE donations SET refunded_cents = refunded_cents + ?
+        // WHERE id = ? AND refunded_cents + ? <= amount_cents
+        if (q.startsWith('update donations set refunded_cents = refunded_cents +')) {
+            const [delta, id] = [p[0], p[1]];
+            const donation = this.db.donations.find((d) => d.id === id);
+            if (!donation) return ok({ last_row_id: null, changes: 0 });
+            const base = donation.refunded_cents ?? 0;
+            if (base + delta <= (donation.amount_cents ?? 0)) {
+                donation.refunded_cents = base + delta;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
+        }
+
+        // 8.E REMOTE fix: release of a refund claim after ledger-write failure.
+        if (q.startsWith('update donations set refunded_cents = refunded_cents -')) {
+            const [delta, id] = [p[0], p[1]];
+            const donation = this.db.donations.find((d) => d.id === id);
+            if (!donation) return ok({ last_row_id: null, changes: 0 });
+            const base = donation.refunded_cents ?? 0;
+            if (base >= delta) {
+                donation.refunded_cents = base - delta;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
+        }
+
+        // 8.E REMOTE fix 1: atomic capture-state claim.
+        // UPDATE donations SET payment_status = 'completed', transaction_id = ?
+        // WHERE id = ? AND payment_status IN ('pending','failed')
+        if (q.startsWith("update donations set payment_status = 'completed', transaction_id = ?")) {
+            const [txId, id] = [p[0], p[1]];
+            const donation = this.db.donations.find((d) => d.id === id);
+            if (!donation) return ok({ last_row_id: null, changes: 0 });
+            if (donation.payment_status === 'pending' || donation.payment_status === 'failed') {
+                donation.payment_status = 'completed';
+                donation.transaction_id = txId;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
         }
 
         // Generic UPDATE donations SET <cols...> WHERE id = ?

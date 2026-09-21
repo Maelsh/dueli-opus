@@ -653,6 +653,7 @@ export const en = {
         min: 'Minimum donation is $1',
         max: 'Dueli sets no maximum donation amount',
         blocked: 'You cannot donate to a user who blocked you',
+        invalid_competition: 'Live donations require a live competition and a competitor in it',
     },
 
     // Reports Page

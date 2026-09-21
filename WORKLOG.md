@@ -1,3 +1,15 @@
+## 2026-09-21 — 8.E تصحيحات REMOTE الخمسة (PR #41)
+
+- RED أولاً: ‏19 اختباراً جديداً سُلّمت حمراء (15 فشل يُظهر كل ثغرة: capture مزدوج [true,true]، قراءة amount الأصلي بدل التراكمي، إسراف 20000 > ‏10000، قبول سياق خاطئ) ثم خضراء.
+- **R1 منع Double Capture**: معرّف حركة قطعي لكل تبرع (`donation:capture:<id>`) — نوعا Stripe لنفس الدفع يتصارعان على نفس tx (الفائز عبر ‏M4 ‏UNIQUE، الخاسر `tx_already_applied`)؛ الترتيب ledger أولاً ثم `claimCapture()` المشروطة (pending/failed→completed) فلا فجوة انهيار.
+- **R2 دلالات Stripe الحقيقية**: `amount_refunded` تراكمي ⇒ الفرق الجديد فقط (R = التراكمي − ‏`refunded_cents`)؛ `amount` fallback للتوافق فقط؛ R‏≤0 ⇒ ‏no-op مسجل.
+- **R3 السقف التراكمي**: `claimRefund()` ذري (`refunded_cents + R <= amount_cents` — migration ‏0023)؛ الرفض بلا تسجيل حدث (إعادة المحاولة باتساق) وبلا أثر؛ تحرير الحجز عند فشل الكتابة فقط.
+- **R4 التسوية**: أرجل كل refund من التخصيص الأصلي الفعلي (C0/F0 من قيود الالتقاط) باستهداف تراكمي integer-exact — المجموعات تنتهي إلى الأصل بالسنت (مُبرهن الحدود + مُختبر)؛ الكامل من الصفر يظل مرآة القيود المسجلة.
+- **R5 سياق المنافسة**: ‏`competition_id` يُقبل فقط مع ‏live + المستلم creator/opponent (+ مستلم إلزامي) وإلا ‏400 `donations.invalid_competition` (ar+en) بلا أي أثر (لا صف/مال/SSE).
+- بلا سياسة جديدة: نفس `platform_share_percentage` ونفس `splitDonationCents`؛ مسار 8.C للمنصة untouched؛ بلا `any` جديد.
+- التحقق: donations ‏31/31 ✅ (×3) + `npm test` 457/457 ✅ + ‏`tsc` ✅ + ‏`build` ✅ + تكامل ‏`ledger` + ‏`schema-contract` 31/31 ✅ + ‏`db:reset` ✅ (24 migration).
+- الملفات: `migrations/0023_donation_refund_tracking.sql`، `src/models/DonationModel.ts` (claimCapture/claimRefund/release + ‏`refunded_cents`)، `src/lib/services/StripeWebhookService.ts`، `src/modules/api/donations/routes.ts`، `src/i18n/ar.ts`، `src/i18n/en.ts`، `tests/api/donations.test.ts`، `tests/api/stripe-webhook-ledger.test.ts` (تحديث tx-id واحد للنظام الجديد)، `tests/helpers/fake-d1.ts` (معالجات الحجز الأمينة)، `tests/integration/schema-contract.test.ts` (24)، `PLAN-STATUS.md`، `WORKLOG.md`.
+
 ## 2026-09-21 — 8.E تصحيح: partial refund لتبرع المتنافس (PR #41)
 
 - الخلل: `processRefund()` للاسترداد الجزئي من تبرع مقسّم كان يستخدم fallback المنصة (مدين البوابة/دائن المنصة) — متوازن حسابياً لكنه يُبقي الصافي المسترد منسوباً للمتنافس خطأً.

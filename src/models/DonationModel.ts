@@ -81,6 +81,12 @@ export interface Donation {
      * سياق البث الحي (8.E). NULL = خارج البث (لا حدث SSE).
      */
     competition_id: number | null;
+    /**
+     * المبلغ المسترد المعتمد تراكمياً بالسنت (8.E تصحيح REMOTE —
+     * migration ‏0023). حارس حجز ذري للسقف التراكمي، لا مصدر حقيقة مالية
+     * (الحقيقة في ledger) — يُحجَز عبر claimRefund() المشروط فقط.
+     */
+    refunded_cents: number;
     amount: number;
     /**
      * المبلغ المالي المعتمد بالسنت (8.C). عدد صحيح فقط — هذا هو المصدر
@@ -273,6 +279,50 @@ export class DonationModel extends BaseModel<Donation> {
      */
     async markRefunded(id: number): Promise<Donation | null> {
         return this.update(id, { payment_status: 'refunded' });
+    }
+
+    /**
+     * حجز capture على مستوى التبرع (إصلاح 1 — منع Double Capture).
+     * انتقال حالة ذري بشرط SQL (عقيدة B5-1/B12): pending/failed → completed
+     * مع تسجيل حدث الفائز. الفائز الوحيد يكمل؛ الخاسر يرى changes=0.
+     * ملاحظة: الحارس المالي الحقيقي هو ledger (tx قطعي لكل تبرع) — هذا
+     * الحارس علامة حالة متسقة فقط، والترتيب دائماً ledger أولاً في الخدمة.
+     */
+    async claimCapture(id: number, transactionId: string): Promise<boolean> {
+        const res = await this.db.prepare(
+            `UPDATE ${this.tableName} SET payment_status = 'completed', transaction_id = ?
+             WHERE id = ? AND payment_status IN ('pending', 'failed')`
+        ).bind(transactionId, id).run();
+        return ((res.meta as { changes?: number } | undefined)?.changes ?? 0) === 1;
+    }
+
+    /**
+     * حجز allowance استرداد (إصلاح 3 — منع Cumulative Over-Refund).
+     * ذري بشرط SQL واحد: يُضاف R فقط حين لا يتجاوز المجموع الأصل —
+     * فيستحيل الإسراف حتى تحت التزامن (لا SELECT-then-INSERT عارٍ).
+     * يعيد true حين رُبح الحجز، false حين الرفض (تجاوز السقف).
+     */
+    async claimRefund(id: number, amountCents: number): Promise<boolean> {
+        if (!Number.isInteger(amountCents) || amountCents <= 0) return false;
+        const res = await this.db.prepare(
+            `UPDATE ${this.tableName} SET refunded_cents = refunded_cents + ?
+             WHERE id = ? AND refunded_cents + ? <= amount_cents`
+        ).bind(amountCents, id, amountCents).run();
+        return ((res.meta as { changes?: number } | undefined)?.changes ?? 0) === 1;
+    }
+
+    /**
+     * تحرير حجز استرداد بعد فشل كتابة القيود (لا يُستدعى عند النجاح).
+     * الطرح يتبادل مع الحجوزات المتزامنة (نفس R يُطرح) فلا يفسد المجاميع —
+     * والاستدعاء فقط في مسار الخطأ قبل أي تسجيل حدث (فيعيد Stripe المحاولة
+     * فيحجز من جديد باتساق).
+     */
+    async releaseRefundClaim(id: number, amountCents: number): Promise<void> {
+        if (!Number.isInteger(amountCents) || amountCents <= 0) return;
+        await this.db.prepare(
+            `UPDATE ${this.tableName} SET refunded_cents = refunded_cents - ?
+             WHERE id = ? AND refunded_cents >= ?`
+        ).bind(amountCents, id, amountCents).run();
     }
 
     /**
