@@ -1,3 +1,12 @@
+## 2026-09-21 — 8.G-F3: non-refundable donation policy (same branch/PR #43)
+
+- Decision (lead): ALL Dueli donations non-refundable once completed, even pre-withdrawal. No full/partial refund, no clawback, no negative, no debt, no platform shortfall.
+- Enforcement: `DONATIONS_NON_REFUNDABLE` (DonationModel) + `processRefund` rejects with `donation_non_refundable` before any financial side effect (event recorded with null tx so Stripe stops retrying; no recovery run). Other Stripe functions untouched.
+- Consent gate: `POST /api/donations` requires `non_refundable_accepted === true` AND `amount_confirmed === true` (400 otherwise); donate-page shows policy + two unchecked boxes, blocks submit unless both checked, sends both flags. No defaults, no implicit consent.
+- i18n: 5 keys (`non_refundable`, `non_refundable_accept`, `non_refundable_required`, `amount_confirm`, `amount_confirm_required`) in ar+en, all differ.
+- Docs: policy section added to `docs/02-DATABASE.md` (no restructuring).
+- Tests: F3A-G RED-first (6 failed pre-fix) then green; old refund-applies tests converted to rejection assertions; creation helpers carry consent flags. Unit 485/485, financial x3 104/104, tsc + build clean. No migration/CI/dependency/prod changes; 20/80, min/max, withdrawals, LedgerService untouched.
+
 ## 2026-09-21 — 8.G: FINAL MONEY GATE correction pass (branch `fix/money-gate-final-remediation`)
 
 - Base: local `b90ca08` (REMOTE base `5e7fcd6` absent from local history — documented in report).

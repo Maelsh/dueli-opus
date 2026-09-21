@@ -253,58 +253,51 @@ describe('8.C Stripe payments → ledger (real SQL via SqliteD1)', () => {
         expect(donation?.payment_status).toBe('failed');
     });
 
-    // ── 6. refund ⇒ قيود عكسية متوازنة وverifyInvariant() = 0 ─────────
-    it('6. refund posts balanced reversal entries, invariant stays 0, net effect 0', async () => {
+    // ── 6. refund ⇒ rejected under the non-refundable policy (8.G-F3) ────
+    it('6. refund is rejected: no reversal entries, balances intact, still completed', async () => {
         const donationId = await seedDonation(db, 40_00);
 
         // أولاً الدفع الناجح.
         const capture = await service.processEvent(db as unknown as D1Database, JSON.parse(captureEvent(donationId, 40_00, 'evt_r_capture')));
         expect(capture.applied).toBe(true);
 
-        // ثم الاسترداد.
+        // ثم محاولة الاسترداد ⇒ مرفوضة بلا أي أثر مالي.
         const refund = await service.processEvent(db as unknown as D1Database, JSON.parse(refundEvent(donationId, 40_00, 'evt_r_refund')));
-        expect(refund.applied).toBe(true);
-        expect(refund.txId).toBe('stripe:refund:evt_r_refund');
+        expect(refund.applied).toBe(false);
+        expect(refund.reason).toBe('donation_non_refundable');
 
-        const refundEntries = await ledger.entriesForTx(refund.txId!);
-        expect(refundEntries).toHaveLength(2);
-        const rDebit = refundEntries.find((e) => e['direction'] === 'debit');
-        const rCredit = refundEntries.find((e) => e['direction'] === 'credit');
-        // عكس القيود الأصلية تماماً.
-        expect(rDebit!['account']).toBe('reserve:gateway');
-        expect(rCredit!['account']).toBe('platform:revenue');
-        expect(rDebit!['amount_cents']).toBe(40_00);
-        expect(rCredit!['amount_cents']).toBe(40_00);
+        const refundEntries = await ledger.entriesForTx('stripe:refund:evt_r_refund');
+        expect(refundEntries).toHaveLength(0);
 
-        // الثابت الكلي = 0 (capture متوازنة + refund متوازنة).
+        // الثابت الكلي = 0 والأرصدة كما بعد الالتقاط تماماً.
         const inv = await ledger.verifyInvariant();
         expect(inv.difference).toBe(0);
 
-        // الأثر الصافي للرصيد صفر: إيراد المنصة عاد كما كان.
         const platformRevenue = await ledger.balance('platform:revenue');
         const gateway = await ledger.balance('reserve:gateway');
-        expect(platformRevenue).toBe(0);
-        expect(gateway).toBe(0);
+        expect(platformRevenue).toBe(40_00);
+        expect(gateway).toBe(-40_00);
 
-        // حالة التبرع تتبع الاسترداد.
+        // الحالة لا تتغيّر (تبقى completed — لا refunded).
         const model = new DonationModel(db as unknown as D1Database);
         const donation = await model.findById(donationId);
-        expect(donation?.payment_status).toBe('refunded');
+        expect(donation?.payment_status).toBe('completed');
     });
 
-    // ── 6b. refund idempotent ─────────────────────────────────────────
-    it('6b. refund event replayed 10 times ⇒ one reversal, no double-reversal', async () => {
+    // ── 6b. refund idempotent (rejected every time) ─────────────────────
+    it('6b. refund event replayed 10 times ⇒ rejected every time, capture only', async () => {
         const donationId = await seedDonation(db, 30_00);
         await service.processEvent(db as unknown as D1Database, JSON.parse(captureEvent(donationId, 30_00, 'evt_rb_cap')));
         for (let i = 0; i < 10; i++) {
-            await service.processEvent(db as unknown as D1Database, JSON.parse(refundEvent(donationId, 30_00, 'evt_rb_ref')));
+            const r = await service.processEvent(db as unknown as D1Database, JSON.parse(refundEvent(donationId, 30_00, 'evt_rb_ref')));
+            expect(r.applied).toBe(false);
         }
         const n = (await db.prepare('SELECT COUNT(*) AS c FROM ledger_entries').first<{ c: number }>())?.c ?? 0;
-        // capture (2) + refund (2) فقط.
-        expect(n).toBe(4);
+        // capture (2) فقط — لا عكسيات إطلاقاً.
+        expect(n).toBe(2);
         const inv = await ledger.verifyInvariant();
         expect(inv.difference).toBe(0);
-        expect(await ledger.balance('platform:revenue')).toBe(0);
+        expect(await ledger.balance('platform:revenue')).toBe(30_00);
     });
 
     // ── 6c. refund بمبلغ يتجاوز الأصل ⇒ رفض ──────────────────────────

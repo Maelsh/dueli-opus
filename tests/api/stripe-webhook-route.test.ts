@@ -169,7 +169,7 @@ describe('8.C POST /api/donations/webhook — route-level status codes', () => {
         expect(after?.payment_status).toBe('failed');
     });
 
-    it('6. refund ⇒ 200, balanced reversal, net zero, refunded status', async () => {
+    it('6. refund ⇒ 200 but rejected (non-refundable policy), capture intact, still completed', async () => {
         const donation = await seed(db, 50_00);
         const capture = JSON.stringify({
             id: 'evt_route_cap2',
@@ -185,14 +185,15 @@ describe('8.C POST /api/donations/webhook — route-level status codes', () => {
         await postWebhook(db, capture, await sign(capture, WEBHOOK_SECRET, Math.floor(Date.now() / 1000)));
         const res = await postWebhook(db, refund, await sign(refund, WEBHOOK_SECRET, Math.floor(Date.now() / 1000)));
         expect(res.status).toBe(200);
+        expect(((await res.json()) as { applied: boolean }).applied).toBe(false);
 
         const ledger = new LedgerService(db as unknown as D1Database);
         expect((await ledger.verifyInvariant()).difference).toBe(0);
-        expect(await ledger.balance('platform:revenue')).toBe(0);
-        expect(await ledger.balance('reserve:gateway')).toBe(0);
+        expect(await ledger.balance('platform:revenue')).toBe(50_00);
+        expect(await ledger.balance('reserve:gateway')).toBe(-50_00);
 
         const model = new DonationModel(db as unknown as D1Database);
         const after = await model.findById(donation.id);
-        expect(after?.payment_status).toBe('refunded');
+        expect(after?.payment_status).toBe('completed');
     });
 });

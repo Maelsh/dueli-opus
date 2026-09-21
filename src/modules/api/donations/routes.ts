@@ -77,11 +77,16 @@ donationsRoutes.get('/total', async (c) => {
  * 8.E: يقبل `competitor_id` (المتنافس المستلم) و`competition_id` (سياق البث
  * اختياري) — بلا أي حساب رسوم في المسار أو العميل (التقسيم integer-cents
  * عند نجاح الدفع فقط عبر LedgerService). بلا مستلم = تبرع للمنصة (8.C).
+ *
+ * 8.G-F3: التبرعات غير قابلة للاسترداد (DONATIONS_NON_REFUNDABLE) — لا يُنشأ
+ * التبرع إلا بموافقتين صريحتين معاً: قبول سياسة عدم الاسترداد
+ * (`non_refundable_accepted === true`) + تأكيد المبلغ
+ * (`amount_confirmed === true`). لا قيم افتراضية ولا موافقة ضمنية.
  */
 donationsRoutes.post('/', async (c) => {
     try {
         const body = await c.req.json();
-        const { amount, payment_method, donor_name, donor_email, message, is_anonymous, competitor_id, competition_id } = body;
+        const { amount, payment_method, donor_name, donor_email, message, is_anonymous, competitor_id, competition_id, non_refundable_accepted, amount_confirmed } = body;
         const lang = (c.get('lang') || 'en') as Language;
         const donationModel = new DonationModel(c.env.DB);
 
@@ -92,6 +97,22 @@ donationsRoutes.post('/', async (c) => {
             return c.json({
                 success: false,
                 error: { message: checked.error === 'below_minimum' ? t('donations.min', lang) : t('payment_min_amount', lang) }
+            }, 400);
+        }
+
+        // 8.G-F3: موافقة صريحة على سياسة عدم الاسترداد — شرط إنشاء.
+        if (non_refundable_accepted !== true) {
+            return c.json({
+                success: false,
+                error: { message: t('donations.non_refundable_required', lang) }
+            }, 400);
+        }
+
+        // 8.G-F3: تأكيد صريح للمبلغ — شرط إنشاء مستقل (لا يُغني عنه قبول السياسة).
+        if (amount_confirmed !== true) {
+            return c.json({
+                success: false,
+                error: { message: t('donations.amount_confirm_required', lang) }
             }, 400);
         }
 

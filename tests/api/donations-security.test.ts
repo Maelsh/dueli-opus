@@ -49,12 +49,38 @@ describe('donations payment methods', () => {
                 {
                     method: 'POST',
                     headers: headers(),
-                    body: JSON.stringify({ amount: 5, payment_method: method })
+                    body: JSON.stringify({ amount: 5, payment_method: method, non_refundable_accepted: true, amount_confirmed: true })
                 },
                 env(db)
             );
             expect(res.status).toBe(200);
         }
+    });
+
+    it('rejects creation without the non-refundable consent (8.G-F3)', async () => {
+        const res = await app.request(
+            '/api/donations',
+            {
+                method: 'POST',
+                headers: headers(),
+                body: JSON.stringify({ amount: 5, payment_method: 'stripe', amount_confirmed: true })
+            },
+            env(db)
+        );
+        expect(res.status).toBe(400);
+    });
+
+    it('rejects creation without the amount confirmation (8.G-F3)', async () => {
+        const res = await app.request(
+            '/api/donations',
+            {
+                method: 'POST',
+                headers: headers(),
+                body: JSON.stringify({ amount: 5, payment_method: 'stripe', non_refundable_accepted: true })
+            },
+            env(db)
+        );
+        expect(res.status).toBe(400);
     });
 });
 
@@ -87,7 +113,7 @@ describe('POST /api/donations/:id/complete (SEC-01 — route deleted)', () => {
             {
                 method: 'POST',
                 headers: headers(ownerSession),
-                body: JSON.stringify({ amount: 10, payment_method: 'stripe' })
+                body: JSON.stringify({ amount: 10, payment_method: 'stripe', non_refundable_accepted: true, amount_confirmed: true })
             },
             env(db)
         );

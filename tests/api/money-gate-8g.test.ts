@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
 import { LedgerService } from '../../src/lib/services/LedgerService';
-import { StripeWebhookService } from '../../src/lib/services/StripeWebhookService';
 import { DonationModel } from '../../src/models/DonationModel';
 
 /**
@@ -151,335 +150,352 @@ async function assertInvariantZero(db: SqliteD1): Promise<void> {
     expect((await ledger.verifyInvariant()).difference).toBe(0);
 }
 
-/** Service-level capture event (same shape the route delivers after signature check). */
-function svcCaptureEvent(donationId: number, amountCents: number, eventId: string) {
-    return {
-        id: eventId,
-        type: 'checkout.session.completed',
-        data: {
-            object: {
-                client_reference_id: String(donationId),
-                metadata: { donation_id: String(donationId) },
-                amount_total: amountCents,
-                amount_received: amountCents,
-            },
-        },
-    };
-}
-
-/** Service-level refund event with real Stripe cumulative semantics. */
-function svcRefundEvent(donationId: number, originalCents: number, cumulativeRefunded: number, eventId: string) {
-    return {
-        id: eventId,
-        type: 'charge.refunded',
-        data: {
-            object: {
-                client_reference_id: String(donationId),
-                metadata: { donation_id: String(donationId) },
-                amount: originalCents,
-                amount_refunded: cumulativeRefunded,
-            },
-        },
-    };
-}
-
-/** Seed a competitor donation + capture it, all through production code. */
-async function seedCapturedCompetitorDonation(
-    db: SqliteD1,
-    svc: StripeWebhookService,
-    donorToken: string,
-    dollars: number,
-    captureTag: string
-): Promise<number> {
-    const donationId = await donationIdOf(
-        await createDonation(db, donorToken, { amount: dollars, payment_method: 'stripe', competitor_id: 2 })
-    );
-    const cents = Math.round(dollars * 100);
-    const cap = await svc.processEvent(db as unknown as D1Database, svcCaptureEvent(donationId, cents, captureTag));
-    expect(cap.applied).toBe(true);
-    return donationId;
-}
-
-// ─── F1 — crash consistency ──────────────────────────────────────────────
-describe('8.G F1 — refund crash consistency (RED-FIRST)', () => {
+// ─── F1/F2 under the non-refundable policy ─────────────────────────────
+// The 8.G crash/race machinery is superseded by the F3 policy: donation
+// refunds are rejected before any financial side effect, so these tests now
+// assert rejection + zero money movement (no re-verification of F1/F2 here).
+describe('8.G F1/F2 — refund attempts under the non-refundable policy', () => {
     let db: SqliteD1;
 
     beforeEach(() => {
         db = new SqliteD1();
     });
 
-    it('F1a. checkpoint claimed but ledger never posted (simulated kill) ⇒ redelivery heals, no lost refund, no duplicate', async () => {
-        const { donorToken } = await seedActors(db);
+    async function createCaptured10(donorToken: string, capTag: string): Promise<number> {
         const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 10, payment_method: 'stripe', competitor_id: 2 })
+            await createDonation(db, donorToken, {
+                amount: 10, payment_method: 'stripe', competitor_id: 2,
+                non_refundable_accepted: true, amount_confirmed: true,
+            })
         );
-        expect((await (await postWebhook(db, capturePayload(donationId, 10_00, 'evt_f1a_cap'))).json()) as { applied: boolean }).toMatchObject({ applied: true });
+        expect((await (await postWebhook(db, capturePayload(donationId, 10_00, capTag))).json()) as { applied: boolean }).toMatchObject({ applied: true });
+        return donationId;
+    }
+
+    it('F1a-policy. legacy claimed checkpoint + redelivery ⇒ still rejected, no money moves', async () => {
+        const { donorToken } = await seedActors(db);
+        const donationId = await createCaptured10(donorToken, 'evt_f1a_cap');
         await assertInvariantZero(db);
 
-        // Simulate the crash: reservation committed, process killed before ledger.post().
-        // (Old code shape: bare refunded_cents bump, no recoverable intent row.)
+        // Legacy crash state: checkpoint claimed, ledger never posted.
         await db.prepare('UPDATE donations SET refunded_cents = ? WHERE id = ?').bind(2_00, donationId).run();
-        expect(await refundCheckpoint(db, donationId)).toBe(2_00);
-        expect(await refundLedgerRows(db, donationId)).toBe(0);
 
-        // Stripe redelivers (new event id, same cumulative truth).
         const redelivery = await postWebhook(db, stripeRefundPayload(donationId, 10_00, 2_00, 'evt_f1a_redeliver'));
         expect(redelivery.status).toBe(200);
+        expect(((await redelivery.json()) as { applied: boolean }).applied).toBe(false);
 
-        // The refund must NOT be lost: exactly 200 reversed, checkpoint intact.
-        const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(2_00);
-        expect(await refundCheckpoint(db, donationId)).toBe(2_00);
+        expect(await refundLedgerRows(db, donationId)).toBe(0);
+        const ledger = new LedgerService(db as unknown as D1Database);
+        expect(await ledger.balance('user:2')).toBe(8_00);
         await assertInvariantZero(db);
 
-        // Further redelivery of the same cumulative truth ⇒ no duplicate.
         await postWebhook(db, stripeRefundPayload(donationId, 10_00, 2_00, 'evt_f1a_redeliver2'));
-        expect((await refundedSums(db, donationId)).total).toBe(2_00);
-        expect(await refundCheckpoint(db, donationId)).toBe(2_00);
+        expect(await refundLedgerRows(db, donationId)).toBe(0);
         await assertInvariantZero(db);
     });
 
-    it('F1b. ledger.post() throws after reservation ⇒ retry completes exactly once', async () => {
+    it('F1b-policy. refund attempt never reaches ledger.post()', async () => {
         const { donorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 10, payment_method: 'stripe', competitor_id: 2 })
-        );
-        await postWebhook(db, capturePayload(donationId, 10_00, 'evt_f1b_cap'));
+        const donationId = await createCaptured10(donorToken, 'evt_f1b_cap');
 
-        // Kill the process exactly between reservation and ledger write.
-        const postSpy = vi.spyOn(LedgerService.prototype, 'post').mockRejectedValueOnce(new Error('crash-sim'));
-        const crashed = await postWebhook(db, stripeRefundPayload(donationId, 10_00, 10_00, 'evt_f1b_ref'));
-        expect(crashed.status).toBe(500);
+        const postSpy = vi.spyOn(LedgerService.prototype, 'post');
+        const res = await postWebhook(db, stripeRefundPayload(donationId, 10_00, 10_00, 'evt_f1b_ref'));
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as { applied: boolean }).applied).toBe(false);
+        expect(postSpy).not.toHaveBeenCalled();
         postSpy.mockRestore();
 
-        // Reservation survived the crash (recoverable), ledger untouched.
-        expect(await refundCheckpoint(db, donationId)).toBe(10_00);
+        expect(await refundCheckpoint(db, donationId)).toBe(0);
         expect(await refundLedgerRows(db, donationId)).toBe(0);
-
-        // Retry (Stripe redelivery of the SAME event) completes the reversal.
-        const retry = await postWebhook(db, stripeRefundPayload(donationId, 10_00, 10_00, 'evt_f1b_ref'));
-        expect(retry.status).toBe(200);
-        expect((await refundedSums(db, donationId)).total).toBe(10_00);
-        expect(await refundCheckpoint(db, donationId)).toBe(10_00);
-        await assertInvariantZero(db);
-
-        // Third delivery ⇒ no duplicate reversal.
-        await postWebhook(db, stripeRefundPayload(donationId, 10_00, 10_00, 'evt_f1b_ref'));
-        expect((await refundedSums(db, donationId)).total).toBe(10_00);
-        expect(await refundLedgerRows(db, donationId)).toBe(3);
         await assertInvariantZero(db);
     });
-});
 
-// ─── F2 — concurrent cumulative refunds ──────────────────────────────────
-describe('8.G F2 — concurrent cumulative refund race (RED-FIRST)', () => {
-    let db: SqliteD1;
-
-    beforeEach(() => {
-        db = new SqliteD1();
-    });
-
-    it('F2a. concurrent cumulative 200 + 300 on a 1000 donation ⇒ checkpoint 300, reversal 300, no over-reversal', async () => {
-        // Service level (not HTTP): the two coroutines share one tick with only
-        // a handful of awaits, so both READ the same stale checkpoint before
-        // either CLAIMS — the exact race window. Route-level Promise.all
-        // staggers through crypto/signature awaits and serializes by luck.
-        await seedActors(db);
-        const svc = new StripeWebhookService(db as unknown as D1Database);
-        const model = new DonationModel(db as unknown as D1Database);
-        const donation = await model.createDonation({ user_id: 1, recipient_user_id: 2, amount: 10, payment_method: 'stripe' });
-        expect(donation.amount_cents).toBe(10_00);
-        const donationId = donation.id;
-        const cap = await svc.processEvent(db as unknown as D1Database, svcCaptureEvent(donationId, 10_00, 'evt_f2a_cap'));
-        expect(cap.applied).toBe(true);
-        await assertInvariantZero(db);
+    it('F2a-policy. concurrent cumulative 200 + 300 ⇒ both rejected, checkpoint 0, balances intact', async () => {
+        const { donorToken } = await seedActors(db);
+        const donationId = await createCaptured10(donorToken, 'evt_f2a_cap');
 
         const [r1, r2] = await Promise.all([
-            svc.processEvent(db as unknown as D1Database, svcRefundEvent(donationId, 10_00, 2_00, 'evt_f2a_A')),
-            svc.processEvent(db as unknown as D1Database, svcRefundEvent(donationId, 10_00, 3_00, 'evt_f2a_B')),
+            postWebhook(db, stripeRefundPayload(donationId, 10_00, 2_00, 'evt_f2a_A')),
+            postWebhook(db, stripeRefundPayload(donationId, 10_00, 3_00, 'evt_f2a_B')),
         ]);
-        expect([r1.applied, r2.applied].filter(Boolean).length).toBeGreaterThanOrEqual(1);
+        expect(r1.status).toBe(200);
+        expect(r2.status).toBe(200);
+        expect(((await r1.json()) as { applied: boolean }).applied).toBe(false);
+        expect(((await r2.json()) as { applied: boolean }).applied).toBe(false);
 
-        // Stripe truth is 300 — the ledger must say exactly 300, not 500.
-        expect(await refundCheckpoint(db, donationId)).toBe(3_00);
-        const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(3_00);
-        // Exact allocation reconciliation: net 800/fee 200 split pro-rata.
-        expect(sums.comp).toBe(2_40);
-        expect(sums.plat).toBe(60);
+        expect(await refundCheckpoint(db, donationId)).toBe(0);
+        expect((await refundedSums(db, donationId)).total).toBe(0);
         const ledger = new LedgerService(db as unknown as D1Database);
-        expect(await ledger.balance('user:2')).toBe(8_00 - 2_40);
+        expect(await ledger.balance('user:2')).toBe(8_00);
+        expect(await ledger.balance('platform:revenue')).toBe(2_00);
         await assertInvariantZero(db);
     });
 
-    it('F2b. 10 concurrent events (mixed cumulatives, repeats, regressions, over-cap) ⇒ exact full reconciliation', async () => {
-        await seedActors(db);
-        const svc = new StripeWebhookService(db as unknown as D1Database);
-        const donationId = await seedCapturedCompetitorDonation(db, svc, 'sess-8g-donor', 10, 'evt_f2b_cap');
+    it('F2b-policy. 10 concurrent refund events ⇒ all rejected, zero reversals', async () => {
+        const { donorToken } = await seedActors(db);
+        const donationId = await createCaptured10(donorToken, 'evt_f2b_cap');
 
         const cumulatives = [1_00, 1_00, 2_00, 1_50, 3_00, 3_00, 2_50, 4_00, 3_50, 10_00];
-        await Promise.all(
-            cumulatives.map((cum, i) =>
-                svc.processEvent(db as unknown as D1Database, svcRefundEvent(donationId, 10_00, cum, `evt_f2b_${i}`))
-            )
+        const results = await Promise.all(
+            cumulatives.map((cum, i) => postWebhook(db, stripeRefundPayload(donationId, 10_00, cum, `evt_f2b_${i}`)))
         );
+        for (const r of results) {
+            expect(r.status).toBe(200);
+            expect(((await r.json()) as { applied: boolean }).applied).toBe(false);
+        }
 
-        expect(await refundCheckpoint(db, donationId)).toBe(10_00);
-        const sums = await refundedSums(db, donationId);
-        expect(sums.total).toBe(10_00);
-        expect(sums.comp).toBe(8_00);
-        expect(sums.plat).toBe(2_00);
-        const ledger = new LedgerService(db as unknown as D1Database);
-        expect(await ledger.balance('user:2')).toBe(0);
-        expect(await ledger.balance('platform:revenue')).toBe(0);
+        expect(await refundCheckpoint(db, donationId)).toBe(0);
+        expect((await refundedSums(db, donationId)).total).toBe(0);
         await assertInvariantZero(db);
     });
 
-    it('F2c. lower-than-checkpoint and over-donation cumulatives never move money', async () => {
+    it('F2c-policy. first, regressive and over-donation refunds ⇒ all rejected', async () => {
         const { donorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 10, payment_method: 'stripe', competitor_id: 2 })
-        );
-        await postWebhook(db, capturePayload(donationId, 10_00, 'evt_f2c_cap'));
-        await postWebhook(db, stripeRefundPayload(donationId, 10_00, 6_00, 'evt_f2c_r1'));
-        expect((await refundedSums(db, donationId)).total).toBe(6_00);
+        const donationId = await createCaptured10(donorToken, 'evt_f2c_cap');
 
-        // Regression below the checkpoint ⇒ no-op.
-        const regressive = await postWebhook(db, stripeRefundPayload(donationId, 10_00, 4_00, 'evt_f2c_reg'));
-        expect(((await regressive.json()) as { applied: boolean }).applied).toBe(false);
-        // Over-donation cumulative ⇒ rejected, no effect.
-        const over = await postWebhook(db, stripeRefundPayload(donationId, 10_00, 10_01, 'evt_f2c_over'));
-        expect(((await over.json()) as { applied: boolean }).applied).toBe(false);
+        for (const [cum, tag] of [[6_00, 'evt_f2c_r1'], [4_00, 'evt_f2c_reg'], [10_01, 'evt_f2c_over']] as Array<[number, string]>) {
+            const res = await postWebhook(db, stripeRefundPayload(donationId, 10_00, cum, tag));
+            expect(res.status).toBe(200);
+            expect(((await res.json()) as { applied: boolean }).applied).toBe(false);
+        }
 
-        expect((await refundedSums(db, donationId)).total).toBe(6_00);
-        expect(await refundCheckpoint(db, donationId)).toBe(6_00);
+        expect((await refundedSums(db, donationId)).total).toBe(0);
+        expect(await refundCheckpoint(db, donationId)).toBe(0);
         await assertInvariantZero(db);
     });
 });
 
-// ─── F3 — paid withdrawal then refund (policy decision required) ─────────
-describe('8.G F3 — withdrawal paid then full refund [BLOCKED: policy decision required]', () => {
+// ─── F3 — non-refundable donation policy (lead decision implemented) ───
+// Policy (8.G-F3, authoritative): ALL Dueli donations are non-refundable
+// once completed — even if the recipient withdrew nothing. No full/partial
+// refund, no clawback, no negative balance, no recipient debt, no platform
+// absorption. Any donation refund attempt is rejected BEFORE any financial
+// side effect. Creation requires BOTH explicit confirmations:
+//   nonRefundablePolicyAccepted === true AND amountConfirmed === true.
+describe('8.G F3 — donations are non-refundable (RED-FIRST)', () => {
     let db: SqliteD1;
 
     beforeEach(() => {
         db = new SqliteD1();
     });
 
-    /**
-     * No authoritative policy was found for this case. Searched: docs/02-*,
-     * PLAN-STATUS, WORKLOG, DonationModel / WithdrawalRequestModel /
-     * LedgerService / StripeWebhookService comments, migrations 0019–0023.
-     * Existing rules only guard withdrawals AT REQUEST TIME (sufficient
-     * balance) — nothing covers a post-paid-withdrawal refund clawback, user
-     * debt, or platform absorption of the shortfall.
-     *
-     * This test therefore DOCUMENTS current behaviour (and must keep passing
-     * unchanged): the claw-back drives the recipient balance NEGATIVE while
-     * the ledger invariant stays 0. A Project Lead must choose between
-     * (1) platform absorbs shortfall, (2) refund capped at withdrawable
-     * balance, (3) negative user debt — this pass implements NONE of them.
-     */
-    it('F3doc. donation 30000 → fee 6000 + net 24000 → withdraw 6000 paid → full refund ⇒ recipient balance is negative (-6000), invariant 0', async () => {
-        const { donorToken, competitorToken, adminToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 300, payment_method: 'stripe', competitor_id: 2 })
-        );
-        await postWebhook(db, capturePayload(donationId, 300_00, 'evt_f3_cap'));
+    async function consentBody(extra: Record<string, unknown> = {}) {
+        return {
+            amount: 10,
+            payment_method: 'stripe',
+            competitor_id: 2,
+            non_refundable_accepted: true,
+            amount_confirmed: true,
+            ...extra,
+        };
+    }
+
+    async function createCaptured(donationBody: Record<string, unknown>, capTag: string): Promise<number> {
+        const { donorToken } = await seedActors(db);
+        const created = await createDonation(db, donorToken, donationBody);
+        expect(created.status).toBe(200);
+        const donationId = await donationIdOf(created);
+        const cents = Math.round(Number(donationBody['amount']) * 100);
+        const cap = await postWebhook(db, capturePayload(donationId, cents, capTag));
+        expect(((await cap.json()) as { applied: boolean }).applied).toBe(true);
+        return donationId;
+    }
+
+    it('F3A. refund of a completed donation with NO withdrawal ⇒ rejected, zero financial side effects', async () => {
+        const donationId = await createCaptured(await consentBody(), 'evt_f3a_cap');
+        const ledger = new LedgerService(db as unknown as D1Database);
+        expect(await ledger.balance('user:2')).toBe(8_00);
+        await assertInvariantZero(db);
+
+        const refund = await postWebhook(db, stripeRefundPayload(donationId, 10_00, 10_00, 'evt_f3a_ref'));
+        expect(refund.status).toBe(200);
+        const body = (await refund.json()) as { applied: boolean };
+        expect(body.applied).toBe(false);
+
+        // No reversal, no checkpoint movement, status untouched, balances intact.
+        expect(await refundLedgerRows(db, donationId)).toBe(0);
+        expect(await refundCheckpoint(db, donationId)).toBe(0);
+        expect(await ledger.balance('user:2')).toBe(8_00);
+        expect(await ledger.balance('platform:revenue')).toBe(2_00);
+        const model = new DonationModel(db as unknown as D1Database);
+        expect((await model.findById(donationId))?.payment_status).toBe('completed');
+        await assertInvariantZero(db);
+    });
+
+    it('F3B. refund after the recipient withdrew part ⇒ rejected, no clawback, no negative balance', async () => {
+        const { competitorToken, adminToken } = await seedActors(db);
+        const created = await createDonation(db, 'sess-8g-donor', {
+            amount: 300, payment_method: 'stripe', competitor_id: 2,
+            non_refundable_accepted: true, amount_confirmed: true,
+        });
+        expect(created.status).toBe(200);
+        const donationId = await donationIdOf(created);
+        await postWebhook(db, capturePayload(donationId, 300_00, 'evt_f3b_cap'));
 
         const ledger = new LedgerService(db as unknown as D1Database);
         expect(await ledger.balance('user:2')).toBe(240_00);
-        await assertInvariantZero(db);
 
-        // Withdraw $60 → requested → approved → paid.
         const wr = await app.request(
             '/api/withdrawals',
-            { method: 'POST', headers: headers(competitorToken), body: JSON.stringify({ amount: 60, payment_method: 'bank', payment_details: 'IBAN-F3' }) },
+            { method: 'POST', headers: headers(competitorToken), body: JSON.stringify({ amount: 60, payment_method: 'bank', payment_details: 'IBAN-F3B' }) },
             env(db)
         );
         expect(wr.status).toBe(201);
         const { request } = ((await wr.json()) as { data: { request: { id: number } } }).data;
         const paid = await app.request(
             `/api/admin/withdrawals/${request.id}/approve`,
-            { method: 'PUT', headers: headers(adminToken), body: JSON.stringify({ transaction_id: 'TXN-F3', note: 'bank transfer' }) },
+            { method: 'PUT', headers: headers(adminToken), body: JSON.stringify({ transaction_id: 'TXN-F3B', note: 'bank' }) },
             env(db)
         );
         expect(paid.status).toBe(200);
         expect(await ledger.balance('user:2')).toBe(180_00);
-        await assertInvariantZero(db);
 
-        // Stripe refunds the original $300 in full.
-        const refund = await postWebhook(db, stripeRefundPayload(donationId, 300_00, 300_00, 'evt_f3_ref'));
+        // Full refund attempt ⇒ rejected; balance stays positive, nothing moves.
+        const refund = await postWebhook(db, stripeRefundPayload(donationId, 300_00, 300_00, 'evt_f3b_ref'));
         expect(refund.status).toBe(200);
-        expect((await refundedSums(db, donationId)).total).toBe(300_00);
-
-        // CURRENT (undocumented-policy) outcome: recipient goes negative.
-        expect(await ledger.balance('user:2')).toBe(-60_00);
-        await assertInvariantZero(db);
-
+        expect(((await refund.json()) as { applied: boolean }).applied).toBe(false);
+        expect(await refundLedgerRows(db, donationId)).toBe(0);
+        expect(await refundCheckpoint(db, donationId)).toBe(0);
+        expect(await ledger.balance('user:2')).toBe(180_00);
         const model = new DonationModel(db as unknown as D1Database);
-        expect((await model.findById(donationId))?.payment_status).toBe('refunded');
+        expect((await model.findById(donationId))?.payment_status).toBe('completed');
+        await assertInvariantZero(db);
+    });
+
+    it('F3C. repeated refund attempts (new events, partial and full) ⇒ all rejected', async () => {
+        const donationId = await createCaptured(await consentBody(), 'evt_f3c_cap');
+        const attempts: Array<[number, string]> = [
+            [25_00, 'evt_f3c_r1'],
+            [25_00, 'evt_f3c_r1_dup'],
+            [60_00, 'evt_f3c_r2'],
+            [10_00, 'evt_f3c_r3'],
+        ];
+        for (const [cum, tag] of attempts) {
+            const res = await postWebhook(db, stripeRefundPayload(donationId, 10_00, cum, tag));
+            expect(res.status).toBe(200);
+            expect(((await res.json()) as { applied: boolean }).applied).toBe(false);
+        }
+        expect(await refundLedgerRows(db, donationId)).toBe(0);
+        expect(await refundCheckpoint(db, donationId)).toBe(0);
+        const ledger = new LedgerService(db as unknown as D1Database);
+        expect(await ledger.balance('user:2')).toBe(8_00);
+        await assertInvariantZero(db);
+    });
+
+    it('F3D. creation WITHOUT accepting the non-refundable policy ⇒ rejected, no donation row', async () => {
+        const { donorToken } = await seedActors(db);
+        const before = (await db.prepare('SELECT COUNT(*) AS c FROM donations').first<{ c: number }>())?.c ?? -1;
+        const res = await createDonation(db, donorToken, {
+            amount: 10, payment_method: 'stripe', competitor_id: 2, amount_confirmed: true,
+        });
+        expect(res.status).toBe(400);
+        const after = (await db.prepare('SELECT COUNT(*) AS c FROM donations').first<{ c: number }>())?.c ?? -2;
+        expect(after).toBe(before);
+    });
+
+    it('F3E. policy accepted but amount NOT confirmed ⇒ rejected, no donation row', async () => {
+        const { donorToken } = await seedActors(db);
+        const before = (await db.prepare('SELECT COUNT(*) AS c FROM donations').first<{ c: number }>())?.c ?? -1;
+        const res = await createDonation(db, donorToken, {
+            amount: 10, payment_method: 'stripe', competitor_id: 2, non_refundable_accepted: true,
+        });
+        expect(res.status).toBe(400);
+        const after = (await db.prepare('SELECT COUNT(*) AS c FROM donations').first<{ c: number }>())?.c ?? -2;
+        expect(after).toBe(before);
+    });
+
+    it('F3F. creation succeeds ONLY with BOTH confirmations together', async () => {
+        const { donorToken } = await seedActors(db);
+        const res = await createDonation(db, donorToken, {
+            amount: 10, payment_method: 'stripe', competitor_id: 2,
+            non_refundable_accepted: true, amount_confirmed: true,
+        });
+        expect(res.status).toBe(200);
+        expect(((await res.json()) as { success: boolean }).success).toBe(true);
+    });
+
+    it('F3G. non-refundable i18n keys exist in ar + en and differ', async () => {
+        const { ar } = await import('../../src/i18n/ar');
+        const { en } = await import('../../src/i18n/en');
+        for (const k of [
+            'non_refundable',
+            'non_refundable_accept',
+            'non_refundable_required',
+            'amount_confirm',
+            'amount_confirm_required',
+        ] as const) {
+            const a = (ar.donations as Record<string, string>)[k];
+            const e = (en.donations as Record<string, string>)[k];
+            expect(a, `ar.donations.${k}`).toBeTruthy();
+            expect(e, `en.donations.${k}`).toBeTruthy();
+            expect(a, `ar/en differ for ${k}`).not.toBe(e);
+        }
     });
 });
 
-// ─── Cross-stage composition matrix (§10) ────────────────────────────────
-describe('8.G cross-stage money matrix (RED-FIRST)', () => {
+// ─── Cross-stage composition matrix (§10, under the F3 policy) ─────────
+describe('8.G cross-stage money matrix (non-refundable policy)', () => {
     let db: SqliteD1;
 
     beforeEach(() => {
         db = new SqliteD1();
     });
 
-    it('M1. donation → capture → refund ⇒ balances return to zero, invariant 0 at every step', async () => {
+    function consentCreate(token: string, dollars: number, tag: string) {
+        return createDonation(db, token, {
+            amount: dollars, payment_method: 'stripe', competitor_id: 2,
+            non_refundable_accepted: true, amount_confirmed: true,
+        }).then(async (created) => {
+            expect(created.status).toBe(200);
+            return donationIdOf(created);
+        });
+    }
+
+    it('M1. donation → capture → refund attempt ⇒ balances intact, invariant 0 at every step', async () => {
         const { donorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 25, payment_method: 'stripe', competitor_id: 2 })
-        );
+        const donationId = await consentCreate(donorToken, 25, 'm1');
         await assertInvariantZero(db);
         await postWebhook(db, capturePayload(donationId, 25_00, 'evt_m1_cap'));
         const ledger = new LedgerService(db as unknown as D1Database);
         expect(await ledger.balance('user:2')).toBe(20_00);
         await assertInvariantZero(db);
-        await postWebhook(db, stripeRefundPayload(donationId, 25_00, 25_00, 'evt_m1_ref'));
-        expect(await ledger.balance('user:2')).toBe(0);
-        expect(await ledger.balance('platform:revenue')).toBe(0);
-        expect(await ledger.balance('reserve:gateway')).toBe(0);
+        const ref = await postWebhook(db, stripeRefundPayload(donationId, 25_00, 25_00, 'evt_m1_ref'));
+        expect(((await ref.json()) as { applied: boolean }).applied).toBe(false);
+        expect(await ledger.balance('user:2')).toBe(20_00);
+        expect(await ledger.balance('platform:revenue')).toBe(5_00);
+        // No reversal happened: gateway cash leg stays as captured (credit).
+        expect(await ledger.balance('reserve:gateway')).toBe(-25_00);
         await assertInvariantZero(db);
     });
 
-    it('M2. capture → partial 2500 → partial 6000 ⇒ exact deltas, invariant 0 at every step', async () => {
+    it('M2. capture → partial attempts ⇒ exact rejection, invariant 0 at every step', async () => {
         const { donorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 })
-        );
+        const donationId = await consentCreate(donorToken, 100, 'm2');
         await postWebhook(db, capturePayload(donationId, 100_00, 'evt_m2_cap'));
         await assertInvariantZero(db);
-        await postWebhook(db, stripeRefundPayload(donationId, 100_00, 25_00, 'evt_m2_r1'));
-        expect((await refundedSums(db, donationId)).total).toBe(25_00);
-        await assertInvariantZero(db);
-        await postWebhook(db, stripeRefundPayload(donationId, 100_00, 60_00, 'evt_m2_r2'));
-        expect((await refundedSums(db, donationId)).total).toBe(60_00);
-        await assertInvariantZero(db);
+        for (const [cum, tag] of [[25_00, 'evt_m2_r1'], [60_00, 'evt_m2_r2']] as Array<[number, string]>) {
+            const res = await postWebhook(db, stripeRefundPayload(donationId, 100_00, cum, tag));
+            expect(((await res.json()) as { applied: boolean }).applied).toBe(false);
+            expect((await refundedSums(db, donationId)).total).toBe(0);
+            await assertInvariantZero(db);
+        }
     });
 
-    it('M3. same refund event delivered 5× concurrently ⇒ exactly one financial effect', async () => {
+    it('M3. same refund event delivered 5× concurrently ⇒ zero financial effects', async () => {
         const { donorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 })
-        );
+        const donationId = await consentCreate(donorToken, 100, 'm3');
         await postWebhook(db, capturePayload(donationId, 100_00, 'evt_m3_cap'));
         const raw = stripeRefundPayload(donationId, 100_00, 25_00, 'evt_m3_same');
         const results = await Promise.all([0, 1, 2, 3, 4].map(() => postWebhook(db, raw)));
         const applied = await Promise.all(results.map(async (r) => ((await r.json()) as { applied: boolean }).applied));
-        expect(applied.filter(Boolean)).toHaveLength(1);
-        expect((await refundedSums(db, donationId)).total).toBe(25_00);
+        expect(applied.filter(Boolean)).toHaveLength(0);
+        expect((await refundedSums(db, donationId)).total).toBe(0);
         await assertInvariantZero(db);
     });
 
     it('M4. capture → withdrawal request ⇒ hold reduces spendable balance, invariant 0', async () => {
         const { donorToken, competitorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 300, payment_method: 'stripe', competitor_id: 2 })
-        );
+        const donationId = await consentCreate(donorToken, 300, 'm4');
         await postWebhook(db, capturePayload(donationId, 300_00, 'evt_m4_cap'));
         await assertInvariantZero(db);
         const wr = await app.request(
@@ -493,14 +509,12 @@ describe('8.G cross-stage money matrix (RED-FIRST)', () => {
         await assertInvariantZero(db);
     });
 
-    it('M6. refund → redelivery with fresh event ids at same cumulative ⇒ no extra effect', async () => {
+    it('M6. refund redeliveries with fresh event ids ⇒ no effect whatsoever', async () => {
         const { donorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 50, payment_method: 'stripe', competitor_id: 2 })
-        );
+        const donationId = await consentCreate(donorToken, 50, 'm6');
         await postWebhook(db, capturePayload(donationId, 50_00, 'evt_m6_cap'));
-        await postWebhook(db, stripeRefundPayload(donationId, 50_00, 20_00, 'evt_m6_r1'));
-        expect((await refundedSums(db, donationId)).total).toBe(20_00);
+        const first = await postWebhook(db, stripeRefundPayload(donationId, 50_00, 20_00, 'evt_m6_r1'));
+        expect(((await first.json()) as { applied: boolean }).applied).toBe(false);
         await assertInvariantZero(db);
         const [a, b] = await Promise.all([
             postWebhook(db, stripeRefundPayload(donationId, 50_00, 20_00, 'evt_m6_dupA')),
@@ -508,20 +522,19 @@ describe('8.G cross-stage money matrix (RED-FIRST)', () => {
         ]);
         expect(a.status).toBe(200);
         expect(b.status).toBe(200);
-        expect((await refundedSums(db, donationId)).total).toBe(20_00);
+        expect((await refundedSums(db, donationId)).total).toBe(0);
         await assertInvariantZero(db);
     });
 
-    it('M7. partial refund → withdrawal of the remainder ⇒ hold succeeds exactly, invariant 0', async () => {
+    it('M7. refund rejected ⇒ full captured net stays withdrawable, invariant 0', async () => {
         const { donorToken, competitorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 100, payment_method: 'stripe', competitor_id: 2 })
-        );
+        const donationId = await consentCreate(donorToken, 100, 'm7');
         await postWebhook(db, capturePayload(donationId, 100_00, 'evt_m7_cap'));
-        await postWebhook(db, stripeRefundPayload(donationId, 100_00, 25_00, 'evt_m7_r1'));
+        const denied = await postWebhook(db, stripeRefundPayload(donationId, 100_00, 25_00, 'evt_m7_r1'));
+        expect(((await denied.json()) as { applied: boolean }).applied).toBe(false);
         const ledger = new LedgerService(db as unknown as D1Database);
-        // Net was 8000; fair(2500) reverses 2000 ⇒ 6000 ($60) remain.
-        expect(await ledger.balance('user:2')).toBe(60_00);
+        // Net untouched (8000): the $60 withdrawal below leaves $20.
+        expect(await ledger.balance('user:2')).toBe(80_00);
         await assertInvariantZero(db);
         const wr = await app.request(
             '/api/withdrawals',
@@ -529,15 +542,13 @@ describe('8.G cross-stage money matrix (RED-FIRST)', () => {
             env(db)
         );
         expect(wr.status).toBe(201);
-        expect(await ledger.balance('user:2')).toBe(0);
+        expect(await ledger.balance('user:2')).toBe(20_00);
         await assertInvariantZero(db);
     });
 
     it('M8. dual capture event types concurrently ⇒ one effect, invariant 0', async () => {
         const { donorToken } = await seedActors(db);
-        const donationId = await donationIdOf(
-            await createDonation(db, donorToken, { amount: 25, payment_method: 'stripe', competitor_id: 2 })
-        );
+        const donationId = await consentCreate(donorToken, 25, 'm8');
         const pi = JSON.stringify({
             id: 'evt_m8_pi', type: 'payment_intent.succeeded',
             data: { object: { id: 'pi_m8', client_reference_id: String(donationId), metadata: { donation_id: String(donationId) }, amount_received: 25_00, amount_total: 25_00 } },

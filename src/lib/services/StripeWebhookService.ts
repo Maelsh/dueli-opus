@@ -39,7 +39,7 @@
  *   ذري، والكتابة المالية تُستكمل بعد أي انهيار (recoverPendingRefunds).
  */
 
-import { DonationModel, splitDonationCents } from '../../models/DonationModel';
+import { DonationModel, splitDonationCents, DONATIONS_NON_REFUNDABLE } from '../../models/DonationModel';
 import { LedgerService } from './LedgerService';
 import { PlatformSettingsModel } from '../../models/PlatformSettingsModel';
 
@@ -418,6 +418,16 @@ export class StripeWebhookService {
         if (!donation) {
             await this.recordEvent(db, eventId, eventType, null);
             return { applied: false, reason: 'donation_not_found', eventId };
+        }
+
+        // 8.G-F3 — سياسة عدم الاسترداد: جميع تبرعات Dueli غير قابلة
+        // للاسترداد بعد إتمامها (DONATIONS_NON_REFUNDABLE). الرفض هنا قبل أي
+        // أثر مالي: لا قيود عكسية، لا تقدّم للحارس، لا نوايا، لا تغيير حالة —
+        // وبلا تشغيل reconciliation (تشغيله سيكتب مالاً وهو الممنوع نفسه).
+        // تسجيل الحدث فقط (بلا tx) لتتوقف Stripe عن إعادة المحاولة.
+        if (DONATIONS_NON_REFUNDABLE) {
+            await this.recordEvent(db, eventId, eventType, null);
+            return { applied: false, reason: 'donation_non_refundable', eventId };
         }
 
         // (R2) التراكمي من حمولة Stripe — `amount_refunded` هو التراكمي

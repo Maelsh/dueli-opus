@@ -74,6 +74,21 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 </button>
                 <!-- 8.E: لا حد أقصى على مستوى Dueli (نص تفسيري بلا رقم مخترع) -->
                 <p class="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">${tr.donations?.max || ''}</p>
+
+                <!-- 8.G-F3: سياسة عدم الاسترداد + موافقتان صريحتان (لا افتراضيات) -->
+                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 shadow mt-6">
+                    <p class="text-sm font-bold text-amber-800 dark:text-amber-200 mb-4" role="note">
+                        <i class="fas fa-exclamation-triangle ${rtl ? 'ml-2' : 'mr-2'}"></i>${tr.donations?.non_refundable || 'Donations are non-refundable once completed'}
+                    </p>
+                    <label class="flex items-start gap-3 mb-3 cursor-pointer">
+                        <input type="checkbox" id="nonRefundableAccept" class="mt-1 w-5 h-5 accent-pink-600" aria-label="${tr.donations?.non_refundable_accept || 'Accept non-refundable policy'}">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">${tr.donations?.non_refundable_accept || 'I understand and accept that this donation is non-refundable'}</span>
+                    </label>
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" id="amountConfirm" class="mt-1 w-5 h-5 accent-pink-600" aria-label="${tr.donations?.amount_confirm || 'Confirm donation amount'}">
+                        <span class="text-sm text-gray-700 dark:text-gray-300">${tr.donations?.amount_confirm || 'I confirm this donation amount'}</span>
+                    </label>
+                </div>
                 
                 <!-- Top Supporters -->
                 <div class="mt-12">
@@ -149,6 +164,19 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     return;
                 }
 
+                // 8.G-F3: موافقتان صريحتان معاً — لا افتراضيات ولا موافقة
+                // ضمنية بمجرد الضغط على Continue/Donate.
+                const policyAccepted = document.getElementById('nonRefundableAccept')?.checked === true;
+                if (!policyAccepted) {
+                    window.dueli?.toast?.error?.(tr.donations?.non_refundable_required || tr.payment_failed);
+                    return;
+                }
+                const amountOk = document.getElementById('amountConfirm')?.checked === true;
+                if (!amountOk) {
+                    window.dueli?.toast?.error?.(tr.donations?.amount_confirm_required || tr.payment_failed);
+                    return;
+                }
+
                 // 8.E: تمرير سياق المتنافس/البث من الرابط (?competitor=&competition=)
                 // إلى POST /api/donations — بلا أي حساب رسوم في العميل.
                 const pageParams = new URLSearchParams(window.location.search);
@@ -158,7 +186,9 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     amount: amount,
                     payment_method: 'stripe',
                     donor_name: window.currentUser?.display_name || undefined,
-                    donor_email: window.currentUser?.email || undefined
+                    donor_email: window.currentUser?.email || undefined,
+                    non_refundable_accepted: true,
+                    amount_confirmed: true
                 };
                 if (competitorParam) donationBody.competitor_id = parseInt(competitorParam, 10);
                 if (competitionParam) donationBody.competition_id = parseInt(competitionParam, 10);

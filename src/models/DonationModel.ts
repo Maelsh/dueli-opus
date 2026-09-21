@@ -29,6 +29,18 @@ export const MIN_DONATION_CENTS = 100;
  */
 export const NO_DUELI_DONATION_MAX = true;
 
+/**
+ * 8.G-F3 — سياسة عدم استرداد التبرعات (قرار رسمي من Project Lead).
+ *
+ * جميع التبرعات في Dueli **غير قابلة للاسترداد مطلقاً بعد إتمامها** — حتى لو
+ * لم يسحب المتلقي أي جزء منها. لا refund كامل ولا جزئي، لا clawback، لا رصيد
+ * سالب، لا دين على المتلقي، ولا تحميل المنصة أي عجز. أي حدث refund لتبرع
+ * يُرفض قبل أي أثر مالي (StripeWebhookService.processRefund).
+ *
+ * المصدر الرسمي: `docs/02-DATABASE.md` (قسم سياسة عدم الاسترداد).
+ */
+export const DONATIONS_NON_REFUNDABLE = true;
+
 /** رموز أخطاء مبلغ التبرع — يترجمها المسار عبر t('donations.*'). */
 export type DonationAmountError = 'invalid_amount' | 'below_minimum';
 
