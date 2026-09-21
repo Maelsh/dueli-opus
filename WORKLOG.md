@@ -1,3 +1,40 @@
+## 2026-09-21 — 8.E تصحيحات REMOTE الخمسة (PR #41)
+
+- RED أولاً: ‏19 اختباراً جديداً سُلّمت حمراء (15 فشل يُظهر كل ثغرة: capture مزدوج [true,true]، قراءة amount الأصلي بدل التراكمي، إسراف 20000 > ‏10000، قبول سياق خاطئ) ثم خضراء.
+- **R1 منع Double Capture**: معرّف حركة قطعي لكل تبرع (`donation:capture:<id>`) — نوعا Stripe لنفس الدفع يتصارعان على نفس tx (الفائز عبر ‏M4 ‏UNIQUE، الخاسر `tx_already_applied`)؛ الترتيب ledger أولاً ثم `claimCapture()` المشروطة (pending/failed→completed) فلا فجوة انهيار.
+- **R2 دلالات Stripe الحقيقية**: `amount_refunded` تراكمي ⇒ الفرق الجديد فقط (R = التراكمي − ‏`refunded_cents`)؛ `amount` fallback للتوافق فقط؛ R‏≤0 ⇒ ‏no-op مسجل.
+- **R3 السقف التراكمي**: `claimRefund()` ذري (`refunded_cents + R <= amount_cents` — migration ‏0023)؛ الرفض بلا تسجيل حدث (إعادة المحاولة باتساق) وبلا أثر؛ تحرير الحجز عند فشل الكتابة فقط.
+- **R4 التسوية**: أرجل كل refund من التخصيص الأصلي الفعلي (C0/F0 من قيود الالتقاط) باستهداف تراكمي integer-exact — المجموعات تنتهي إلى الأصل بالسنت (مُبرهن الحدود + مُختبر)؛ الكامل من الصفر يظل مرآة القيود المسجلة.
+- **R5 سياق المنافسة**: ‏`competition_id` يُقبل فقط مع ‏live + المستلم creator/opponent (+ مستلم إلزامي) وإلا ‏400 `donations.invalid_competition` (ar+en) بلا أي أثر (لا صف/مال/SSE).
+- بلا سياسة جديدة: نفس `platform_share_percentage` ونفس `splitDonationCents`؛ مسار 8.C للمنصة untouched؛ بلا `any` جديد.
+- التحقق: donations ‏31/31 ✅ (×3) + `npm test` 457/457 ✅ + ‏`tsc` ✅ + ‏`build` ✅ + تكامل ‏`ledger` + ‏`schema-contract` 31/31 ✅ + ‏`db:reset` ✅ (24 migration).
+- الملفات: `migrations/0023_donation_refund_tracking.sql`، `src/models/DonationModel.ts` (claimCapture/claimRefund/release + ‏`refunded_cents`)، `src/lib/services/StripeWebhookService.ts`، `src/modules/api/donations/routes.ts`، `src/i18n/ar.ts`، `src/i18n/en.ts`، `tests/api/donations.test.ts`، `tests/api/stripe-webhook-ledger.test.ts` (تحديث tx-id واحد للنظام الجديد)، `tests/helpers/fake-d1.ts` (معالجات الحجز الأمينة)، `tests/integration/schema-contract.test.ts` (24)، `PLAN-STATUS.md`، `WORKLOG.md`.
+
+## 2026-09-21 — 8.E تصحيح: partial refund لتبرع المتنافس (PR #41)
+
+- الخلل: `processRefund()` للاسترداد الجزئي من تبرع مقسّم كان يستخدم fallback المنصة (مدين البوابة/دائن المنصة) — متوازن حسابياً لكنه يُبقي الصافي المسترد منسوباً للمتنافس خطأً.
+- الإصلاح (في `StripeWebhookService.processRefund` فقط): الاسترداد الجزئي (`recipientUserId != null` و`refundAmount < amountCents`) يعكس نفس سياسة التقسيم على مبلغ الاسترداد R عبر `splitDonationCents(R, pct)` بنفس `getPlatformSharePercentage()` — مدين البوابة R + دائن المنصة F(R) + دائن المتنافس N(R)، integer cents، بلا floating-point، بلا سياسة جديدة. الاسترداد الكامل ما زال مرآة قيود الـcapture الأصلية. الـidempotency (`stripe:refund:<eventId>`) محفوظة.
+- الاختبارات: ‏8b (جزئي 2500 من 10000 ⇒ ‏500/2000 + أرصدة 6000/1500 + ثابت 0) و8c (تكرار نفس الحدث 3× ⇒ أثر واحد) في `tests/api/donations.test.ts`؛ انحدار الاسترداد الكامل (8) سليم.
+- التحقق: donations ‏12/12 ✅ + `npm test` 438/438 ✅ + ‏`tsc` ✅ + ‏`build` ✅ + تكامل ‏`ledger` + ‏`schema-contract` 31/31 ✅.
+- بلا migration/CI/dependencies/سياسة — ملفان فقط: `src/lib/services/StripeWebhookService.ts` + `tests/api/donations.test.ts` (+ هذا السجل + `PLAN-STATUS.md`).
+
+## 2026-09-21 — 8.E: التبرعات للمتنافسين (فرع `feat/money-donations`)
+
+- النطاق: المشاهد يتبرع لمتنافس (مستلم + سياق بث اختياري) بأثر مالي حصري عبر `LedgerService` — لا رصيد موازٍ، لا مسار مالي ثانٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService` (استُخدم `post()` كما هو)، لا CI/dependencies، لا Production deployment/migration/merge.
+- **Migration `0022_donation_recipients.sql`** (additive فقط): `recipient_user_id` + `competition_id` (NULL = تبرع المنصة/خارج البث — المسار القديم يعمل بلا تغيير) + فهرسان. تُطبَّق على قاعدة فارغة (23 migration) + `db:reset` ✅.
+- **السياسة (ثوابت موثقة، لا سياسة جديدة)**: `MIN_DONATION_CENTS = 100` ($1 = i18n ‏`payment_min_amount` + فحص `POST /` + فحص `donate-page`)؛ **بلا حد أقصى على مستوى Dueli** (قرار موثق بعد بحث شامل — لا `MAX` مخترع؛ رفض البوابة الخارجي يُعالَج بلا قيود)؛ الرسوم = `platform_share_percentage` (الافتراضي 20 — سياسة 8.B الموثقة؛ أرشيف `PROJECT_REFERENCE_EN` ‏10% تاريخي غير حاكم per ‏`docs/16 §4`).
+- **التقسيم integer-exact** (`splitDonationCents` — عقيدة 8.B): رسوم floor ثم الصافي = الباقي (fee+net === total دائماً). حركة واحدة: مدين المنصة (رسوم) + مدين المتنافس (صافي) + دائن البوابة (الإجمالي) — ساق واحدة لأن `UNIQUE(tx_id, account)` في 8.A يمنع تكرار الحساب (اكتُشف باختبار أحمر حقيقي: 4 قيود ⇒ تعارض ⇒ `tx_already_applied` بلا أثر).
+- **الالتقاط**: تبرع المنصة يكتب شكل 8.C حرفياً (بلا تغيير)؛ تبرع المتنافس يكتب التقسيم. **الفشل ⇒ لا قيود** (مسار 8.C كما هو). **الاسترداد الكامل** لتبرع مقسّم = مرآة معكوسة لقيود الالتقاط الأصلية عبر المسار الموثوق نفسه؛ الجزئي/القديم على مسار 8.C.
+- **الحظر 3.A**: فحص خادمي اتجاهي (`user_blocks`: المستلم حظر المتبرع ⇒ ‏403 `donations.blocked`) قبل أي أثر — الاتجاه المعاكس مسموح (مثبت).
+- **SSE**: نجاح تبرع أثناء البث ⇒ ‏`donation_new` على `competition:<id>` عبر `EventPusher` القائم (لا نظام جديد)؛ الاسترداد لا يبث استلاماً (`kind` يميز).
+- **i18n**: ‏`donations.{send,thanks,min,max,blocked}` في ar+en (مختلفان)؛ ‏`max` يصف غياب الحد بلا رقم مخترع. العميل: تمرير `?competitor=&competition=` فقط — بلا حساب رسوم.
+- **الاختبارات** (`tests/api/donations.test.ts`، ‏10 عبر Hono الحقيقي + ‏SqliteD1): ‏(1) مبلغ صحيح ⇒ 3 قيود + صافي 80% + ثابت 0؛ (2) دون $1 ⇒ ‏400؛ (3) مبلغ ضخم ⇒ إنشاء 200 + رفض المعالج ⇒ صفر قيود + ‏`max` بلا أرقام؛ (4) محظور ⇒ ‏403 بلا صف/مال (+4b الاتجاه المعاكس مسموح)؛ (5) فشل ⇒ صفر قيود؛ (6) تزامن ⇒ كلاهما + ثابت 0؛ (7) بث حي ⇒ ‏SSE صحيح؛ (8) استرداد ⇒ مرآة + أرصدة صفر + ثابت 0؛ (9) مفاتيح ‏i18n. سُلّمت حمراء أولاً (4 فشل: تعارض ‏UNIQUE) ثم خضراء ×3.
+- **صيانة**: ‏`schema-contract` (‏23 migration + العدّاد)؛ ‏`fake-d1` (مواضع أعمدة التبرعات الجديدة).
+- التحقق: `npm test` 436/436 ✅ + ‏`tsc` ✅ + ‏`build` ✅ + ‏`db:reset` ✅ + تكامل ‏`schema-contract` 16/16 ✅ + تكامل ‏`ledger` 15/15 ✅ (التكامل الكامل يتعثر على بطء ‏`messages-schema` البيئي المعروف — غير مرتبط).
+- G8 التراجع: revert الـcommit (migration إضافية على عمودين جديدين؛ لا بيانات إنتاج).
+- الملفات: `migrations/0022_donation_recipients.sql`، `src/models/DonationModel.ts`، `src/lib/services/StripeWebhookService.ts`، `src/lib/services/EventPusher.ts`، `src/models/SseEventLogModel.ts`، `src/modules/api/donations/routes.ts`، `src/modules/pages/donate-page.ts`، `src/i18n/ar.ts`، `src/i18n/en.ts`، `tests/api/donations.test.ts`، `tests/helpers/fake-d1.ts`، `tests/integration/schema-contract.test.ts`، `PLAN-STATUS.md`، `WORKLOG.md`.
+- / الملفات المعدَّلة: migrations/0022_donation_recipients.sql, src/models/DonationModel.ts, src/lib/services/StripeWebhookService.ts, src/lib/services/EventPusher.ts, src/models/SseEventLogModel.ts, src/modules/api/donations/routes.ts, src/modules/pages/donate-page.ts, src/i18n/ar.ts, src/i18n/en.ts, tests/api/donations.test.ts, tests/helpers/fake-d1.ts, tests/integration/schema-contract.test.ts / وكيل: 8.E LOCAL agent / التحقق: donations 10/10 ✅ (×3) + npm test 436/436 ✅ + tsc ✅ + build ✅ + db:reset ✅ + integration schema-contract 16/16 ✅ + ledger 15/15 ✅
+
 ## 2026-09-21 — 8.D: السحوبات — دورة الحياة عبر LedgerService (فرع `feat/money-withdrawals`)
 
 - النطاق: دورة `requested → approved → paid | rejected` بأثر مالي حصري عبر `LedgerService` — لا رصيد مباشر (حُذفت كتابات `user_earnings` من مسار السحب)، لا مسار مالي موازٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService` (استُخدم `withdraw()`/`post()` كما هما)، لا CI/dependencies، لا Production deployment/migration/merge.

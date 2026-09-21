@@ -1,5 +1,20 @@
 
 
+
+## 8.E — التبرعات للمتنافسين · فرع `feat/money-donations`
+
+- 🔧 منفَّذ محلياً (من الرأس `f280ee6` على `feat/money-withdrawals` الذي يحمل 8.A–8.D). النطاق: تبرع المشاهد لمتنافس بأثر مالي حصري عبر `LedgerService` — لا رصيد موازٍ، لا مسار مالي ثانٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService`، لا CI/dependencies، لا Production deployment/migration/merge.
+  - **Migration 0022**: `recipient_user_id` + `competition_id` (additive فقط؛ NULL = مسار 8.C القديم بلا تغيير). تُطبَّق على قاعدة فارغة (23 migration) + `db:reset` ✅.
+  - **السياسة (ثوابت موثقة)**: الحد الأدنى $1 (100 سنت = `payment_min_amount` + فحص المسار + الواجهة)؛ **بلا حد أقصى** على مستوى Dueli (قرار موثق — لا رقم مخترع)؛ الرسوم `platform_share_percentage` (الافتراضي 20 = سياسة 8.B).
+  - **التقسيم**: حركة واحدة integer-exact (مدين المنصة بالرسوم + مدين المتنافس بالصافي + دائن البوابة بالإجمالي — ساق واحدة التزاماً بـ`UNIQUE(tx_id, account)`)؛ الفشل ⇒ لا قيود؛ الاسترداد الكامل ⇒ مرآة معكوسة عبر المسار الموثوق نفسه.
+  - **الحظر 3.A**: المستلم حظر المتبرع ⇒ ‏403 خادمياً قبل أي أثر (اتجاهي؛ المعاكس مسموح).
+  - **SSE**: نجاح أثناء البث ⇒ ‏`donation_new` على `competition:<id>` عبر البنية القائمة (الاسترداد لا يبث).
+  - **i18n**: ‏`donations.{send,thanks,min,max,blocked}` في ar+en (مختلفان؛ `max` بلا رقم).
+  - **الاختبارات**: `tests/api/donations.test.ts` (31 عبر Hono الحقيقي — الثمانية الأصلية + 8b/8c + ‏19 لتصحيحات REMOTE الخمسة R1–R5؛ سُلّمت حمراء أولاً 15 فشل ثم خضراء ×3). الصيانة: `schema-contract` (24) و`fake-d1` (معالجات الحجز).
+  - **التصحيحات**: منع Double Capture (tx قطعي لكل تبرع) + دلالات amount_refunded التراكمية + سقف تراكمي ذري (0023) + تسوية تقريب من التخصيص الأصلي + سياق live/competitor — بلا سياسة جديدة.
+  - **التحقق**: `npm test` 457/457 ✅ + `tsc` ✅ + `build` ✅ + `db:reset` ✅ + تكامل `schema-contract` + ‏`ledger` 31/31 ✅. الحالة 🔧 (تحقق محلي) ريثما يعيد REMOTE التحقق المستقل — بلا دمج.
+  - **التسريب (G8)**: revert الـcommit؛ لا بيانات إنتاج.
+
 ## 8.D — السحوبات · فرع `feat/money-withdrawals`
 
 - 🔧 منفَّذ محلياً (من الرأس 976ab63 على `feat/money-stripe-payments`). النطاق: دورة `requested → approved → paid | rejected` بأثر مالي حصري عبر `LedgerService` — لا رصيد مباشر، لا مسار مالي موازٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService`، لا CI/dependencies، لا Production deployment/migration/merge.

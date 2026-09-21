@@ -55,6 +55,8 @@ const EXPECTED_MIGRATIONS = [
     '0019_ledger_entries.sql',
     '0020_donations_stripe_cents.sql',
     '0021_withdrawals_lifecycle.sql',
+    '0022_donation_recipients.sql',
+    '0023_donation_refund_tracking.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -147,8 +149,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 22 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(22);
+    it('has exactly 24 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(24);
     });
 
     it('matches the full expected migration file name list', () => {

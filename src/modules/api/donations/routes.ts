@@ -7,6 +7,11 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { DonationModel } from '../../../models/DonationModel';
+import { UserModel } from '../../../models/UserModel';
+import { CompetitionModel } from '../../../models/CompetitionModel';
+import { PlatformSettingsModel } from '../../../models/PlatformSettingsModel';
+import { splitDonationCents } from '../../../models/DonationModel';
+import { EventPusher } from '../../../lib/services/EventPusher';
 import { authMiddleware } from '../../../middleware/auth';
 import { t } from '../../../i18n';
 import type { Language } from '../../../config/types';
@@ -66,18 +71,25 @@ donationsRoutes.get('/total', async (c) => {
 /**
  * POST /api/donations
  * Create a new donation (initiates payment)
+ *
+ * 8.E: يقبل `competitor_id` (المتنافس المستلم) و`competition_id` (سياق البث
+ * اختياري) — بلا أي حساب رسوم في المسار أو العميل (التقسيم integer-cents
+ * عند نجاح الدفع فقط عبر LedgerService). بلا مستلم = تبرع للمنصة (8.C).
  */
 donationsRoutes.post('/', async (c) => {
     try {
         const body = await c.req.json();
-        const { amount, payment_method, donor_name, donor_email, message, is_anonymous } = body;
+        const { amount, payment_method, donor_name, donor_email, message, is_anonymous, competitor_id, competition_id } = body;
         const lang = (c.get('lang') || 'en') as Language;
+        const donationModel = new DonationModel(c.env.DB);
 
-        // Validate amount
-        if (!amount || amount < 1) {
+        // Validate amount — 8.E: الحد الأدنى الموثق $1، ولا حد أقصى على
+        // مستوى Dueli (أي مبلغ فوق ذلك يمرّ للبوابة ورفضها آمن بلا قيود).
+        const checked = donationModel.validateAmountCents(amount);
+        if (!checked.ok) {
             return c.json({
                 success: false,
-                error: { message: t('payment_min_amount', lang) }
+                error: { message: checked.error === 'below_minimum' ? t('donations.min', lang) : t('payment_min_amount', lang) }
             }, 400);
         }
 
@@ -90,14 +102,77 @@ donationsRoutes.post('/', async (c) => {
             }, 400);
         }
 
-        const donationModel = new DonationModel(c.env.DB);
+        // 8.E: المستلم — يجب أن يكون مستخدماً موجوداً (وإلا 404).
+        let recipientId: number | null = null;
+        if (competitor_id !== undefined && competitor_id !== null) {
+            recipientId = Number.parseInt(String(competitor_id), 10);
+            if (!Number.isInteger(recipientId) || (recipientId as number) <= 0) {
+                return c.json({
+                    success: false,
+                    error: { message: t('errors.invalid_request', lang) }
+                }, 400);
+            }
+            const recipient = await new UserModel(c.env.DB).findById(recipientId as number);
+            if (!recipient) {
+                return c.json({
+                    success: false,
+                    error: { message: t('not_found', lang) }
+                }, 404);
+            }
+        }
 
         // Get user if logged in
         const user = c.get('user');
 
+        // 8.E + 3.A: التبرع لمستخدم قام بحظرك مرفوض (403) — فحص خادمي
+        // اتجاهي قبل أي أثر (لا صف ولا مال ولا Stripe) وليس في العميل فقط.
+        if (recipientId !== null) {
+            const blocked = await donationModel.isBlockedByRecipient(recipientId, user?.id ?? null);
+            if (blocked) {
+                return c.json({
+                    success: false,
+                    error: { message: t('donations.blocked', lang) }
+                }, 403);
+            }
+        }
+
+        // 8.E + تصحيح REMOTE 5: سياق البث — المنافسة يجب أن تكون live
+        // والمستلم أحد متنافسَيها (creator/opponent)، والمستلم إلزامي مع
+        // سياق البث (حدث SSE يحتاج متنافساً). الرفض هنا قبل أي أثر: لا صف
+        // ولا مال ولا Stripe ولا SSE — برسالة i18n واحدة.
+        let liveCompetitionId: number | null = null;
+        if (competition_id !== undefined && competition_id !== null) {
+            liveCompetitionId = Number.parseInt(String(competition_id), 10);
+            if (!Number.isInteger(liveCompetitionId) || (liveCompetitionId as number) <= 0) {
+                return c.json({
+                    success: false,
+                    error: { message: t('errors.invalid_request', lang) }
+                }, 400);
+            }
+            const competition = await new CompetitionModel(c.env.DB).findOne('id', liveCompetitionId as number);
+            if (!competition) {
+                return c.json({
+                    success: false,
+                    error: { message: t('not_found', lang) }
+                }, 404);
+            }
+            const contextOk =
+                recipientId !== null &&
+                competition.status === 'live' &&
+                (recipientId === competition.creator_id || recipientId === competition.opponent_id);
+            if (!contextOk) {
+                return c.json({
+                    success: false,
+                    error: { message: t('donations.invalid_competition', lang) }
+                }, 400);
+            }
+        }
+
         // Create donation record
         const donation = await donationModel.createDonation({
             user_id: user?.id,
+            recipient_user_id: recipientId,
+            competition_id: liveCompetitionId,
             amount,
             payment_method,
             donor_name: is_anonymous ? null : donor_name,
@@ -113,13 +188,18 @@ donationsRoutes.post('/', async (c) => {
             try {
                 const { StripeService } = await import('../../../lib/services/StripeService');
                 const origin = c.req.header('origin') || 'https://dueli.maelshpro.com';
+                // 8.E: تمرير سياق المتنافس في رابط العودة لعرض رسالة الشكر
+                // المناسبة — لا يؤثر على الدفع نفسه.
+                const competitorQs = donation.recipient_user_id != null
+                    ? `&competitor=${donation.recipient_user_id}`
+                    : '';
                 const session = await StripeService.createCheckoutSession(stripeKey, {
                     amount,
                     donationId: donation.id,
                     donorEmail: donor_email || null,
                     donorName: is_anonymous ? null : (donor_name || null),
                     message: message || null,
-                    successUrl: `${origin}/donate?paid=1&session_id={CHECKOUT_SESSION_ID}`,
+                    successUrl: `${origin}/donate?paid=1&session_id={CHECKOUT_SESSION_ID}${competitorQs}`,
                     cancelUrl: `${origin}/donate?cancelled=1`
                 });
                 paymentUrl = session.url;
@@ -138,6 +218,8 @@ donationsRoutes.post('/', async (c) => {
                 donation_id: donation.id,
                 amount: donation.amount,
                 currency: donation.currency,
+                competitor_id: donation.recipient_user_id,
+                competition_id: donation.competition_id,
                 payment_url: paymentUrl,
                 message: 'Donation created. Complete payment to finalize.'
             }
@@ -256,6 +338,29 @@ donationsRoutes.post('/webhook', async (c) => {
 
         if (!result.eventId) {
             return c.json({ success: false, error: { message: 'Malformed event' } }, 400);
+        }
+
+        // 8.E: نجاح تبرع أثناء البث ⇒ بث حدث التبرع على SSE الموجود
+        // (قناة المنافسة) — لا نظام realtime جديد. الاسترداد (kind=refund)
+        // لا يبث حدث استلام. الفشل هنا لا يُفشل الـwebhook (يُسجَّل فقط)
+        // حتى لا يعيد Stripe المحاولة بلا داعٍ.
+        if (result.applied && result.kind === 'capture' && result.competitionId != null && result.donationId != null) {
+            try {
+                const donationModel = new DonationModel(c.env.DB);
+                const donation = await donationModel.findById(result.donationId);
+                const pct = await new PlatformSettingsModel(c.env.DB).getPlatformSharePercentage();
+                const split = splitDonationCents(result.amountCents ?? 0, pct);
+                const pusher = new EventPusher(c.env.DB, c.env);
+                await pusher.publishDonation(result.competitionId, {
+                    donation_id: result.donationId,
+                    competitor_id: donation?.recipient_user_id ?? 0,
+                    amount_cents: result.amountCents ?? 0,
+                    net_cents: split.netCents,
+                    donor_name: donation?.is_anonymous ? null : (donation?.donor_name ?? null),
+                });
+            } catch (sseError) {
+                console.error('[Donations] donation SSE publish failed:', sseError);
+            }
         }
 
         // 8.C §7: every outcome returns 200 so Stripe stops retrying, EXCEPT

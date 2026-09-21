@@ -27,6 +27,9 @@ export type SseEventType =
     | 'competition_status'
     | 'notification'
     | 'withdrawal_status'
+    // 8.E: donation received during a live competition (existing SSE infra,
+    // no new realtime system — persisted in the same sse_event_log table).
+    | 'donation_new'
     | 'signal_offer'
     | 'signal_answer'
     | 'signal_ice'

@@ -131,7 +131,7 @@ describe('8.C Stripe payments → ledger (real SQL via SqliteD1)', () => {
         const res = await service.processEvent(db as unknown as D1Database, JSON.parse(raw));
 
         expect(res.applied).toBe(true);
-        expect(res.txId).toBe('stripe:capture:evt_capture_1');
+        expect(res.txId).toBe('donation:capture:1');
 
         const entries = await ledger.entriesForTx(res.txId!);
         expect(entries).toHaveLength(2);

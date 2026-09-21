@@ -967,27 +967,74 @@ class FakeStmt {
             return ok({ last_row_id: newId, changes: 1 });
         }
 
-        // INSERT INTO donations (user_id, amount, amount_cents, currency,
-        //  payment_method, [payment_status='pending' literal], donor_name,
-        //  donor_email, message, is_anonymous, created_at)
+        // INSERT INTO donations (user_id, recipient_user_id, competition_id,
+        //  amount, amount_cents, currency, payment_method,
+        //  [payment_status='pending' literal], donor_name, donor_email,
+        //  message, is_anonymous, created_at) — 8.E adds the two recipient cols.
         if (q.startsWith('insert into donations')) {
             const newId = ++this.db.donationSeq;
             this.db.donations.push({
                 id: newId,
                 user_id: p[0],
-                amount: p[1],
-                amount_cents: p[2],
-                currency: p[3],
-                payment_method: p[4],
+                recipient_user_id: p[1] ?? null,
+                competition_id: p[2] ?? null,
+                amount: p[3],
+                amount_cents: p[4],
+                currency: p[5],
+                payment_method: p[6],
                 payment_status: 'pending',
                 transaction_id: null,
-                donor_name: p[5],
-                donor_email: p[6],
-                message: p[7],
-                is_anonymous: !!p[8],
+                donor_name: p[7],
+                donor_email: p[8],
+                message: p[9],
+                is_anonymous: !!p[10],
+                refunded_cents: 0,
                 created_at: new Date().toISOString()
             });
             return ok({ last_row_id: newId, changes: 1 });
+        }
+
+        // 8.E REMOTE fix: atomic refund-allowance claim (migration 0023).
+        // UPDATE donations SET refunded_cents = refunded_cents + ?
+        // WHERE id = ? AND refunded_cents + ? <= amount_cents
+        if (q.startsWith('update donations set refunded_cents = refunded_cents +')) {
+            const [delta, id] = [p[0], p[1]];
+            const donation = this.db.donations.find((d) => d.id === id);
+            if (!donation) return ok({ last_row_id: null, changes: 0 });
+            const base = donation.refunded_cents ?? 0;
+            if (base + delta <= (donation.amount_cents ?? 0)) {
+                donation.refunded_cents = base + delta;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
+        }
+
+        // 8.E REMOTE fix: release of a refund claim after ledger-write failure.
+        if (q.startsWith('update donations set refunded_cents = refunded_cents -')) {
+            const [delta, id] = [p[0], p[1]];
+            const donation = this.db.donations.find((d) => d.id === id);
+            if (!donation) return ok({ last_row_id: null, changes: 0 });
+            const base = donation.refunded_cents ?? 0;
+            if (base >= delta) {
+                donation.refunded_cents = base - delta;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
+        }
+
+        // 8.E REMOTE fix 1: atomic capture-state claim.
+        // UPDATE donations SET payment_status = 'completed', transaction_id = ?
+        // WHERE id = ? AND payment_status IN ('pending','failed')
+        if (q.startsWith("update donations set payment_status = 'completed', transaction_id = ?")) {
+            const [txId, id] = [p[0], p[1]];
+            const donation = this.db.donations.find((d) => d.id === id);
+            if (!donation) return ok({ last_row_id: null, changes: 0 });
+            if (donation.payment_status === 'pending' || donation.payment_status === 'failed') {
+                donation.payment_status = 'completed';
+                donation.transaction_id = txId;
+                return ok({ last_row_id: null, changes: 1 });
+            }
+            return ok({ last_row_id: null, changes: 0 });
         }
 
         // Generic UPDATE donations SET <cols...> WHERE id = ?
