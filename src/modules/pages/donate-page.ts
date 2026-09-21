@@ -68,10 +68,12 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 </div>
                 
                 <!-- Donate Button -->
-                <button onclick="processDonation()" class="w-full py-4 bg-gradient-to-r from-pink-600 to-red-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg text-lg">
+                <button onclick="processDonation()" aria-label="${tr.donations?.send || 'Send donation'}" class="w-full py-4 bg-gradient-to-r from-pink-600 to-red-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg text-lg">
                     <i class="fas fa-heart ${rtl ? 'ml-2' : 'mr-2'}"></i>
                     ${tr.donate_now || 'Donate Now'}
                 </button>
+                <!-- 8.E: لا حد أقصى على مستوى Dueli (نص تفسيري بلا رقم مخترع) -->
+                <p class="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">${tr.donations?.max || ''}</p>
                 
                 <!-- Top Supporters -->
                 <div class="mt-12">
@@ -147,16 +149,25 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     return;
                 }
 
+                // 8.E: تمرير سياق المتنافس/البث من الرابط (?competitor=&competition=)
+                // إلى POST /api/donations — بلا أي حساب رسوم في العميل.
+                const pageParams = new URLSearchParams(window.location.search);
+                const competitorParam = pageParams.get('competitor');
+                const competitionParam = pageParams.get('competition');
+                const donationBody = {
+                    amount: amount,
+                    payment_method: 'stripe',
+                    donor_name: window.currentUser?.display_name || undefined,
+                    donor_email: window.currentUser?.email || undefined
+                };
+                if (competitorParam) donationBody.competitor_id = parseInt(competitorParam, 10);
+                if (competitionParam) donationBody.competition_id = parseInt(competitionParam, 10);
+
                 try {
                     const res = await fetch('/api/donations?lang=' + (window.lang || 'ar'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            amount: amount,
-                            payment_method: 'stripe',
-                            donor_name: window.currentUser?.display_name || undefined,
-                            donor_email: window.currentUser?.email || undefined
-                        })
+                        body: JSON.stringify(donationBody)
                     });
                     const data = await res.json();
                     if (data.success && data.data?.payment_url) {
@@ -176,10 +187,14 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             }
 
             // 8.C: عرض نتيجة العودة من Stripe Checkout (?paid=1 / ?cancelled=1).
+            // 8.E: العودة لتبرع متنافس (?competitor=) تعرض رسالة الشكر المخصصة.
             function showPaymentOutcome() {
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('paid') === '1') {
-                    window.dueli?.toast?.success?.(tr.donation_completed);
+                    const thanked = params.get('competitor')
+                        ? (tr.donations?.thanks || tr.donation_completed)
+                        : tr.donation_completed;
+                    window.dueli?.toast?.success?.(thanked);
                 } else if (params.get('cancelled') === '1') {
                     window.dueli?.toast?.error?.(tr.payment_cancelled);
                 }

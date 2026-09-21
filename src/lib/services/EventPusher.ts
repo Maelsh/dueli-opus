@@ -183,6 +183,25 @@ export class EventPusher {
             note: note || null
         });
     }
+
+    /**
+     * 8.E: بث حدث التبرع أثناء البث الحي على SSE الموجود (لا نظام جديد).
+     * القناة هي قناة المنافسة (`competition:<id>`) — نفس نمط publishComment.
+     * الحمولة عرضية فقط (المبالغ للعرض بالدولار) — الحقيقة المالية في ledger.
+     */
+    async publishDonation(
+        competitionId: number,
+        donation: { donation_id: number; competitor_id: number; amount_cents: number; net_cents: number; donor_name: string | null }
+    ) {
+        return this.publish(`competition:${competitionId}`, 'donation_new', {
+            competition_id: competitionId,
+            donation_id: donation.donation_id,
+            competitor_id: donation.competitor_id,
+            amount_cents: donation.amount_cents,
+            net_cents: donation.net_cents,
+            donor_name: donation.donor_name,
+        });
+    }
 }
 
 export default EventPusher;

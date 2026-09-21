@@ -24,10 +24,19 @@
  *      - أي حدث آخر ⇒ 200 ولا أثر مالي.
  * 5. المبالغ integer cents فقط؛ لا `Math.round` على فاصلة عائمة في الحساب
  *    المالي (التحويل من الدولار يحدث مرة واحدة عند الإنشاء).
+ *
+ * 8.E (تبرعات المتنافسين — امتداد بلا تغيير لسياسة 8.C):
+ * - التبرع المرتبط بمستلم يُقسَّم عند الالتقاط: رسوم المنصة
+ *   (`platform_share_percentage` الموثقة في 8.B) + صافي المتنافس في
+ *   `user:<id>` — كلها عبر LedgerService.post() في batch واحد.
+ * - التبرع بلا مستلم يكتب شكله الأصلي حرفياً (سياسة 8.C untouched).
+ * - الاسترداد الكامل لتبرع مقسّم = مرآة معكوسة لقيود الالتقاط الأصلية
+ *   عبر المسار الموثوق نفسه؛ الجزئي/القديم على مسار 8.C كما هو.
  */
 
-import { DonationModel } from '../../models/DonationModel';
+import { DonationModel, splitDonationCents } from '../../models/DonationModel';
 import { LedgerService } from './LedgerService';
+import { PlatformSettingsModel } from '../../models/PlatformSettingsModel';
 
 /** نتيجة معالجة حدث webhook واحدة. */
 export interface WebhookEventResult {
@@ -39,6 +48,22 @@ export interface WebhookEventResult {
     eventId: string;
     /** tx_id المرتبط في ledger (إن وُجد). */
     txId?: string;
+    /**
+     * 8.E — نوع الأثر المالي (additive): 'capture' للالتقاط، 'refund'
+     * للاسترداد. يحتاجه المسار لتمييز نجاح التبرع (يُبث SSE) عن الاسترداد
+     * (لا يُبث حدث استلام). غائب في مسارات 8.C القديمة بلا أثر.
+     */
+    kind?: 'capture' | 'refund';
+    /**
+     * 8.E — سياق التبرع (additive): يُملأ عند ربط الحدث بتبرع داخلي،
+     * ليبثّ المسار حدث SSE دون استعلام إضافي. غائب للتبرعات القديمة
+     * والأحداث غير المرتبطة — لا يغيّر عقد 8.C.
+     */
+    donationId?: number;
+    /** سياق البث الحي (NULL = خارج البث — لا حدث SSE). */
+    competitionId?: number | null;
+    /** مبلغ التبرع بالسنت (للحمولة فقط — الحقيقة المالية في ledger). */
+    amountCents?: number;
 }
 
 /** حساب المنصة لاستقبال تبرعات الدفع — نمط حساب ledger المعتمد (8.A). */
@@ -61,10 +86,12 @@ export interface StripeEventShape {
 export class StripeWebhookService {
     private readonly ledger: LedgerService;
     private readonly donations: DonationModel;
+    private readonly settings: PlatformSettingsModel;
 
     constructor(db: D1Database) {
         this.ledger = new LedgerService(db);
         this.donations = new DonationModel(db);
+        this.settings = new PlatformSettingsModel(db);
     }
 
     /**
@@ -101,7 +128,7 @@ export class StripeWebhookService {
      * استخراج معرّف التبرع من بيانات الحدث (client_reference_id أو
      * metadata.donation_id)، ثم تحميل السجل الداخلي.
      */
-    private async resolveDonation(obj: Record<string, unknown> | null | undefined): Promise<{ id: number; amountCents: number; paymentStatus: string } | null> {
+    private async resolveDonation(obj: Record<string, unknown> | null | undefined): Promise<{ id: number; amountCents: number; paymentStatus: string; transactionId: string | null; recipientUserId: number | null; competitionId: number | null } | null> {
         if (!obj || typeof obj !== 'object') return null;
 
         const meta = obj['metadata'] as Record<string, unknown> | null | undefined;
@@ -121,6 +148,9 @@ export class StripeWebhookService {
             id: donation.id,
             amountCents: typeof donation.amount_cents === 'number' ? donation.amount_cents : 0,
             paymentStatus: donation.payment_status,
+            transactionId: donation.transaction_id,
+            recipientUserId: donation.recipient_user_id ?? null,
+            competitionId: donation.competition_id ?? null,
         };
     }
 
@@ -197,11 +227,17 @@ export class StripeWebhookService {
     /**
      * نجاح الدفع: قيود متوازنة عبر LedgerService فقط.
      *
+     * تبرع المنصة (8.C — بلا تغيير):
      *   debit  platform:revenue   <amount>   (إيراد المنصة)
      *   credit reserve:gateway    <amount>   (نقد في البوابة)
      *
-     * Σ(debit) − Σ(credit) = 0 (M1)، وكل شيء داخل db.batch() واحد عبر
-     * LedgerService.post() (M2).
+     * تبرع لمتنافس (8.E — تقسيم بنفس عقيدة 8.B):
+     *   debit  platform:revenue   <fee>      (رسوم المنصة الموثقة)
+     *   debit  user:<recipient>   <net>      (صافي المتنافس بعد الرسوم)
+     *   credit reserve:gateway    <fee+net>  (ساق واحدة — M4 تمنع التكرار)
+     *
+     * Σ(debit) − Σ(credit) = 0 دائماً (fee + net === total)، وكل شيء داخل
+     * db.batch() واحد عبر LedgerService.post() (M2). integer cents فقط.
      */
     private async processCapture(
         db: D1Database,
@@ -237,16 +273,23 @@ export class StripeWebhookService {
             return { applied: false, reason: 'tx_already_applied', eventId, txId };
         }
 
+        // 8.E: بناء القيود — تقسيم للمتنافس، أو شكل 8.C القديم للمنصة.
+        const recipientId = donation.recipientUserId;
+        const entries: Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }> =
+            recipientId == null
+                ? [
+                    { account: PLATFORM_DONATION_ACCOUNT, direction: 'debit', amountCents: donation.amountCents },
+                    { account: RESERVE_ACCOUNT, direction: 'credit', amountCents: donation.amountCents },
+                ]
+                : await this.buildRecipientEntries(donation.amountCents, recipientId);
+
         try {
             const result = await this.ledger.post({
                 txId,
                 currency: 'USD',
                 createdBy: 'system:stripe',
                 ref: { ref_type: 'donation', ref_id: donation.id },
-                entries: [
-                    { account: PLATFORM_DONATION_ACCOUNT, direction: 'debit', amountCents: donation.amountCents },
-                    { account: RESERVE_ACCOUNT, direction: 'credit', amountCents: donation.amountCents },
-                ],
+                entries,
             });
 
             if (!result.applied) {
@@ -269,16 +312,70 @@ export class StripeWebhookService {
         await this.donations.markCompleted(donation.id, eventId);
 
         await this.recordEvent(db, eventId, eventType, txId);
-        return { applied: true, eventId, txId };
+        return {
+            applied: true,
+            kind: 'capture',
+            eventId,
+            txId,
+            donationId: donation.id,
+            competitionId: donation.competitionId,
+            amountCents: donation.amountCents,
+        };
     }
 
     /**
-     * الاسترداد: قيود عكسية متوازنة متطابقة مع القيود الأصلية معكوسة.
+     * قيود تبرع المتنافس (8.E): رسوم المنصة + صافي المستلم.
+     * النسبة من `platform_share_percentage` (الموثقة في 8.B)، والتقسيم
+     * integer-exact عبر splitDonationCents (fee + net === total دائماً).
      *
+     * الشكل (نفس عقيدة 8.B — مدينون متعددون + دائن واحد بالإجمالي):
+     *   debit  platform:revenue   <fee>
+     *   debit  user:<recipient>   <net>
+     *   credit reserve:gateway    <fee + net = total>
+     * حركة واحدة في batch واحد (M2)، وحسابات مميزة داخلها (M4:
+     * ‏UNIQUE(tx_id, account) يمنع تكرار نفس الحساب — لهذا ساق البوابة
+     * واحدة بالإجمالي لا ساقين). الحالات الحدّية (رسوم صفر أو صافي صفر)
+     * تُسقط القيد الصفري لأن LedgerService يرفض غير الموجب.
+     */
+    private async buildRecipientEntries(
+        totalCents: number,
+        recipientUserId: number
+    ): Promise<Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }>> {
+        const pct = await this.settings.getPlatformSharePercentage();
+        const split = splitDonationCents(totalCents, pct);
+        const entries: Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }> = [];
+        if (split.feeCents > 0) {
+            entries.push(
+                { account: PLATFORM_DONATION_ACCOUNT, direction: 'debit', amountCents: split.feeCents },
+            );
+        }
+        if (split.netCents > 0) {
+            entries.push(
+                { account: `user:${recipientUserId}`, direction: 'debit', amountCents: split.netCents },
+            );
+        }
+        // ساق البوابة الدائنة واحدة بالإجمالي (M4) — ومجموع المدين يساويها
+        // دائماً لأن fee + net === total (نفس نمط 8.B).
+        entries.push(
+            { account: RESERVE_ACCOUNT, direction: 'credit', amountCents: split.feeCents + split.netCents },
+        );
+        return entries;
+    }
+
+    /**
+     * الاسترداد: قيود عكسية متوازنة عبر المسار المالي الموثوق نفسه (8.C).
+     *
+     * تبرع المنصة (8.C — بلا تغيير):
      *   debit  reserve:gateway    <amount>   (إرجاع النقد)
      *   credit platform:revenue   <amount>   (عكس الإيراد)
      *
-     * Σ(debit) − Σ(credit) = 0 (M1) — نفس المبلغ، اتجاهان معكوسان.
+     * تبرع لمتنافس (8.E): الاسترداد الكامل يعكس قيود الالتقاط الأصلية
+     * قيداً بقيد (مرآة معكوسة الاتجاه من `stripe:capture:<event>` المخزّن
+     * في `donations.transaction_id`) — فيعود الصافي للمتنافس والرسوم
+     * للمنصة بدقة السنت، والثابت 0. الاسترداد الجزئي لتبرع مقسّم يبقى على
+     * مسار 8.C (عكس عبر ساق المنصة/البوابة — متوازن وثابته 0).
+     *
+     * Σ(debit) − Σ(credit) = 0 (M1) في كل الحالات.
      */
     private async processRefund(
         db: D1Database,
@@ -307,16 +404,33 @@ export class StripeWebhookService {
             return { applied: false, reason: 'tx_already_applied', eventId, txId };
         }
 
+        // 8.E: مرآة الالتقاط للاسترداد الكامل من تبرع مقسّم.
+        let entries: Array<{ account: string; direction: 'debit' | 'credit'; amountCents: number }> | null = null;
+        if (donation.recipientUserId != null && refundAmount === donation.amountCents && donation.transactionId) {
+            const captureTxId = `stripe:capture:${donation.transactionId}`;
+            const captureEntries = await this.ledger.entriesForTx(captureTxId);
+            if (captureEntries.length > 0) {
+                entries = captureEntries.map((row) => ({
+                    account: String(row['account']),
+                    direction: (row['direction'] === 'debit' ? 'credit' : 'debit') as 'debit' | 'credit',
+                    amountCents: Number(row['amount_cents']),
+                }));
+            }
+        }
+        // المسار الموثوق 8.C (تبرعات المنصة، أو احتياطي آمن لأي حالة حدّية):
+        // عكس عبر ساق المنصة/البوابة بالمبلغ المسترد.
+        entries ??= [
+            { account: RESERVE_ACCOUNT, direction: 'debit', amountCents: refundAmount },
+            { account: PLATFORM_DONATION_ACCOUNT, direction: 'credit', amountCents: refundAmount },
+        ];
+
         try {
             const result = await this.ledger.post({
                 txId,
                 currency: 'USD',
                 createdBy: 'system:stripe',
                 ref: { ref_type: 'donation', ref_id: donation.id },
-                entries: [
-                    { account: RESERVE_ACCOUNT, direction: 'debit', amountCents: refundAmount },
-                    { account: PLATFORM_DONATION_ACCOUNT, direction: 'credit', amountCents: refundAmount },
-                ],
+                entries,
             });
 
             if (!result.applied) {
@@ -335,7 +449,15 @@ export class StripeWebhookService {
         await this.donations.markRefunded(donation.id);
 
         await this.recordEvent(db, eventId, eventType, txId);
-        return { applied: true, eventId, txId };
+        return {
+            applied: true,
+            kind: 'refund',
+            eventId,
+            txId,
+            donationId: donation.id,
+            competitionId: donation.competitionId,
+            amountCents: donation.amountCents,
+        };
     }
 }
 

@@ -1,5 +1,19 @@
 
 
+
+## 8.E — التبرعات للمتنافسين · فرع `feat/money-donations`
+
+- 🔧 منفَّذ محلياً (من الرأس `f280ee6` على `feat/money-withdrawals` الذي يحمل 8.A–8.D). النطاق: تبرع المشاهد لمتنافس بأثر مالي حصري عبر `LedgerService` — لا رصيد موازٍ، لا مسار مالي ثانٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService`، لا CI/dependencies، لا Production deployment/migration/merge.
+  - **Migration 0022**: `recipient_user_id` + `competition_id` (additive فقط؛ NULL = مسار 8.C القديم بلا تغيير). تُطبَّق على قاعدة فارغة (23 migration) + `db:reset` ✅.
+  - **السياسة (ثوابت موثقة)**: الحد الأدنى $1 (100 سنت = `payment_min_amount` + فحص المسار + الواجهة)؛ **بلا حد أقصى** على مستوى Dueli (قرار موثق — لا رقم مخترع)؛ الرسوم `platform_share_percentage` (الافتراضي 20 = سياسة 8.B).
+  - **التقسيم**: حركة واحدة integer-exact (مدين المنصة بالرسوم + مدين المتنافس بالصافي + دائن البوابة بالإجمالي — ساق واحدة التزاماً بـ`UNIQUE(tx_id, account)`)؛ الفشل ⇒ لا قيود؛ الاسترداد الكامل ⇒ مرآة معكوسة عبر المسار الموثوق نفسه.
+  - **الحظر 3.A**: المستلم حظر المتبرع ⇒ ‏403 خادمياً قبل أي أثر (اتجاهي؛ المعاكس مسموح).
+  - **SSE**: نجاح أثناء البث ⇒ ‏`donation_new` على `competition:<id>` عبر البنية القائمة (الاسترداد لا يبث).
+  - **i18n**: ‏`donations.{send,thanks,min,max,blocked}` في ar+en (مختلفان؛ `max` بلا رقم).
+  - **الاختبارات**: `tests/api/donations.test.ts` (10 عبر Hono الحقيقي — الثمانية المطلوبة + الاتجاه المعاكس + i18n؛ سُلّمت حمراء أولاً 4 فشل ثم خضراء ×3). الصيانة: `schema-contract` (23) و`fake-d1` (الأعمدة الجديدة).
+  - **التحقق**: `npm test` 436/436 ✅ + `tsc` ✅ + `build` ✅ + `db:reset` ✅ + تكامل `schema-contract` 16/16 ✅ + تكامل `ledger` 15/15 ✅. الحالة 🔧 (تحقق محلي) ريثما تكتمل G1–G8 بالمراجعة الخارجية — بلا دمج.
+  - **التسريب (G8)**: revert الـcommit؛ لا بيانات إنتاج.
+
 ## 8.D — السحوبات · فرع `feat/money-withdrawals`
 
 - 🔧 منفَّذ محلياً (من الرأس 976ab63 على `feat/money-stripe-payments`). النطاق: دورة `requested → approved → paid | rejected` بأثر مالي حصري عبر `LedgerService` — لا رصيد مباشر، لا مسار مالي موازٍ، لا تعديل لسياسة 8.A/8.B/8.C ولا لـ`LedgerService`، لا CI/dependencies، لا Production deployment/migration/merge.

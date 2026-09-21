@@ -646,6 +646,15 @@ export const en = {
         insufficient_balance: 'Your available balance does not cover the requested amount',
     },
 
+    // Competitor donations (8.E) — $1 documented minimum, no Dueli-level maximum
+    donations: {
+        send: 'Send donation',
+        thanks: 'Thanks for supporting the competitor!',
+        min: 'Minimum donation is $1',
+        max: 'Dueli sets no maximum donation amount',
+        blocked: 'You cannot donate to a user who blocked you',
+    },
+
     // Reports Page
     report_type: 'Report Type',
     report_inappropriate_desc: 'Offensive or harmful content',
