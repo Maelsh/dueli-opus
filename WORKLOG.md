@@ -1,3 +1,37 @@
+## 2026-09-22 — Phase 9.B ad serving & targeting (branch `feat/ads-serving-targeting`)
+
+- Base: `origin/main` @ `aa55b38` (9.A merged PR #44) — verified via fetch/pull before branching.
+- Result: the right ad reaches the right audience; a blocked viewer never gets the ad (server-side).
+- **Targeting (language + country + category only)**: `GET /api/advertisements` now resolves targeting
+  server-side from the `competition_id` row (existing language/country/category_id — no new data
+  collection, no behavioral tracking). New `AdvertisementModel.getTargetedAds()` carries the 9.A
+  lifecycle + ledger-balance guard in the same SQL plus `target_* IS NULL OR =` match semantics.
+  Category dimension was missing → **migration 0026** (additive: `target_category_id` FK + index only).
+- **AdBlockModel respected server-side**: `NOT IN (SELECT ad_id FROM ad_blocks WHERE user_id=?)` inside the
+  selection SQL — not a frontend hide. `UserBlockModel` untouched (different system).
+- **Frequency cap server-side**: 5 impressions/user/ad/rolling-24h (`AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY`),
+  counted from existing `ad_impressions` rows only. Enforced twice: exclusion in selection SQL AND a 429
+  guard (`ads.frequency_cap_reached`) on `POST /:id/impression` keyed on the session identity (never on
+  self-asserted `body.user_id`). `chargeImpression`/Ledger/lifecycle untouched.
+- **Sponsored label**: every served ad carries `sponsored_label` + `why_this_ad` + `hide_ad` via `t('ads.*')`
+  (new keys in `ar.ts` + `en.ts`, real Arabic). No hard-coded text.
+- **Sensitive pages**: `context=private_messages` → `[]` from the server (`SENSITIVE_AD_CONTEXTS`);
+  verified `messages-page.ts` renders no ads. No messaging changes.
+- **New `AdServingService`** (`lib/services/`): single orchestration point (sensitive check → competition
+  resolution → model call → cap check). Routes do HTTP wiring only; no SQL in routes/pages; no new
+  abstraction duplicating `AdCampaignManager` (9.A stays money/lifecycle SSOT). `createCampaign` gains
+  optional `target_category_id` (validated against `CategoryModel`, additive).
+- RED-first: 5/8 new tests failed pre-fix (mismatch served, blocked served, cap bypassed 200≠429,
+  labels undefined, private_messages served 4 ads) → 8/8 post-fix.
+- Interaction found by re-running 9.A suite (required — shared impression route): 2 failures (cap fired
+  before budget exhaustion on unauthenticated `user_id:2` probes) → fixed by keying the guard on the
+  authenticated session identity; 9.A semantics (409/budget_exhausted) preserved.
+- Verification: `tests/api/ad-serving.test.ts` 8/8 ✅, `npm test` 501/501 ✅, `tsc --noEmit` ✅ (zero new
+  `any`), `npm run build` ✅. No new routes (query params only) → no inventory regen. Rollback: drop
+  0026 column+index; code is additive (old clients ignore new label fields).
+- Deliberately untouched: 9.C/9.D/9.E, LedgerService, Stripe, Money Phase, CI/dependencies, behavioral
+  tracking, messaging architecture, historical migrations. No merge performed.
+
 ## 2026-09-22 — Phase 9.A PR#44 remediation (findings F-1 → F-5)
 
 - **F-1 (CRITICAL):** Rewrote `0025_ads_campaign_lifecycle.sql` to be **additive** (no `DROP TABLE`):

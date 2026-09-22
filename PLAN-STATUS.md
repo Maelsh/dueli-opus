@@ -1,6 +1,28 @@
 
 
 
+## 9.B — عرض الإعلان واستهدافه · فرع `feat/ads-serving-targeting`
+
+- 🔧 منفَّذ محلياً (من `aa55b38` = `origin/main` بعد دمج 9.A في PR #44). النتيجة: الإعلان المناسب يظهر
+  للجمهور المناسب، ولا يظهر لمن حجبه — كل الحماية server-side.
+- **استهداف language + country + category فقط** (بلا behavioral tracking): `GET /api/advertisements`
+  (`competition_id`/`context`/`limit`) يحلّ الاستهداف من صف المنافسة؛ `getTargetedAds()` في SQL واحد
+  (حارس 9.A + مطابقة `target_* IS NULL OR =`). البعد الفئوي كان مفقوداً ⇒ **migration 0026** المضافة فقط
+  (`target_category_id` + فهرس). `createCampaign` يقبلها اختيارياً (تحقق عبر `CategoryModel`).
+- **AdBlockModel**: استبعاد `NOT IN` داخل SQL الاختيار — لا إخفاء frontend؛ `UserBlockModel` لم يُلمس.
+- **Frequency cap**: ‏5 مشاهدات/مستخدم/إعلان/24h من `ad_impressions` فقط؛ استبعاد في الاختيار + حارس 429
+  (`ads.frequency_cap_reached`) على مسار impression مفتاحه هوية الجلسة. `chargeImpression`/Ledger كما هما.
+- **وسم معلن**: كل إعلان مخدوم يحمل `sponsored_label`/`why_this_ad`/`hide_ad` عبر `t('ads.*')` (مفاتيح جديدة
+  ar+en بعربية فعلية) — بلا hard-code.
+- **صفحات حساسة**: `context=private_messages` ⇒ `[]` من الخادم؛ `messages-page.ts` بلا إعلانات أصلاً.
+- **RED أولاً (مُثبَت)**: 5 فشلت قبل الإصلاح (غير مطابق يُعرض، محجوب يُعرض، تجاوز الحد 200≠429،
+  labels غير معرّفة، private_messages تعرض 4) ⇒ 8/8 بعده عبر Hono الحقيقي + SqliteD1.
+- **الاختبارات**: `tests/api/ad-serving.test.ts` (8) ✅، `npm test` 501/501 ✅ (أُعيد تشغيل 9.A لضرورة لمس
+  مسار impression المشترك — كشف تفاعلاً أُصلح بتقييد الحارس على الجلسة)، `tsc` ✅ (صفر `any` جديد)،
+  `build` ✅. لا مسارات جديدة ⇒ بلا تجديد جرد. التراجع: إسقاط عمود 0026 وفهرسه.
+- **النطاق المحترَم**: بلا 9.C/9.D/9.E، بلا LedgerService/Stripe/Money، بلا CI/dependencies، بلا تتبع
+  سلوكي، بلا تعديل messaging، بلا migrations تاريخية، بلا دمج. الحالة 🔧 ريثما يعيد REMOTE التحقق.
+
 ## 9.A — دورة حياة الحملة الإعلانية · فرع `feat/ads-campaign-lifecycle`
 
 - 🔧 منفَّذ محلياً (من `7855419` = `origin/main` بعد دمج PR #43). النتيجة: المعلن ينشئ حملة بميزانية،

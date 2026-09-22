@@ -854,6 +854,11 @@ export const en = {
         campaign_not_draft: 'Campaign must be in draft to submit it for review',
         campaign_not_active: 'Campaign must be active for this action',
         campaign_not_paused: 'Campaign must be paused to resume it',
+        // ── Phase 9.B: ad serving and targeting ───────────────
+        sponsored_label: 'Sponsored',
+        why_this_ad: 'Why am I seeing this ad?',
+        hide_ad: 'Hide ad',
+        frequency_cap_reached: 'You have reached the display frequency limit for this ad',
     },
 
     // ── Task 2: Admin Governance ──────────────────────────────

@@ -95,6 +95,7 @@ export class AdCampaignManager {
         cost_per_impression_cents?: number;
         target_language?: string;
         target_country?: string;
+        target_category_id?: number;
         advertiser_id: number;
     }): Promise<Advertisement> {
         if (!Number.isInteger(data.budget_cents) || data.budget_cents <= 0) {
@@ -121,6 +122,7 @@ export class AdCampaignManager {
                 cost_per_impression_cents = ?,
                 target_language = ?,
                 target_country = ?,
+                target_category_id = ?,
                                 campaign_lifecycle_status = 'draft'
             WHERE id = ?
         `).bind(
@@ -129,6 +131,7 @@ export class AdCampaignManager {
             cost,
             data.target_language || null,
             data.target_country || null,
+            data.target_category_id ?? null,
             ad.id
         ).run();
 
