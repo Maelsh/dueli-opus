@@ -108,9 +108,13 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
         const adModel = new AdvertisementModel(c.env.DB);
         const clickService = new AdClickService(c.env.DB);
         const key = body.idempotency_key ?? null;
+        const mintKey = mintRateIdentity(c, viewer);
 
         const mintClickToken = async () => {
-            const minted = await clickService.mint(adId, effectiveUserId);
+            // Graceful under stockpile pressure: the impression already
+            // succeeded server-side, so a hit cap yields success WITHOUT a
+            // token (null) rather than failing the verified delivery.
+            const minted = await clickService.mint(adId, effectiveUserId, mintKey);
             return minted?.token ?? null;
         };
 
@@ -198,10 +202,29 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
 });
 
 /**
- * Mint a single-use click token (Phase 9.C anti-fraud).
+ * Mint rate identity (9.C remediation): authenticated callers are keyed by
+ * their SESSION user id — body parameters are never consulted, so spoofing
+ * `user_id` cannot escape the caller's own quota. Anonymous callers are keyed
+ * by the server-observed client IP (same source as the platform rate limiter
+ * in middleware/security.ts — never a client counter).
+ */
+function mintRateIdentity(
+    c: { req: { header: (name: string) => string | undefined } },
+    viewer: { id: number } | null
+): string {
+    if (viewer) return `user:${viewer.id}`;
+    const ip = c.req.header('CF-Connecting-IP') || c.req.header('X-Forwarded-For') || 'unknown';
+    return `ip:${ip}`;
+}
+
+/**
+ * Mint a single-use click token (Phase 9.C anti-fraud + remediation cap).
  * The token is an opaque server-side bearer bound to (ad, session identity),
  * expiring after AD_CLICK_TOKEN_TTL_SECONDS. Every countable click must
  * present one on POST /:id/click. No secret material is ever exposed.
+ * Minting is free (no ledger movement) but NOT unlimited: at most
+ * AD_CLICK_TOKEN_MAX_LIVE_PER_IDENTITY live tokens per (ad, rate identity)
+ * (429 `click_token_limit` beyond that). The body is ignored for identity.
  * POST /api/advertisements/:id/click-token
  */
 advertisementsRoutes.post('/:id/click-token', async (c) => {
@@ -212,10 +235,18 @@ advertisementsRoutes.post('/:id/click-token', async (c) => {
             return c.json({ success: false, error: t('errors.missing_fields', lang) }, 422);
         }
         const viewer = c.get('user') as { id: number } | null;
-        const clickService = new AdClickService(c.env.DB);
-        const minted = await clickService.mint(adId, viewer?.id ?? null);
-        if (!minted) {
+        const adModel = new AdvertisementModel(c.env.DB);
+        if (!(await adModel.findById(adId))) {
             return c.json({ success: false, error: t('not_found', lang) }, 404);
+        }
+        const clickService = new AdClickService(c.env.DB);
+        const minted = await clickService.mint(adId, viewer?.id ?? null, mintRateIdentity(c, viewer));
+        if (!minted) {
+            return c.json({
+                success: false,
+                error: t('errors.rate_limited', lang),
+                code: 'click_token_limit'
+            }, 429);
         }
         return c.json({
             success: true,

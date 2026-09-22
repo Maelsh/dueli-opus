@@ -23,6 +23,18 @@ import { AdvertisementModel, ClickRedeemOutcome } from '../../models/Advertiseme
 /** Click-token time to live, in seconds (10 minutes). */
 export const AD_CLICK_TOKEN_TTL_SECONDS = 600;
 
+/**
+ * Anti-stockpile bound (9.C remediation): at most this many LIVE (unconsumed,
+ * unexpired) click tokens may exist per (ad, mint identity). Minting is free
+ * (no ledger movement), so without a cap one session could hoard unlimited
+ * credentials; with the cap + TTL + the platform's per-path rate limit the
+ * stockpile is bounded three ways. 100 keeps legitimate flows (including the
+ * 100-token concurrency proof) green while stopping hoarding. Enforced
+ * atomically inside AdvertisementModel.createClickToken — never via client
+ * counters, JS, or UI.
+ */
+export const AD_CLICK_TOKEN_MAX_LIVE_PER_IDENTITY = 100;
+
 export interface ClickTokenMint {
     token: string;
     expiresInSeconds: number;
@@ -44,15 +56,21 @@ export class AdClickService {
 
     /**
      * Mint a single-use click token for an ad, bound to the server-side
-     * caller identity (session user id, or null for anonymous). Returns null
-     * when the ad does not exist — no token for unknown ads.
+     * caller identity (session user id, or null for anonymous). mintKey is the
+     * rate identity ('user:<id>' or server-observed 'ip:<...>'), decided by the
+     * route — never from client input. Returns null when the ad does not exist
+     * (no token for unknown ads) or when the per-identity live-token cap is
+     * hit (caller maps to 429).
      */
-    async mint(adId: number, userId: number | null): Promise<ClickTokenMint | null> {
+    async mint(adId: number, userId: number | null, mintKey: string): Promise<ClickTokenMint | null> {
         const adModel = new AdvertisementModel(this.database);
         const ad = await adModel.findById(adId);
         if (!ad) return null;
         const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`.replace(/-/g, '');
-        await adModel.createClickToken(adId, userId, token);
+        const row = await adModel.createClickToken(
+            adId, userId, mintKey, token, AD_CLICK_TOKEN_MAX_LIVE_PER_IDENTITY
+        );
+        if (!row) return null;
         return { token, expiresInSeconds: AD_CLICK_TOKEN_TTL_SECONDS };
     }
 

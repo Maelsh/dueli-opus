@@ -1,6 +1,17 @@
 
 
 
+## 9.C remediation — F-1 + dedup isolation + mint cap · نفس الفرع (PR #46)
+
+- 🔧 remediation فوق `79a1358` بعد REJECT خارجي (كل الوظائف كانت PASS): إغلاق F-1 المانع + ملاحظتين.
+- **F-1**: contract ‏27 ← ‏29 (+0027 و0028) + جداول 9.C الثلاثة + index الهوية المركبة (COALESCE).
+- **Dedup isolation**: migration ‏0028 جديدة (0027 تاريخية لم تُمس) — `UNIQUE(key, ad, COALESCE(user,-1))`
+  مع نسخ كامل للصفوف؛ نفس key+ad+identity ‏⇒ dedup، وعبر ad/identity ⇒ مستقل.
+- **Mint cap**: ‏100 live token لكل (ad, هوية) ذرّياً — ‏429 `click_token_limit` عند التجاوز؛ الهوية من
+  الجلسة (body يُتجاهل) أو IP المراقب للمجهول؛ السك لا يكتب ledger.
+- **RED/GREEN مُثبَت**: ‏5 فشلت قبل الإصلاح ⇒ ‏ad-metrics ‏16/16 بعده (تشمل upgrade حقيقياً لـ0028)؛
+  ‏19/19 للجيران؛ ‏`tsc` ✅؛ ‏`build` ✅. schema-contract يُجمَع بنجاح ولا يُنفَّذ محلياً (يتطلب Cloudflare).
+
 ## 9.C — القياس ومكافحة الاحتيال · فرع `feat/ads-metrics-antifraud`
 
 - 🔧 منفَّذ محلياً (من `87b6517` = طرف 9.B). النتيجة: المعلن يدفع مقابل مشاهدات ونقرات حقيقية،

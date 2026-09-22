@@ -66,6 +66,8 @@ export interface AdClickToken {
     expires_at: string;
     consumed_at: string | null;
     created_at: string;
+    /** Rate identity the token was minted for (0028: 'user:<id>' | 'ip:<...>' | 'anon'). */
+    mint_key: string | null;
 }
 
 /**
@@ -343,14 +345,30 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
     }
 
     /**
-     * 9.C — mint a single-use click token bound to (ad, server-side identity).
-     * Expiry is stamped in SQL clock time so comparisons never mix formats.
+     * 9.C remediation — mint a single-use click token bound to (ad,
+     * server-side identity), with an ATOMIC live-token cap per mint identity.
+     * The INSERT fires only while fewer than maxLiveTokens live (unconsumed,
+     * unexpired) tokens exist for (ad_id, mint_key) — count and write in ONE
+     * statement, so concurrent minters cannot overshoot and no 500 arises.
+     * Returns null when the cap is hit (caller maps to 429). Expiry is stamped
+     * in SQL clock time so comparisons never mix formats.
      */
-    async createClickToken(adId: number, userId: number | null, token: string): Promise<AdClickToken> {
-        await this.db.prepare(`
-            INSERT INTO ad_click_tokens (ad_id, user_id, token, expires_at, consumed_at)
-            VALUES (?, ?, ?, datetime('now', '+10 minutes'), NULL)
-        `).bind(adId, userId, token).run();
+    async createClickToken(
+        adId: number,
+        userId: number | null,
+        mintKey: string,
+        token: string,
+        maxLiveTokens: number
+    ): Promise<AdClickToken | null> {
+        const inserted = await this.db.prepare(`
+            INSERT INTO ad_click_tokens (ad_id, user_id, mint_key, token, expires_at, consumed_at)
+            SELECT ?, ?, ?, ?, datetime('now', '+10 minutes'), NULL
+            WHERE (SELECT COUNT(*) FROM ad_click_tokens
+                   WHERE ad_id = ? AND mint_key = ?
+                     AND consumed_at IS NULL AND expires_at > datetime('now')) < ?
+        `).bind(adId, userId, mintKey, token, adId, mintKey, maxLiveTokens).run();
+        const changes = (inserted.meta as { changes?: number } | undefined)?.changes ?? 0;
+        if (changes !== 1) return null;
         const row = await this.db.prepare(`
             SELECT * FROM ad_click_tokens WHERE token = ?
         `).bind(token).first<AdClickToken>();
@@ -422,16 +440,18 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
     }
 
     /**
-     * 9.C — claim an impression idempotency key. Returns false when the same
-     * key was already claimed inside the window (caller must replay the stored
-     * result instead of charging again). Stale claims (>24h) are released so
-     * keys stay bounded and the approved window is honored.
+     * 9.C remediation — claim an impression idempotency key for the composite
+     * identity (key, ad, user) enforced by 0028's UNIQUE index. Returns false
+     * ONLY when the same identity already claimed it inside the window (caller
+     * must replay instead of charging again); the same key for another ad or
+     * identity inserts cleanly. Stale claims (>24h, same identity) are released
+     * so keys stay bounded and the approved window is honored.
      */
     async claimImpressionKey(key: string, adId: number, userId: number | null): Promise<boolean> {
         await this.db.prepare(`
             DELETE FROM ad_impression_dedup
-            WHERE key = ? AND created_at < datetime('now', '-1 day')
-        `).bind(key).run();
+            WHERE key = ? AND ad_id = ? AND user_id IS ? AND created_at < datetime('now', '-1 day')
+        `).bind(key, adId, userId).run();
         try {
             await this.db.prepare(`
                 INSERT INTO ad_impression_dedup (key, ad_id, user_id, served, spent_cents)
