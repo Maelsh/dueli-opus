@@ -808,6 +808,28 @@ export const ar = {
         budget_exhausted: 'نفدت الميزانية',
         image_url: 'رابط الصورة',
         link_url: 'رابط الوجهة',
+        budget_cents_label: 'الميزانية (سنت)',
+        cost_cents_label: 'تكلفة العرض (سنت)',
+        submitted_review: 'أُرسلت الحملة للمراجعة',
+        campaign_ended: 'انتهت الحملة',
+        submit_for_review: 'إرسال للمراجعة',
+        end_campaign: 'إنهاء الحملة',
+    },
+
+    // ── المرحلة 9.A: دورة حياة الحملة الإعلانية ─────────────────
+    ads: {
+        campaign_status_draft: 'مسودة',
+        campaign_status_pending_review: 'بانتظار المراجعة',
+        campaign_status_active: 'نشطة',
+        campaign_status_paused: 'متوقفة مؤقتاً',
+        campaign_status_ended: 'منتهية',
+        budget_exhausted: 'نفدت ميزانية الحملة — توقف العرض تلقائياً',
+        pending_review: 'الحملة بانتظار مراجعة الإدارة ولا يمكن تنشيطها بعد',
+        invalid_transition: 'انتقال غير مسموح لحالة الحملة',
+        invalid_budget: 'الميزانية يجب أن تكون عدداً صحيحاً موجباً بالسنت',
+        campaign_not_draft: 'يجب أن تكون الحملة في حالة مسودة لإرسالها للمراجعة',
+        campaign_not_active: 'يجب أن تكون الحملة نشطة لهذا الإجراء',
+        campaign_not_paused: 'يجب أن تكون الحملة متوقفة مؤقتاً لاستئنافها',
     },
 
     // ── المهمة 2: حوكمة الإدارة ──────────────────────────────────

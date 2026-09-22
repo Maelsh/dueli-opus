@@ -89,3 +89,19 @@ erDiagram
 - **الفرض backend**: أي حدث refund لتبرع (`charge.refunded` على تبرع Dueli) يُرفض في `StripeWebhookService.processRefund` قبل أي أثر مالي (لا قيود عكسية، لا تقدّم حارس، لا تغيير حالة) — مع تسجيل الحدث بلا tx لتتوقف Stripe عن إعادة المحاولة. وظائف Stripe الأخرى غير الخاصة بالتبرعات لا تُمس.
 - **المتبرع يرى السياسة قبل الدفع**: صفحة التبرع تعرض نص عدم الاسترداد (`donations.non_refundable`).
 - **موافقتان صريحتان شرط إنشاء**: قبول السياسة (`non_refundable_accepted === true`) + تأكيد المبلغ (`amount_confirmed === true`) في `POST /api/donations` — بلا قيم افتراضية ولا موافقة ضمنية. الرفض ⇒ لا تبرع (400).
+
+## دورة حياة الحملة الإعلانية (9.A)
+
+> المصدر canonical: `migrations/0025_ads_campaign_lifecycle.sql` + `src/lib/services/AdCampaignManager.ts`.
+
+- **الحالات**: `draft → pending_review → active → paused → ended` — مفروضة بـ`CHECK` على مستوى المخطط،
+  وكل انتقال `UPDATE ... WHERE campaign_status IN (...)` في SQL (الحراسة في طبقة السلامة لا الـController).
+- **المراجعة إلزامية**: لا تصل الحملة إلى `active` إلا عبر `PUT /api/admin/ads/campaigns/:id/review` (مشرف فقط) من `pending_review`.
+- **الميزانية عبر LedgerService حصراً**: ميزانية الحملة تعيش في `ledger_entries` بحساب `reserve:campaign_<id>`
+  (مدين-موجب؛ التمويل متوازن: مدين الحملة / دائن `platform:ad_budget_commitments`). الأعمدة الحقيقية القديمة
+  `budget`/`budget_remaining` **حُذفت** من `advertisements` — لا مصدر مالي موازٍ. الجديد: `budget_cents` و`cost_per_impression_cents` (integer cents، بيانات وصفية).
+- **نفاد الميزانية ذرّي**: كل خصم عرض = حركة دفتر بشرط SQL داخل عبارة `INSERT ... SELECT` واحدة (حالة الحملة + الرصيد + الكتابة
+  في نفس العبارة — بلا TOCTOU)، وفي نفس الـbatch تنقلب الحالة إلى `ended` ذرّياً عندما لا يكفي الرصيد لعرض آخر.
+  استعلاما الاختيار (`getActiveAds`, `getActiveAdsForCompetition`) يضمّنان شرط الرصيد في SQL — الحملة المستنزفة تتوقف عن العرض فوراً.
+- **ترحيل الحالات القديمة**: `depleted`/`archived` → `ended`. صفوف `active` القديمة تبقى بحالتها لكن برصيد دفتر صفر،
+  فلا تُعرض حتى تُموَّل صراحة عبر الـledger (افتراض آمن).

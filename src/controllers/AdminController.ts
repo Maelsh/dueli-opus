@@ -15,6 +15,7 @@ import { PlatformFinancialLogModel } from '../models/PlatformFinancialLogModel';
 import { ArbitrationService, ArbitrationStatus } from '../lib/services/ArbitrationService';
 import { LivePayoutEngine } from '../lib/services/LivePayoutEngine';
 import { EventPusher } from '../lib/services/EventPusher';
+import { AdCampaignManager } from '../lib/services/AdCampaignManager';
 import { WithdrawalController } from './WithdrawalController';
 
 export class AdminController extends BaseController {
@@ -267,10 +268,16 @@ export class AdminController extends BaseController {
                 image_url?: string;
                 link_url?: string;
                 revenue_per_view?: number;
+                budget_cents?: number;
             }>(c);
 
             if (!body?.title) {
                 return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+
+            const budgetCents = body.budget_cents ?? 0;
+            if (!Number.isInteger(budgetCents) || budgetCents < 0) {
+                return this.validationError(c, this.t('ads.invalid_budget', c));
             }
 
             const adModel = new AdvertisementModel(c.env.DB);
@@ -282,7 +289,17 @@ export class AdminController extends BaseController {
                 created_by: user.id
             });
 
-            return this.success(c, { ad }, 201);
+            // 0025/0026 carry-over: every row carries BOTH status columns so the
+            // admin review workflow can always proceed to pending_review/active.
+            const manager = new AdCampaignManager(c.env.DB);
+            await manager.registerExternalRow(ad.id, {
+                advertiserId: user.id,
+                budgetCents,
+                costPerImpressionCents: Math.max(1, Math.round((body.revenue_per_view ?? 0.01) * 100)),
+                initialStatus: 'draft'
+            });
+
+            return this.success(c, { ad: (await adModel.findById(ad.id))! }, 201);
         } catch (error) {
             console.error('Admin create ad error:', error);
             return this.serverError(c, error as Error);
@@ -332,6 +349,52 @@ export class AdminController extends BaseController {
             return this.success(c, { deleted: true });
         } catch (error) {
             console.error('Admin delete ad error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    // =====================================
+    // Ad campaign review (Phase 9.A): pending_review → active
+    // =====================================
+
+    async reviewAdCampaign(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!await this.isAdmin(c)) return this.forbidden(c);
+
+            const admin = this.getCurrentUser(c);
+            const adId = this.getParamInt(c, 'id');
+            if (!adId) return this.validationError(c, this.t('errors.invalid_id', c));
+
+            const body = await this.getBody<{ approve?: boolean }>(c);
+            if (body?.approve !== true) {
+                return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+
+            const campaignManager = new AdCampaignManager(c.env.DB);
+            const ad = await campaignManager.approveCampaign(adId);
+
+            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
+
+            // F-4: admin campaign review is written to the existing append-only
+            // audit trail — who, what, when, which campaign — G4/A record.
+            try {
+                const auditModel = new AdminAuditLogModel(c.env.DB);
+                await auditModel.log(
+                    admin?.id ?? 0,
+                    'review_ad_campaign',
+                    'advertisement',
+                    adId,
+                    `Approved campaign #${adId} to active`
+                );
+            } catch (auditError) {
+                // Audit must never block the guarded lifecycle outcome — the
+                // transition already committed; surface the failure in logs only.
+                console.error('Admin review audit write failed:', auditError);
+            }
+
+            return this.success(c, { ad });
+        } catch (error) {
+            console.error('Admin review ad campaign error:', error);
             return this.serverError(c, error as Error);
         }
     }
