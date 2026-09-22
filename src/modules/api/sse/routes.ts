@@ -84,12 +84,12 @@ sseRoutes.get('/', async (c) => {
                 if (catchUp) enqueue(catchUp);
             }
 
-            // Poll for new events every 2 seconds
+            // Poll for new events every POLL_INTERVAL_MS (10 seconds — SEC-14)
             // (In a Durable Objects setup this would be a push; here we use
             //  a polling loop backed by the D1 event log.)
             let latestId = lastEventId;
             let pollCount = 0;
-            const MAX_POLLS = 1500; // ~50 minutes at 2s intervals
+            const MAX_POLLS = 1500; // ~4 hours at 10s intervals, then reconnect hint
 
             const poll = async () => {
                 if (pollCount++ >= MAX_POLLS) {

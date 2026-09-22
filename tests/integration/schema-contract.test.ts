@@ -174,6 +174,28 @@ describe('migrations — applied via Wrangler CLI only', () => {
     it('matches the full expected migration file name list', () => {
         expect(listMigrationFileNames()).toEqual(EXPECTED_MIGRATIONS);
     });
+
+    it('rejects any NEW duplicate migration number (historical 0012 pair is the only exception)', () => {
+        // Phase-10 debt ballet: docs/16-KNOWN-ISSUES.md §1 + plan 16 §10 —
+        // the 0012 pair (rate_limits + reports_ad_target) stays forever, but
+        // no future migration may reuse a number. Pure filename guard, no D1.
+        const byNumber = new Map<string, string[]>();
+        for (const name of listMigrationFileNames()) {
+            const num = name.split('_')[0];
+            if (num === undefined || !/^\d+$/.test(num)) {
+                throw new Error(`bad migration file name: ${name}`);
+            }
+            const group = byNumber.get(num);
+            if (group) group.push(name);
+            else byNumber.set(num, [name]);
+        }
+        const duplicated = [...byNumber.entries()].filter((e) => e[1].length > 1);
+        expect(duplicated.map((e) => e[0]).sort()).toEqual(['0012']);
+        expect((byNumber.get('0012') ?? []).sort()).toEqual([
+            '0012_rate_limits.sql',
+            '0012_reports_ad_target.sql',
+        ]);
+    });
 });
 
 describe('schema — real D1 queried through Wrangler CLI', () => {

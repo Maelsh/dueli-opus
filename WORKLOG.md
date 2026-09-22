@@ -1,3 +1,39 @@
+## 2026-09-23 — FINAL DEFERRED-DEBT CLOSURE SWEEP (branch `chore/final-debt-closure`)
+
+- Base: `d332223` (merge of PR #48, 9.E closed). Reconciled every 8.G→9.E finding
+  and every Phase-10 deferred item in `dueli-plan/16-AGENT-PROMPTS-PLAN.md` against
+  `origin/main`, the code, and Remote D1. 9.E N-1/N-2/N-3 NOT reopened (re-verified
+  green: ad-impression-identity 10/10). No financial decision reversed
+  (DONATIONS_NON_REFUNDABLE intact, no refund/clawback policy touched).
+- **CLOSED in this sweep (code/test/docs, one cycle)**:
+  - A1 — migration-numbering guard (plan §10, 0012 row): new assertion in
+    `tests/integration/schema-contract.test.ts` — any NEW duplicate migration number
+    fails; the historical 0012 pair is pinned as the only exception. RED-proven
+    (expecting `[]` fails with exactly `["0012"]`). No historical file touched.
+  - A2 — SEC-04 auth lock (plan §10, SEC-04 row): new `tests/api/cron-auth.test.ts`
+    (6/6) — no-header⇒403, `?key=`⇒403, wrong Bearer⇒403, valid Bearer⇒200,
+    GET⇒404 (POST-only), unconfigured⇒503. RED-proven (re-opening `?key=`
+    fails case 2 with 200≠403). Route code unchanged (already Bearer-only).
+  - B1 — `docs/16-KNOWN-ISSUES.md` §3 counter 19→29 migration files (0015→0028).
+  - B2 — `src/modules/api/sse/routes.ts` stale "2 seconds" comments → 10s
+    (matches POLL_INTERVAL_MS; behavior unchanged).
+- **REMOTE D1 — BLOCKED, no action taken (production safety)**: repo 29 files;
+  remote history has 28 rows but ids 2–10 name files ABSENT from the repo
+  (`0002_add_auth_fields.sql`…`0010_add_invitations.sql` — pre-rewrite set,
+  proven via `git log`); `donations` table MISSING remotely (repo 0001 creates
+  it) so pending 0020/0022/0023 canNOT apply; pending 0019–0028 = 10, applied
+  now = 0. Remote left byte-identical (re-listed after). Remediation needs a
+  leader decision — see PR body / sweep report (UNPLANNED DEBTS).
+- **Verified still closed (no code change)**: 8.G money-gate 13/13,
+  donations-security 404-lock, SEC-01 route absent, ledger invariant 0 in-test.
+- **Verification**: `npm test` 544/544 (53 files: 538 + 6 cron-auth) ✅;
+  schema-contract 20/20 via real wrangler D1 ✅; `npx tsc --noEmit` clean
+  (any 279 ≤ 308, no new `any`) ✅; `npm run build` ✅ (CSS artifact churn
+  reverted). No migration, no dependency, no config, no route changes.
+  Rollback: revert the single commit.
+  Files: tests/api/cron-auth.test.ts (new), tests/integration/schema-contract.test.ts,
+  docs/16-KNOWN-ISSUES.md, src/modules/api/sse/routes.ts (comments only).
+
 ## 2026-09-22 — 9.E final-gate remediation N-1+N-3 (branch `fix/ads-final-gate-remediation`)
 
 - Base: `76525cf` (merge of PR #47). Single goal: close every finding of the two independent
