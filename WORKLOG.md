@@ -1,4 +1,24 @@
-## 2026-09-22 — Phase 9.A: ad campaign lifecycle (branch `feat/ads-campaign-lifecycle`)
+## 2026-09-22 — Phase 9.A PR#44 remediation (findings F-1 → F-5)
+
+- **F-1 (CRITICAL):** Rewrote `0025_ads_campaign_lifecycle.sql` to be **additive** (no `DROP TABLE`):
+  preserves all `advertisements`, `ad_impressions`, `ad_blocks` rows + FK from
+  `platform_financial_logs.ad_id`. Added `campaign_lifecycle_status` column and
+  `budget_cents`/`cost_per_impression_cents` (integer cents) alongside legacy
+  columns. Legacy `depleted`/`archived` → `ended`. No data loss on upgrade.
+  Production-like migration probe (`tests/api/ad-campaign-remediation.test.ts`)
+  proves pre-existing rows + FK relations survive migration and new schema works.
+- **F-2 (MODERATE):** Advertiser portal uses `budget_cents` integer-cents contract;
+  dashboard budget fields derived from ledger via `LedgerService.balance` (not a column).
+- **F-3 (MODERATE):** Admin ads workflow completes: admin `POST /api/admin/ads` →
+  advertiser `submit-review` → admin `PUT /api/admin/ads/campaigns/:id/review` → active.
+- **F-4 (LOW):** Admin campaign review logged via existing `AdminAuditLogModel`
+  (`admin_audit_logs`) — who, what, when, which campaign.
+- **F-5 (LOW):** 409 messages use distinct i18n keys: `campaign_not_active` (pause/end),
+  `campaign_not_draft` (submit), `campaign_not_paused` (resume), `budget_exhausted`,
+  `invalid_budget` (422). No hard-coded user-visible text.
+- All writes go to `campaign_lifecycle_status` only (0003 CHECK on `campaign_status`
+  is never violated with draft/pending_review/ended). Reads use CASE priority.
+- tsc ✅, 8 targeted tests ✅.
 
 - Result: advertiser creates a budgeted campaign that walks a guarded lifecycle (draft → pending_review → active → paused → ended) and stops serving automatically and atomically when the budget runs out.
 - Migration 0025 (new): rebuilds `advertisements` — new CHECK states, `budget_cents`/`cost_per_impression_cents` (integer cents), legacy REAL `budget`/`budget_remaining` columns REMOVED (no parallel money source). Legacy `depleted`/`archived` → `ended`; legacy active rows hold zero ledger balance so they never serve until funded (safe default).
