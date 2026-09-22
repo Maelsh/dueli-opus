@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-21T23:23:03.675Z
+> تاريخ التوليد: 2026-09-22T13:34:35.251Z
 
-## الإجمالي: 190 مسار
+## الإجمالي: 191 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 90 |
+| PUBLIC(auth-optional, in-handler check required) | 91 |
 | UNGUARDED ⚠ | 50 |
 | AUTHENTICATED | 47 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -65,6 +65,7 @@
 | GET | `/api/advertisements` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/advertisements/routes.ts` |
 | GET | `/api/advertisements/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/advertisements/routes.ts` |
 | POST | `/api/advertisements/:id/click` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/advertisements/routes.ts` |
+| POST | `/api/advertisements/:id/click-token` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/advertisements/routes.ts` |
 | POST | `/api/advertisements/:id/impression` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/advertisements/routes.ts` |
 | GET | `/api/advertisements/competition/:id/revenue` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/advertisements/routes.ts` |
 | POST | `/api/advertiser/campaigns` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |

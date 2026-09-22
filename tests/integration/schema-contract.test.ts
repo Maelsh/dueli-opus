@@ -60,6 +60,8 @@ const EXPECTED_MIGRATIONS = [
     '0024_donation_refund_intents.sql',
     '0025_ads_campaign_lifecycle.sql',
     '0026_ads_target_category.sql',
+    '0027_ad_metrics_antifraud.sql',
+    '0028_ad_dedup_identity.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -78,6 +80,9 @@ const EXPECTED_TABLES = [
     'ledger_entries',
     'stripe_webhook_events',
     'donation_refund_intents',
+    'ad_click_tokens',
+    'ad_clicks',
+    'ad_impression_dedup',
 ];
 
 let migrationOutput = '';
@@ -86,6 +91,7 @@ let messagesColumns: string[] = [];
 let advertisementsColumns: string[] = [];
 let userEarningsColumns: string[] = [];
 let chunkKeysColumns: string[] = [];
+let dedupIdentityIndexSql = '';
 let reportsDdl = '';
 let foreignKeyCheck: ForeignKeyCheckRow[] = [];
 
@@ -142,6 +148,12 @@ beforeAll(() => {
         queryD1('PRAGMA table_info(user_earnings)').filter(isTableInfoRow),
     );
     chunkKeysColumns = columnNames(queryD1('PRAGMA table_info(chunk_keys)').filter(isTableInfoRow));
+    const dedupIndexRows = queryD1(
+        "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type='index' AND name='idx_ad_impression_dedup_identity'",
+    ).filter(isSqliteMasterRow);
+    const firstDedupIndex = dedupIndexRows[0];
+    dedupIdentityIndexSql =
+        firstDedupIndex !== undefined && typeof firstDedupIndex.sql === 'string' ? firstDedupIndex.sql : '';
     foreignKeyCheck = queryD1('PRAGMA foreign_key_check').filter(isForeignKeyCheckRow);
     const reportsRows = queryD1(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='reports'",
@@ -155,8 +167,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 27 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(27);
+    it('has exactly 29 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(29);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -236,6 +248,17 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
     it('advertisements has the 0026 category-targeting column: target_category_id', () => {
         expect(tables).toContain('advertisements');
         expect(advertisementsColumns).toContain('target_category_id');
+    });
+
+    it('9.C tables exist: ad_click_tokens, ad_clicks, ad_impression_dedup (0027)', () => {
+        for (const table of ['ad_click_tokens', 'ad_clicks', 'ad_impression_dedup']) {
+            expect(tables, `missing table: ${table}`).toContain(table);
+        }
+    });
+
+    it('ad_impression_dedup carries the NULL-safe composite identity index (0028)', () => {
+        expect(dedupIdentityIndexSql.length).toBeGreaterThan(0);
+        expect(dedupIdentityIndexSql).toContain('COALESCE');
     });
 
     it('reports CHECK constraint includes ad target_type when provable via sqlite_master', () => {
