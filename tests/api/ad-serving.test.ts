@@ -156,6 +156,77 @@ describe('9.B — ad serving and targeting', () => {
         expect(ids((await serve(db, 100)).data)).not.toContain(adCap);
     });
 
+    it('F-1a. omitting body.user_id cannot bypass the cap — session identity counts', async () => {
+        const adId = await createCampaign(db, { title: 'F-1a probe' });
+        for (let i = 0; i < 5; i++) {
+            const res = await app.request(`/api/advertisements/${adId}/impression?lang=en`, {
+                method: 'POST', headers: headers(VIEWER),
+                // No user_id at all — the REMOTE bypass.
+                body: JSON.stringify({ competition_id: 100 }),
+            }, env(db));
+            expect(res.status).toBe(200);
+        }
+        // Impressions were attributed to the authenticated viewer (id 5)…
+        const rows = await db.prepare(
+            'SELECT user_id FROM ad_impressions WHERE ad_id = ?'
+        ).bind(adId).all<{ user_id: number | null }>();
+        expect(rows.results.length).toBe(5);
+        for (const row of rows.results) expect(row.user_id).toBe(5);
+        // …so the 6th request hits the cap instead of sailing through.
+        const over = await app.request(`/api/advertisements/${adId}/impression?lang=en`, {
+            method: 'POST', headers: headers(VIEWER),
+            body: JSON.stringify({ competition_id: 100 }),
+        }, env(db));
+        expect(over.status).toBe(429);
+    });
+
+    it('F-1b. a spoofed body.user_id cannot move the charge to another user', async () => {
+        const adId = await createCampaign(db, { title: 'F-1b probe' });
+        for (let i = 0; i < 5; i++) {
+            const res = await app.request(`/api/advertisements/${adId}/impression?lang=en`, {
+                method: 'POST', headers: headers(VIEWER),
+                // Attacker claims to be user 4 — must be ignored for identity.
+                body: JSON.stringify({ competition_id: 100, user_id: 4 }),
+            }, env(db));
+            expect(res.status).toBe(200);
+        }
+        const own = await db.prepare(
+            'SELECT COUNT(*) as n FROM ad_impressions WHERE ad_id = ? AND user_id = 5'
+        ).bind(adId).first<{ n: number }>();
+        const victim = await db.prepare(
+            'SELECT COUNT(*) as n FROM ad_impressions WHERE ad_id = ? AND user_id = 4'
+        ).bind(adId).first<{ n: number }>();
+        expect(own!.n).toBe(5);
+        expect(victim!.n).toBe(0);
+        const over = await app.request(`/api/advertisements/${adId}/impression?lang=en`, {
+            method: 'POST', headers: headers(VIEWER),
+            body: JSON.stringify({ competition_id: 100, user_id: 4 }),
+        }, env(db));
+        expect(over.status).toBe(429);
+    });
+
+    it('F-2. concurrent impressions cannot overshoot the cap (atomic enforcement)', async () => {
+        const adId = await createCampaign(db, { title: 'F-2 probe', budget_cents: 10000 });
+        const results = await Promise.all(
+            Array.from({ length: 30 }, (_, i) =>
+                app.request(`/api/advertisements/${adId}/impression?lang=en`, {
+                    method: 'POST', headers: headers(VIEWER),
+                    body: JSON.stringify({ competition_id: 100 }),
+                }, env(db)).then(async (res) => res.status)
+            )
+        );
+        const ok = results.filter((s) => s === 200).length;
+        const capped = results.filter((s) => s === 429).length;
+        // Order-independent: exactly the cap is served, the rest are rejected…
+        expect(ok).toBe(5);
+        expect(capped).toBe(25);
+        // …and exactly the served ones left impression rows (charge ⇔ row pairing).
+        const stored = await db.prepare(
+            'SELECT COUNT(*) as n FROM ad_impressions WHERE ad_id = ? AND user_id = 5'
+        ).bind(adId).first<{ n: number }>();
+        expect(stored!.n).toBe(5);
+    });
+
     it('7. every served ad carries the sponsored label (i18n, no hard-coded text)', async () => {
         const { data } = await serve(db, 100);
         expect(data.length).toBeGreaterThan(0);

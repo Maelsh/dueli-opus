@@ -59,6 +59,7 @@ const EXPECTED_MIGRATIONS = [
     '0023_donation_refund_tracking.sql',
     '0024_donation_refund_intents.sql',
     '0025_ads_campaign_lifecycle.sql',
+    '0026_ads_target_category.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -82,6 +83,7 @@ const EXPECTED_TABLES = [
 let migrationOutput = '';
 let tables: string[] = [];
 let messagesColumns: string[] = [];
+let advertisementsColumns: string[] = [];
 let userEarningsColumns: string[] = [];
 let chunkKeysColumns: string[] = [];
 let reportsDdl = '';
@@ -135,6 +137,7 @@ beforeAll(() => {
     ).filter(isSqliteMasterRow);
     tables = tableNames(masterRows);
     messagesColumns = columnNames(queryD1('PRAGMA table_info(messages)').filter(isTableInfoRow));
+    advertisementsColumns = columnNames(queryD1('PRAGMA table_info(advertisements)').filter(isTableInfoRow));
     userEarningsColumns = columnNames(
         queryD1('PRAGMA table_info(user_earnings)').filter(isTableInfoRow),
     );
@@ -152,8 +155,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 26 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(26);
+    it('has exactly 27 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(27);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -228,6 +231,11 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
     it('chunk_keys has user_id and expires_at columns (0013_chunk_key_binding.sql)', () => {
         expect(chunkKeysColumns).toContain('user_id');
         expect(chunkKeysColumns).toContain('expires_at');
+    });
+
+    it('advertisements has the 0026 category-targeting column: target_category_id', () => {
+        expect(tables).toContain('advertisements');
+        expect(advertisementsColumns).toContain('target_category_id');
     });
 
     it('reports CHECK constraint includes ad target_type when provable via sqlite_master', () => {

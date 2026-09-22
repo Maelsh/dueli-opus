@@ -8,7 +8,7 @@ import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { AdvertisementModel } from '../../../models/AdvertisementModel';
 import { AdCampaignManager } from '../../../lib/services/AdCampaignManager';
-import { AdServingService } from '../../../lib/services/AdServingService';
+import { AdServingService, AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY } from '../../../lib/services/AdServingService';
 import { authMiddleware } from '../../../middleware/auth';
 import { t, DEFAULT_LANGUAGE } from '../../../i18n';
 
@@ -80,27 +80,33 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
             return c.json({ success: false, error: t('errors.missing_fields', c.get('lang') || DEFAULT_LANGUAGE) }, 422);
         }
 
-        // 9.B frequency cap — server-side, authenticated viewer only: the cap
-        // keys on the session identity, never on the client-supplied
-        // body.user_id (self-asserted, rotatable). Unauthenticated calls keep
-        // 9.A attribution behavior; a tampered client cannot exceed the cap
-        // under its own identity. Uses existing ad_impressions rows only.
+        // F-1: the session identity is the ONLY identity for authenticated
+        // callers — body.user_id is never trusted (it is self-asserted and
+        // rotatable). The same effective id feeds the frequency-cap count AND
+        // the impression row via chargeImpression, so omitting user_id cannot
+        // bypass the cap and spoofing another id cannot touch their counter.
+        // Anonymous callers keep 9.A attribution (body.user_id || null), uncapped.
         const viewer = c.get('user') as { id: number } | null;
-        if (viewer?.id !== undefined && viewer?.id !== null) {
-            const serving = new AdServingService(c.env.DB);
-            if (await serving.hasReachedFrequencyCap(adId, viewer.id)) {
+        const effectiveUserId = viewer?.id ?? body.user_id ?? null;
+
+        const campaignManager = new AdCampaignManager(c.env.DB);
+        const result = await campaignManager.chargeImpression(
+            adId,
+            body.competition_id,
+            effectiveUserId,
+            viewer ? { frequencyCap: AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY } : undefined
+        );
+
+        if (!result.served) {
+            // 9.B frequency cap is enforced atomically INSIDE chargeImpression
+            // (F-2: cap count + reserve + write in one batch — no COUNT-then-INSERT).
+            if (result.frequencyCapped) {
                 return c.json({
                     success: false,
                     error: t('ads.frequency_cap_reached', c.get('lang') || DEFAULT_LANGUAGE),
                     code: 'frequency_cap_reached'
                 }, 429);
             }
-        }
-
-        const campaignManager = new AdCampaignManager(c.env.DB);
-        const result = await campaignManager.chargeImpression(adId, body.competition_id, body.user_id || null);
-
-        if (!result.served) {
             return c.json({
                 success: false,
                 error: t('ads.budget_exhausted', c.get('lang') || DEFAULT_LANGUAGE),

@@ -1,3 +1,20 @@
+## 2026-09-22 — Phase 9.B remediation F-1/F-2/F-3 (same branch/PR #45)
+
+- **F-1 (HIGH, identity bypass)**: impression route no longer trusts `body.user_id` for authenticated
+  callers — `effectiveUserId = session viewer.id ?? body.user_id ?? null` feeds BOTH the cap count and the
+  `chargeImpression` write, so omitting `user_id` records under the session identity and spoofing another
+  id is ignored. Anonymous attribution unchanged (uncapped, 9.A behavior).
+- **F-2 (MODERATE, cap TOCTOU)**: cap folded into the atomic 9.A batch — stmt1 (ledger credit) carries the
+  24h `ad_impressions` COUNT guard in the same statement as the write; impression row + views bump moved
+  INTO the batch guarded on the per-request `tx_id`, so serialized batches always see prior commits and
+  30 concurrent requests serve exactly 5 then 25×429. Post-batch COUNT only classifies 429 vs 409.
+  `ImpressionChargeResult` gains additive `frequencyCapped`; racy route pre-check removed.
+- **F-3 (schema-contract)**: expected list 26→27 + `0026_ads_target_category.sql` + new assertion that
+  `advertisements.target_category_id` exists after migrate-from-empty.
+- RED proven on pre-fix code via stash: F-1a rows NULL (bypass), F-1b trusted spoofed id (FK 500),
+  F-2 30/30 served. GREEN after: ad-serving 11/11, ad-campaign-lifecycle + remediation 8/8,
+  schema-contract via real wrangler D1 17/17, tsc clean. No merge.
+
 ## 2026-09-22 — Phase 9.B ad serving & targeting (branch `feat/ads-serving-targeting`)
 
 - Base: `origin/main` @ `aa55b38` (9.A merged PR #44) — verified via fetch/pull before branching.

@@ -8,15 +8,20 @@ import { CompetitionModel } from '../../models/CompetitionModel';
  * targeting (language + country + category only — no behavioral tracking),
  * AdBlockModel exclusion, per-user frequency cap, and the sensitive-context
  * ban (private messages) are all enforced HERE, server-side. A tampered
- * client cannot bypass them: the impression route re-checks the cap before
- * calling AdCampaignManager.chargeImpression (9.A stays the money SSOT and
- * is never rewritten here).
+ * client cannot bypass them: the cap is enforced atomically inside
+ * AdCampaignManager.chargeImpression (9.A stays the money SSOT and its
+ * lifecycle is never rewritten here).
  *
  * Targeting values come from EXISTING rows only:
  * - language / country / category: the competition row (competitions table
  *   already carries all three), falling back to the caller's explicit hints
  * - blocks: ad_blocks (AdBlockModel semantics — unrelated to UserBlockModel)
  * - frequency: ad_impressions rows from the trailing 24h (no new telemetry)
+ *
+ * The impression route enforces the same cap atomically INSIDE
+ * AdCampaignManager.chargeImpression (cap count + reserve + write in one
+ * batch, F-2) using the session identity (F-1) — this service owns selection,
+ * the charge owns enforcement.
  */
 export const AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY = 5;
 
@@ -78,12 +83,6 @@ export class AdServingService {
             cappedForUserId: opts.viewerUserId ?? null,
             limit: opts.limit ?? 5,
         });
-    }
-
-    /** True when the viewer already hit the cap for this ad (trailing 24h). */
-    async hasReachedFrequencyCap(adId: number, userId: number): Promise<boolean> {
-        const count = await this.adModel.countRecentImpressions(adId, userId);
-        return count >= AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY;
     }
 }
 
