@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
 import { AdCampaignManager } from '../lib/services/AdCampaignManager';
+import { AdvertisementModel } from '../models/AdvertisementModel';
 import { CategoryModel } from '../models/CategoryModel';
 import { ArbitrationService } from '../lib/services/ArbitrationService';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
@@ -21,6 +22,30 @@ export class AdvertiserController extends BaseController {
             console.error('Advertiser dashboard error:', error);
             return this.serverError(c, error as Error);
         }
+    }
+
+    /**
+     * 9.D ownership gate — server-side, per sensitive operation.
+     * The session identity is the ONLY identity: client-supplied ownership is
+     * never read. Returns the owned row, or sends the contract status:
+     * missing row → 404, row owned by another advertiser (or by nobody, e.g.
+     * an admin-created legacy row with advertiser_id NULL) → 403 — never an
+     * empty list or an ambiguous 409 that hides the resource.
+     */
+    private async requireOwnedCampaign(
+        c: Context<{ Bindings: Bindings; Variables: Variables }>,
+        adId: number,
+        ownerId: number
+    ) {
+        const adModel = new AdvertisementModel(c.env.DB);
+        const existing = await adModel.findById(adId);
+        if (!existing) {
+            return { response: this.notFound(c) };
+        }
+        if (existing.advertiser_id !== ownerId) {
+            return { response: this.forbidden(c, this.t('advertiser.not_your_campaign', c)) };
+        }
+        return { response: null };
     }
 
     async createCampaign(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
@@ -83,6 +108,9 @@ export class AdvertiserController extends BaseController {
             const adId = this.getParamInt(c, 'id');
             if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
 
+            const ownership = await this.requireOwnedCampaign(c, adId, user.id);
+            if (ownership.response) return ownership.response;
+
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.submitForReview(adId, user.id);
 
@@ -102,10 +130,13 @@ export class AdvertiserController extends BaseController {
             const adId = this.getParamInt(c, 'id');
             if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
 
+            const ownership = await this.requireOwnedCampaign(c, adId, user.id);
+            if (ownership.response) return ownership.response;
+
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.endCampaign(adId, user.id);
 
-                                    if (!ad) return this.error(c, this.t('ads.campaign_not_active', c), 409);
+                                     if (!ad) return this.error(c, this.t('ads.campaign_not_active', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser end campaign error:', error);
@@ -121,10 +152,13 @@ export class AdvertiserController extends BaseController {
             const adId = this.getParamInt(c, 'id');
             if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
 
+            const ownership = await this.requireOwnedCampaign(c, adId, user.id);
+            if (ownership.response) return ownership.response;
+
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.pauseCampaign(adId, user.id);
 
-                                    if (!ad) return this.error(c, this.t('ads.campaign_not_active', c), 409);
+                                     if (!ad) return this.error(c, this.t('ads.campaign_not_active', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser pause campaign error:', error);
@@ -139,6 +173,9 @@ export class AdvertiserController extends BaseController {
 
             const adId = this.getParamInt(c, 'id');
             if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
+
+            const ownership = await this.requireOwnedCampaign(c, adId, user.id);
+            if (ownership.response) return ownership.response;
 
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.resumeCampaign(adId, user.id);
@@ -158,6 +195,9 @@ export class AdvertiserController extends BaseController {
 
             const adId = this.getParamInt(c, 'id');
             if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
+
+            const ownership = await this.requireOwnedCampaign(c, adId, user.id);
+            if (ownership.response) return ownership.response;
 
             const campaignManager = new AdCampaignManager(c.env.DB);
             const analytics = await campaignManager.getCampaignAnalytics(adId);

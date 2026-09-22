@@ -187,9 +187,10 @@ describe('9.A — ad campaign lifecycle', () => {
         expect((await approve(db, id)).status).toBe(200);
         expect((await approve(db, id)).status).toBe(409);
 
-        // non-owner cannot transition someone else's campaign
+        // non-owner cannot transition someone else's campaign (9.D contract:
+        // cross-owner access is 403, not a mislabelled 409)
         const res = await app.request(`/api/advertiser/campaigns/${id}/pause?lang=en`, { method: 'PUT', headers: headers(OTHER) }, env(db));
-        expect(res.status).toBe(409);
+        expect(res.status).toBe(403);
         expect(await statusOf(db, id)).toBe('active');
     });
 

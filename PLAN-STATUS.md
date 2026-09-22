@@ -1,6 +1,22 @@
 
 
 
+## 9.D — بوابة المعلنين (ownership server-side) · فرع `feat/ads-advertiser-portal`
+
+- 🔧 منفَّذ محلياً (من `345bb86` = دمج PR #46). النتيجة: المعلن يدير حملاته وميزانيته ذاتياً،
+  ويرى ويدير **حملاته فقط** — التحقق server-side في كل عملية حساسة.
+- **الثغرات المغلقة**: `submitForReview` كان يتجاهل المالك (A يرسل مسودة B للمراجعة!)،
+  و`getCampaignAnalytics` بلا أي فحص (A يقرأ أرقام B) — كلاهما الآن 403 عبر `requireOwnedCampaign`
+  (404 للمفقود، 403 للمملوك لغيره/بلا مالك — لا قائمة فارغة ولا 409 مُضلِّل) + guard المالك في SQL.
+- **المحافَظ عليه**: المسار الكامل للمالك (create→submit→approve→pause→resume→end+analytics)،
+  والاعتماد admin-only (مراجعة الأدمن 403 لغير الأدمن)، والميزانية من ledger حصراً (integer cents،
+  تمويل `ad_campaign_fund_<id>` متوازن، عدّادات views/clicks المزوّرة لا تحرّك الأرقام).
+- **UI**: `esc()` لعناوين الحملات في البوابة (stored-XSS)، مفتاح `advertiser.not_your_campaign` في ar+en،
+  RTL/LTR عبر layout، لا SQL ولا منطق مالي في الصفحة. بلا migration، بلا routes جديدة (191 كما هي).
+- **RED/GREEN مُثبَت**: 4/8 فشلت قبل الإصلاح (submit عابر 200، تحليلات عابرة 200، pause مفقود 409،
+  مفتاح i18n غائب) ⇒ ‏advertiser-portal ‏8/8 بعده؛ تحديثان تعاقديان في اختبارات 9.A (409→403 لعابر المالك،
+  وF-3 يرسلها المالك-الأدمن)؛ ‏`npm test` ‏528/528؛ ‏`tsc` ✅ (any ‏272 ≤ ‏308)؛ ‏`build` ✅.
+
 ## 9.C remediation — F-1 + dedup isolation + mint cap · نفس الفرع (PR #46)
 
 - 🔧 remediation فوق `79a1358` بعد REJECT خارجي (كل الوظائف كانت PASS): إغلاق F-1 المانع + ملاحظتين.

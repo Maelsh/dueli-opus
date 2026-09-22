@@ -814,6 +814,7 @@ export const ar = {
         campaign_ended: 'انتهت الحملة',
         submit_for_review: 'إرسال للمراجعة',
         end_campaign: 'إنهاء الحملة',
+        not_your_campaign: 'هذه الحملة مملوكة لمعلن آخر',
     },
 
     // ── المرحلة 9.A: دورة حياة الحملة الإعلانية ─────────────────

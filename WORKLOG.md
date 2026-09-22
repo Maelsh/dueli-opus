@@ -1,3 +1,27 @@
+## 2026-09-22 — Phase 9.D Advertiser Portal (branch `feat/ads-advertiser-portal`)
+
+- Base: `345bb86` (merge of PR #46). Result: the advertiser self-manages campaigns and budget —
+  seeing and managing **only their own** — with server-side ownership on every sensitive op.
+- **Holes closed**: `submitForReview` ignored the owner (A could submit B's draft — proven 200 pre-fix);
+  `getCampaignAnalytics` had no check at all (A read B's numbers — proven 200 pre-fix). Both now go
+  through `AdvertiserController.requireOwnedCampaign` (404 missing / 403 foreign-or-unowned via new
+  `advertiser.not_your_campaign` in ar+en), plus the owner guard pushed into SQL `guardedTransition`.
+  pause/resume/end missing-id now 404 instead of a misleading 409. Approval stays admin-only
+  (`PUT /api/admin/ads/campaigns/:id/review` → 403 for advertisers, audit-logged per F-4).
+- **Untouched by design**: 9.A lifecycle/guards, LedgerService, Stripe infra, targeting, tracking,
+  SEC-02/SEC-04 docs note. No migration, no new routes (inventory still 191 — timestamp-only regen
+  reverted), no parallel financial truth (funding `ad_campaign_fund_<id>` balanced integer cents;
+  dashboard/analytics read the ledger; forged views/clicks counters move nothing).
+- **Portal UI**: `esc()` on campaign titles in `renderCampaigns` (stored-XSS), all strings via
+  `advertiser.*` (ar+en parity tested), RTL/LTR via layout, dark: variants already present, no SQL
+  and no money logic in the page (thin fetch over the API).
+- **RED-first (proven)**: 4/8 new tests failed pre-fix ⇒ `tests/api/advertiser-portal.test.ts` 8/8 after.
+  Two contractual updates in 9.A suites (cross-owner 409→403; F-3 submits via the owner session).
+- **Verification**: `npm test` 528/528, `npx tsc --noEmit` clean (any 272, baseline 308), `npm run build` ok.
+  Files: controllers/AdvertiserController.ts, lib/services/AdCampaignManager.ts, i18n/ar.ts,
+  i18n/en.ts, modules/pages/advertiser-portal-page.ts, tests x3.
+  Rollback: revert the single commit (no migration to unwind).
+
 ## 2026-09-22 — Phase 9.C remediation (F-1 + dedup isolation + mint cap, same branch/PR #46)
 
 - Remote verdict on 9.C was REJECT with 1 blocking finding + 2 non-blocking notes; all functional
