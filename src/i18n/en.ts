@@ -838,6 +838,7 @@ export const en = {
         campaign_ended: 'Campaign ended',
         submit_for_review: 'Submit for review',
         end_campaign: 'End campaign',
+        not_your_campaign: 'This campaign belongs to another advertiser',
     },
 
     // ── Phase 9.A: Ad campaign lifecycle ──────────────────────

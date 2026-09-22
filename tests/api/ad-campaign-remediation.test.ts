@@ -256,9 +256,12 @@ describe('9.A remediation — F-1 migration carry-over + F-3 admin workflow', ()
         }, env(db));
         expect(res.status).toBe(403);
 
-        // advertiser submits it, admin approves — workflow completes, no dead-end
+        // owner submits it, admin approves — workflow completes, no dead-end.
+        // (9.D: the admin owns this row — registerExternalRow books
+        // advertiser_id = admin — so the OWNER submits via its own session;
+        // a foreign advertiser submitting it is 403, covered in 9.D tests.)
         res = await app.request(`/api/advertiser/campaigns/${id}/submit-review?lang=en`, {
-            method: 'POST', headers: headers('sess-adv'),
+            method: 'POST', headers: headers('sess-admin'),
         }, env(db));
         expect(res.status).toBe(200);
         res = await app.request(`/api/admin/ads/campaigns/${id}/review?lang=en`, {

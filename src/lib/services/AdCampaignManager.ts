@@ -199,12 +199,13 @@ export class AdCampaignManager {
     }
 
     /**
-     * Advertiser: draft → pending_review. No ownership guard — any authenticated
-     * advertisers may submit their draft for review; the transition guard still
-     * enforces the correct source state.
+     * Advertiser: draft → pending_review, owner-guarded (9.D).
+     * The transition guard still enforces the correct source state; the
+     * advertiser guard rejects cross-owner submits at the SQL layer, so a
+     * forged request on another advertiser's draft changes nothing.
      */
     async submitForReview(adId: number, advertiserId?: number): Promise<Advertisement | null> {
-        return this.guardedTransition(adId, ['draft'], 'pending_review');
+        return this.guardedTransition(adId, ['draft'], 'pending_review', { advertiserId });
     }
 
     /**
