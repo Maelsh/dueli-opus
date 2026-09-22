@@ -9,9 +9,15 @@ import { BaseModel } from './base/BaseModel';
 
 /**
  * Advertisement Interface
- * campaign_status lifecycle (9.A): draft → pending_review → active → paused → ended.
- * Money lives in ledger_entries (LedgerService) under `reserve:campaign_<id>`;
- * budget_cents is declared-budget metadata only — never a money source.
+ * Lifecycle state (9.A): draft → pending_review → active → paused → ended.
+ * Column mapping (migrations 0025+0026 carry-over):
+ * - 0025 rebuilds the table with campaign_status carrying the FIVE lifecycle
+ *   states (new rows); 0026 backfills legacy rows — both write the SAME column.
+ * - 0025 drops the legacy REAL money columns; 0026 preserves them as pure
+ *   metadata. budget_cents / cost_per_impression_cents are the integer-cents
+ *   config. Runtime money lives ONLY in ledger_entries (LedgerService).
+ * - For 0026-carried legacy rows the lifecycle state is read from
+ *   campaign_lifecycle_status via statusColumn(); DROP-free and additive only.
  */
 export interface Advertisement {
     id: number;
@@ -25,11 +31,14 @@ export interface Advertisement {
     created_by: number;
     created_at: string;
     advertiser_id: number | null;
+    budget: number;
+    budget_remaining: number;
     budget_cents: number;
     cost_per_impression_cents: number;
     target_language: string | null;
     target_country: string | null;
-    campaign_status: 'draft' | 'pending_review' | 'active' | 'paused' | 'ended';
+    campaign_lifecycle_status: 'draft' | 'pending_review' | 'active' | 'paused' | 'ended';
+    campaign_status: string;
 }
 
 /**
@@ -134,12 +143,15 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
      * Budget exhaustion is enforced by a SQL condition on the ledger balance
      * (LedgerService = source of truth): a depleted campaign stops being
      * selected ATOMICALLY, with no later JS check.
+          * Lifecycle state is read from campaign_lifecycle_status (new rows) with
+     * fallback to campaign_status (legacy rows) — see docs/02-DATABASE.md §9.A remediation.
      */
     async getActiveAds(limit: number = 5): Promise<Advertisement[]> {
         const result = await this.db.prepare(`
             SELECT * FROM ${this.tableName}
             WHERE is_active = 1
-              AND campaign_status = 'active'
+                            AND (CASE WHEN campaign_lifecycle_status IN ('draft', 'pending_review', 'active', 'paused', 'ended')
+                    THEN campaign_lifecycle_status ELSE campaign_status END) = 'active'
               AND (
                 SELECT COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE -amount_cents END), 0)
                 FROM ledger_entries

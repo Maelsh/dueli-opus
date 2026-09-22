@@ -3,6 +3,7 @@ import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
 import { campaignAccount } from '../../src/lib/services/AdCampaignManager';
 import { LedgerService } from '../../src/lib/services/LedgerService';
+import { t } from '../../src/i18n';
 
 /**
  * Phase 9.A — ad campaign lifecycle (RED-FIRST).
@@ -106,8 +107,8 @@ async function invariantDifference(db: SqliteD1): Promise<number> {
 }
 
 async function statusOf(db: SqliteD1, adId: number): Promise<string> {
-    const row = await db.prepare('SELECT campaign_status FROM advertisements WHERE id = ?').bind(adId).first<{ campaign_status: string }>();
-    return row!.campaign_status;
+        const row = await db.prepare('SELECT campaign_lifecycle_status FROM advertisements WHERE id = ?').bind(adId).first<{ campaign_lifecycle_status: string }>();
+    return row!.campaign_lifecycle_status;
 }
 
 describe('9.A — ad campaign lifecycle', () => {
@@ -234,5 +235,34 @@ describe('9.A — ad campaign lifecycle', () => {
         expect(c.budget).toBe(1);
         expect(c.budget_remaining).toBe(0.99);
         expect(c.total_spend).toBeCloseTo(0.01, 6);
+    });
+
+    it('409 semantics: each rejection carries its own localized key', async () => {
+        const id = await createCampaign(db);
+
+        // invalid transition (pause from draft) — not "exhausted", not "budget"
+        let res = await app.request(`/api/advertiser/campaigns/${id}/pause?lang=en`, { method: 'PUT', headers: headers(ADV) }, env(db));
+        expect(res.status).toBe(409);
+        let body = await res.json() as { error: string };
+        expect(body.error).toBe(t('ads.campaign_not_active', 'en'));
+        expect(body.error).not.toBe(t('ads.budget_exhausted', 'en'));
+
+        // budget exhausted: approve, drain, then the serve itself is refused
+        await submit(db, id);
+        await approve(db, id);
+        for (let i = 0; i < 100; i++) await impression(db, id, `10.7.7.${i + 1}`);
+        res = await impression(db, id);
+        expect(res.status).toBe(409);
+        body = await res.json() as { error: string };
+        expect(body.error).toBe(t('ads.budget_exhausted', 'en'));
+
+        // invalid budget: float / negative budgets are 422, user-visible, i18n
+        res = await app.request('/api/advertiser/campaigns?lang=en', {
+            method: 'POST', headers: headers(ADV),
+            body: JSON.stringify({ title: 'Bad cents', budget_cents: 12.5 }),
+        }, env(db));
+        expect(res.status).toBe(422);
+        body = await res.json() as { error: string };
+        expect(body.error).toBe(t('ads.invalid_budget', 'en'));
     });
 });

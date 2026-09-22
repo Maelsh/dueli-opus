@@ -832,6 +832,12 @@ export const en = {
         budget_exhausted: 'Budget exhausted',
         image_url: 'Image URL',
         link_url: 'Link URL',
+        budget_cents_label: 'Budget (cents)',
+        cost_cents_label: 'Cost per impression (cents)',
+        submitted_review: 'Campaign submitted for review',
+        campaign_ended: 'Campaign ended',
+        submit_for_review: 'Submit for review',
+        end_campaign: 'End campaign',
     },
 
     // ── Phase 9.A: Ad campaign lifecycle ──────────────────────
@@ -845,6 +851,9 @@ export const en = {
         pending_review: 'Campaign is pending admin review and cannot be activated yet',
         invalid_transition: 'Invalid campaign status transition',
         invalid_budget: 'Budget must be a positive integer amount in cents',
+        campaign_not_draft: 'Campaign must be in draft to submit it for review',
+        campaign_not_active: 'Campaign must be active for this action',
+        campaign_not_paused: 'Campaign must be paused to resume it',
     },
 
     // ── Task 2: Admin Governance ──────────────────────────────

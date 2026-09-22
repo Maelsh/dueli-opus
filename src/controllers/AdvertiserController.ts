@@ -74,7 +74,7 @@ export class AdvertiserController extends BaseController {
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.submitForReview(adId, user.id);
 
-            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
+            if (!ad) return this.error(c, this.t('ads.campaign_not_draft', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser submit campaign error:', error);
@@ -93,7 +93,7 @@ export class AdvertiserController extends BaseController {
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.endCampaign(adId, user.id);
 
-            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
+                                    if (!ad) return this.error(c, this.t('ads.campaign_not_active', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser end campaign error:', error);
@@ -112,7 +112,7 @@ export class AdvertiserController extends BaseController {
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.pauseCampaign(adId, user.id);
 
-            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
+                                    if (!ad) return this.error(c, this.t('ads.campaign_not_active', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser pause campaign error:', error);
@@ -131,7 +131,7 @@ export class AdvertiserController extends BaseController {
             const campaignManager = new AdCampaignManager(c.env.DB);
             const ad = await campaignManager.resumeCampaign(adId, user.id);
 
-            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
+            if (!ad) return this.error(c, this.t('ads.campaign_not_paused', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser resume campaign error:', error);
