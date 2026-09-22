@@ -1,15 +1,15 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-21T16:59:07.410Z
+> تاريخ التوليد: 2026-09-21T23:23:03.675Z
 
-## الإجمالي: 187 مسار
+## الإجمالي: 190 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 89 |
+| PUBLIC(auth-optional, in-handler check required) | 90 |
 | UNGUARDED ⚠ | 50 |
-| AUTHENTICATED | 45 |
+| AUTHENTICATED | 47 |
 | SERVICE(origin-only ⚠) | 3 |
 
 ## الحماية على مستوى المجموعات (main.ts)
@@ -39,6 +39,7 @@
 | POST | `/api/admin/ads` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | DELETE | `/api/admin/ads/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | PUT | `/api/admin/ads/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| PUT | `/api/admin/ads/campaigns/:id/review` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | GET | `/api/admin/arbitrations` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | PUT | `/api/admin/arbitrations/:id/assign` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | PUT | `/api/admin/arbitrations/:id/transition` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
@@ -68,8 +69,10 @@
 | GET | `/api/advertisements/competition/:id/revenue` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/advertisements/routes.ts` |
 | POST | `/api/advertiser/campaigns` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |
 | GET | `/api/advertiser/campaigns/:id/analytics` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |
+| PUT | `/api/advertiser/campaigns/:id/end` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |
 | PUT | `/api/advertiser/campaigns/:id/pause` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |
 | PUT | `/api/advertiser/campaigns/:id/resume` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |
+| POST | `/api/advertiser/campaigns/:id/submit-review` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |
 | GET | `/api/advertiser/dashboard` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/advertiser/routes.ts` |
 | GET | `/api/analytics/admin/dashboard` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/analytics/routes.ts` |
 | GET | `/api/analytics/public` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/analytics/routes.ts` |

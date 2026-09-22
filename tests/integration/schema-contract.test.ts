@@ -58,6 +58,7 @@ const EXPECTED_MIGRATIONS = [
     '0022_donation_recipients.sql',
     '0023_donation_refund_tracking.sql',
     '0024_donation_refund_intents.sql',
+    '0025_ads_campaign_lifecycle.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -151,8 +152,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 25 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(25);
+    it('has exactly 26 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(26);
     });
 
     it('matches the full expected migration file name list', () => {

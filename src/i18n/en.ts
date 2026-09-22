@@ -834,6 +834,19 @@ export const en = {
         link_url: 'Link URL',
     },
 
+    // ── Phase 9.A: Ad campaign lifecycle ──────────────────────
+    ads: {
+        campaign_status_draft: 'Draft',
+        campaign_status_pending_review: 'Pending Review',
+        campaign_status_active: 'Active',
+        campaign_status_paused: 'Paused',
+        campaign_status_ended: 'Ended',
+        budget_exhausted: 'Campaign budget exhausted — serving stopped automatically',
+        pending_review: 'Campaign is pending admin review and cannot be activated yet',
+        invalid_transition: 'Invalid campaign status transition',
+        invalid_budget: 'Budget must be a positive integer amount in cents',
+    },
+
     // ── Task 2: Admin Governance ──────────────────────────────
     admin: {
         dashboard_title: 'Admin Dashboard',

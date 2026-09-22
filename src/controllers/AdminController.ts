@@ -15,6 +15,7 @@ import { PlatformFinancialLogModel } from '../models/PlatformFinancialLogModel';
 import { ArbitrationService, ArbitrationStatus } from '../lib/services/ArbitrationService';
 import { LivePayoutEngine } from '../lib/services/LivePayoutEngine';
 import { EventPusher } from '../lib/services/EventPusher';
+import { AdCampaignManager } from '../lib/services/AdCampaignManager';
 import { WithdrawalController } from './WithdrawalController';
 
 export class AdminController extends BaseController {
@@ -332,6 +333,33 @@ export class AdminController extends BaseController {
             return this.success(c, { deleted: true });
         } catch (error) {
             console.error('Admin delete ad error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    // =====================================
+    // Ad campaign review (Phase 9.A): pending_review → active
+    // =====================================
+
+    async reviewAdCampaign(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!await this.isAdmin(c)) return this.forbidden(c);
+
+            const adId = this.getParamInt(c, 'id');
+            if (!adId) return this.validationError(c, this.t('errors.invalid_id', c));
+
+            const body = await this.getBody<{ approve?: boolean }>(c);
+            if (body?.approve !== true) {
+                return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+
+            const campaignManager = new AdCampaignManager(c.env.DB);
+            const ad = await campaignManager.approveCampaign(adId);
+
+            if (!ad) return this.error(c, this.t('ads.pending_review', c), 409);
+            return this.success(c, { ad });
+        } catch (error) {
+            console.error('Admin review ad campaign error:', error);
             return this.serverError(c, error as Error);
         }
     }

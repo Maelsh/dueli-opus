@@ -9,6 +9,9 @@ import { BaseModel } from './base/BaseModel';
 
 /**
  * Advertisement Interface
+ * campaign_status lifecycle (9.A): draft → pending_review → active → paused → ended.
+ * Money lives in ledger_entries (LedgerService) under `reserve:campaign_<id>`;
+ * budget_cents is declared-budget metadata only — never a money source.
  */
 export interface Advertisement {
     id: number;
@@ -22,11 +25,11 @@ export interface Advertisement {
     created_by: number;
     created_at: string;
     advertiser_id: number | null;
-    budget: number;
-    budget_remaining: number;
+    budget_cents: number;
+    cost_per_impression_cents: number;
     target_language: string | null;
     target_country: string | null;
-    campaign_status: 'active' | 'paused' | 'depleted' | 'archived';
+    campaign_status: 'draft' | 'pending_review' | 'active' | 'paused' | 'ended';
 }
 
 /**
@@ -127,12 +130,21 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
     }
 
     /**
-     * Get active ads
+     * Get active ads — serving-safe selection.
+     * Budget exhaustion is enforced by a SQL condition on the ledger balance
+     * (LedgerService = source of truth): a depleted campaign stops being
+     * selected ATOMICALLY, with no later JS check.
      */
     async getActiveAds(limit: number = 5): Promise<Advertisement[]> {
         const result = await this.db.prepare(`
             SELECT * FROM ${this.tableName}
             WHERE is_active = 1
+              AND campaign_status = 'active'
+              AND (
+                SELECT COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE -amount_cents END), 0)
+                FROM ledger_entries
+                WHERE account = 'reserve:campaign_' || ${this.tableName}.id
+              ) >= cost_per_impression_cents
             ORDER BY RANDOM()
             LIMIT ?
         `).bind(limit).all<Advertisement>();

@@ -28,7 +28,9 @@ describe('F-5D AdminController SQL extraction', () => {
         db.exec(`INSERT INTO reports (id, reporter_id, target_type, target_id, reason, status) VALUES
             (200, 1, 'comment', 100, 'spam', 'pending'),
             (201, 2, 'user', 3, 'spam', 'pending')`);
-        db.exec(`INSERT INTO advertisements (id, title, created_by) VALUES (300, 'ad', 1)`);
+        // 9.A: the lifecycle default for a fresh campaign is 'draft' — seed an
+        // explicitly active one for the aggregate assertion below.
+        db.exec(`INSERT INTO advertisements (id, title, created_by, campaign_status, is_active) VALUES (300, 'ad', 1, 'active', 1)`);
     });
 
     afterEach(() => { vi.restoreAllMocks(); db.close(); });

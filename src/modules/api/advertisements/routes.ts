@@ -7,7 +7,9 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { AdvertisementModel } from '../../../models/AdvertisementModel';
+import { AdCampaignManager } from '../../../lib/services/AdCampaignManager';
 import { authMiddleware } from '../../../middleware/auth';
+import { t, DEFAULT_LANGUAGE } from '../../../i18n';
 
 const advertisementsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -36,7 +38,10 @@ advertisementsRoutes.get('/', async (c) => {
 });
 
 /**
- * Record ad impression
+ * Record ad impression — atomic budget charge via AdCampaignManager.
+ * The debit (LedgerService = money SSOT) and the serving-state check happen
+ * in ONE guarded SQL batch: a depleted or unapproved campaign is never
+ * charged and never served.
  * POST /api/advertisements/:id/impression
  */
 advertisementsRoutes.post('/:id/impression', async (c) => {
@@ -47,15 +52,28 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
             user_id?: number;
         }>();
 
-        const adModel = new AdvertisementModel(c.env.DB);
-        await adModel.recordImpression(adId, body.competition_id, body.user_id || null);
+        if (!adId || !body?.competition_id) {
+            return c.json({ success: false, error: t('errors.missing_fields', c.get('lang') || DEFAULT_LANGUAGE) }, 422);
+        }
+
+        const campaignManager = new AdCampaignManager(c.env.DB);
+        const result = await campaignManager.chargeImpression(adId, body.competition_id, body.user_id || null);
+
+        if (!result.served) {
+            return c.json({
+                success: false,
+                error: t('ads.budget_exhausted', c.get('lang') || DEFAULT_LANGUAGE),
+                code: 'budget_exhausted'
+            }, 409);
+        }
 
         return c.json({
-            success: true
+            success: true,
+            data: result
         });
     } catch (error) {
         console.error('Error recording impression:', error);
-        return c.json({ error: 'Failed to record impression' }, 500);
+        return c.json({ error: t('server_error', c.get('lang') || DEFAULT_LANGUAGE) }, 500);
     }
 });
 

@@ -31,14 +31,17 @@ export class AdvertiserController extends BaseController {
                 title: string;
                 image_url?: string;
                 link_url?: string;
-                budget: number;
-                revenue_per_view?: number;
+                budget_cents: number;
+                cost_per_impression_cents?: number;
                 target_language?: string;
                 target_country?: string;
             }>(c);
 
-            if (!body?.title || !body?.budget) {
+            if (!body?.title || !body?.budget_cents) {
                 return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+            if (!Number.isInteger(body.budget_cents) || body.budget_cents <= 0) {
+                return this.validationError(c, this.t('ads.invalid_budget', c));
             }
 
             const campaignManager = new AdCampaignManager(c.env.DB);
@@ -46,8 +49,8 @@ export class AdvertiserController extends BaseController {
                 title: body.title,
                 image_url: body.image_url,
                 link_url: body.link_url,
-                budget: body.budget,
-                revenue_per_view: body.revenue_per_view,
+                budget_cents: body.budget_cents,
+                cost_per_impression_cents: body.cost_per_impression_cents,
                 target_language: body.target_language,
                 target_country: body.target_country,
                 advertiser_id: user.id
@@ -56,6 +59,44 @@ export class AdvertiserController extends BaseController {
             return this.success(c, { ad }, 201);
         } catch (error) {
             console.error('Advertiser create campaign error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    async submitCampaign(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            const user = this.getCurrentUser(c);
+            if (!user) return this.unauthorized(c);
+
+            const adId = this.getParamInt(c, 'id');
+            if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
+
+            const campaignManager = new AdCampaignManager(c.env.DB);
+            const ad = await campaignManager.submitForReview(adId, user.id);
+
+            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
+            return this.success(c, { ad });
+        } catch (error) {
+            console.error('Advertiser submit campaign error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    async endCampaign(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            const user = this.getCurrentUser(c);
+            if (!user) return this.unauthorized(c);
+
+            const adId = this.getParamInt(c, 'id');
+            if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
+
+            const campaignManager = new AdCampaignManager(c.env.DB);
+            const ad = await campaignManager.endCampaign(adId, user.id);
+
+            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
+            return this.success(c, { ad });
+        } catch (error) {
+            console.error('Advertiser end campaign error:', error);
             return this.serverError(c, error as Error);
         }
     }
@@ -69,9 +110,9 @@ export class AdvertiserController extends BaseController {
             if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
 
             const campaignManager = new AdCampaignManager(c.env.DB);
-            const ad = await campaignManager.pauseCampaign(adId);
+            const ad = await campaignManager.pauseCampaign(adId, user.id);
 
-            if (!ad) return this.notFound(c);
+            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser pause campaign error:', error);
@@ -88,9 +129,9 @@ export class AdvertiserController extends BaseController {
             if (!adId) return this.validationError(c, this.t('errors.missing_fields', c));
 
             const campaignManager = new AdCampaignManager(c.env.DB);
-            const ad = await campaignManager.resumeCampaign(adId);
+            const ad = await campaignManager.resumeCampaign(adId, user.id);
 
-            if (!ad) return this.notFound(c);
+            if (!ad) return this.error(c, this.t('ads.invalid_transition', c), 409);
             return this.success(c, { ad });
         } catch (error) {
             console.error('Advertiser resume campaign error:', error);

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-21T16:59:07.410Z",
-  "total": 187,
+  "generatedAt": "2026-09-21T23:23:03.675Z",
+  "total": 190,
   "routes": [
     {
       "method": "GET",
@@ -96,6 +96,13 @@
     {
       "method": "PUT",
       "path": "/api/admin/ads/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/ads/campaigns/:id/review",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/admin/routes.ts"
@@ -305,6 +312,13 @@
     },
     {
       "method": "PUT",
+      "path": "/api/advertiser/campaigns/:id/end",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertiser/routes.ts"
+    },
+    {
+      "method": "PUT",
       "path": "/api/advertiser/campaigns/:id/pause",
       "classification": "AUTHENTICATED",
       "guards": "router:auth, group:rateLimit, group:csrf",
@@ -313,6 +327,13 @@
     {
       "method": "PUT",
       "path": "/api/advertiser/campaigns/:id/resume",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertiser/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/advertiser/campaigns/:id/submit-review",
       "classification": "AUTHENTICATED",
       "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/advertiser/routes.ts"

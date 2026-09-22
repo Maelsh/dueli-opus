@@ -1,3 +1,17 @@
+## 2026-09-22 — Phase 9.A: ad campaign lifecycle (branch `feat/ads-campaign-lifecycle`)
+
+- Result: advertiser creates a budgeted campaign that walks a guarded lifecycle (draft → pending_review → active → paused → ended) and stops serving automatically and atomically when the budget runs out.
+- Migration 0025 (new): rebuilds `advertisements` — new CHECK states, `budget_cents`/`cost_per_impression_cents` (integer cents), legacy REAL `budget`/`budget_remaining` columns REMOVED (no parallel money source). Legacy `depleted`/`archived` → `ended`; legacy active rows hold zero ledger balance so they never serve until funded (safe default).
+- SQL-guarded transitions: `guardedTransition` uses `UPDATE ... WHERE id=? AND campaign_status IN (...)` (+ owner). Mandatory review: only admin can flip `pending_review → active` via new `PUT /api/admin/ads/campaigns/:id/review`. New advertiser routes: `POST /campaigns/:id/submit-review`, `PUT /campaigns/:id/end`. Route inventory regenerated.
+- LedgerService = single money source: campaign funding posts one balanced idempotent tx (debit `reserve:campaign_<id>` / credit `platform:ad_budget_commitments`, debit-positive balance semantics like `withdraw`). Each impression is ONE guarded SQL batch: conditional `INSERT ... SELECT` (state + balance + write in the same statement — no TOCTOU), balanced `platform:ad_revenue` entry, and an atomic flip to `ended` when balance can no longer cover the next impression. Both selection queries (`getActiveAds`, `getActiveAdsForCompetition`) carry the balance condition in SQL.
+- RED-first proof: with the balance guard + transition guard temporarily removed → `expected 101 to be 100` (budget overspent under concurrency) and `expected 200 to be 409` (invalid transition accepted); restored → green.
+- Tests: new `tests/api/ad-campaign-lifecycle.test.ts` (4) on the real Hono app + SqliteD1 with real migrations: full lifecycle, invalid/foreign transitions 409, draft/pending_review never serve, budget 100 cents vs 101 concurrent impressions ⇒ exactly 100 debited, campaign `ended`, ledger invariant difference 0. `npm test` 489/489 ✅ (F-5D AdminModelExtraction seed updated for the new `draft` default), tsc ✅ (any=272 ≤ 308), build ✅.
+- i18n: new `ads.*` group (5 status keys + budget_exhausted + pending_review + invalid_transition + invalid_budget) in ar/en with real Arabic values.
+- Docs: new policy section in `docs/02-DATABASE.md`; route inventory regenerated.
+- SEC-02/SEC-04 documentation note verified (both actually implemented in code) — explicitly OUT of 9.A scope, no remediation or doc change included.
+- Deliberately untouched: 9.B–9.E, general ads refactor, LedgerService internals, 8.G money policy, Stripe infra, CI, dependencies, historical migrations. No merge performed.
+
+
 ## 2026-09-21 — 8.G-F3: non-refundable donation policy (same branch/PR #43)
 
 - Decision (lead): ALL Dueli donations non-refundable once completed, even pre-withdrawal. No full/partial refund, no clawback, no negative, no debt, no platform shortfall.

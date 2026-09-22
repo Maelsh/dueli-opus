@@ -1,6 +1,37 @@
 
 
 
+## 9.A — دورة حياة الحملة الإعلانية · فرع `feat/ads-campaign-lifecycle`
+
+- 🔧 منفَّذ محلياً (من `7855419` = `origin/main` بعد دمج PR #43). النتيجة: المعلن ينشئ حملة بميزانية،
+  تمر بدورة محروسة `draft → pending_review → active → paused → ended`، وتتوقف عن العرض تلقائياً وذرّياً عند نفاد الميزانية.
+- **migration 0025** (جديد، لا تعديل على القديم): إعادة بناء `advertisements` — `CHECK` جديد للحالات الخمس،
+  `budget_cents`/`cost_per_impression_cents` (integer cents)، حذف عمودي `budget`/`budget_remaining` REAL
+  (لا مصدر مالي موازٍ للـledger). ترحيل الحالات القديمة: `depleted`/`archived` → `ended`؛ صفوف `active` القديمة
+  برصيد دفتر صفر فلا تُعرض حتى تُموَّل (افتراض آمن).
+- **الحراسة في SQL**: كل انتقال عبر `guardedTransition` — `UPDATE ... WHERE id=? AND campaign_status IN (...)`
+  (+ ملكية المعلن). المراجعة إلزامية: `pending_review → active` من المشرف فقط (`PUT /api/admin/ads/campaigns/:id/review`).
+  مسارات جديدة: `POST /api/advertiser/campaigns/:id/submit-review`، `PUT .../end`، ومراجعة الأدمن (مولَّدة في الجرد).
+- **LedgerService مصدر المال الوحيد (8.A)**: تمويل الحملة حركة متوازنة idempotent
+  (`txId=ad_campaign_fund_<id>`): مدين `reserve:campaign_<id>` / دائن `platform:ad_budget_commitments`.
+  كل عرض = حركة بشرط SQL داخل `INSERT ... SELECT` واحدة (حالة + رصيد + كتابة — بلا TOCTOU، نمط `withdraw`)
+  + قيد توازن على `platform:ad_revenue` + انقلاب ذرّي إلى `ended` في نفس الـbatch عند عدم كفاية الرصيد للعرض التالي.
+  استعلاما الاختيار (`getActiveAds`/`getActiveAdsForCompetition`) يتحقّقان من الرصيد في SQL.
+- **RED أولاً (مُثبَت)**: بتعطيل حارس الرصيد وحارس الانتقالات مؤقتاً: `expected 101 to be 100`
+  (تجاوز الميزانية تحت التزامن) و`expected 200 to be 409` (انتقال غير صالح يقبل) — ثم أخضر 4/4 بعد الإصلاح.
+- **الاختبارات**: `tests/api/ad-campaign-lifecycle.test.ts` (4) عبر Hono الحقيقي + SqliteD1 بالمخطط الفعلي:
+  دورة كاملة، رفض الانتقالات غير الصالحة (409) وغير المالك، منع عرض draft/pending_review، ميزانية 100 سنت مع
+  101 عرضاً متزامناً ⇒ الخصم يتوقف عند 100 بالضبط + `ended` + ثابت الدفتر (فرق=0). `npm test` 489/489 ✅
+  (بذرة `AdminModelExtraction` حُدّثت لافتراض `draft` الجديد)، `tsc` ✅ (any=272 ≤ 308)، `build` ✅.
+- **i18n**: مجموعة `ads.*` جديدة (campaign_status_draft/pending_review/active/paused/ended، budget_exhausted،
+  pending_review، invalid_transition، invalid_budget) في `ar.ts` و`en.ts` — عربية فعلية.
+- **توثيق**: قسم جديد في `docs/02-DATABASE.md` + جرد المسارات مولَّد من جديد.
+- **SEC-02/SEC-04**: تم التحقق من الملاحظة التوثيقية في `docs/12` (كلاهما منفَّذ في الكود فعلاً) — **خارج نطاق 9.A**،
+  لا إصلاح ولا تعديل توثيقي لهما في هذا الـPR.
+- **النطاق المحترَم**: بلا 9.B/9.C/9.D/9.E، بلا refactor عام للإعلانات، بلا تعديل LedgerService أو سياسة 8.G،
+  بلا Stripe، بلا CI/dependencies، بلا migrations تاريخية، بلا دمج. الحالة 🔧 ريثما يعيد REMOTE التحقق.
+
+
 ## 8.G — FINAL MONEY GATE correction pass · فرع `fix/money-gate-final-remediation`
 
 - 🔧 منفَّذ محلياً (من الرأس `b90ca08` على `feat/money-transparency` الذي يحمل 8.A–8.F).

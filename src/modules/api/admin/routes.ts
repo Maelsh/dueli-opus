@@ -64,6 +64,7 @@ adminRoutes.put('/arbitrations/:id/assign', async (c) => controller.assignArbitr
 
 adminRoutes.get('/ads', async (c) => controller.getAds(c));
 adminRoutes.post('/ads', async (c) => controller.createAd(c));
+adminRoutes.put('/ads/campaigns/:id/review', async (c) => controller.reviewAdCampaign(c));
 adminRoutes.put('/ads/:id', async (c) => controller.updateAd(c));
 adminRoutes.delete('/ads/:id', async (c) => controller.deleteAd(c));
 
