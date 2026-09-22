@@ -1,3 +1,30 @@
+## 2026-09-22 — 9.E final-gate remediation N-1+N-3 (branch `fix/ads-final-gate-remediation`)
+
+- Base: `76525cf` (merge of PR #47). Single goal: close every finding of the two independent
+  9.E audits with zero redesign of anything green. No migration, no new routes, no dependencies.
+- **N-1 (blocking)**: `AdvertisementModel.settleImpressionKey` settled by `key` alone while 0028
+  scopes identity to (key, ad, NULL-safe user) — one identity's settle rewrote other rows sharing
+  the key (proven pre-fix: settled retry returned 409 instead of a replay; cross-identity
+  corruption). Now scoped to the full composite identity + 24h window, mirroring claim/lookup.
+  Caller (`POST /:id/impression`) passes the in-scope adId + effectiveUserId — audited, no other caller.
+- **N-3 (blocking)**: impression route was `viewer?.id ?? body.user_id ?? null` — anonymous callers
+  could impersonate real users (proven pre-fix: attribution forgery, victim cap consumption = cap DoS,
+  FK failure → 500 on nonexistent ids). Now `viewer?.id ?? null` always; `body.user_id` is a legacy
+  ignored field. Full advertising audit: serving/click/click-token/ad-blocks/ad-reports/advertiser
+  routes are all session-based — impression was the only hole.
+- **INFO/LOW closed without extra scope**: FK-masking path gone (anonymous always writes NULL → 200,
+  proven); `getCampaignAnalytics` has a single caller path through `requireOwnedCampaign` (verified,
+  no bypass — no change); legacy `budget/budget_remaining/views_count/clicks_count` are write-only
+  display/counters — tampering moves neither analytics nor ledger (proven). N-2 untouched (cap/token
+  flows green as-is).
+- **RED-first (proven)**: 6/10 new tests failed pre-fix (model settle leak, 2 corruption replays,
+  anon attribution, FK 500, cap-DoS) ⇒ `tests/api/ad-impression-identity.test.ts` 10/10 after
+  (RED-sensitivity re-verified by stashing src fixes: 6 fail again).
+- **Verification**: `npm test` 538/538, `npx tsc --noEmit` clean (any 272, baseline 308),
+  `npm run build` ok, `verifyInvariant() = 0` asserted in-test, `migrations/` untouched.
+  Files: models/AdvertisementModel.ts, modules/api/advertisements/routes.ts, tests x1.
+  Rollback: revert the single commit (no migration to unwind).
+
 ## 2026-09-22 — Phase 9.D Advertiser Portal (branch `feat/ads-advertiser-portal`)
 
 - Base: `345bb86` (merge of PR #46). Result: the advertiser self-manages campaigns and budget —

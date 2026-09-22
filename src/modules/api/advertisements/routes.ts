@@ -81,6 +81,7 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
         const adId = parseInt(c.req.param('id'));
         const body = await c.req.json<{
             competition_id: number;
+            /** 9.E N-3: legacy field, ALWAYS ignored — session (or NULL) is the identity. */
             user_id?: number;
             idempotency_key?: string;
         }>();
@@ -96,14 +97,16 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
             return c.json({ success: false, error: t('errors.missing_fields', lang) }, 422);
         }
 
-        // F-1: the session identity is the ONLY identity for authenticated
-        // callers — body.user_id is never trusted (it is self-asserted and
-        // rotatable). The same effective id feeds the frequency-cap count AND
-        // the impression row via chargeImpression, so omitting user_id cannot
-        // bypass the cap and spoofing another id cannot touch their counter.
-        // Anonymous callers keep 9.A attribution (body.user_id || null), uncapped.
+        // 9.E (N-3): the session identity is the ONLY user identity — never
+        // trust body.user_id. Authenticated callers are their session user
+        // (a forged id cannot move attribution or touch another user's
+        // frequency cap). Anonymous callers are ALWAYS the NULL identity:
+        // a supplied user_id (real or nonexistent) is ignored outright, so it
+        // can neither consume a victim's cap, forge attribution, nor trip an
+        // FK failure that would mask the real outcome. Legacy clients may
+        // still send the field; it has zero effect.
         const viewer = c.get('user') as { id: number } | null;
-        const effectiveUserId = viewer?.id ?? body.user_id ?? null;
+        const effectiveUserId = viewer?.id ?? null;
 
         const adModel = new AdvertisementModel(c.env.DB);
         const clickService = new AdClickService(c.env.DB);
@@ -171,7 +174,9 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
         );
 
         if (key) {
-            await adModel.settleImpressionKey(key, result.served, result.served ? result.spentCents : 0);
+            // 9.E (N-1): settle is scoped to this request's full identity —
+            // adId + effectiveUserId are in scope and passed through.
+            await adModel.settleImpressionKey(key, adId, effectiveUserId, result.served, result.served ? result.spentCents : 0);
         }
 
         if (!result.served) {

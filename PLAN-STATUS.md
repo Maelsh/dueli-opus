@@ -1,6 +1,23 @@
 
 
 
+## 9.E final-gate remediation — N-1 + N-3 · فرع `fix/ads-final-gate-remediation`
+
+- 🔧 remediation من `76525cf` (دمج PR #47). الهدف: إغلاق كل findings التدقيقين دون مساس بما اجتاز 9.E.
+- **N-1 (blocking)**: `settleImpressionKey` كان `WHERE key = ?` وحده — settlement هوية يعيد كتابة
+  صفوف هويات/إعلانات أخرى تشترك في key (مثبت: retry يعيد 409 بدل replay + شحنة وهمية محتملة).
+  الآن `(key, ad_id, user_id IS ?, created_at >= -1 day)` — نفس هوية claim/lookup تماماً.
+- **N-3 (blocking)**: مسار impression كان `viewer?.id ?? body.user_id ?? null` — المجهول ينتحل
+  مستخدماً حقيقياً (مثبت: تلويث attribution + استهلاك cap الضحية + FK failure بـ500).
+  الآن `viewer?.id ?? null` دائماً؛ `body.user_id` موروث يُتجاهل كلياً. تدقيق كل مسارات الإعلانات:
+  serving/click/token/ad-blocks/ad-reports/advertiser كلها session-based — لا ثقب آخر.
+- **INFO/LOW مغلقة بلا scope زائد**: مسار FK المقنّع اختفى (المجهول يكتب NULL دائماً — مثبت 200)؛
+  `getCampaignAnalytics` لها مسار واحد عبر `requireOwnedCampaign` (لا bypass — تحقق فقط)؛
+  الأعمدة `budget/budget_remaining/views/clicks` كتابة عرض فقط — التلاعب بها لا يحرّك قرشاً (مثبت).
+  N-2 لم تُمس (cap/token flows خضراء كما هي). بلا migration، بلا routes جديدة، بلا dependencies.
+- **RED/GREEN مُثبَت**: ‏6/10 فشلت قبل الإصلاح ⇒ ‏ad-impression-identity ‏10/10 بعده؛ ‏`npm test`
+  ‏538/538؛ ‏`tsc` ✅ (any ‏272 ≤ ‏308)؛ ‏`build` ✅؛ ‏`verifyInvariant() = 0` داخل الاختبار.
+
 ## 9.D — بوابة المعلنين (ownership server-side) · فرع `feat/ads-advertiser-portal`
 
 - 🔧 منفَّذ محلياً (من `345bb86` = دمج PR #46). النتيجة: المعلن يدير حملاته وميزانيته ذاتياً،

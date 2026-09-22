@@ -463,11 +463,24 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
         }
     }
 
-    /** 9.C — store the charge outcome on a claimed key for duplicate replays. */
-    async settleImpressionKey(key: string, served: boolean, spentCents: number): Promise<void> {
+    /**
+     * 9.E — store the charge outcome on a claimed key for duplicate replays.
+     * Scoped to the FULL composite identity (key, ad, NULL-safe user) inside
+     * the 24h window: after 0028 the same key can label rows of other ads or
+     * identities, and a key-only UPDATE would rewrite their settlements.
+     */
+    async settleImpressionKey(
+        key: string,
+        adId: number,
+        userId: number | null,
+        served: boolean,
+        spentCents: number
+    ): Promise<void> {
         await this.db.prepare(`
-            UPDATE ad_impression_dedup SET served = ?, spent_cents = ? WHERE key = ?
-        `).bind(served ? 1 : 0, spentCents, key).run();
+            UPDATE ad_impression_dedup SET served = ?, spent_cents = ?
+            WHERE key = ? AND ad_id = ? AND user_id IS ?
+              AND created_at >= datetime('now', '-1 day')
+        `).bind(served ? 1 : 0, spentCents, key, adId, userId).run();
     }
 
     /**
