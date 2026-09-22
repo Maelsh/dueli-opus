@@ -9,6 +9,7 @@ import type { Bindings, Variables } from '../../../config/types';
 import { AdvertisementModel } from '../../../models/AdvertisementModel';
 import { AdCampaignManager } from '../../../lib/services/AdCampaignManager';
 import { AdServingService, AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY } from '../../../lib/services/AdServingService';
+import { AdClickService } from '../../../lib/services/AdClickService';
 import { authMiddleware } from '../../../middleware/auth';
 import { t, DEFAULT_LANGUAGE } from '../../../i18n';
 
@@ -66,18 +67,33 @@ advertisementsRoutes.get('/', async (c) => {
  * The debit (LedgerService = money SSOT) and the serving-state check happen
  * in ONE guarded SQL batch: a depleted or unapproved campaign is never
  * charged and never served.
+ *
+ * 9.C: an optional client idempotency key (`idempotency_key`) makes delivery
+ * retries safe — the same key for the same ad + session identity replays the
+ * stored result WITHOUT a second ledger charge (24h approved window).
+ * Callers that send no key keep exact 9.A/9.B behavior. A successful charge
+ * also mints a single-use click token (click anti-fraud) in the response.
  * POST /api/advertisements/:id/impression
  */
 advertisementsRoutes.post('/:id/impression', async (c) => {
     try {
+        const lang = c.get('lang') || DEFAULT_LANGUAGE;
         const adId = parseInt(c.req.param('id'));
         const body = await c.req.json<{
             competition_id: number;
             user_id?: number;
+            idempotency_key?: string;
         }>();
 
         if (!adId || !body?.competition_id) {
-            return c.json({ success: false, error: t('errors.missing_fields', c.get('lang') || DEFAULT_LANGUAGE) }, 422);
+            return c.json({ success: false, error: t('errors.missing_fields', lang) }, 422);
+        }
+        if (body.idempotency_key !== undefined && (
+            typeof body.idempotency_key !== 'string' ||
+            body.idempotency_key.length === 0 ||
+            body.idempotency_key.length > 128
+        )) {
+            return c.json({ success: false, error: t('errors.missing_fields', lang) }, 422);
         }
 
         // F-1: the session identity is the ONLY identity for authenticated
@@ -89,6 +105,59 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
         const viewer = c.get('user') as { id: number } | null;
         const effectiveUserId = viewer?.id ?? body.user_id ?? null;
 
+        const adModel = new AdvertisementModel(c.env.DB);
+        const clickService = new AdClickService(c.env.DB);
+        const key = body.idempotency_key ?? null;
+
+        const mintClickToken = async () => {
+            const minted = await clickService.mint(adId, effectiveUserId);
+            return minted?.token ?? null;
+        };
+
+        if (key) {
+            const prior = await adModel.findImpressionKey(key, adId, effectiveUserId);
+            if (prior && prior.served === 1) {
+                // Duplicate delivery inside the window: replay, never re-charge.
+                return c.json({
+                    success: true,
+                    data: {
+                        served: true,
+                        budgetExhausted: false,
+                        spentCents: prior.spent_cents,
+                        frequencyCapped: false,
+                        deduped: true,
+                        click_token: await mintClickToken()
+                    }
+                });
+            }
+            if (!prior) {
+                const claimed = await adModel.claimImpressionKey(key, adId, effectiveUserId);
+                if (!claimed) {
+                    // Lost a concurrent claim race: another delivery is in
+                    // flight or already settled — never charge blindly.
+                    const raced = await adModel.findImpressionKey(key, adId, effectiveUserId);
+                    if (raced && raced.served === 1) {
+                        return c.json({
+                            success: true,
+                            data: {
+                                served: true,
+                                budgetExhausted: false,
+                                spentCents: raced.spent_cents,
+                                frequencyCapped: false,
+                                deduped: true,
+                                click_token: await mintClickToken()
+                            }
+                        });
+                    }
+                    return c.json({
+                        success: false,
+                        error: t('errors.invalid_request', lang),
+                        code: 'duplicate_delivery'
+                    }, 409);
+                }
+            }
+        }
+
         const campaignManager = new AdCampaignManager(c.env.DB);
         const result = await campaignManager.chargeImpression(
             adId,
@@ -97,26 +166,30 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
             viewer ? { frequencyCap: AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY } : undefined
         );
 
+        if (key) {
+            await adModel.settleImpressionKey(key, result.served, result.served ? result.spentCents : 0);
+        }
+
         if (!result.served) {
             // 9.B frequency cap is enforced atomically INSIDE chargeImpression
             // (F-2: cap count + reserve + write in one batch — no COUNT-then-INSERT).
             if (result.frequencyCapped) {
                 return c.json({
                     success: false,
-                    error: t('ads.frequency_cap_reached', c.get('lang') || DEFAULT_LANGUAGE),
+                    error: t('ads.frequency_cap_reached', lang),
                     code: 'frequency_cap_reached'
                 }, 429);
             }
             return c.json({
                 success: false,
-                error: t('ads.budget_exhausted', c.get('lang') || DEFAULT_LANGUAGE),
+                error: t('ads.budget_exhausted', lang),
                 code: 'budget_exhausted'
             }, 409);
         }
 
         return c.json({
             success: true,
-            data: result
+            data: { ...result, deduped: key ? false : undefined, click_token: await mintClickToken() }
         });
     } catch (error) {
         console.error('Error recording impression:', error);
@@ -125,22 +198,88 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
 });
 
 /**
- * Record ad click
+ * Mint a single-use click token (Phase 9.C anti-fraud).
+ * The token is an opaque server-side bearer bound to (ad, session identity),
+ * expiring after AD_CLICK_TOKEN_TTL_SECONDS. Every countable click must
+ * present one on POST /:id/click. No secret material is ever exposed.
+ * POST /api/advertisements/:id/click-token
+ */
+advertisementsRoutes.post('/:id/click-token', async (c) => {
+    try {
+        const lang = c.get('lang') || DEFAULT_LANGUAGE;
+        const adId = parseInt(c.req.param('id'));
+        if (!adId) {
+            return c.json({ success: false, error: t('errors.missing_fields', lang) }, 422);
+        }
+        const viewer = c.get('user') as { id: number } | null;
+        const clickService = new AdClickService(c.env.DB);
+        const minted = await clickService.mint(adId, viewer?.id ?? null);
+        if (!minted) {
+            return c.json({ success: false, error: t('not_found', lang) }, 404);
+        }
+        return c.json({
+            success: true,
+            data: { click_token: minted.token, expires_in_seconds: minted.expiresInSeconds }
+        });
+    } catch (error) {
+        console.error('Error minting click token:', error);
+        return c.json({ error: t('server_error', c.get('lang') || DEFAULT_LANGUAGE) }, 500);
+    }
+});
+
+/**
+ * Record ad click — countable ONLY with a valid server-issued token (9.C).
+ * Rejected without counting: missing token (422), unknown/foreign token
+ * (403), expired token (403), consumed token replay (409). The counted click
+ * is written atomically with the token consumption, so 100 concurrent
+ * replays of one token count exactly one click.
  * POST /api/advertisements/:id/click
  */
 advertisementsRoutes.post('/:id/click', async (c) => {
     try {
+        const lang = c.get('lang') || DEFAULT_LANGUAGE;
         const adId = parseInt(c.req.param('id'));
+        if (!adId) {
+            return c.json({ success: false, error: t('errors.missing_fields', lang) }, 422);
+        }
+        const body = await c.req.json<{ click_token?: string }>().catch(() => null);
+        if (!body?.click_token || typeof body.click_token !== 'string') {
+            return c.json({
+                success: false,
+                error: t('errors.missing_fields', lang),
+                code: 'missing_click_token'
+            }, 422);
+        }
 
-        const adModel = new AdvertisementModel(c.env.DB);
-        await adModel.recordClick(adId);
+        const viewer = c.get('user') as { id: number } | null;
+        const clickService = new AdClickService(c.env.DB);
+        const outcome = await clickService.redeem(adId, body.click_token, viewer?.id ?? null);
 
+        if (outcome === 'ok') {
+            return c.json({ success: true, data: { counted: true } });
+        }
+        if (outcome === 'reused') {
+            return c.json({
+                success: false,
+                error: t('errors.invalid_request', lang),
+                code: 'click_token_reused'
+            }, 409);
+        }
+        if (outcome === 'expired') {
+            return c.json({
+                success: false,
+                error: t('errors.invalid_request', lang),
+                code: 'click_token_expired'
+            }, 403);
+        }
         return c.json({
-            success: true
-        });
+            success: false,
+            error: t('errors.invalid_request', lang),
+            code: 'click_token_invalid'
+        }, 403);
     } catch (error) {
         console.error('Error recording click:', error);
-        return c.json({ error: 'Failed to record click' }, 500);
+        return c.json({ error: t('server_error', c.get('lang') || DEFAULT_LANGUAGE) }, 500);
     }
 });
 

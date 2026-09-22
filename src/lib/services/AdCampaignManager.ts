@@ -406,18 +406,31 @@ export class AdCampaignManager {
         return { depleted: result.served, budgetExhausted: result.budgetExhausted };
     }
 
-    /** Analytics rows with budget fields DERIVED from the ledger (dollars for display). */
-    private toAnalytics(ad: Advertisement, balanceCents: number): CampaignAnalytics {
+    /**
+     * Analytics rows DERIVED from the single source of truth (9.C):
+     * impressions = counted ad_impressions rows (paired 1:1 with ledger
+     * charges), clicks = counted ad_clicks rows (token-consumed), spend =
+     * SUM of the ad_impression ledger credits in integer cents. The legacy
+     * views_count / clicks_count columns are NEVER read — forged counters
+     * cannot move these numbers. Dollars are display-only (cents / 100);
+     * no floating point lives in the money path.
+     */
+    private async toAnalytics(ad: Advertisement, balanceCents: number): Promise<CampaignAnalytics> {
         const budgetCents = ad.budget_cents ?? 0;
+        const [impressions, clicks, spendCents] = await Promise.all([
+            this.adModel.countImpressions(ad.id),
+            this.adModel.countClicks(ad.id),
+            this.adModel.adSpendCents(ad.id)
+        ]);
         return {
             ad_id: ad.id,
             title: ad.title,
             budget: budgetCents / 100,
             budget_remaining: balanceCents / 100,
-            total_impressions: ad.views_count,
-            total_clicks: ad.clicks_count,
-            total_spend: (budgetCents - balanceCents) / 100,
-            ctr: ad.views_count > 0 ? ad.clicks_count / ad.views_count : 0,
+            total_impressions: impressions,
+            total_clicks: clicks,
+            total_spend: spendCents / 100,
+            ctr: impressions > 0 ? clicks / impressions : 0,
             campaign_status: lifecycleStatus(ad),
             target_language: ad.target_language ?? null,
             target_country: ad.target_country ?? null
@@ -431,7 +444,7 @@ export class AdCampaignManager {
 
         const campaigns: CampaignAnalytics[] = [];
         for (const ad of result.results || []) {
-            campaigns.push(this.toAnalytics(ad, await this.budgetBalanceCents(ad.id)));
+            campaigns.push(await this.toAnalytics(ad, await this.budgetBalanceCents(ad.id)));
         }
 
         return {

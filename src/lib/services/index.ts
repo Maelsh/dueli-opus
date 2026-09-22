@@ -7,6 +7,8 @@ export { EmailService } from './EmailService';
 export { CryptoUtils } from './CryptoUtils';
 export { AdCampaignManager } from './AdCampaignManager';
 export { AdServingService, AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY, SENSITIVE_AD_CONTEXTS } from './AdServingService';
+export { AdClickService, AD_CLICK_TOKEN_TTL_SECONDS } from './AdClickService';
+export type { ClickTokenMint, AdMetrics } from './AdClickService';
 export { ArbitrationService } from './ArbitrationService';
 export { LivePayoutEngine } from './LivePayoutEngine';
 export { EventPusher } from './EventPusher';

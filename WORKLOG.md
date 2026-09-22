@@ -1,3 +1,43 @@
+## 2026-09-22 — Phase 9.C ad metrics & anti-fraud (branch `feat/ads-metrics-antifraud`)
+
+- Base: `87b6517` (9.B remediation tip of `feat/ads-serving-targeting`, i.e. `origin/main` 9.A + 9.B).
+  Result: the advertiser pays for REAL views/clicks, and the stats shown derive from the same
+  source the money was taken from.
+- **Click anti-fraud token**: new `AdClickService` (`lib/services/`) mints opaque 256-bit single-use
+  tokens bound to (ad, session identity), TTL 10 min (`AD_CLICK_TOKEN_TTL_SECONDS`), persisted in new
+  `ad_click_tokens` (migration 0027). `POST /:id/click` counts ONLY with a valid token: missing → 422
+  (`missing_click_token`), unknown/foreign-ad/stolen → 403 (`click_token_invalid`), expired → 403
+  (`click_token_expired`), replay → 409 (`click_token_reused`). No secret in client code — there is no
+  shared secret at all (opaque bearer + server-side table). Tokens are minted via new
+  `POST /api/advertisements/:id/click-token` and attached to every successful impression response.
+- **Atomic redeem** (`AdvertisementModel.redeemClickToken`): guarded `UPDATE ... WHERE consumed_at IS NULL
+  AND expires_at > datetime('now')` + `INSERT INTO ad_clicks ... WHERE EXISTS(consumed) AND NOT
+  EXISTS(ad_clicks.token)` in ONE batch — 100 concurrent replays of one token yield exactly one 200 and
+  99×409 with zero 500s (the NOT EXISTS guard, plus keeping the UNIQUE backstop, fixed a real
+  UNIQUE-throw race found by the test). The recorded user is the token's bound identity, never caller input.
+- **Single financial source**: `AdCampaignManager.toAnalytics` no longer reads `views_count`/`clicks_count`
+  — impressions = counted `ad_impressions` rows (paired 1:1 with ledger charges in 9.A's batch),
+  clicks = counted `ad_clicks` rows, spend = `SUM(amount_cents)` of the `ad_impression` ledger credits on
+  `reserve:campaign_<id>` (integer cents, no floats). Forging the legacy counters (9999/9999) provably
+  cannot move the numbers. `LedgerService` untouched.
+- **Impression dedup**: optional `idempotency_key` on the impression route (`ad_impression_dedup`, 24h
+  approved window, same key+ad+session identity replays the stored result with `deduped:true` and no second
+  charge; claim-race losers get an honest 409 `duplicate_delivery`, never a blind charge). No key ⇒ exact
+  9.A/9.B behavior (all 9.B tests pass unmodified). No new behavioral tracking, no new targeting.
+- **i18n**: `ads.{impressions,clicks,ctr,spend}` added in `ar.ts` + `en.ts` (real Arabic) and returned as
+  `labels` from `GET /api/advertiser/campaigns/:id/analytics` (translated at render time).
+- **RED-first (proven)**: 8/8 new tests failed pre-fix (token-less click counted 200, mint route 404,
+  invalid token counted, no dedup) ⇒ 8/8 post-fix via real Hono + SqliteD1 (full production migrations).
+- **Verification**: `tests/api/ad-metrics.test.ts` 8/8 ✅, ad-serving + lifecycle + remediation 19/19 ✅,
+  `npx tsc --noEmit` ✅ (zero new `any`), `npm run build` ✅, route inventory regen (191 routes, new
+  `POST /:id/click-token` PUBLIC/auth-optional like the other ad routes). `test:integration`/`db:reset`
+  not runnable in this sandbox (real-D1 tests need Cloudflare access — one messages-schema test alone
+  exceeds 6 min; pre-existing limitation); migration 0027 validity from-empty is covered because SqliteD1
+  loads every migration file on each test run. Rollback: drop the three 0027 tables; legacy counters kept
+  (display-compat) so rollback cannot break reads.
+- Deliberately untouched: 9.A/9.B logic (cap, targeting, AdBlock, private_messages, chargeImpression math),
+  LedgerService, Stripe/money, CI/dependencies, historical migrations, `private_messages`. No merge performed.
+
 ## 2026-09-22 — Phase 9.B remediation F-1/F-2/F-3 (same branch/PR #45)
 
 - **F-1 (HIGH, identity bypass)**: impression route no longer trusts `body.user_id` for authenticated

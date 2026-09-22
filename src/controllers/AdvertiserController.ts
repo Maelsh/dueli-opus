@@ -163,7 +163,15 @@ export class AdvertiserController extends BaseController {
             const analytics = await campaignManager.getCampaignAnalytics(adId);
 
             if (!analytics) return this.notFound(c);
-            return this.success(c, { analytics });
+            // 9.C: display labels travel with the numbers — translated at
+            // render time via t('ads.*'), never hard-coded in code or client.
+            const labels = {
+                impressions: this.t('ads.impressions', c),
+                clicks: this.t('ads.clicks', c),
+                ctr: this.t('ads.ctr', c),
+                spend: this.t('ads.spend', c)
+            };
+            return this.success(c, { analytics, labels });
         } catch (error) {
             console.error('Advertiser analytics error:', error);
             return this.serverError(c, error as Error);

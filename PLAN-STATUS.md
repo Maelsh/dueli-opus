@@ -1,6 +1,23 @@
 
 
 
+## 9.C — القياس ومكافحة الاحتيال · فرع `feat/ads-metrics-antifraud`
+
+- 🔧 منفَّذ محلياً (من `87b6517` = طرف 9.B). النتيجة: المعلن يدفع مقابل مشاهدات ونقرات حقيقية،
+  والإحصاءات مشتقة من نفس المصدر الذي خُصم منه.
+- **Click token** أحادي الاستخدام (opaque، مرتبط بالإعلان وهوية الجلسة، TTL ‏10 دقائق): بلا token ‏422،
+  منتهي/غير صالح ‏403، معاد الاستخدام ‏409 — كلها بلا احتساب. بلا secret في العميل.
+- **مصدر مالي واحد**: impressions/clicks/spend من الصفوف التشغيلية + `SUM` دفتر `ad_impression`
+  (integer cents) — تزوير `views_count`/`clicks_count` (9999) لا يحرّك الأرقام. `LedgerService` كما هو.
+- **Dedup**: مفتاح `idempotency_key` اختياري (نافذة 24h) — إعادة نفس التسليم لا تخصم ثانية؛ بلا مفتاح ⇒
+  سلوك 9.A/9.B حرفياً. بلا تتبع سلوكي ولا استهداف جديد.
+- **i18n**: `ads.{impressions,clicks,ctr,spend}` في `ar.ts` + `en.ts` وتُرجع كـ`labels` مع التحليلات.
+- **Migration 0027** فقط (جديدة: `ad_click_tokens` + `ad_clicks` + `ad_impression_dedup`)؛ routes inventory
+  مولَّد من جديد (191 مساراً، `POST /:id/click-token` جدید).
+- **RED/GREEN مُثبَت**: ‏8/8 فشلت قبل الإصلاح ⇒ ‏8/8 بعده (تشمل 100 نقرة متزامنة: ‏1×200 + ‏99×409،
+  و100 رمزاً مميزاً ⇒ ‏100×200)؛ ‏19/19 لجيران 9.A/9.B؛ ‏`tsc` ✅؛ ‏`build` ✅.
+  الحالة 🔧 ريثما يعيد REMOTE التحقق (integration الحقيقي تعذّر محلياً — يتطلب Cloudflare).
+
 ## 9.B — عرض الإعلان واستهدافه · فرع `feat/ads-serving-targeting`
 
 - 🔧 remediation لنفس الـPR (#45) بعد مراجعة REMOTE — ثلاثة findings فقط، ما عداها PASS وبقي مغلقاً:
