@@ -8,6 +8,7 @@ import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { AdvertisementModel } from '../../../models/AdvertisementModel';
 import { AdCampaignManager } from '../../../lib/services/AdCampaignManager';
+import { AdServingService, AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY } from '../../../lib/services/AdServingService';
 import { authMiddleware } from '../../../middleware/auth';
 import { t, DEFAULT_LANGUAGE } from '../../../i18n';
 
@@ -17,19 +18,42 @@ const advertisementsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables
 advertisementsRoutes.use('*', authMiddleware({ required: false }));
 
 /**
- * Get active advertisements
- * GET /api/advertisements
+ * Targeted ad serving (Phase 9.B).
+ * GET /api/advertisements?competition_id=&context=&limit=
+ *
+ * Targeting (language + country + category) is resolved SERVER-SIDE from the
+ * competition row — the client never decides which ad matches. AdBlockModel
+ * exclusions, the per-user frequency cap, and the sensitive-context ban
+ * (context=private_messages → always []) are enforced in AdServingService.
+ * Every served ad carries the i18n sponsored/why/hide labels (ads.*) — never
+ * hard-coded text.
  */
 advertisementsRoutes.get('/', async (c) => {
     try {
-        const limit = parseInt(c.req.query('limit') || '5');
+        const lang = c.get('lang') || DEFAULT_LANGUAGE;
+        const limit = Math.max(1, Math.min(parseInt(c.req.query('limit') || '5') || 5, 50));
+        const competitionRaw = c.req.query('competition_id');
+        const competitionId = competitionRaw ? parseInt(competitionRaw) : null;
+        const context = c.req.query('context') || null;
+        const viewer = c.get('user') as { id: number } | null;
 
-        const adModel = new AdvertisementModel(c.env.DB);
-        const ads = await adModel.getActiveAds(limit);
+        const serving = new AdServingService(c.env.DB);
+        const ads = await serving.serve({
+            competitionId: competitionId && Number.isInteger(competitionId) && competitionId > 0 ? competitionId : null,
+            language: lang,
+            viewerUserId: viewer?.id ?? null,
+            context,
+            limit,
+        });
 
         return c.json({
             success: true,
-            data: ads
+            data: ads.map((ad) => ({
+                ...ad,
+                sponsored_label: t('ads.sponsored_label', lang),
+                why_this_ad: t('ads.why_this_ad', lang),
+                hide_ad: t('ads.hide_ad', lang),
+            }))
         });
     } catch (error) {
         console.error('Error fetching advertisements:', error);
@@ -56,10 +80,33 @@ advertisementsRoutes.post('/:id/impression', async (c) => {
             return c.json({ success: false, error: t('errors.missing_fields', c.get('lang') || DEFAULT_LANGUAGE) }, 422);
         }
 
+        // F-1: the session identity is the ONLY identity for authenticated
+        // callers — body.user_id is never trusted (it is self-asserted and
+        // rotatable). The same effective id feeds the frequency-cap count AND
+        // the impression row via chargeImpression, so omitting user_id cannot
+        // bypass the cap and spoofing another id cannot touch their counter.
+        // Anonymous callers keep 9.A attribution (body.user_id || null), uncapped.
+        const viewer = c.get('user') as { id: number } | null;
+        const effectiveUserId = viewer?.id ?? body.user_id ?? null;
+
         const campaignManager = new AdCampaignManager(c.env.DB);
-        const result = await campaignManager.chargeImpression(adId, body.competition_id, body.user_id || null);
+        const result = await campaignManager.chargeImpression(
+            adId,
+            body.competition_id,
+            effectiveUserId,
+            viewer ? { frequencyCap: AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY } : undefined
+        );
 
         if (!result.served) {
+            // 9.B frequency cap is enforced atomically INSIDE chargeImpression
+            // (F-2: cap count + reserve + write in one batch — no COUNT-then-INSERT).
+            if (result.frequencyCapped) {
+                return c.json({
+                    success: false,
+                    error: t('ads.frequency_cap_reached', c.get('lang') || DEFAULT_LANGUAGE),
+                    code: 'frequency_cap_reached'
+                }, 429);
+            }
             return c.json({
                 success: false,
                 error: t('ads.budget_exhausted', c.get('lang') || DEFAULT_LANGUAGE),

@@ -54,6 +54,8 @@ export interface ImpressionChargeResult {
     served: boolean;
     budgetExhausted: boolean;
     spentCents: number;
+    /** 9.B: rejected by the per-user frequency cap (maps to 429, not 409). */
+    frequencyCapped: boolean;
 }
 
 export class AdCampaignManager {
@@ -95,6 +97,7 @@ export class AdCampaignManager {
         cost_per_impression_cents?: number;
         target_language?: string;
         target_country?: string;
+        target_category_id?: number;
         advertiser_id: number;
     }): Promise<Advertisement> {
         if (!Number.isInteger(data.budget_cents) || data.budget_cents <= 0) {
@@ -121,6 +124,7 @@ export class AdCampaignManager {
                 cost_per_impression_cents = ?,
                 target_language = ?,
                 target_country = ?,
+                target_category_id = ?,
                                 campaign_lifecycle_status = 'draft'
             WHERE id = ?
         `).bind(
@@ -129,6 +133,7 @@ export class AdCampaignManager {
             cost,
             data.target_language || null,
             data.target_country || null,
+            data.target_category_id ?? null,
             ad.id
         ).run();
 
@@ -275,34 +280,43 @@ export class AdCampaignManager {
     }
 
     /**
-     * Atomic impression charge (9.A core).
+     * Atomic impression charge (9.A core + 9.B frequency cap).
      *
      * ONE db.batch() that:
      *  1. conditionally INSERTs the debit into ledger_entries — the WHERE clause
-     *     checks BOTH the campaign serving state AND the aggregated ledger
-     *     balance in the SAME statement as the write (no TOCTOU, no
-     *     check-then-debit gap), exactly like LedgerService.withdraw();
+     *     checks the campaign serving state, the aggregated ledger balance, AND
+     *     (9.B) the per-user frequency cap in the SAME statement as the write
+     *     (no TOCTOU, no check-then-debit gap), exactly like LedgerService.withdraw();
      *  2. credits platform:ad_revenue (balanced pair, M1);
-          *  3. flips campaign_lifecycle_status to 'ended' atomically when the remaining
+     *  3. records the impression row — guarded on the tx above, so one charge
+     *     always pairs with exactly one impression row (the cap subquery in
+     *     step 1 therefore sees every previously committed impression, even
+     *     under concurrency);
+     *  4. bumps views_count for the same guarded tx;
+     *  5. flips campaign_lifecycle_status to 'ended' atomically when the remaining
      *     balance can no longer cover the next impression.
      *
-     * The impression row itself is recorded only after a successful charge.
+     * The cap applies only when BOTH userId and opts.frequencyCap are set
+     * (authenticated serving path); anonymous/legacy callers keep 9.A behavior.
+     * userId written to ad_impressions is the SAME value the cap counted —
+     * callers must pass the session identity, never client-supplied ids (F-1).
      */
-    async chargeImpression(adId: number, competitionId: number, userId: number | null): Promise<ImpressionChargeResult> {
+    async chargeImpression(
+        adId: number,
+        competitionId: number,
+        userId: number | null,
+        opts: { frequencyCap?: number } = {}
+    ): Promise<ImpressionChargeResult> {
         const ad = await this.adModel.findById(adId);
-        if (!ad) return { served: false, budgetExhausted: false, spentCents: 0 };
+        if (!ad) return { served: false, budgetExhausted: false, spentCents: 0, frequencyCapped: false };
 
         const cost = ad.cost_per_impression_cents;
         const account = campaignAccount(adId);
         const txId = `ad_imp_${adId}_${competitionId}_${crypto.randomUUID()}`;
+        const now = new Date().toISOString();
+        const capEnforced = userId !== null && opts.frequencyCap !== undefined;
 
-        const results = await this.db().batch([
-            // 1. conditional spend: credit the campaign reserve (balance is
-            // debit-positive, so a credit reduces it) — serving state + balance
-            // + write in one statement.
-            // Serving state is the lifecycle state (CASE over the 0025/0026
-            // carry-over columns) — no JS pre-check, no TOCTOU.
-            this.db().prepare(`
+        const spendGuard = `
                 INSERT INTO ledger_entries (tx_id, account, direction, amount_cents, currency, ref_type, ref_id, created_by)
                 SELECT ?, ?, 'credit', ?, 'USD', 'ad_impression', ?, 'system:ad_lifecycle'
                 WHERE EXISTS (
@@ -316,14 +330,38 @@ export class AdCampaignManager {
                     FROM ledger_entries
                     WHERE account = ?
                 ) >= ?
-            `).bind(txId, account, cost, adId, adId, account, cost),
+                ${capEnforced ? `AND (
+                    SELECT COUNT(*) FROM ad_impressions
+                    WHERE ad_id = ? AND user_id = ?
+                      AND created_at >= datetime('now', '-1 day')
+                ) < ?` : ``}
+        `;
+        const spendParams: unknown[] = [txId, account, cost, adId, adId, account, cost];
+        if (capEnforced) spendParams.push(adId, userId, opts.frequencyCap);
+
+        const results = await this.db().batch([
+            // 1. conditional spend: serving state + balance + frequency cap + write
+            // in one statement — serialized batches make concurrent requests see
+            // each other's committed impression rows, so the cap cannot overshoot.
+            this.db().prepare(spendGuard).bind(...spendParams),
             // 2. balanced debit side (M1) — platform revenue, only if the credit landed
             this.db().prepare(`
                 INSERT INTO ledger_entries (tx_id, account, direction, amount_cents, currency, ref_type, ref_id, created_by)
                 SELECT ?, ?, 'debit', ?, 'USD', 'ad_impression', ?, 'system:ad_lifecycle'
                 WHERE EXISTS (SELECT 1 FROM ledger_entries WHERE tx_id = ?)
             `).bind(txId, AD_REVENUE_ACCOUNT, cost, adId, txId),
-            // 3. atomic exhaustion flip: cannot afford the next impression.
+            // 3. impression row — fires exactly when the charge above landed.
+            this.db().prepare(`
+                INSERT INTO ad_impressions (ad_id, competition_id, user_id, created_at)
+                SELECT ?, ?, ?, ?
+                WHERE EXISTS (SELECT 1 FROM ledger_entries WHERE tx_id = ?)
+            `).bind(adId, competitionId, userId, now, txId),
+            // 4. views counter for the same guarded charge.
+            this.db().prepare(`
+                UPDATE advertisements SET views_count = views_count + 1
+                WHERE id = ? AND EXISTS (SELECT 1 FROM ledger_entries WHERE tx_id = ?)
+            `).bind(adId, txId),
+            // 5. atomic exhaustion flip: cannot afford the next impression.
             // Guarded on BOTH columns — the flipped row is readable under
             // either layout immediately within the same batch.
             this.db().prepare(`
@@ -340,12 +378,15 @@ export class AdCampaignManager {
 
         const debitChanges = (results[0].meta as { changes?: number } | undefined)?.changes ?? 0;
         if (debitChanges === 0) {
-            // Rejected: not active, or balance < cost. Distinguish for the caller.
+            // Rejected: not active, balance < cost, or frequency cap hit.
+            // The post-hoc COUNT only classifies the rejection for the caller;
+            // enforcement already happened atomically above.
+            if (capEnforced && (await this.adModel.countRecentImpressions(adId, userId)) >= opts.frequencyCap!) {
+                return { served: false, budgetExhausted: false, spentCents: 0, frequencyCapped: true };
+            }
             const balance = await this.budgetBalanceCents(adId);
-            return { served: false, budgetExhausted: balance < cost, spentCents: 0 };
+            return { served: false, budgetExhausted: balance < cost, spentCents: 0, frequencyCapped: false };
         }
-
-        await this.adModel.recordImpression(adId, competitionId, userId);
 
         // Audit log entry (log only — the ledger remains the money SSOT).
         await this.financialModel.record({
@@ -356,7 +397,7 @@ export class AdCampaignManager {
             public_description: `Ad impression for campaign #${adId}`
         });
 
-        return { served: true, budgetExhausted: false, spentCents: cost };
+        return { served: true, budgetExhausted: false, spentCents: cost, frequencyCapped: false };
     }
 
     /** Backwards-compatible alias over the atomic charge. */

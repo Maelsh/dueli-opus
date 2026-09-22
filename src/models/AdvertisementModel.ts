@@ -37,6 +37,7 @@ export interface Advertisement {
     cost_per_impression_cents: number;
     target_language: string | null;
     target_country: string | null;
+    target_category_id: number | null;
     campaign_lifecycle_status: 'draft' | 'pending_review' | 'active' | 'paused' | 'ended';
     campaign_status: string;
 }
@@ -161,6 +162,92 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
             LIMIT ?
         `).bind(limit).all<Advertisement>();
         return result.results || [];
+    }
+
+    /**
+     * Targeted serving selection (Phase 9.B).
+     *
+     * One SQL statement enforcing, server-side:
+     * - 9.A lifecycle state = 'active' AND ledger budget covers one impression
+     *   (same atomic guard as getActiveAds — LedgerService stays the money SSOT)
+     * - targeting: NULL target = no restriction (same semantics as 0003
+     *   target_language / target_country); otherwise exact match on the
+     *   competition-derived language / country / category
+     * - AdBlockModel exclusion: the viewer's blocked ads never match
+     * - frequency cap: ads the viewer already saw `frequencyCap` times in the
+     *   trailing 24h (existing ad_impressions rows only — no new tracking)
+     */
+    async getTargetedAds(opts: {
+        language?: string | null;
+        country?: string | null;
+        categoryId?: number | null;
+        blockedForUserId?: number | null;
+        frequencyCap?: number | null;
+        cappedForUserId?: number | null;
+        limit?: number;
+    }): Promise<Advertisement[]> {
+        const limit = Math.max(1, Math.min(opts.limit ?? 5, 50));
+        const params: unknown[] = [];
+        let sql = `
+            SELECT * FROM ${this.tableName}
+            WHERE is_active = 1
+              AND (CASE WHEN campaign_lifecycle_status IN ('draft', 'pending_review', 'active', 'paused', 'ended')
+                    THEN campaign_lifecycle_status ELSE campaign_status END) = 'active'
+              AND (
+                SELECT COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE -amount_cents END), 0)
+                FROM ledger_entries
+                WHERE account = 'reserve:campaign_' || ${this.tableName}.id
+              ) >= cost_per_impression_cents
+        `;
+
+        if (opts.language !== undefined && opts.language !== null) {
+            sql += ` AND (target_language IS NULL OR target_language = ?)`;
+            params.push(opts.language);
+        }
+        if (opts.country !== undefined && opts.country !== null) {
+            sql += ` AND (target_country IS NULL OR target_country = ?)`;
+            params.push(opts.country);
+        }
+        if (opts.categoryId !== undefined && opts.categoryId !== null) {
+            sql += ` AND (target_category_id IS NULL OR target_category_id = ?)`;
+            params.push(opts.categoryId);
+        }
+        if (opts.blockedForUserId !== undefined && opts.blockedForUserId !== null) {
+            sql += ` AND id NOT IN (SELECT ad_id FROM ad_blocks WHERE user_id = ?)`;
+            params.push(opts.blockedForUserId);
+        }
+        if (
+            opts.frequencyCap !== undefined && opts.frequencyCap !== null &&
+            opts.cappedForUserId !== undefined && opts.cappedForUserId !== null
+        ) {
+            sql += ` AND (
+                SELECT COUNT(*) FROM ad_impressions
+                WHERE ad_impressions.ad_id = ${this.tableName}.id
+                  AND ad_impressions.user_id = ?
+                  AND ad_impressions.created_at >= datetime('now', '-1 day')
+            ) < ?`;
+            params.push(opts.cappedForUserId, opts.frequencyCap);
+        }
+
+        sql += ` ORDER BY RANDOM() LIMIT ?`;
+        params.push(limit);
+
+        const result = await this.db.prepare(sql).bind(...params).all<Advertisement>();
+        return result.results || [];
+    }
+
+    /**
+     * Impressions of one ad seen by one user in the trailing 24h.
+     * Backs the server-side frequency-cap guard on the impression route, so a
+     * tampered client cannot exceed the cap by calling the API directly.
+     */
+    async countRecentImpressions(adId: number, userId: number): Promise<number> {
+        const row = await this.db.prepare(`
+            SELECT COUNT(*) as count FROM ad_impressions
+            WHERE ad_id = ? AND user_id = ?
+              AND created_at >= datetime('now', '-1 day')
+        `).bind(adId, userId).first<{ count: number }>();
+        return row?.count ?? 0;
     }
 
     /**

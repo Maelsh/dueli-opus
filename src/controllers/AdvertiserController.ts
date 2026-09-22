@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
 import { AdCampaignManager } from '../lib/services/AdCampaignManager';
+import { CategoryModel } from '../models/CategoryModel';
 import { ArbitrationService } from '../lib/services/ArbitrationService';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
 
@@ -35,6 +36,7 @@ export class AdvertiserController extends BaseController {
                 cost_per_impression_cents?: number;
                 target_language?: string;
                 target_country?: string;
+                target_category_id?: number;
             }>(c);
 
             if (!body?.title || !body?.budget_cents) {
@@ -42,6 +44,15 @@ export class AdvertiserController extends BaseController {
             }
             if (!Number.isInteger(body.budget_cents) || body.budget_cents <= 0) {
                 return this.validationError(c, this.t('ads.invalid_budget', c));
+            }
+            if (body.target_category_id !== undefined && body.target_category_id !== null) {
+                if (!Number.isInteger(body.target_category_id) || body.target_category_id <= 0) {
+                    return this.validationError(c, this.t('errors.missing_fields', c));
+                }
+                const categoryModel = new CategoryModel(c.env.DB);
+                if (!(await categoryModel.findById(body.target_category_id))) {
+                    return this.validationError(c, this.t('errors.missing_fields', c));
+                }
             }
 
             const campaignManager = new AdCampaignManager(c.env.DB);
@@ -53,6 +64,7 @@ export class AdvertiserController extends BaseController {
                 cost_per_impression_cents: body.cost_per_impression_cents,
                 target_language: body.target_language,
                 target_country: body.target_country,
+                target_category_id: body.target_category_id ?? undefined,
                 advertiser_id: user.id
             });
 
