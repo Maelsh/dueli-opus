@@ -1,6 +1,15 @@
 
 
 
+## C1 — payments/ad-blocks auth · فرع `fix/c1-auth-fix` (مكدّس فوق C7)
+
+- 🔧 منفَّذ محلياً: `authMiddleware({required:true})` على مستوى الراوتر في
+  `ad-blocks/routes.ts` و`payments/routes.ts` (8 مسارات: UNGUARDED→AUTHENTICATED،
+  الجرد مولَّد من جديد) — بلا global middleware، بلا تغيير business logic.
+- **الاختبارات**: `tests/api/payment-auth.test.ts` ‏8/8 (401 بلا/خاطئة/منتهية،
+  200 + 201 بجلسة صالحة، 422 تُثبت مرور الـauth)؛ `npm test` ‏566/566 على المكدس؛
+  `tsc` ✅؛ `build` ✅. الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
+
 ## C7 — D1 reconciliation · فرع `chore/c7-d1-reconciliation` (مكدّس فوق C3b) — ✅ منفَّذ
 
 - **Remote rebuild منفَّذ ومُتحقق**: backup طازج (2.4MB) → إسقاط 50 كائناً بترتيب FK

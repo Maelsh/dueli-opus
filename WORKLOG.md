@@ -1,3 +1,8 @@
+## 2026-09-23 — C1 restack (branch `fix/c1-auth-fix` on C7)
+
+- Rebased onto C7 stack; re-verified on-stack: `payment-auth` 8/8, `npm test` 566/566،
+  `tsc` نظيف، `build` ناجح، الجرد المعاد توليده مطابق (فرق الطابع الزمني فقط — رُجع).
+
 ## 2026-09-23 — C7 EXECUTED (branch `chore/c7-d1-reconciliation` on C3b)
 
 - Remote rebuild done + validated: fresh 2.4MB backup → dropped 50 objects (FK order,
