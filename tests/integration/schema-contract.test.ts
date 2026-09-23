@@ -62,11 +62,8 @@ const EXPECTED_MIGRATIONS = [
     '0026_ads_target_category.sql',
     '0027_ad_metrics_antifraud.sql',
     '0028_ad_dedup_identity.sql',
-<<<<<<< HEAD
     '0029_drop_unused_posts.sql',
-=======
     '0030_chunk_upload_nonces.sql',
->>>>>>> 8b60053 (fix(c2): HMAC auth for upload-server chunk routes (SEC-03) + 11 security pins)
 ];
 
 const EXPECTED_TABLES = [
