@@ -867,6 +867,12 @@ export const en = {
         frequency_cap_reached: 'You have reached the display frequency limit for this ad',
     },
 
+    // ── C7: synthetic/demo data labeling ────────────────────
+    demo: {
+        badge: 'Demo',
+        title: 'Demo data for illustration — not a real account or competition',
+    },
+
     // ── Task 2: Admin Governance ──────────────────────────────
     admin: {
         dashboard_title: 'Admin Dashboard',

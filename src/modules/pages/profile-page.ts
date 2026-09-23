@@ -111,7 +111,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                             
                             <!-- Info -->
                             <div class="text-center md:${rtl ? 'text-right' : 'text-left'} flex-1">
-                                <h1 class="text-3xl font-bold">${user.display_name || user.username}</h1>
+                                <h1 class="text-3xl font-bold">${user.display_name || user.username}${user.is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-xs font-bold px-2.5 py-1 rounded-full bg-amber-400/90 text-amber-950" title="${(tr.demo as any)?.title || 'Demo'}">${(tr.demo as any)?.badge || 'Demo'}</span>` : ''}</h1>
                                 <p class="text-white/70 text-lg">@${user.username}</p>
                                 ${user.bio ? `<p class="mt-3 text-white/80 max-w-xl">${user.bio}</p>` : ''}
                                 

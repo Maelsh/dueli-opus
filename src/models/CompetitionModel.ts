@@ -7,6 +7,7 @@
 
 import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { Competition, CompetitionStatus } from '../config/types';
+import { SyntheticRetirementService } from '../lib/services/SyntheticRetirementService';
 
 /**
  * Competition filter options
@@ -235,7 +236,15 @@ export class CompetitionModel extends BaseModel<Competition> {
             data.competition_type || 'instant'
         ).run();
 
-        return (await this.findById(result.meta.last_row_id as number))!;
+        const created = (await this.findById(result.meta.last_row_id as number))!;
+        // C7 synthetic lifecycle: a real competition retires one dependency-free
+        // synthetic competition. Best-effort (see UserModel.create).
+        try {
+            await new SyntheticRetirementService(this.db).retireOneSyntheticCompetition();
+        } catch (error) {
+            console.error('[SyntheticRetirement] competition retire skipped:', error);
+        }
+        return created;
     }
 
     /**

@@ -149,6 +149,7 @@ export interface User extends BaseEntity {
   average_rating?: number;
   total_earnings?: number;
   is_verified?: boolean;
+  is_fake?: number; // C7: 1 = synthetic/demo row, 0 = real (see SyntheticRetirementService)
   // NOTE: `users.email_verified` exists in the DB schema (0001_initial_schema.sql) but is
   // dead — nothing in the codebase reads or writes it. `is_verified` above is the column
   // actually used for verification status. Kept in the DB (not dropped) because SQLite/D1
@@ -201,6 +202,7 @@ export interface Competition extends TimestampedEntity {
   creator_earnings?: number;
   opponent_earnings?: number;
   ad_revenue?: number;
+  is_fake?: number; // C7: 1 = synthetic/demo row, 0 = real (see SyntheticRetirementService)
 }
 
 /**
