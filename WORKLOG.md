@@ -1,3 +1,16 @@
+## 2026-09-23 — C3b posts cleanup (branch `chore/c3b-posts-cleanup`)
+
+- Base: `376b2ea` (merge of PR #49). Verified `posts` + `post_likes` dead: zero refs in
+  src/tests/workers (no DML/JOIN/model/route/seed; only 0001 DDL + FK `post_likes→posts`).
+  Live system is `user_posts` (UserPostModel + SettingsController ×4 + profile-page +
+  delete-account cascade + seed) — untouched.
+- Migration `0029_drop_unused_posts.sql` (new, forward-only: `post_likes` first, then
+  `posts`; historical migrations untouched). schema-contract: 29→30 + absent/present
+  assertion. Verification: `npm test` 544/544 ✅; `tsc` ✅; `build` ✅ (CSS churn
+  reverted). Wrangler integration needs Cloudflare — left for REMOTE. No merge.
+  Files: migrations/0029_drop_unused_posts.sql, tests/integration/schema-contract.test.ts,
+  PLAN-STATUS.md, WORKLOG.md.
+
 ## 2026-09-23 — FINAL DEFERRED-DEBT CLOSURE SWEEP (branch `chore/final-debt-closure`)
 
 - Base: `d332223` (merge of PR #48, 9.E closed). Reconciled every 8.G→9.E finding
