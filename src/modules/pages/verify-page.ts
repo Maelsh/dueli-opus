@@ -68,5 +68,5 @@ export async function verifyPage(c: Context<{ Bindings: Bindings; Variables: Var
     ${getFooter(lang)}
   `;
 
-  return c.html(generateHTML(content, lang, tr.account_verification));
+  return c.html(generateHTML(content, lang, tr.account_verification, (c.get('cspNonce') as string) ?? ''));
 }

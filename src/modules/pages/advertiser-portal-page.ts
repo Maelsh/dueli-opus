@@ -20,7 +20,7 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
                     <h1 class="text-3xl font-bold">${tt('portal_title')}</h1>
                     <p class="text-gray-500 mt-1">${tt('dashboard')}</p>
                 </div>
-                <button onclick="showCreateCampaignForm()" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-colors">
+                <button data-csp-on="click" data-csp-fn="showCreateCampaignForm" data-csp-args='[]' class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold transition-colors">
                     <i class="fas fa-plus mr-2"></i>${tt('create_campaign')}
                 </button>
             </div>
@@ -54,7 +54,7 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
 
             <div id="createCampaignForm" class="hidden mt-8 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 <h3 class="text-xl font-bold mb-4">${tt('create_campaign')}</h3>
-                <form onsubmit="createCampaign(event)" class="space-y-4">
+                <form data-csp-on="submit" data-csp-fn="createCampaign" data-csp-args='["@event"]' class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">${tt('campaign_title')}</label>
                         <input type="text" id="campaignTitle" required class="w-full px-4 py-2 rounded-xl border dark:border-gray-600 bg-transparent" />
@@ -99,7 +99,7 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
         </div>
     </div>
     ${getFooter(lang)}
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         async function loadAdvertiserDashboard() {
             try {
                 const token = localStorage.getItem('session_id');
@@ -120,7 +120,7 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
         function renderCampaigns(campaigns) {
             const list = document.getElementById('campaignsList');
             if (!campaigns.length) { list.innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fas fa-bullhorn text-4xl mb-3"></i><p>${tt("no_campaigns")}</p></div>'; return; }
-            list.innerHTML = campaigns.map(c => '<div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700"><div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">' + esc(c.title) + '</h3><div class="flex gap-4 mt-2 text-sm text-gray-500"><span>' + '${tt("impressions")}: ' + c.total_impressions + '</span><span>' + '${tt("clicks")}: ' + c.total_clicks + '</span><span>' + '${tt("ctr")}: ' + (c.ctr * 100).toFixed(2) + '%</span></div></div><div class="text-right"><span class="px-3 py-1 rounded-full text-xs font-bold ' + (c.campaign_status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : c.campaign_status === 'paused' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : c.campaign_status === 'draft' ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' : c.campaign_status === 'pending_review' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300') + '">' + c.campaign_status + '</span><p class="text-sm mt-1">$' + c.budget_remaining.toFixed(2) + ' / $' + c.budget.toFixed(2) + '</p>' + (c.campaign_status === 'draft' ? '<button onclick="submitCampaign(' + c.ad_id + ')" class="text-xs text-purple-600 dark:text-purple-400 mt-1">${tt("submit_for_review")}</button>' : c.campaign_status === 'active' ? '<button onclick="pauseCampaign(' + c.ad_id + ')" class="text-xs text-yellow-600 dark:text-yellow-400 mt-1">${tt("pause_campaign")}</button><button onclick="endCampaign(' + c.ad_id + ')" class="text-xs text-red-600 dark:text-red-400 mt-1 ms-2">${tt("end_campaign")}</button>' : c.campaign_status === 'paused' ? '<button onclick="resumeCampaign(' + c.ad_id + ')" class="text-xs text-green-600 dark:text-green-400 mt-1">${tt("resume_campaign")}</button><button onclick="endCampaign(' + c.ad_id + ')" class="text-xs text-red-600 dark:text-red-400 mt-1 ms-2">${tt("end_campaign")}</button>' : '') + '</div></div></div>').join('');
+            list.innerHTML = campaigns.map(c => '<div class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700"><div class="flex justify-between items-start"><div><h3 class="font-bold text-lg">' + esc(c.title) + '</h3><div class="flex gap-4 mt-2 text-sm text-gray-500"><span>' + '${tt("impressions")}: ' + c.total_impressions + '</span><span>' + '${tt("clicks")}: ' + c.total_clicks + '</span><span>' + '${tt("ctr")}: ' + (c.ctr * 100).toFixed(2) + '%</span></div></div><div class="text-right"><span class="px-3 py-1 rounded-full text-xs font-bold ' + (c.campaign_status === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' : c.campaign_status === 'paused' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : c.campaign_status === 'draft' ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' : c.campaign_status === 'pending_review' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300') + '">' + c.campaign_status + '</span><p class="text-sm mt-1">$' + c.budget_remaining.toFixed(2) + ' / $' + c.budget.toFixed(2) + '</p>' + (c.campaign_status === 'draft' ? '<button data-csp-on="click" data-csp-fn="submitCampaign" data-csp-args='[" + c.ad_id + "]' class="text-xs text-purple-600 dark:text-purple-400 mt-1">${tt("submit_for_review")}</button>' : c.campaign_status === 'active' ? '<button data-csp-on="click" data-csp-fn="pauseCampaign" data-csp-args='[" + c.ad_id + "]' class="text-xs text-yellow-600 dark:text-yellow-400 mt-1">${tt("pause_campaign")}</button><button data-csp-on="click" data-csp-fn="endCampaign" data-csp-args='[" + c.ad_id + "]' class="text-xs text-red-600 dark:text-red-400 mt-1 ms-2">${tt("end_campaign")}</button>' : c.campaign_status === 'paused' ? '<button data-csp-on="click" data-csp-fn="resumeCampaign" data-csp-args='[" + c.ad_id + "]' class="text-xs text-green-600 dark:text-green-400 mt-1">${tt("resume_campaign")}</button><button data-csp-on="click" data-csp-fn="endCampaign" data-csp-args='[" + c.ad_id + "]' class="text-xs text-red-600 dark:text-red-400 mt-1 ms-2">${tt("end_campaign")}</button>' : '') + '</div></div></div>').join('');
         }
         function showCreateCampaignForm() { document.getElementById('createCampaignForm').classList.toggle('hidden'); }
         async function createCampaign(e) {
@@ -137,5 +137,5 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
         loadAdvertiserDashboard();
     </script>`;
 
-    return c.html(generateHTML(content, lang, tt('portal_title')));
+    return c.html(generateHTML(content, lang, tt('portal_title'), (c.get('cspNonce') as string) ?? ''));
 }

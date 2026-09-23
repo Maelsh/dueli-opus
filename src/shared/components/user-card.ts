@@ -43,7 +43,7 @@ export function getUserCard(user: UserCardProps, lang: Language): string {
             alt="${displayName}" 
             class="w-16 h-16 rounded-full object-cover border-2 border-purple-100 dark:border-purple-900 group-hover:border-purple-400 transition-colors"
             loading="lazy"
-            onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'"
+            data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'
           >
           ${user.is_verified ? `
             <div class="absolute -bottom-1 ${rtl ? '-left-1' : '-right-1'} bg-blue-500 rounded-full p-1" title="${tr.verified || 'Verified'}">

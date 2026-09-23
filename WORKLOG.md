@@ -1,3 +1,7 @@
+## 2026-09-23 — C5 full CSP removal (branch `fix/c5-csp-hardening` on C4)
+
+- (التفاصيل النهائية بعد التحقق أدناه)
+
 ## 2026-09-23 — C4 restack + WS worker tickets (branch `fix/c4-sse-ticket-auth` on C2)
 
 - Restack cumulative (0029–0031 → 32 files; inventory re-taken: 56 AUTH + redeem).

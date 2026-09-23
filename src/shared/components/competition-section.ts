@@ -31,24 +31,24 @@ export function getCompetitionSection(
       <section class="py-6 animate-fade-in relative group" id="${uniqueId}">
         <div class="flex items-center justify-between mb-4 px-2">
           <div class="flex items-center gap-3">
-             <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transform rotate-3 transition-transform hover:rotate-0" style="background: linear-gradient(135deg, ${color}, ${color}dd)">
+             <div class="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transform rotate-3 transition-transform hover:rotate-0" data-csp-style="background: linear-gradient(135deg, ${color}, ${color}dd)">
                 <i class="${icon} text-white text-lg"></i>
              </div>
              <div>
                <h2 class="text-xl font-bold text-gray-900 dark:text-white leading-tight">${title}</h2>
-               <div class="h-1 w-12 rounded-full mt-1" style="background-color: ${color}"></div>
+               <div class="h-1 w-12 rounded-full mt-1" data-csp-style="background-color: ${color}"></div>
              </div>
           </div>
           
           ${allowSeeAll ? `
             <div class="flex items-center gap-2">
-              <button class="section-prev p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed max-sm:opacity-100 max-sm:scale-100" aria-label="${t('previous', lang)}" onclick="document.getElementById('${uniqueId}-scroll').scrollBy({left: ${rtl ? 300 : -300}, behavior: 'smooth'})">
+              <button class="section-prev p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed max-sm:opacity-100 max-sm:scale-100" aria-label="${t('previous', lang)}" data-csp-on="click" data-csp-fn="__byIdScroll" data-csp-args='["${uniqueId}-scroll",${rtl ? 300 : -300},"smooth"]'>
                 <i class="fas fa-chevron-${rtl ? 'right' : 'left'} text-gray-600 dark:text-gray-300"></i>
               </button>
-              <button class="section-next p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed max-sm:opacity-100 max-sm:scale-100" aria-label="${t('next', lang)}" onclick="document.getElementById('${uniqueId}-scroll').scrollBy({left: ${rtl ? -300 : 300}, behavior: 'smooth'})">
+              <button class="section-next p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed max-sm:opacity-100 max-sm:scale-100" aria-label="${t('next', lang)}" data-csp-on="click" data-csp-fn="__byIdScroll" data-csp-args='["${uniqueId}-scroll",${rtl ? -300 : 300},"smooth"]'>
                 <i class="fas fa-chevron-${rtl ? 'left' : 'right'} text-gray-600 dark:text-gray-300"></i>
               </button>
-              <a href="/explore?category=${title}&lang=${lang}" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800" style="color: ${color}">
+              <a href="/explore?category=${title}&lang=${lang}" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800" data-csp-style="color: ${color}">
                 <span>${tr.view_all || 'View All'}</span>
                 <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs transform transition-transform group-hover:translate-x-1"></i>
               </a>
@@ -61,7 +61,7 @@ export function getCompetitionSection(
            <div class="absolute left-0 top-0 bottom-4 w-12 bg-gradient-to-r from-white dark:from-[#121212] to-transparent z-10 pointer-events-none hidden sm:block"></div>
            <div class="absolute right-0 top-0 bottom-4 w-12 bg-gradient-to-l from-white dark:from-[#121212] to-transparent z-10 pointer-events-none hidden sm:block"></div>
            
-           <div id="${uniqueId}-scroll" class="flex overflow-x-auto pb-8 -mx-4 px-4 gap-5 scrollbar-hide snap-x snap-mandatory scroll-smooth" style="scroll-padding-left: 1rem; scroll-padding-right: 1rem;">
+           <div id="${uniqueId}-scroll" class="flex overflow-x-auto pb-8 -mx-4 px-4 gap-5 scrollbar-hide snap-x snap-mandatory scroll-smooth [scroll-padding-left:1rem] [scroll-padding-right:1rem]">
              ${cardsHtml}
              
              ${allowSeeAll ? `

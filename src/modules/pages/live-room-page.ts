@@ -63,54 +63,54 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         <!-- Control Buttons - All in one row, scrollable on mobile -->
                         <div class="flex items-center gap-1 overflow-x-auto">
                             <!-- Clear Site Data (for debugging) -->
-                            <button onclick="clearSiteData()" id="clearDataBtn" class="p-2 rounded-lg bg-orange-600/80 text-white hover:bg-orange-700 transition-colors" title="${tr.clear_data || 'Clear Site Data'}">
+                            <button data-csp-on="click" data-csp-fn="clearSiteData" data-csp-args='[]' id="clearDataBtn" class="p-2 rounded-lg bg-orange-600/80 text-white hover:bg-orange-700 transition-colors" title="${tr.clear_data || 'Clear Site Data'}">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                             
                             <!-- Fullscreen - For Everyone -->
-                            <button onclick="toggleFullscreen()" id="fullscreenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.fullscreen || 'Fullscreen'}">
+                            <button data-csp-on="click" data-csp-fn="toggleFullscreen" data-csp-args='[]' id="fullscreenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.fullscreen || 'Fullscreen'}">
                                 <i class="fas fa-expand"></i>
                             </button>
                             
                             <!-- Swap Videos - For Everyone -->
-                            <button onclick="swapVideos()" id="swapBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.swap_videos || 'Swap Videos'}">
+                            <button data-csp-on="click" data-csp-fn="swapVideos" data-csp-args='[]' id="swapBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.swap_videos || 'Swap Videos'}">
                                 <i class="fas fa-exchange-alt"></i>
                             </button>
                             
                             <!-- Hide Comments - For Everyone -->
-                            <button onclick="toggleComments()" id="commentsBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_comments || 'Toggle Comments'}">
+                            <button data-csp-on="click" data-csp-fn="toggleComments" data-csp-args='[]' id="commentsBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_comments || 'Toggle Comments'}">
                                 <i class="fas fa-comment"></i>
                             </button>
                             
                             <!-- Competitor-only controls -->
                             <div id="competitorControls" class="flex items-center gap-1">
                                 <!-- Hide My Video -->
-                                <button onclick="toggleLocalVideo()" id="localVideoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_my_video || 'Toggle My Video'}">
+                                <button data-csp-on="click" data-csp-fn="toggleLocalVideo" data-csp-args='[]' id="localVideoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_my_video || 'Toggle My Video'}">
                                     <i class="fas fa-user-circle"></i>
                                 </button>
                                 
                                 <!-- Switch Camera -->
-                                <button onclick="switchCamera()" id="switchCamBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.switch_camera || 'Switch Camera'}">
+                                <button data-csp-on="click" data-csp-fn="switchCamera" data-csp-args='[]' id="switchCamBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.switch_camera || 'Switch Camera'}">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
                                 
                                 <!-- Screen Share -->
-                                <button onclick="shareScreen()" id="screenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.share_screen || 'Share Screen'}">
+                                <button data-csp-on="click" data-csp-fn="shareScreen" data-csp-args='[]' id="screenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.share_screen || 'Share Screen'}">
                                     <i class="fas fa-desktop"></i>
                                 </button>
                                 
                                 <!-- Microphone -->
-                                <button onclick="toggleAudio()" id="audioBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_mic || 'Toggle Microphone'}">
+                                <button data-csp-on="click" data-csp-fn="toggleAudio" data-csp-args='[]' id="audioBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_mic || 'Toggle Microphone'}">
                                     <i class="fas fa-microphone"></i>
                                 </button>
                                 
                                 <!-- Camera -->
-                                <button onclick="toggleVideo()" id="videoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_camera || 'Toggle Camera'}">
+                                <button data-csp-on="click" data-csp-fn="toggleVideo" data-csp-args='[]' id="videoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.toggle_camera || 'Toggle Camera'}">
                                     <i class="fas fa-video"></i>
                                 </button>
                                 
                                 <!-- End Stream - Better Design -->
-                                <button onclick="endStream()" id="endBtn" class="px-3 py-2 rounded-lg bg-red-600/90 text-white hover:bg-red-700 transition-colors flex items-center gap-1" title="${tr.end_stream || 'End Stream'}">
+                                <button data-csp-on="click" data-csp-fn="endStream" data-csp-args='[]' id="endBtn" class="px-3 py-2 rounded-lg bg-red-600/90 text-white hover:bg-red-700 transition-colors flex items-center gap-1" title="${tr.end_stream || 'End Stream'}">
                                     <i class="fas fa-stop-circle"></i>
                                     <span class="hidden sm:inline text-sm">${tr.end || 'End'}</span>
                                 </button>
@@ -137,7 +137,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             
                             <!-- Local Video - Small in Corner (can be hidden/swapped) -->
                             <div id="localVideoWrapper" class="absolute ${rtl ? 'left-4' : 'right-4'} top-4 z-20 transition-all duration-300">
-                                <div class="relative w-28 h-20 md:w-40 md:h-28 rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500 cursor-pointer hover:scale-105 transition-transform" onclick="swapVideos()">
+                                <div class="relative w-28 h-20 md:w-40 md:h-28 rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500 cursor-pointer hover:scale-105 transition-transform" data-csp-on="click" data-csp-fn="swapVideos" data-csp-args='[]'>
                                     <video id="localVideo" class="w-full h-full object-cover" autoplay muted playsinline></video>
                                     <div class="absolute bottom-1 ${rtl ? 'right-1' : 'left-1'} bg-black/60 px-2 py-0.5 rounded text-white text-xs">
                                         ${tr.you || 'You'}
@@ -157,12 +157,12 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <div id="adBanner" class="absolute top-1/2 ${rtl ? 'left-4' : 'right-4'} transform -translate-y-1/2 z-25 max-w-xs">
                                 <div class="bg-gray-900/90 backdrop-blur-sm rounded-xl overflow-hidden shadow-xl border border-gray-700">
                                     <div class="relative">
-                                        <img src="/static/images/ad-placeholder.png" alt="Ad" class="w-full h-auto" onerror="this.parentElement.parentElement.parentElement.style.display='none'">
+                                        <img src="/static/images/ad-placeholder.png" alt="Ad" class="w-full h-auto" data-csp-on="error" data-csp-fn="__ancestorDisplayNone" data-csp-args='["@this",3]'>
                                         <div class="absolute top-1 ${rtl ? 'left-1' : 'right-1'} flex gap-1">
-                                            <button onclick="closeAd()" id="closeAdBtn" class="bg-black/70 hover:bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors" title="${tr.close_ad || 'Close Ad'}">
+                                            <button data-csp-on="click" data-csp-fn="closeAd" data-csp-args='[]' id="closeAdBtn" class="bg-black/70 hover:bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors" title="${tr.close_ad || 'Close Ad'}">
                                                 <i class="fas fa-times"></i>
                                             </button>
-                                            <button onclick="reportAd()" class="bg-black/70 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors" title="${tr.report_ad || 'Report Ad'}">
+                                            <button data-csp-on="click" data-csp-fn="reportAd" data-csp-args='[]' class="bg-black/70 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs transition-colors" title="${tr.report_ad || 'Report Ad'}">
                                                 <i class="fas fa-flag"></i>
                                             </button>
                                         </div>
@@ -230,7 +230,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
         <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
         
         ${competition ? `
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             // Streaming services are loaded from the main bundle (app.js)
             // They are available on window after DOMContentLoaded
             
@@ -1017,7 +1017,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
         ` : ''}
     `;
 
-    return c.html(generateHTML(content, lang, competition?.title || 'Live Room'));
+    return c.html(generateHTML(content, lang, competition?.title || 'Live Room', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default liveRoomPage;

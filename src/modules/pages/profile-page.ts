@@ -146,7 +146,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                             <i class="fas fa-sign-in-alt text-5xl mb-4 opacity-50"></i>
                             <h1 class="text-2xl font-bold">${tr.login_required || tr.login || 'Login required'}</h1>
                             <p class="text-white/70 mt-2">${tr.login_to_view_profile || 'Please log in to view your profile'}</p>
-                            <button onclick="showLoginModal()" class="mt-6 px-8 py-3 bg-white text-purple-700 rounded-full font-bold hover:bg-gray-100 transition-colors">
+                            <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 bg-white text-purple-700 rounded-full font-bold hover:bg-gray-100 transition-colors">
                                 ${tr.login || 'Login'}
                             </button>
                         </div>
@@ -166,12 +166,12 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     <!-- Tabs -->
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl mb-6">
                         <div class="flex border-b border-gray-200 dark:border-gray-700">
-                            <button onclick="setProfileTab('competitions')" id="tab-competitions" 
+                            <button data-csp-on="click" data-csp-fn="setProfileTab" data-csp-args='["competitions"]' id="tab-competitions" 
                                 class="flex-1 px-6 py-4 text-center font-semibold transition-colors border-b-2 border-purple-600 text-purple-600">
                                 <i class="fas fa-trophy ${rtl ? 'ml-2' : 'mr-2'}"></i>
                                 ${tr.my_competitions || 'Competitions'}
                             </button>
-                            <button onclick="setProfileTab('posts')" id="tab-posts" 
+                            <button data-csp-on="click" data-csp-fn="setProfileTab" data-csp-args='["posts"]' id="tab-posts" 
                                 class="flex-1 px-6 py-4 text-center font-semibold transition-colors border-b-2 border-transparent text-gray-500 hover:text-gray-700">
                                 <i class="fas fa-stream ${rtl ? 'ml-2' : 'mr-2'}"></i>
                                 ${tr.posts || 'Posts'}
@@ -229,7 +229,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
         
         ${getFooter(lang)}
         
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const profileUsername = '${username}';
             const profileUserId = ${user?.id || 'null'};
             const lang = '${lang}';
@@ -258,7 +258,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     \`;
                 } else if (currentUser) {
                     container.innerHTML = \`
-                        <button onclick="toggleFollow(\${profileUserId})" id="followBtn" 
+                        <button data-csp-on="click" data-csp-fn="toggleFollow" data-csp-args='[\${profileUserId}]' id="followBtn" 
                             class="px-6 py-2.5 bg-white text-purple-600 hover:bg-gray-100 rounded-full font-semibold transition-colors">
                             <i class="fas fa-user-plus \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.follow || 'Follow'}
@@ -349,7 +349,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                                 class="w-full border-0 focus:ring-0 resize-none bg-transparent text-gray-900 dark:text-white text-sm"
                                 aria-label="\${tr.post_publish || 'Publish'}"></textarea>
                             <div class="flex justify-end mt-2">
-                                <button onclick="publishPost()" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full text-sm font-bold transition-colors disabled:opacity-50">
+                                <button data-csp-on="click" data-csp-fn="publishPost" data-csp-args='[]' class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full text-sm font-bold transition-colors disabled:opacity-50">
                                     <i class="fas fa-paper-plane mr-1"></i>\${tr.post_publish || 'Publish'}
                                 </button>
                             </div>
@@ -362,7 +362,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                                 <p class="text-gray-900 dark:text-white whitespace-pre-wrap">\${post.content}</p>
                                 <div class="flex items-center justify-between mt-2">
                                     <p class="text-sm text-gray-400">\${new Date(post.created_at).toLocaleDateString()}</p>
-                                    \${isOwner ? \`<button onclick="deletePost(\${post.id})" class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="Delete"><i class="fas fa-trash"></i></button>\` : ''}
+                                    \${isOwner ? \`<button data-csp-on="click" data-csp-fn="deletePost" data-csp-args='[\${post.id}]' class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="Delete"><i class="fas fa-trash"></i></button>\` : ''}
                                 </div>
                             </div>
                         \`).join('');
@@ -419,12 +419,12 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
     `;
 
     if (needsLogin) {
-        return c.html(generateHTML(content, lang, tr.login || 'Login'), 401);
+        return c.html(generateHTML(content, lang, tr.login || 'Login', (c.get('cspNonce') as string) ?? ''), 401);
     }
     if (userNotFound || !user) {
-        return c.html(generateHTML(content, lang, `404 - ${username || tr.page_not_found}`), 404);
+        return c.html(generateHTML(content, lang, `404 - ${username || tr.page_not_found}`, (c.get('cspNonce') as string) ?? ''), 404);
     }
-    return c.html(generateHTML(content, lang, user ? `${user.display_name || user.username} - ${tr.profile}` : tr.page_not_found));
+    return c.html(generateHTML(content, lang, user ? `${user.display_name || user.username} - ${tr.profile}` : tr.page_not_found, (c.get('cspNonce') as string) ?? ''));
 };
 
 export default profilePageRoutes;

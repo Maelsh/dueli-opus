@@ -1,6 +1,16 @@
 
 
 
+## C5 — CSP full removal · فرع `fix/c5-csp-hardening` (مكدّس فوق C4)
+
+- إزالة كاملة: لا `unsafe-inline` ولا `unsafe-eval` في الترويسة المقدمة (مثبتة).
+  195 handler مضمّن ← تفويض `data-csp-*` (موزع خارجي + allowlist مولدة)؛ كل
+  `<script>/<style>` يحمل nonce الطلب؛ `style=` ← كلاسات أو `data-csp-style`
+  (مطبق JS)؛ CSS المحقون runtime نُقل لـ`styles.css`؛ الإيميلات مستثناة معمارياً.
+- تحقق المتصفح الحقيقي (Playwright + wrangler local): 8 تدفقات خضراء، صفر
+  CSP violations، صفر console errors (401 تسجيل خاطئ متوقعة وتثبت عمل submit).
+- الأرقام النهائية أدناه. بلا دمج.
+
 ## C4 — SSE/WS ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
 
 - أُعيد التثبيت فوق المكدس (العقد ‏32: 0029–0031)؛ وأُغلق مسار WS نهائياً داخل المستودع:

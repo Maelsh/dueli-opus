@@ -67,18 +67,18 @@ export class RecommendationCarousel {
                         <h3 class="text-sm font-bold text-gray-900 dark:text-white">${t('recommendations.carousel_title', lang)}</h3>
                     </div>
                     <div class="flex items-center gap-1">
-                        <button onclick="window._recCarouselScroll('${this.containerId}', -1)" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
+                        <button data-csp-on="click" data-csp-fn="window._recCarouselScroll" data-csp-args='[${JSON.stringify((this.containerId))},-1]' class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
                             <i class="fas fa-chevron-${isRtl ? 'right' : 'left'} text-xs text-gray-600 dark:text-gray-400"></i>
                         </button>
-                        <button onclick="window._recCarouselScroll('${this.containerId}', 1)" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
+                        <button data-csp-on="click" data-csp-fn="window._recCarouselScroll" data-csp-args='[${JSON.stringify((this.containerId))},1]' class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
                             <i class="fas fa-chevron-${isRtl ? 'left' : 'right'} text-xs text-gray-600 dark:text-gray-400"></i>
                         </button>
-                        <button onclick="window._recCarouselRefresh('${this.containerId}')" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all" title="${t('matchmaking.refresh', lang)}">
+                        <button data-csp-on="click" data-csp-fn="window._recCarouselRefresh" data-csp-args='[${JSON.stringify((this.containerId))}]' class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all" title="${t('matchmaking.refresh', lang)}">
                             <i class="fas fa-sync-alt text-xs text-gray-600 dark:text-gray-400"></i>
                         </button>
                     </div>
                 </div>
-                <div id="${this.containerId}-scroll" class="flex overflow-x-auto pb-3 gap-4 scrollbar-hide snap-x snap-mandatory scroll-smooth" style="scroll-behavior: smooth;">
+                <div id="${this.containerId}-scroll" class="flex overflow-x-auto pb-3 gap-4 scrollbar-hide snap-x snap-mandatory scroll-smooth">
                     <div class="flex items-center justify-center min-w-[200px] py-8">
                         <i class="fas fa-spinner fa-spin text-2xl text-purple-400"></i>
                     </div>
@@ -253,8 +253,8 @@ export class CompetitorsMiniStatsCard {
                                 const name = lang === 'ar' ? cat.name_ar : cat.name_en;
                                 return `
                                     <div class="flex items-center gap-2">
-                                        <div class="w-6 h-6 rounded-lg flex items-center justify-center" style="background-color: ${cat.color || '#8B5CF6'}20">
-                                            <i class="${cat.icon || 'fas fa-tag'} text-[10px]" style="color: ${cat.color || '#8B5CF6'}"></i>
+                                        <div class="w-6 h-6 rounded-lg flex items-center justify-center" data-csp-style="background-color: ${cat.color || '#8B5CF6'}20">
+                                            <i class="${cat.icon || 'fas fa-tag'} text-[10px]" data-csp-style="color: ${cat.color || '#8B5CF6'}"></i>
                                         </div>
                                         <span class="text-xs text-gray-700 dark:text-gray-300 flex-1">${name}</span>
                                         <span class="text-[10px] text-gray-400 font-medium">${cat.count}</span>

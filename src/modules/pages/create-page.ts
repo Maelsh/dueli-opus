@@ -35,7 +35,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
     
     ${getFooter(lang)}
     
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       const lang = '${lang}';
       const isRTL = ${rtl};
       const tr = ${JSON.stringify(tr)};
@@ -52,7 +52,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
               </div>
               <h2 class="text-xl font-bold mb-2 text-gray-900 dark:text-white">\${tr.login_required}</h2>
               <p class="text-gray-500 mb-4">\${tr.login_subtitle}</p>
-              <button onclick="showLoginModal()" class="btn-primary">
+              <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="btn-primary">
                 \${tr.login}
               </button>
             </div>
@@ -82,7 +82,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
             
             <div>
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.select_category} *</label>
-              <select name="category_id" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" onchange="updateSubcategories(this.value)">
+              <select name="category_id" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" data-csp-on="change" data-csp-fn="updateSubcategories" data-csp-args='["@this.value"]'>
                 <option value="">\${tr.select_category}</option>
                 \${mainCats.map(c => \`<option value="\${c.id}">\${lang === 'ar' ? (c.name_ar || c.name_en) : (c.name_en || c.name_ar)}</option>\`).join('')}
               </select>
@@ -172,5 +172,5 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
     </script>
   `;
 
-  return c.html(generateHTML(content, lang, tr.create_competition));
+  return c.html(generateHTML(content, lang, tr.create_competition, (c.get('cspNonce') as string) ?? ''));
 }

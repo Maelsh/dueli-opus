@@ -241,7 +241,7 @@ export class HomePage {
                 if (data.data.length >= 24) {
                     newHtml += `
                         <div class="text-center py-8">
-                          <button onclick="loadMoreCompetitions()" id="loadMoreBtn" class="px-8 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full font-semibold transition-all">
+                          <button data-csp-on="click" data-csp-fn="loadMoreCompetitions" data-csp-args='[]' id="loadMoreBtn" class="px-8 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full font-semibold transition-all">
                             <i class="fas fa-plus-circle mr-2"></i>
                             ${tr.load_more || 'Load More'}
                           </button>

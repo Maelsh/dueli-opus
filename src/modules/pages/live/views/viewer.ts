@@ -34,26 +34,26 @@ export function getViewerContent(lang: Language): string {
         <!-- Competition ID Input (سيختفي بعد تحديد المنافسة) -->
         <div id="compInputSection" class="mb-4 text-center flex flex-wrap justify-center items-center gap-2">
             <input type="number" id="compIdInput" class="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded-lg w-32 text-center font-mono" placeholder="${tr.enter_number}" title="${tr.competition_number}">
-            <button onclick="window.checkAndLoad()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition" title="${tr.start_watching}">
+            <button data-csp-on="click" data-csp-fn="window.checkAndLoad" data-csp-args='[]' class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition" title="${tr.start_watching}">
                 <i class="fas fa-play" aria-hidden="true"></i>
             </button>
-            <button onclick="window.stopStream()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" title="${tr.stop_watching}">
+            <button data-csp-on="click" data-csp-fn="window.stopStream" data-csp-args='[]' class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" title="${tr.stop_watching}">
                 <i class="fas fa-stop" aria-hidden="true"></i>
             </button>
         </div>
         
         <!-- Video Container -->
-        <div id="videoContainer" class="video-container aspect-video mb-4" style="position: relative;">
+        <div id="videoContainer" class="video-container aspect-video mb-4 relative">
             <div id="modeBadge" class="mode-badge hidden"></div>
-            <video id="videoPlayer1" autoplay playsinline style="position: absolute; width: 100%; height: 100%; transition: opacity 0.3s; opacity: 1; z-index: 2; background: #000;"></video>
-            <video id="videoPlayer2" autoplay playsinline style="position: absolute; width: 100%; height: 100%; transition: opacity 0.3s; opacity: 0; z-index: 1; background: #000;"></video>
+            <video id="videoPlayer1" autoplay playsinline class="absolute inset-0 transition-opacity duration-300 opacity-100 z-[2] bg-black"></video>
+            <video id="videoPlayer2" autoplay playsinline class="absolute inset-0 transition-opacity duration-300 opacity-0 z-[1] bg-black"></video>
         </div>  
         
         <!-- Custom VOD Controls (Hidden by default) -->
         <div id="vodControls" class="hidden bg-gray-200 dark:bg-gray-800 rounded-lg p-3 mb-4">
             <div class="flex items-center gap-3">
                 <!-- Play/Pause -->
-                <button id="playPauseBtn" onclick="window.togglePlayPause()" class="w-10 h-10 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700" title="Play/Pause">
+                <button id="playPauseBtn" data-csp-on="click" data-csp-fn="window.togglePlayPause" data-csp-args='[]' class="w-10 h-10 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700" title="Play/Pause">
                     <i id="playPauseIcon" class="fas fa-play"></i>
                 </button>
                 <!-- Time Display -->
@@ -65,7 +65,7 @@ export function getViewerContent(lang: Language): string {
                 <!-- Loading Info -->
                 <span id="vodLoadingInfo" class="text-xs text-gray-500 min-w-12">0/0</span>
                 <!-- Fullscreen -->
-                <button onclick="window.toggleVideoFullscreen()" class="w-10 h-10 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700" title="${tr.fullscreen}">
+                <button data-csp-on="click" data-csp-fn="window.toggleVideoFullscreen" data-csp-args='[]' class="w-10 h-10 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700" title="${tr.fullscreen}">
                     <i id="fullscreenIcon" class="fas fa-expand"></i>
                 </button>
             </div>

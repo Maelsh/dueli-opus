@@ -33,14 +33,14 @@ staticPagesRoutes.get('/sw.js', (c) => {
 /**
  * Privacy Policy HTML - صفحة سياسة الخصوصية
  */
-const getPrivacyPolicyHTML = (): string => `<!DOCTYPE html>
+const getPrivacyPolicyHTML = (nonce: string): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Privacy Policy - Dueli</title>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+    <style nonce="${nonce}">
+        body, .sp-body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9fafb; }
         h1 { color: #7c3aed; }
         h2 { color: #1f2937; margin-top: 30px; }
         ul { padding-left: 20px; }
@@ -49,7 +49,7 @@ const getPrivacyPolicyHTML = (): string => `<!DOCTYPE html>
         .footer { margin-top: 50px; font-size: 0.9em; color: #666; text-align: center; }
     </style>
 </head>
-<body style="background-color: #f9fafb;">
+<body class="sp-body">
     <div class="container">
         <h1>Privacy Policy</h1>
         <p><strong>Last Updated: December 2025</strong></p>
@@ -79,14 +79,14 @@ const getPrivacyPolicyHTML = (): string => `<!DOCTYPE html>
 /**
  * Data Deletion HTML - صفحة تعليمات حذف البيانات
  */
-const getDataDeletionHTML = (): string => `<!DOCTYPE html>
+const getDataDeletionHTML = (nonce: string): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Deletion Instructions - Dueli</title>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; }
+    <style nonce="${nonce}">
+        body, .sp-body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9fafb; }
         h1 { color: #dc2626; }
         h2 { color: #1f2937; margin-top: 30px; }
         .container { background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -94,7 +94,7 @@ const getDataDeletionHTML = (): string => `<!DOCTYPE html>
         .step strong { display: block; margin-bottom: 5px; color: #4b5563; }
     </style>
 </head>
-<body style="background-color: #f9fafb;">
+<body class="sp-body">
     <div class="container">
         <h1>Data Deletion Instructions</h1>
         <p>If you want to delete your data from Dueli, follow these instructions:</p>
@@ -126,20 +126,20 @@ const getDataDeletionHTML = (): string => `<!DOCTYPE html>
 /**
  * Deletion Status HTML - صفحة حالة الحذف
  */
-const getDeletionStatusHTML = (code: string): string => `<!DOCTYPE html>
+const getDeletionStatusHTML = (code: string, nonce: string): string => `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Deletion Status - Dueli</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+    <style nonce="${nonce}">
+        body, .sp-body { font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f9fafb; }
         .card { background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
         h1 { color: #22c55e; }
         .code { background: #f3f4f6; padding: 15px; border-radius: 8px; font-family: monospace; margin: 20px 0; }
     </style>
 </head>
-<body style="background: #f9fafb;">
+<body class="sp-body">
     <div class="card">
         <h1>✓ Data Deletion Request Received</h1>
         <p>Your data deletion request has been received and is being processed.</p>
@@ -151,12 +151,12 @@ const getDeletionStatusHTML = (code: string): string => `<!DOCTYPE html>
 </html>`;
 
 // Privacy Policy Routes
-staticPagesRoutes.get('/privacy-policy.html', (c) => c.html(getPrivacyPolicyHTML()));
-staticPagesRoutes.get('/privacy-policy', (c) => c.html(getPrivacyPolicyHTML()));
+staticPagesRoutes.get('/privacy-policy.html', (c) => c.html(getPrivacyPolicyHTML((c.get('cspNonce') as string) ?? '')));
+staticPagesRoutes.get('/privacy-policy', (c) => c.html(getPrivacyPolicyHTML((c.get('cspNonce') as string) ?? '')));
 
 // Data Deletion Routes
-staticPagesRoutes.get('/data-deletion.html', (c) => c.html(getDataDeletionHTML()));
-staticPagesRoutes.get('/data-deletion', (c) => c.html(getDataDeletionHTML()));
+staticPagesRoutes.get('/data-deletion.html', (c) => c.html(getDataDeletionHTML((c.get('cspNonce') as string) ?? '')));
+staticPagesRoutes.get('/data-deletion', (c) => c.html(getDataDeletionHTML((c.get('cspNonce') as string) ?? '')));
 
 // TikTok Verification File
 staticPagesRoutes.get('/tiktokJ1mxZ8w8FhnDIkHqfGNq0ney95Smz9PQ.txt', (c) => {
@@ -201,7 +201,7 @@ staticPagesRoutes.post('/api/facebook/data-deletion', async (c) => {
 // Deletion Status Page
 staticPagesRoutes.get('/deletion-status', (c) => {
   const code = c.req.query('code') || 'N/A';
-  return c.html(getDeletionStatusHTML(code));
+  return c.html(getDeletionStatusHTML(code, (c.get('cspNonce') as string) ?? ''));
 });
 
 // .well-known handler
