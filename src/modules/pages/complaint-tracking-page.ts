@@ -26,13 +26,13 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
             </div>
 
             <div id="complaintDetail" class="hidden">
-                <button onclick="backToList()" class="mb-4 text-purple-600 hover:underline"><i class="fas fa-arrow-left mr-2"></i>${tr.back}</button>
+                <button data-csp-on="click" data-csp-fn="backToList" data-csp-args='[]' class="mb-4 text-purple-600 hover:underline"><i class="fas fa-arrow-left mr-2"></i>${tr.back}</button>
                 <div id="complaintDetailContent"></div>
             </div>
         </div>
     </div>
     ${getFooter(lang)}
-    <style>
+    <style nonce="${(c.get('cspNonce') as string) ?? ''}">
         .arb-status { display: inline-block; padding: 2px 12px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; }
         .arb-submitted { background: #e0e7ff; color: #4338ca; }
         .arb-under_review { background: #fef3c7; color: #92400e; }
@@ -43,7 +43,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
         .state-timeline .entry { position: relative; padding-bottom: 16px; }
         .state-timeline .entry::before { content: ''; position: absolute; left: -29px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: #8b5cf6; }
     </style>
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         async function loadComplaints() {
             try {
                 const token = localStorage.getItem('session_id');
@@ -54,7 +54,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
                     document.getElementById('complaintsList').innerHTML = data.data.complaints.map(c => {
                         const report = c.report;
                         const statusClass = 'arb-' + c.current_status;
-                        return '<div onclick="viewComplaint(' + report.id + ')" class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-purple-300 transition-colors"><div class="flex justify-between items-start"><div><h3 class="font-bold">${t("report.reason", lang)}: ' + report.reason + '</h3><p class="text-sm text-gray-500 mt-1">${t("report.target_type", lang)}: ' + report.target_type + ' #' + report.target_id + '</p><p class="text-xs text-gray-400 mt-1">' + new Date(report.created_at).toLocaleString() + '</p></div><span class="arb-status ' + statusClass + '">' + c.current_status + '</span></div>' + (c.assigned_admin_role ? '<p class="text-sm text-gray-500 mt-2">${tt("assigned_admin")}: <span class="font-medium">' + c.assigned_admin_role + '</span></p>' : '') + '</div>';
+                        return '<div data-csp-on="click" data-csp-fn="viewComplaint" data-csp-args='[" + report.id + "]' class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-purple-300 transition-colors"><div class="flex justify-between items-start"><div><h3 class="font-bold">${t("report.reason", lang)}: ' + report.reason + '</h3><p class="text-sm text-gray-500 mt-1">${t("report.target_type", lang)}: ' + report.target_type + ' #' + report.target_id + '</p><p class="text-xs text-gray-400 mt-1">' + new Date(report.created_at).toLocaleString() + '</p></div><span class="arb-status ' + statusClass + '">' + c.current_status + '</span></div>' + (c.assigned_admin_role ? '<p class="text-sm text-gray-500 mt-2">${tt("assigned_admin")}: <span class="font-medium">' + c.assigned_admin_role + '</span></p>' : '') + '</div>';
                     }).join('');
                 } else {
                     document.getElementById('complaintsList').innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fas fa-gavel text-4xl mb-3"></i><p>${tt("no_complaints")}</p></div>';
@@ -101,5 +101,5 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
         loadComplaints();
     </script>`;
 
-    return c.html(generateHTML(content, lang, tt('my_complaints')));
+    return c.html(generateHTML(content, lang, tt('my_complaints'), (c.get('cspNonce') as string) ?? ''));
 }

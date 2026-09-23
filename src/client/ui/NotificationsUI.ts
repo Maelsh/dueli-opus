@@ -111,7 +111,7 @@ export class NotificationsUI {
 
         container.innerHTML = this.notifications.slice(0, 10).map(notification => `
             <div class="p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${!notification.is_read ? 'bg-purple-50 dark:bg-purple-900/20' : ''}"
-                 onclick="NotificationsUI.handleNotificationClick(${notification.id})">
+                 data-csp-on="click" data-csp-fn="NotificationsUI.handleNotificationClick" data-csp-args='[${notification.id}]'>
                 <div class="flex items-start gap-3">
                     <div class="w-10 h-10 rounded-full ${this.getNotificationColor(notification.type)} flex items-center justify-center">
                         <i class="fas ${this.getNotificationIcon(notification.type)}"></i>
@@ -121,7 +121,7 @@ export class NotificationsUI {
                         <p class="text-xs text-gray-400 mt-1">${this.formatTime(notification.created_at)}</p>
                     </div>
                     <div class="flex items-center gap-1">
-                        <button onclick="event.stopPropagation(); NotificationsUI.toggleStar(${notification.id})" 
+                        <button data-csp-stop="1" data-csp-on="click" data-csp-fn="NotificationsUI.toggleStar" data-csp-args='[${notification.id}]' 
                                 class="p-1 hover:text-amber-500 ${notification.data?.starred ? 'text-amber-500' : 'text-gray-400'}" 
                                 title="Star">
                             <i class="fas fa-star text-xs"></i>

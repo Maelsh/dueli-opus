@@ -26,7 +26,6 @@ export interface TimerConfig {
 
 export class CountdownTimer {
     private static instances: Map<number, CountdownTimer> = new Map();
-    private static styleInjected: boolean = false;
 
     private config: TimerConfig;
     private intervalId: ReturnType<typeof setInterval> | null = null;
@@ -77,7 +76,7 @@ export class CountdownTimer {
                     <span class="countdown-digits" id="${this.elementId}-digits">${initialTime}</span>
                 </div>
                 <div class="countdown-bar-track">
-                    <div class="countdown-bar-fill" id="${this.elementId}-bar" style="width: 100%"></div>
+                    <div class="countdown-bar-fill w-full" id="${this.elementId}-bar"></div>
                 </div>
             </div>
         `;
@@ -218,122 +217,7 @@ export class CountdownTimer {
      * Inject CSS styles once
      */
     private injectStyles(): void {
-        if (CountdownTimer.styleInjected) return;
-        CountdownTimer.styleInjected = true;
-
-        const style = document.createElement('style');
-        style.id = 'countdownTimerStyles';
-        style.textContent = `
-            .countdown-timer {
-                border-radius: 16px;
-                padding: 10px 16px;
-                transition: all 0.3s ease;
-                overflow: hidden;
-            }
-
-            .countdown-inner {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 4px;
-            }
-
-            .countdown-icon {
-                font-size: 14px;
-            }
-
-            .countdown-label {
-                font-size: 12px;
-                font-weight: 600;
-                opacity: 0.9;
-            }
-
-            .countdown-digits {
-                font-size: 16px;
-                font-weight: 800;
-                font-variant-numeric: tabular-nums;
-                letter-spacing: 1px;
-                margin-left: auto;
-            }
-
-            .countdown-bar-track {
-                height: 3px;
-                border-radius: 2px;
-                overflow: hidden;
-                opacity: 0.6;
-            }
-
-            .countdown-bar-fill {
-                height: 100%;
-                border-radius: 2px;
-                transition: width 1s linear;
-            }
-
-            /* Normal state */
-            .countdown-normal {
-                background: rgba(139, 92, 246, 0.1);
-                border: 1px solid rgba(139, 92, 246, 0.2);
-                color: #8B5CF6;
-            }
-            .countdown-normal .countdown-bar-track { background: rgba(139, 92, 246, 0.2); }
-            .countdown-normal .countdown-bar-fill { background: #8B5CF6; }
-
-            /* Warning state */
-            .countdown-warning {
-                background: rgba(245, 158, 11, 0.1);
-                border: 1px solid rgba(245, 158, 11, 0.2);
-                color: #F59E0B;
-                animation: countdown-pulse-warning 2s ease-in-out infinite;
-            }
-            .countdown-warning .countdown-bar-track { background: rgba(245, 158, 11, 0.2); }
-            .countdown-warning .countdown-bar-fill { background: #F59E0B; }
-
-            /* Critical state */
-            .countdown-critical {
-                background: rgba(239, 68, 68, 0.1);
-                border: 1px solid rgba(239, 68, 68, 0.3);
-                color: #EF4444;
-                animation: countdown-pulse-critical 1s ease-in-out infinite;
-            }
-            .countdown-critical .countdown-bar-track { background: rgba(239, 68, 68, 0.2); }
-            .countdown-critical .countdown-bar-fill { background: #EF4444; }
-
-            /* Expired state */
-            .countdown-expired {
-                background: rgba(107, 114, 128, 0.1);
-                border: 1px solid rgba(107, 114, 128, 0.2);
-                color: #6B7280;
-            }
-
-            @keyframes countdown-pulse-warning {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.85; }
-            }
-
-            @keyframes countdown-pulse-critical {
-                0%, 100% { opacity: 1; transform: scale(1); }
-                50% { opacity: 0.9; transform: scale(1.01); }
-            }
-
-            /* Dark mode adjustments */
-            .dark .countdown-normal {
-                background: rgba(139, 92, 246, 0.15);
-                border-color: rgba(139, 92, 246, 0.3);
-            }
-            .dark .countdown-warning {
-                background: rgba(245, 158, 11, 0.15);
-                border-color: rgba(245, 158, 11, 0.3);
-            }
-            .dark .countdown-critical {
-                background: rgba(239, 68, 68, 0.15);
-                border-color: rgba(239, 68, 68, 0.3);
-            }
-            .dark .countdown-expired {
-                background: rgba(107, 114, 128, 0.15);
-                border-color: rgba(107, 114, 128, 0.3);
-            }
-        `;
-        document.head.appendChild(style);
+        // C5: styles live in src/styles.css (runtime <style> is CSP-blocked).
     }
 
     /**

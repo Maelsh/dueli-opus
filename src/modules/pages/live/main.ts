@@ -69,13 +69,14 @@ export function generateTestPage(
     content: string,
     pageScript: string,
     title: string,
-    lang: Language
+    lang: Language,
+    nonce: string = ''
 ): string {
     const fullContent = `
         ${getNavigation(lang)}
         ${getLoginModal(lang)}
         
-        <style>${testStyles}</style>
+        <style nonce="${nonce}">${testStyles}</style>
         
         <main class="flex-1 bg-gray-100 dark:bg-[#0f0f0f] py-4">
             <div class="container mx-auto px-4 max-w-4xl">
@@ -86,17 +87,17 @@ export function generateTestPage(
         ${getFooter(lang)}
         
         <!-- Client Shared Script -->
-        <script>
+        <script nonce="${nonce}">
             ${getClientSharedScript(lang)}
         </script>
-        
+
         <!-- Page Specific Script -->
-        <script>
+        <script nonce="${nonce}">
             ${pageScript}
         </script>
     `;
 
-    return generateHTML(fullContent, lang, title);
+    return generateHTML(fullContent, lang, title, nonce);
 }
 
 /**
@@ -109,7 +110,7 @@ export const testMainPage = async (c: Context<{ Bindings: Bindings; Variables: V
     const content = getLandingContent(lang);
     const pageScript = getLandingScript();
 
-    return c.html(generateTestPage(content, pageScript, tr.test_stream, lang));
+    return c.html(generateTestPage(content, pageScript, tr.test_stream, lang, (c.get('cspNonce') as string) ?? ''));
 };
 
 /**
@@ -148,7 +149,7 @@ export const testHostPage = async (c: Context<{ Bindings: Bindings; Variables: V
     const content = getHostContent(lang);
     const pageScript = getHostScript(lang);
 
-    return c.html(generateTestPage(content, pageScript, `${tr.host} - ${tr.test_stream}`, lang));
+    return c.html(generateTestPage(content, pageScript, `${tr.host} - ${tr.test_stream}`, lang, (c.get('cspNonce') as string) ?? ''));
 };
 
 /**
@@ -187,7 +188,7 @@ export const testGuestPage = async (c: Context<{ Bindings: Bindings; Variables: 
     const content = getGuestContent(lang);
     const pageScript = getGuestScript(lang);
 
-    return c.html(generateTestPage(content, pageScript, `${tr.guest} - ${tr.test_stream}`, lang));
+    return c.html(generateTestPage(content, pageScript, `${tr.guest} - ${tr.test_stream}`, lang, (c.get('cspNonce') as string) ?? ''));
 };
 
 /**
@@ -200,6 +201,6 @@ export const testViewerPage = async (c: Context<{ Bindings: Bindings; Variables:
     const content = getViewerContent(lang);
     const pageScript = getViewerScript(lang);
 
-    return c.html(generateTestPage(content, pageScript, `${tr.viewer} - ${tr.test_stream}`, lang));
+    return c.html(generateTestPage(content, pageScript, `${tr.viewer} - ${tr.test_stream}`, lang, (c.get('cspNonce') as string) ?? ''));
 };
 

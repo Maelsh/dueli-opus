@@ -33,7 +33,7 @@ export function getNavigation(lang: Language): string {
           
           <!-- Country/Language Switcher -->
           <div class="relative">
-            <button onclick="toggleCountryMenu()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.country_language || 'Language & Country'}">
+            <button data-csp-on="click" data-csp-fn="toggleCountryMenu" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.country_language || 'Language & Country'}">
               <i class="fas fa-globe text-xl"></i>
             </button>
             <div id="countryMenu" class="dropdown-panel hidden fixed sm:absolute ${isRTL ? 'sm:left-0' : 'sm:right-0'} left-1/2 sm:left-auto transform -translate-x-1/2 sm:translate-x-0 top-20 sm:top-full sm:mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
@@ -46,7 +46,7 @@ export function getNavigation(lang: Language): string {
                     placeholder="${tr.search_country || 'Search country...'}" 
                     title="${tr.search_country || 'Search country...'}"
                     class="w-full px-3 py-2 ${isRTL ? 'pr-9' : 'pl-9'} text-sm border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    oninput="filterCountries(this.value)"
+                    data-csp-on="input" data-csp-fn="filterCountries" data-csp-args='["@this.value"]'
                   />
                   <i class="fas fa-search absolute top-1/2 -translate-y-1/2 ${isRTL ? 'right-3' : 'left-3'} text-gray-400 text-sm"></i>
                 </div>
@@ -59,7 +59,7 @@ export function getNavigation(lang: Language): string {
           </div>
           
           <!-- Dark Mode Toggle -->
-          <button onclick="toggleDarkMode()" class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors" title="${tr.theme || 'Theme'}">
+          <button data-csp-on="click" data-csp-fn="toggleDarkMode" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors" title="${tr.theme || 'Theme'}">
             <i id="moonIcon" class="fas fa-moon text-2xl"></i>
             <i id="sunIcon" class="fas fa-sun text-2xl text-amber-400 theme-icon-hidden"></i>
           </button>
@@ -69,7 +69,7 @@ export function getNavigation(lang: Language): string {
 
           <!-- Auth Section - Login Button (hidden when logged in) -->
           <div id="authSection">
-            <button onclick="showLoginModal()" class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30" title="${tr.login || 'Login'}">
+            <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30" title="${tr.login || 'Login'}">
               <i class="fas fa-sign-in-alt text-lg"></i>
             </button>
           </div>
@@ -78,7 +78,7 @@ export function getNavigation(lang: Language): string {
           <div id="userSection" class="flex items-center gap-2 hidden">
             <!-- Notifications Button -->
             <div class="relative">
-              <button onclick="toggleNotifications()" class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.notifications || 'Notifications'}">
+              <button data-csp-on="click" data-csp-fn="toggleNotifications" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.notifications || 'Notifications'}">
                 <i class="fas fa-bell text-xl"></i>
                 <span id="notificationBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
@@ -86,7 +86,7 @@ export function getNavigation(lang: Language): string {
               <div id="notificationsDropdown" class="dropdown-panel hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <span class="font-bold text-gray-900 dark:text-white">${tr.notifications || 'Notifications'}</span>
-                  <button onclick="markAllNotificationsRead()" class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
+                  <button data-csp-on="click" data-csp-fn="markAllNotificationsRead" data-csp-args='[]' class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
                 </div>
                 <div id="notificationsList" class="overflow-y-auto max-h-72">
                   <div class="p-4 text-center text-gray-400 text-sm">
@@ -102,7 +102,7 @@ export function getNavigation(lang: Language): string {
 
             <!-- Messages Button with Dropdown -->
             <div class="relative">
-              <button onclick="toggleMessages()" class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.messages?.title || 'Messages'}">
+              <button data-csp-on="click" data-csp-fn="toggleMessages" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.messages?.title || 'Messages'}">
                 <i class="fas fa-envelope text-xl"></i>
                 <span id="messagesBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
@@ -110,7 +110,7 @@ export function getNavigation(lang: Language): string {
               <div id="messagesDropdown" class="dropdown-panel hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <span class="font-bold text-gray-900 dark:text-white">${tr.messages?.title || 'Messages'}</span>
-                  <button onclick="markAllMessagesRead()" class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
+                  <button data-csp-on="click" data-csp-fn="markAllMessagesRead" data-csp-args='[]' class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
                 </div>
                 <div id="messagesList" class="overflow-y-auto max-h-72">
                   <div class="p-4 text-center text-gray-400 text-sm">
@@ -126,7 +126,7 @@ export function getNavigation(lang: Language): string {
 
             <!-- User Avatar & Menu -->
             <div class="relative">
-              <button onclick="toggleUserMenu()" class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all" title="${tr.profile || 'Profile'}">
+              <button data-csp-on="click" data-csp-fn="toggleUserMenu" data-csp-args='[]' class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all" title="${tr.profile || 'Profile'}">
                 <img id="userAvatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="" class="w-12 h-12 rounded-full border-2 border-purple-400">
               </button>
               <div id="userMenu" class="user-menu ${isRTL ? 'left-0' : 'right-0'}">
@@ -168,7 +168,7 @@ export function getNavigation(lang: Language): string {
                   <i class="fas fa-cog text-gray-500"></i>
                   <span>${tr.settings || 'Settings'}</span>
                 </a>
-                <button onclick="logout()" class="user-menu-item text-red-600 w-full" title="${tr.logout || 'Logout'}">
+                <button data-csp-on="click" data-csp-fn="logout" data-csp-args='[]' class="user-menu-item text-red-600 w-full" title="${tr.logout || 'Logout'}">
                   <i class="fas fa-sign-out-alt"></i>
                   <span>${tr.logout || 'Logout'}</span>
                 </button>

@@ -51,7 +51,7 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                 <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                     <h2 class="text-xl font-bold mb-4">${tt('admin_roles')}</h2>
                     <div id="adminRoles" class="space-y-2"></div>
-                    <button onclick="showGrantRoleForm()" class="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm">${tt('grant_role')}</button>
+                    <button data-csp-on="click" data-csp-fn="showGrantRoleForm" data-csp-args='[]' class="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm">${tt('grant_role')}</button>
                 </div>
                 <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                     <h2 class="text-xl font-bold mb-4">${tt('audit_logs')}</h2>
@@ -66,7 +66,7 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
 
             <div id="grantRoleForm" class="hidden mt-6 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 <h3 class="text-lg font-bold mb-4">${tt('grant_role')}</h3>
-                <form onsubmit="grantRole(event)" class="flex gap-4 items-end">
+                <form data-csp-on="submit" data-csp-fn="grantRole" data-csp-args='["@event"]' class="flex gap-4 items-end">
                     <div class="flex-1"><label class="block text-sm mb-1">User ID</label><input type="number" id="grantUserId" required class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" /></div>
                     <div class="flex-1"><label class="block text-sm mb-1">${tt('grant_role')}</label><select id="grantRoleSelect" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent"><option value="Moderator">${tt('role_moderator')}</option><option value="Auditor">${tt('role_auditor')}</option><option value="SuperAdmin">${tt('role_superadmin')}</option></select></div>
                     <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-lg">${tt('grant_role')}</button>
@@ -81,7 +81,7 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                         Withdrawal Queue
                         <span id="pendingWithdrawCount" class="ml-2 bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
                     </h2>
-                    <select id="withdrawFilterStatus" onchange="loadWithdrawals()" class="px-3 py-1.5 text-sm rounded-lg border dark:border-gray-600 bg-transparent">
+                    <select id="withdrawFilterStatus" data-csp-on="change" data-csp-fn="loadWithdrawals" data-csp-args='[]' class="px-3 py-1.5 text-sm rounded-lg border dark:border-gray-600 bg-transparent">
                         <option value="">All</option>
                         <option value="requested" selected>Requested</option>
                         <option value="paid">Paid</option>
@@ -101,8 +101,8 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                     <label class="block text-sm mb-1 font-medium">Note (optional)</label>
                     <input type="text" id="approveNote" placeholder="Payment sent via bank transfer" class="w-full px-4 py-2 border dark:border-gray-600 rounded-xl bg-transparent mb-4" />
                     <div class="flex gap-3">
-                        <button onclick="document.getElementById('approveModal').classList.add('hidden')" class="flex-1 py-2 border dark:border-gray-600 rounded-xl text-sm">Cancel</button>
-                        <button onclick="confirmApprove()" class="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold">Confirm Approve</button>
+                        <button data-csp-on="click" data-csp-fn="__byIdClass" data-csp-args='["approveModal","add","hidden"]' class="flex-1 py-2 border dark:border-gray-600 rounded-xl text-sm">Cancel</button>
+                        <button data-csp-on="click" data-csp-fn="confirmApprove" data-csp-args='[]' class="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold">Confirm Approve</button>
                     </div>
                 </div>
             </div>
@@ -115,8 +115,8 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                     <label class="block text-sm mb-1 font-medium">Reason for rejection *</label>
                     <textarea id="rejectReason" rows="3" placeholder="Please provide a clear reason..." class="w-full px-4 py-2 border dark:border-gray-600 rounded-xl bg-transparent mb-4 resize-none"></textarea>
                     <div class="flex gap-3">
-                        <button onclick="document.getElementById('rejectModal').classList.add('hidden')" class="flex-1 py-2 border dark:border-gray-600 rounded-xl text-sm">Cancel</button>
-                        <button onclick="confirmReject()" class="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-bold">Confirm Reject</button>
+                        <button data-csp-on="click" data-csp-fn="__byIdClass" data-csp-args='["rejectModal","add","hidden"]' class="flex-1 py-2 border dark:border-gray-600 rounded-xl text-sm">Cancel</button>
+                        <button data-csp-on="click" data-csp-fn="confirmReject" data-csp-args='[]' class="flex-1 py-2 bg-red-600 text-white rounded-xl text-sm font-bold">Confirm Reject</button>
                     </div>
                 </div>
             </div>
@@ -141,7 +141,7 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                             <textarea id="suspendReason" rows="2" placeholder="Describe the rule violation clearly..." class="w-full px-4 py-2 border border-red-900/50 dark:border-red-800 rounded-xl bg-transparent resize-none"></textarea>
                         </div>
                         <div id="suspendError" class="hidden p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm rounded-lg"></div>
-                        <button onclick="suspendBroadcast()" class="w-full py-3 bg-gradient-to-r from-red-600 to-red-800 text-white rounded-xl font-bold hover:opacity-90 transition-all">
+                        <button data-csp-on="click" data-csp-fn="suspendBroadcast" data-csp-args='[]' class="w-full py-3 bg-gradient-to-r from-red-600 to-red-800 text-white rounded-xl font-bold hover:opacity-90 transition-all">
                             <i class="fas fa-ban mr-2"></i> Execute Transparent Suspension
                         </button>
                     </div>
@@ -154,7 +154,7 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                             <label class="block text-sm font-semibold mb-1">Restore Reason *</label>
                             <textarea id="restoreReason" rows="2" placeholder="Why is this competition being restored?" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-xl bg-transparent resize-none"></textarea>
                         </div>
-                        <button onclick="restoreBroadcast()" class="w-full py-3 bg-gradient-to-r from-green-600 to-teal-700 text-white rounded-xl font-bold hover:opacity-90 transition-all">
+                        <button data-csp-on="click" data-csp-fn="restoreBroadcast" data-csp-args='[]' class="w-full py-3 bg-gradient-to-r from-green-600 to-teal-700 text-white rounded-xl font-bold hover:opacity-90 transition-all">
                             <i class="fas fa-undo mr-2"></i> Restore to Archive
                         </button>
                     </div>
@@ -164,7 +164,7 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
         </div>
     </div>
     ${getFooter(lang)}
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         const token = localStorage.getItem('session_id');
 
         async function loadAdminDashboard() {
@@ -185,13 +185,13 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                         document.getElementById('demographics').innerHTML = d.demographics.map(dm => '<div class="flex justify-between text-sm"><span>' + dm.country + '</span><span class="font-bold">' + dm.count + '</span></div>').join('');
                     }
                     if (d.hottestCompetitions) {
-                        document.getElementById('hottestCompetitions').innerHTML = d.hottestCompetitions.map(c => '<div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-xl"><div><span class="font-bold">' + c.title + '</span><span class="text-sm text-gray-500 ml-2">' + c.status + '</span></div><div class="flex items-center gap-2"><span class="text-sm text-gray-500">' + c.total_views + ' ${tr.viewers}</span><button onclick="openSuspendPanel(' + c.id + ')" class="text-xs text-red-500 hover:text-red-700 font-bold"><i class="fas fa-ban"></i></button></div></div>').join('');
+                        document.getElementById('hottestCompetitions').innerHTML = d.hottestCompetitions.map(c => '<div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-xl"><div><span class="font-bold">' + c.title + '</span><span class="text-sm text-gray-500 ml-2">' + c.status + '</span></div><div class="flex items-center gap-2"><span class="text-sm text-gray-500">' + c.total_views + ' ${tr.viewers}</span><button data-csp-on="click" data-csp-fn="openSuspendPanel" data-csp-args='[" + c.id + "]' class="text-xs text-red-500 hover:text-red-700 font-bold"><i class="fas fa-ban"></i></button></div></div>').join('');
                     }
                 }
                 const rolesRes = await fetch('/api/admin/roles', { headers: { 'Authorization': 'Bearer ' + token } });
                 const rolesData = await rolesRes.json();
                 if (rolesData.success && rolesData.data.roles) {
-                    document.getElementById('adminRoles').innerHTML = rolesData.data.roles.map(r => '<div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"><span>' + r.display_name + ' (' + r.username + ')</span><div class="flex items-center gap-2"><span class="px-2 py-1 rounded-full text-xs font-bold ' + (r.role === 'SuperAdmin' ? 'bg-red-100 text-red-700' : r.role === 'Auditor' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700') + '">' + r.role + '</span><button onclick="revokeRole(' + r.user_id + ')" class="text-red-500 text-xs">${tt('revoke_role')}</button></div></div>').join('');
+                    document.getElementById('adminRoles').innerHTML = rolesData.data.roles.map(r => '<div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"><span>' + r.display_name + ' (' + r.username + ')</span><div class="flex items-center gap-2"><span class="px-2 py-1 rounded-full text-xs font-bold ' + (r.role === 'SuperAdmin' ? 'bg-red-100 text-red-700' : r.role === 'Auditor' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700') + '">' + r.role + '</span><button data-csp-on="click" data-csp-fn="revokeRole" data-csp-args='[" + r.user_id + "]' class="text-red-500 text-xs">${tt('revoke_role')}</button></div></div>').join('');
                 }
                 const logsRes = await fetch('/api/admin/audit-logs?limit=10', { headers: { 'Authorization': 'Bearer ' + token } });
                 const logsData = await logsRes.json();
@@ -224,8 +224,8 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
                         '<div class="flex items-center gap-2">' +
                         '<span class="font-bold text-sm ' + statusColor + ' capitalize">' + r.status + '</span>' +
                         (r.status === 'requested' ?
-                            '<button onclick="openApproveModal(' + r.id + ')" class="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>' +
-                            '<button onclick="openRejectModal(' + r.id + ')" class="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700">Reject</button>'
+                            '<button data-csp-on="click" data-csp-fn="openApproveModal" data-csp-args='[" + r.id + "]' class="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>' +
+                            '<button data-csp-on="click" data-csp-fn="openRejectModal" data-csp-args='[" + r.id + "]' class="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700">Reject</button>'
                             : '') +
                         '</div></div>';
                 }).join('');
@@ -351,5 +351,5 @@ export function adminDashboardPage(c: Context<{ Bindings: Bindings; Variables: V
         loadWithdrawals();
     </script>`;
 
-    return c.html(generateHTML(content, lang, tt('dashboard_title')));
+    return c.html(generateHTML(content, lang, tt('dashboard_title'), (c.get('cspNonce') as string) ?? ''));
 }

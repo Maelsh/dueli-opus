@@ -1,6 +1,21 @@
 
 
 
+## C6 — cron operational hardening · فرع `fix/c6-cron-operational-hardening` (مكدّس فوق C5)
+
+- أُعيد التثبيت فوق المكدس؛ العقد تراكمي (0029–0032 ← ‏33 ملفاً)؛ `cron-runs` ‏6/6؛
+  `npm test` ‏610/610 على المكدس الكامل؛ `tsc` ✅؛ `build` ✅. بلا دمج.
+
+## C5 — CSP full removal · فرع `fix/c5-csp-hardening` (مكدّس فوق C4)
+
+- إزالة كاملة: لا `unsafe-inline` ولا `unsafe-eval` في الترويسة المقدمة (مثبتة).
+  195 handler مضمّن ← تفويض `data-csp-*` (موزع خارجي + allowlist مولدة)؛ كل
+  `<script>/<style>` يحمل nonce الطلب؛ `style=` ← كلاسات أو `data-csp-style`
+  (مطبق JS)؛ CSS المحقون runtime نُقل لـ`styles.css`؛ الإيميلات مستثناة معمارياً.
+- تحقق المتصفح الحقيقي (Playwright + wrangler local): 8 تدفقات خضراء، صفر
+  CSP violations، صفر console errors (401 تسجيل خاطئ متوقعة وتثبت عمل submit).
+- الأرقام النهائية أدناه. بلا دمج.
+
 ## C4 — SSE/WS ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
 
 - أُعيد التثبيت فوق المكدس (العقد ‏32: 0029–0031)؛ وأُغلق مسار WS نهائياً داخل المستودع:
@@ -58,11 +73,6 @@
   وبقاء user_posts؛ `npm test` ‏544/544؛ `tsc` ✅؛ `build` ✅ (churn الـCSS رُجع).
   الـintegration عبر Wrangler لم يُنفَّذ محلياً (يتطلب Cloudflare) — بانتظار REMOTE.
 - الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
-
-## C4 — SSE ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
-
-- تدفق التذاكر + إزالة `query('token')` كما في التمريرة الأولى، والعقد تراكمي
-  (0029–0031 ← ‏32 ملفاً)؛ دعم WS Worker أدناه؛ الأرقام الكاملة بعد التحقق.
 
 ## FINAL DEBT CLOSURE SWEEP · فرع `chore/final-debt-closure` (من `d332223`)
 

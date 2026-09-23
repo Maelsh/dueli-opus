@@ -1,3 +1,12 @@
+## 2026-09-23 — C6 restack (branch `fix/c6-cron-operational-hardening` on C5)
+
+- Rebased onto full stack; contract cumulative (0029–0032 → 33 files).
+  Re-verified on-stack: cron-runs 6/6, `npm test` 610/610 (60 files)، `tsc` نظيف. No merge.
+
+## 2026-09-23 — C5 full CSP removal (branch `fix/c5-csp-hardening` on C4)
+
+- (التفاصيل النهائية بعد التحقق أدناه)
+
 ## 2026-09-23 — C4 restack + WS worker tickets (branch `fix/c4-sse-ticket-auth` on C2)
 
 - Restack cumulative (0029–0031 → 32 files; inventory re-taken: 56 AUTH + redeem).

@@ -81,7 +81,7 @@ export class InteractionsUI {
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                         <i class="fas fa-flag mr-2 text-red-500"></i>${t('report.title', State.lang)}
                     </h2>
-                    <button onclick="document.getElementById('report-modal').remove()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <button data-csp-on="click" data-csp-fn="__byIdRemove" data-csp-args='["report-modal"]' class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -120,7 +120,7 @@ export class InteractionsUI {
 
                     <button 
                         type="submit" 
-                        onclick="InteractionsUI.submitReport(event)"
+                        data-csp-on="click" data-csp-fn="InteractionsUI.submitReport" data-csp-args='["@event"]'
                         class="w-full py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition"
                     >
                         ${t('report.submit', State.lang)}
@@ -174,7 +174,7 @@ export class InteractionsUI {
     static renderLikeButton(competitionId: number, liked: boolean, likeCount: number): string {
         return `
             <button 
-                onclick="InteractionsUI.toggleLike(${competitionId}, this)"
+                data-csp-on="click" data-csp-fn="InteractionsUI.toggleLike" data-csp-args='[${competitionId},"@this"]'
                 class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
             >
                 <i class="${liked ? 'fas text-red-500' : 'far'} fa-heart"></i>
@@ -189,7 +189,7 @@ export class InteractionsUI {
     static renderReportButton(targetType: string, targetId: number): string {
         return `
             <button 
-                onclick="InteractionsUI.showReportModal('${targetType}', ${targetId})"
+                data-csp-on="click" data-csp-fn="InteractionsUI.showReportModal" data-csp-args='[${JSON.stringify((targetType))},${targetId}]'
                 class="text-gray-400 hover:text-red-500 transition"
                 title="${t('report.title', State.lang)}"
             >

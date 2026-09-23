@@ -36,18 +36,18 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
                 
                 <!-- Tabs -->
                 <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg mb-6 p-2 inline-flex gap-2">
-                    <button onclick="setTab('all')" id="tab-all" class="px-5 py-2 rounded-lg font-semibold transition-colors bg-purple-600 text-white">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["all"]' id="tab-all" class="px-5 py-2 rounded-lg font-semibold transition-colors bg-purple-600 text-white">
                         ${tr.all || 'All'}
                     </button>
-                    <button onclick="setTab('pending')" id="tab-pending" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["pending"]' id="tab-pending" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
                         <i class="fas fa-clock ${rtl ? 'ml-1' : 'mr-1'} text-amber-500"></i>
                         ${tr.status_pending || 'Pending'}
                     </button>
-                    <button onclick="setTab('live')" id="tab-live" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["live"]' id="tab-live" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
                         <span class="w-2 h-2 rounded-full bg-red-500 inline-block ${rtl ? 'ml-1' : 'mr-1'}"></span>
                         ${tr.status_live || 'Live'}
                     </button>
-                    <button onclick="setTab('completed')" id="tab-completed" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["completed"]' id="tab-completed" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
                         <i class="fas fa-check-circle ${rtl ? 'ml-1' : 'mr-1'} text-green-500"></i>
                         ${tr.completed || 'Completed'}
                     </button>
@@ -64,7 +64,7 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
         
         ${getFooter(lang)}
         
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const lang = '${lang}';
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
@@ -84,7 +84,7 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-lock text-5xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.login_required || 'Please login to view your competitions'}</p>
-                        <button onclick="showLoginModal()" class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -163,7 +163,7 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, tr.my_competitions || 'My Competitions'));
+    return c.html(generateHTML(content, lang, tr.my_competitions || 'My Competitions', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default myCompetitionsPage;

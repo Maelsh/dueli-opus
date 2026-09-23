@@ -48,9 +48,9 @@ export function liveFinanceDashboardPage(c: Context<{ Bindings: Bindings; Variab
             <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
                 <h2 class="text-xl font-bold mb-4">${tt('revenue_split')}</h2>
                 <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-8 overflow-hidden flex">
-                    <div id="platformBar" class="bg-purple-500 h-full transition-all duration-500" style="width:20%"></div>
-                    <div id="creatorBar" class="bg-emerald-500 h-full transition-all duration-500" style="width:40%"></div>
-                    <div id="opponentBar" class="bg-amber-500 h-full transition-all duration-500" style="width:40%"></div>
+                    <div id="platformBar" class="bg-purple-500 h-full transition-all duration-500 w-[20%]"></div>
+                    <div id="creatorBar" class="bg-emerald-500 h-full transition-all duration-500 w-[40%]"></div>
+                    <div id="opponentBar" class="bg-amber-500 h-full transition-all duration-500 w-[40%]"></div>
                 </div>
                 <div class="flex justify-between mt-3 text-sm">
                     <span class="text-purple-500">■ ${tt('platform_cut')}</span>
@@ -72,7 +72,7 @@ export function liveFinanceDashboardPage(c: Context<{ Bindings: Bindings; Variab
         </div>
     </div>
     ${getFooter(lang)}
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         const competitionId = '${competitionId}';
         async function pollLiveFinance() {
             try {
@@ -103,5 +103,5 @@ export function liveFinanceDashboardPage(c: Context<{ Bindings: Bindings; Variab
         setInterval(pollLiveFinance, 3000);
     </script>`;
 
-    return c.html(generateHTML(content, lang, tt('dashboard_title')));
+    return c.html(generateHTML(content, lang, tt('dashboard_title'), (c.get('cspNonce') as string) ?? ''));
 }

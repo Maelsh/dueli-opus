@@ -34,13 +34,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     
     <!-- Shared Streaming Classes (ChunkManager, LiveSequentialPlayer, SmartVodPlayer...) -->
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       (function() {
       ${getClientSharedScript()}
       })();
     </script>
     
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       const lang = '${lang}';
       const isRTL = ${rtl};
       const competitionId = '${id}';
@@ -202,7 +202,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <div class="text-center text-white">
                         <i class="fas fa-video text-6xl opacity-80 mb-4"></i>
                         <p class="mb-4">\${tr.competitors} \${tr.status_accepted}</p>
-                        <button onclick="goLive()" class="px-6 py-3 bg-green-600 rounded-full font-bold hover:bg-green-700 transition-all inline-flex items-center gap-2">
+                        <button data-csp-on="click" data-csp-fn="goLive" data-csp-args='[]' class="px-6 py-3 bg-green-600 rounded-full font-bold hover:bg-green-700 transition-all inline-flex items-center gap-2">
                           <i class="fas fa-broadcast-tower"></i>
                           \${tr.status_live || 'Go Live'}
                         </button>
@@ -228,9 +228,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <div class="aspect-video relative bg-black" id="embeddedVideoContainer">
                         <div id="embeddedModeBadge" class="hidden absolute top-3 right-3 z-10 px-3 py-1 rounded-full text-xs font-bold text-white"></div>
                         <video id="embeddedVideoPlayer1" autoplay playsinline 
-                               style="position:absolute;width:100%;height:100%;transition:opacity 0.3s;opacity:1;z-index:2;background:#000;"></video>
+                               class="absolute inset-0 transition-opacity duration-300 opacity-100 z-[2] bg-black"></video>
                         <video id="embeddedVideoPlayer2" autoplay playsinline 
-                               style="position:absolute;width:100%;height:100%;transition:opacity 0.3s;opacity:0;z-index:1;background:#000;"></video>
+                               class="absolute inset-0 transition-opacity duration-300 opacity-0 z-[1] bg-black"></video>
                         
                         <!-- Status overlay -->
                         <div id="embeddedStatusOverlay" class="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
@@ -241,7 +241,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                         
                         <!-- Fullscreen button -->
-                        <button onclick="embeddedToggleFullscreen()" 
+                        <button data-csp-on="click" data-csp-fn="embeddedToggleFullscreen" data-csp-args='[]' 
                                 class="absolute bottom-3 right-3 z-30 w-9 h-9 bg-black/50 backdrop-blur text-white rounded-lg hover:bg-black/70 transition flex items-center justify-center"
                                 title="\${tr.fullscreen || 'ملء الشاشة'}">
                           <i id="embeddedFsIcon" class="fas fa-expand text-sm"></i>
@@ -257,7 +257,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <!-- VOD Controls (hidden by default, shown for recorded) -->
                       <div id="embeddedVodControls" class="hidden bg-gray-900 p-3">
                         <div class="flex items-center gap-3">
-                          <button id="embeddedPlayPauseBtn" onclick="embeddedTogglePlayPause()" 
+                          <button id="embeddedPlayPauseBtn" data-csp-on="click" data-csp-fn="embeddedTogglePlayPause" data-csp-args='[]' 
                                   class="w-9 h-9 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700 flex-shrink-0">
                             <i id="embeddedPlayPauseIcon" class="fas fa-play text-sm"></i>
                           </button>
@@ -265,12 +265,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           <input type="range" id="embeddedSeekbar" min="0" max="100" value="0"
                                  class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500"
                                  title="Seek" />
-                          <button id="embeddedDownloadBtn" onclick="embeddedDownload()"
+                          <button id="embeddedDownloadBtn" data-csp-on="click" data-csp-fn="embeddedDownload" data-csp-args='[]'
                                   class="hidden w-9 h-9 flex items-center justify-center bg-green-600 text-white rounded-full hover:bg-green-700 flex-shrink-0"
                                   title="${tr.download || '\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0641\u064a\u062f\u064a\u0648'}">
                             <i class="fas fa-download text-sm"></i>
                           </button>
-                          <button onclick="embeddedToggleFullscreen()"
+                          <button data-csp-on="click" data-csp-fn="embeddedToggleFullscreen" data-csp-args='[]'
                                   class="w-9 h-9 flex items-center justify-center bg-gray-700 text-white rounded-full hover:bg-gray-600 flex-shrink-0">
                             <i class="fas fa-expand text-sm"></i>
                           </button>
@@ -309,23 +309,23 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                         <h4 class="font-bold text-gray-400">\${tr.awaiting_opponent}</h4>
                         \${isCreator ? \`
-                          <button onclick="window.toggleInvitePanel && window.toggleInvitePanel(\${comp.id})" class="mt-3 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-sm font-bold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95">
+                          <button data-csp-on="click" data-csp-fn="window.toggleInvitePanel" data-csp-args='[\${comp.id}]' class="mt-3 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-sm font-bold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 active:scale-95">
                             <i class="fas fa-user-plus me-1"></i>
                             \${tr.matchmaking?.invite_opponent_btn || tr.invite || 'Invite Opponent'}
                           </button>
                         \` : ''}
                         \${window.currentUser && !isCreator && !hasRequested ? \`
-                          <button onclick="requestJoin()" class="join-btn mt-3">
+                          <button data-csp-on="click" data-csp-fn="requestJoin" data-csp-args='[]' class="join-btn mt-3">
                             <i class="fas fa-hand-paper"></i>
                             \${tr.request_join}
                           </button>
                         \` : hasRequested ? \`
-                          <button onclick="cancelRequest()" class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-300 transition-all">
+                          <button data-csp-on="click" data-csp-fn="cancelRequest" data-csp-args='[]' class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-300 transition-all">
                             <i class="fas fa-times me-1"></i>
                             \${tr.cancel_request}
                           </button>
                         \` : !window.currentUser ? \`
-                          <button onclick="showLoginModal()" class="join-btn mt-3">
+                          <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="join-btn mt-3">
                             <i class="fas fa-sign-in-alt"></i>
                             \${tr.login_to_compete}
                           </button>
@@ -365,7 +365,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                         <div class="flex gap-1" dir="ltr">
                           \${[1,2,3,4,5].map(v => \`
-                            <button onclick="submitRating(\${comp.creator_id}, \${v}, this)" data-val="\${v}"
+                            <button data-csp-on="click" data-csp-fn="submitRating" data-csp-args='[\${comp.creator_id},\${v},"@this"]' data-val="\${v}"
                               class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
                               aria-label="\${v}/5"><i class="fas fa-star"></i></button>
                           \`).join('')}
@@ -379,7 +379,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                         <div class="flex gap-1" dir="ltr">
                           \${[1,2,3,4,5].map(v => \`
-                            <button onclick="submitRating(\${comp.opponent_id}, \${v}, this)" data-val="\${v}"
+                            <button data-csp-on="click" data-csp-fn="submitRating" data-csp-args='[\${comp.opponent_id},\${v},"@this"]' data-val="\${v}"
                               class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
                               aria-label="\${v}/5"><i class="fas fa-star"></i></button>
                           \`).join('')}
@@ -412,17 +412,17 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   
                   <!-- Interaction Buttons -->
                   <div class="flex gap-2 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <button onclick="toggleLike()" id="likeBtn" 
+                    <button data-csp-on="click" data-csp-fn="toggleLike" data-csp-args='[]' id="likeBtn" 
                       class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 \${comp.user_liked ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500'}">
                       <i class="fas fa-heart"></i>
                       <span id="likeCount">\${comp.likes_count || 0}</span>
                     </button>
-                    <button onclick="toggleReminder()" id="reminderBtn" 
+                    <button data-csp-on="click" data-csp-fn="toggleReminder" data-csp-args='[]' id="reminderBtn" 
                       class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 \${comp.user_reminded ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-amber-50 hover:text-amber-500'}">
                       <i class="fas fa-bell"></i>
                       \${comp.user_reminded ? tr.reminder_set || 'Reminder On' : tr.remind_me || 'Remind Me'}
                     </button>
-                    <button onclick="showReportModal()" class="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                    <button data-csp-on="click" data-csp-fn="showReportModal" data-csp-args='[]' class="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all">
                       <i class="fas fa-flag"></i>
                     </button>
                   </div>
@@ -437,17 +437,17 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   </div>
                   <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                     \${window.currentUser ? \`
-                      <form onsubmit="sendComment(event)" class="flex gap-2">
+                      <form data-csp-on="submit" data-csp-fn="sendComment" data-csp-args='["@event"]' class="flex gap-2">
                         <input type="text" id="commentInput" placeholder="\${tr.add_comment}..." aria-label="\${tr.add_comment || 'Add comment'}" class="flex-1 border dark:border-gray-600 dark:bg-gray-700 rounded-full px-4 py-2 text-sm">
                         <button type="submit" aria-label="\${tr.send || 'Send'}" class="p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors">
                           <i class="fas fa-paper-plane"></i>
                         </button>
                       </form>
                       <div class="mt-2 text-center">
-                        <button id="commentsMoreBtn" onclick="loadMoreComments()" class="hidden text-sm text-purple-600 hover:underline font-medium" aria-label="\${(tr.comments && tr.comments.load_more) || tr.load_more || 'Load more'}">\${(tr.comments && tr.comments.load_more) || tr.load_more || 'Load more'}</button>
+                        <button id="commentsMoreBtn" data-csp-on="click" data-csp-fn="loadMoreComments" data-csp-args='[]' class="hidden text-sm text-purple-600 hover:underline font-medium" aria-label="\${(tr.comments && tr.comments.load_more) || tr.load_more || 'Load more'}">\${(tr.comments && tr.comments.load_more) || tr.load_more || 'Load more'}</button>
                       </div>
                     \` : \`
-                      <button onclick="showLoginModal()" class="w-full py-2 text-center text-purple-600 hover:underline text-sm font-medium">
+                      <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="w-full py-2 text-center text-purple-600 hover:underline text-sm font-medium">
                         \${tr.login_required}
                       </button>
                     \`}
@@ -640,10 +640,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               <p class="text-sm text-gray-600 dark:text-gray-300 break-words">\${cm.content}</p>
               \${window.currentUser ? \`
                 <span class="inline-flex items-center gap-3 mt-0.5">
-                  <button onclick="setReplyTo(\${cm.id}, '\${(cm.display_name || '').replace(/'/g, '')}')" class="text-xs text-gray-400 hover:text-purple-500 transition-colors">
+                  <button data-csp-on="click" data-csp-fn="setReplyTo" data-csp-args='[\${cm.id},\${JSON.stringify((cm.display_name || "").replace(/['"]/g, ""))}]' class="text-xs text-gray-400 hover:text-purple-500 transition-colors">
                     <i class="fas fa-reply me-1"></i>\${tr.reply || 'Reply'}
                   </button>
-                  <button onclick="showReportModal('comment', \${cm.id})" class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="\${tr.report || 'Report'}">
+                  <button data-csp-on="click" data-csp-fn="showReportModal" data-csp-args='["comment",\${cm.id}]' class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="\${tr.report || 'Report'}">
                     <i class="fas fa-flag"></i>
                   </button>
                 </span>
@@ -811,10 +811,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               \${reasonOptions}
             </div>
             <div class="flex gap-3">
-              <button onclick="closeReportModal()" class="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
+              <button data-csp-on="click" data-csp-fn="closeReportModal" data-csp-args='[]' class="flex-1 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl font-semibold hover:bg-gray-200 transition-colors">
                 \${tr.cancel || 'Cancel'}
               </button>
-              <button onclick="submitReport()" class="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors">
+              <button data-csp-on="click" data-csp-fn="submitReport" data-csp-args='[]' class="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors">
                 \${tr.submit || 'Submit'}
               </button>
             </div>
@@ -1425,5 +1425,5 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     </script>
   `;
 
-  return c.html(generateHTML(content, lang, tr.competitors));
+  return c.html(generateHTML(content, lang, tr.competitors, (c.get('cspNonce') as string) ?? ''));
 }

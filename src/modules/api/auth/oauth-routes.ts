@@ -83,12 +83,12 @@ oauthRoutes.get('/:provider/callback', async (c) => {
   }
 
   if (!code) {
-    return c.html(getOAuthErrorHTML(lang, 'PROVIDER_ERROR'));
+    return c.html(getOAuthErrorHTML(lang, 'PROVIDER_ERROR', (c.get('cspNonce') as string) ?? ''));
   }
 
   const oauth = getOAuthProvider(provider, c.env, origin);
   if (!oauth) {
-    return c.html(getOAuthErrorHTML(lang, 'PROVIDER_ERROR'));
+    return c.html(getOAuthErrorHTML(lang, 'PROVIDER_ERROR', (c.get('cspNonce') as string) ?? ''));
   }
 
   try {
@@ -96,7 +96,7 @@ oauthRoutes.get('/:provider/callback', async (c) => {
 
     // Check email domain
     if (oauthUser.email && !isEmailAllowed(oauthUser.email)) {
-      return c.html(getOAuthErrorHTML(lang, 'INVALID_EMAIL_DOMAIN'));
+      return c.html(getOAuthErrorHTML(lang, 'INVALID_EMAIL_DOMAIN', (c.get('cspNonce') as string) ?? ''));
     }
 
     // Check if user exists
@@ -156,7 +156,7 @@ oauthRoutes.get('/:provider/callback', async (c) => {
     await sessionModel.pruneOldSessions((user as any).id);
     const sessionId = session.id;
 
-    return c.html(getOAuthSuccessHTML(lang, sessionId));
+    return c.html(getOAuthSuccessHTML(lang, sessionId, (c.get('cspNonce') as string) ?? ''));
 
   } catch (error: any) {
     console.error('OAuth Error Details:', {
@@ -165,21 +165,25 @@ oauthRoutes.get('/:provider/callback', async (c) => {
       error
     });
 
-    return c.html(getOAuthErrorDetailHTML(provider, origin, error?.message || 'Unknown error'));
+    return c.html(getOAuthErrorDetailHTML(provider, origin, error?.message || 'Unknown error', (c.get('cspNonce') as string) ?? ''));
   }
 });
 
 /**
  * OAuth Error HTML - صفحة خطأ OAuth
  */
-function getOAuthErrorHTML(lang: string, errorType: string): string {
+function getOAuthErrorHTML(lang: string, errorType: string, nonce: string): string {
   const tr = translations[getUILanguage(lang)];
   return `
     <!DOCTYPE html>
     <html>
-    <head><title>OAuth Error</title></head>
+    <head><title>OAuth Error</title>
+      <style nonce="${nonce}">
+        .oa-err { text-align: center; padding: 20px; font-family: Arial, sans-serif; color: red; }
+      </style>
+    </head>
     <body>
-      <script>
+      <script nonce="${nonce}">
         if (window.opener) {
           window.opener.postMessage({ type: 'oauth_error', error: '${errorType}' }, window.location.origin);
           window.close();
@@ -187,7 +191,7 @@ function getOAuthErrorHTML(lang: string, errorType: string): string {
           window.location.href = '/?error=${errorType}&lang=${lang}';
         }
       </script>
-      <p style="text-align:center;padding:20px;font-family:Arial;color:red;">
+      <p class="oa-err">
         ${tr.error_occurred} ${tr.close}...
       </p>
     </body>
@@ -198,21 +202,29 @@ function getOAuthErrorHTML(lang: string, errorType: string): string {
 /**
  * OAuth Success HTML - صفحة نجاح OAuth
  */
-function getOAuthSuccessHTML(lang: string, sessionId: string): string {
+function getOAuthSuccessHTML(lang: string, sessionId: string, nonce: string): string {
   const tr = translations[getUILanguage(lang)];
   return `
     <!DOCTYPE html>
     <html>
-    <head><title>OAuth Success</title></head>
-    <body style="font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f0fdf4;">
-      <div style="background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto;">
-        <h2 style="color: #22c55e; margin: 0 0 20px 0;">✓ ${tr.success}</h2>
-        <p style="color: #666; margin: 0 0 20px 0;">${tr.loading}</p>
-        <button onclick="window.close()" style="background: #22c55e; color: white; border: none; padding: 10px 30px; border-radius: 6px; cursor: pointer; font-size: 16px;">
+    <head><title>OAuth Success</title>
+      <style nonce="${nonce}">
+        .oa-ok-body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #f0fdf4; }
+        .oa-ok-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+        .oa-ok-h2 { color: #22c55e; margin: 0 0 20px 0; }
+        .oa-ok-p { color: #666; margin: 0 0 20px 0; }
+        .oa-ok-btn { background: #22c55e; color: white; border: none; padding: 10px 30px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+      </style>
+    </head>
+    <body class="oa-ok-body">
+      <div class="oa-ok-box">
+        <h2 class="oa-ok-h2">✅ ${tr.success}</h2>
+        <p class="oa-ok-p">${tr.loading}</p>
+        <button data-csp-on="click" data-csp-fn="__winClose" data-csp-args='[]' class="oa-ok-btn">
           ${tr.close}
         </button>
       </div>
-      <script>
+      <script nonce="${nonce}">
         setTimeout(function() {
           if (window.opener) {
             window.opener.postMessage({
@@ -233,13 +245,13 @@ function getOAuthSuccessHTML(lang: string, sessionId: string): string {
 /**
  * OAuth Error Detail HTML - صفحة تفاصيل خطأ OAuth
  */
-function getOAuthErrorDetailHTML(provider: string, origin: string, errorMessage: string): string {
+function getOAuthErrorDetailHTML(provider: string, origin: string, errorMessage: string, nonce: string): string {
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <title>OAuth Error</title>
-      <style>
+      <style nonce="${nonce}">
         body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
         .error-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
         h2 { color: #dc2626; margin-top: 0; }
@@ -255,8 +267,8 @@ function getOAuthErrorDetailHTML(provider: string, origin: string, errorMessage:
         <p><strong>Error:</strong></p>
         <pre>${errorMessage}</pre>
         <p><strong>Origin:</strong> ${origin}</p>
-        <button onclick="window.close()">Close Window</button>
-        <button onclick="window.opener?.postMessage({ type: 'oauth_error', error: 'PROVIDER_ERROR' }, window.location.origin); window.close();">Close & Report Error</button>
+        <button data-csp-on="click" data-csp-fn="__winClose" data-csp-args='[]'>Close Window</button>
+        <button data-csp-on="click" data-csp-fn="__oauthDone" data-csp-args='["oauth_error","PROVIDER_ERROR"]'>Close & Report Error</button>
       </div>
     </body>
     </html>
