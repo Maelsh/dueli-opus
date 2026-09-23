@@ -38,7 +38,7 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
         
         ${getFooter(lang)}
         
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const lang = '${lang}';
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
@@ -57,7 +57,7 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-8 text-center shadow-lg">
                         <i class="fas fa-lock text-4xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500">\${tr.login_required || 'Please login to submit a report'}</p>
-                        <button onclick="showLoginModal()" class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -66,7 +66,7 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
             
             function renderReportForm() {
                 document.getElementById('reportsContent').innerHTML = \`
-                    <form onsubmit="submitReport(event)" class="space-y-6">
+                    <form data-csp-on="submit" data-csp-fn="submitReport" data-csp-args='["@event"]' class="space-y-6">
                         <!-- Report Type -->
                         <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-6 shadow-lg">
                             <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
@@ -173,7 +173,7 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, tr.submit_report || 'Submit Report'));
+    return c.html(generateHTML(content, lang, tr.submit_report || 'Submit Report', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default reportsPage;

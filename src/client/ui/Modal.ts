@@ -94,7 +94,7 @@ export class Modal {
         </div>
         <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">${title}</h3>
         <p class="text-gray-600 dark:text-gray-300 mb-6">${message}</p>
-        <button onclick="this.closest('div.fixed').remove()" class="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-purple-500/25">
+        <button data-csp-on="click" data-csp-fn="__closestRemove" data-csp-args='["@this","div.fixed"]' class="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium transition-all shadow-lg hover:shadow-purple-500/25">
           ${btnText}
         </button>
       </div>

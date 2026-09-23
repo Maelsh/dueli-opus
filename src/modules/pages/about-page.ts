@@ -133,5 +133,5 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
     </div>
   `;
 
-  return c.html(generateHTML(content, lang, tr.about_dueli));
+  return c.html(generateHTML(content, lang, tr.about_dueli, (c.get('cspNonce') as string) ?? ''));
 }

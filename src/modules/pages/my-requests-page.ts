@@ -30,15 +30,15 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 
                 <!-- Tabs -->
                 <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg mb-6 p-2 inline-flex gap-2 flex-wrap">
-                    <button onclick="setTab('received')" id="tab-received" class="px-5 py-2 rounded-lg font-semibold transition-colors bg-purple-600 text-white">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["received"]' id="tab-received" class="px-5 py-2 rounded-lg font-semibold transition-colors bg-purple-600 text-white">
                         <i class="fas fa-inbox ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.received_requests || 'Received'}
                     </button>
-                    <button onclick="setTab('sent')" id="tab-sent" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["sent"]' id="tab-sent" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
                         <i class="fas fa-paper-plane ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.sent_requests || 'Sent'}
                     </button>
-                    <button onclick="setTab('invitations')" id="tab-invitations" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["invitations"]' id="tab-invitations" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
                         <i class="fas fa-envelope-open-text ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.invitations || 'Invitations'}
                     </button>
@@ -55,7 +55,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
         
         ${getFooter(lang)}
         
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const lang = '${lang}';
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
@@ -75,7 +75,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-lock text-5xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.login_required || 'Please login to view your requests'}</p>
-                        <button onclick="showLoginModal()" class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -168,12 +168,12 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                             </div>
                             \${isReceived && req.status === 'pending' ? \`
                                 <div class="flex gap-2">
-                                    <button onclick="handleRequest(\${req.competition_id}, \${req.id}, 'accept')" 
+                                    <button data-csp-on="click" data-csp-fn="handleRequest" data-csp-args='[\${req.competition_id},\${req.id},"accept"]' 
                                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                                         <i class="fas fa-check \${isRTL ? 'ml-1' : 'mr-1'}"></i>
                                         \${tr.accept || 'Accept'}
                                     </button>
-                                    <button onclick="handleRequest(\${req.competition_id}, \${req.id}, 'decline')" 
+                                    <button data-csp-on="click" data-csp-fn="handleRequest" data-csp-args='[\${req.competition_id},\${req.id},"decline"]' 
                                         class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
                                         <i class="fas fa-times \${isRTL ? 'ml-1' : 'mr-1'}"></i>
                                         \${tr.decline || 'Decline'}
@@ -182,12 +182,12 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                             \` : ''}
                             \${isInvitation && req.status === 'pending' ? \`
                                 <div class="flex gap-2">
-                                    <button onclick="handleInvitation(\${req.competition_id}, 'accept')" 
+                                    <button data-csp-on="click" data-csp-fn="handleInvitation" data-csp-args='[\${req.competition_id},"accept"]' 
                                         class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
                                         <i class="fas fa-check \${isRTL ? 'ml-1' : 'mr-1'}"></i>
                                         \${tr.accept || 'Accept'}
                                     </button>
-                                    <button onclick="handleInvitation(\${req.competition_id}, 'decline')" 
+                                    <button data-csp-on="click" data-csp-fn="handleInvitation" data-csp-args='[\${req.competition_id},"decline"]' 
                                         class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
                                         <i class="fas fa-times \${isRTL ? 'ml-1' : 'mr-1'}"></i>
                                         \${tr.decline || 'Decline'}
@@ -195,7 +195,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                                 </div>
                             \` : ''}
                             \${currentTab === 'sent' && req.status === 'pending' ? \`
-                                <button onclick="cancelRequest(\${req.competition_id})" 
+                                <button data-csp-on="click" data-csp-fn="cancelRequest" data-csp-args='[\${req.competition_id}]' 
                                     class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 transition-colors">
                                     <i class="fas fa-times \${isRTL ? 'ml-1' : 'mr-1'}"></i>
                                     \${tr.cancel || 'Cancel'}
@@ -268,7 +268,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, tr.my_requests || 'My Requests'));
+    return c.html(generateHTML(content, lang, tr.my_requests || 'My Requests', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default myRequestsPage;

@@ -40,7 +40,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
         
         ${getFooter(lang)}
         
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const lang = '${lang}';
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
@@ -61,7 +61,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-8 text-center shadow-lg">
                         <i class="fas fa-lock text-4xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500">\${tr.login_required || 'Please login to access settings'}</p>
-                        <button onclick="showLoginModal()" class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -86,7 +86,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             function renderSettings() {
                 const user = window.currentUser || {};
                 document.getElementById('settingsContent').innerHTML = \`
-                    <form onsubmit="saveSettings(event)" class="space-y-6">
+                    <form data-csp-on="submit" data-csp-fn="saveSettings" data-csp-args='["@event"]' class="space-y-6">
                         <!-- Profile Section -->
                         <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-6 shadow-lg">
                             <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
@@ -170,7 +170,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             \${tr.danger_zone || 'Danger Zone'}
                         </h2>
                         <p class="text-red-600/80 mb-4">\${tr.delete_account_warning || 'Deleting your account is permanent and cannot be undone.'}</p>
-                        <button onclick="deleteAccount()" class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                        <button data-csp-on="click" data-csp-fn="deleteAccount" data-csp-args='[]' class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
                             <i class="fas fa-trash \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.delete_account || 'Delete Account'}
                         </button>
@@ -245,7 +245,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, tr.settings || 'Settings'));
+    return c.html(generateHTML(content, lang, tr.settings || 'Settings', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default settingsPage;

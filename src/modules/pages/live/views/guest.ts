@@ -39,7 +39,7 @@ export function getGuestContent(lang: Language): string {
             <div class="video-wrapper w-full md:w-[48%]" id="remoteVideoWrapper">
                 <div class="video-container aspect-video relative" id="remoteVideoContainer">
                     <video id="remoteVideo" autoplay playsinline class="w-full h-full object-cover"></video>
-                    <button onclick="window.toggleFullscreen()" id="fullscreenBtn" title="${tr.fullscreen}"
+                    <button data-csp-on="click" data-csp-fn="window.toggleFullscreen" data-csp-args='[]' id="fullscreenBtn" title="${tr.fullscreen}"
                         class="absolute top-2 right-2 control-btn bg-black/50 hover:bg-black/70">
                         <i class="fas fa-expand text-white text-sm" id="fullscreenIcon" aria-hidden="true"></i>
                     </button>
@@ -50,34 +50,34 @@ export function getGuestContent(lang: Language): string {
         <!-- Media Controls -->
         <div class="flex flex-wrap gap-3 justify-center mb-3">
             <div class="relative">
-                <button onclick="window.toggleScreen()" id="screenBtn" title="${tr.share_screen}" 
+                <button data-csp-on="click" data-csp-fn="window.toggleScreen" data-csp-args='[]' id="screenBtn" title="${tr.share_screen}" 
                     class="control-btn bg-blue-600 hover:bg-blue-700">
                     <i class="fas fa-desktop text-white" aria-hidden="true"></i>
                 </button>
                 <span id="screenUnavailable" class="hidden absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-red-400 whitespace-nowrap">${tr.error}</span>
             </div>
             
-            <button onclick="window.toggleCamera()" id="cameraBtn" title="${tr.toggle_camera}"
+            <button data-csp-on="click" data-csp-fn="window.toggleCamera" data-csp-args='[]' id="cameraBtn" title="${tr.toggle_camera}"
                 class="control-btn bg-purple-600 hover:bg-purple-700">
                 <i class="fas fa-video text-white" id="cameraIcon" aria-hidden="true"></i>
             </button>
             
-            <button onclick="window.switchCamera()" id="switchCamBtn" title="${tr.switch_camera}"
+            <button data-csp-on="click" data-csp-fn="window.switchCamera" data-csp-args='[]' id="switchCamBtn" title="${tr.switch_camera}"
                 class="control-btn bg-indigo-600 hover:bg-indigo-700">
                 <i class="fas fa-sync-alt text-white" aria-hidden="true"></i>
             </button>
             
-            <button onclick="window.toggleMic()" id="micBtn" title="${tr.toggle_mic}"
+            <button data-csp-on="click" data-csp-fn="window.toggleMic" data-csp-args='[]' id="micBtn" title="${tr.toggle_mic}"
                 class="control-btn bg-green-600 hover:bg-green-700">
                 <i class="fas fa-microphone text-white" id="micIcon" aria-hidden="true"></i>
             </button>
             
-            <button onclick="window.toggleSpeaker()" id="speakerBtn" title="${tr.toggle_speaker}"
+            <button data-csp-on="click" data-csp-fn="window.toggleSpeaker" data-csp-args='[]' id="speakerBtn" title="${tr.toggle_speaker}"
                 class="control-btn bg-teal-600 hover:bg-teal-700">
                 <i class="fas fa-volume-up text-white" id="speakerIcon" aria-hidden="true"></i>
             </button>
             
-            <button onclick="window.toggleLocalVideo()" id="hideLocalBtn" title="${tr.toggle_my_video}"
+            <button data-csp-on="click" data-csp-fn="window.toggleLocalVideo" data-csp-args='[]' id="hideLocalBtn" title="${tr.toggle_my_video}"
                 class="control-btn bg-gray-600 hover:bg-gray-700">
                 <i class="fas fa-eye text-white" id="hideLocalIcon" aria-hidden="true"></i>
             </button>
@@ -85,17 +85,17 @@ export function getGuestContent(lang: Language): string {
         
         <!-- Connection Controls -->
         <div class="flex flex-wrap gap-3 justify-center mb-4">
-            <button onclick="window.joinRoom()" id="joinBtn" title="${tr.join}"
+            <button data-csp-on="click" data-csp-fn="window.joinRoom" data-csp-args='[]' id="joinBtn" title="${tr.join}"
                 class="control-btn control-btn-lg bg-green-600 hover:bg-green-700">
                 <i class="fas fa-play text-white text-lg" aria-hidden="true"></i>
             </button>
             
-            <button onclick="window.reconnect()" id="reconnectBtn" title="${tr.reconnect}"
+            <button data-csp-on="click" data-csp-fn="window.reconnect" data-csp-args='[]' id="reconnectBtn" title="${tr.reconnect}"
                 class="control-btn control-btn-lg bg-amber-600 hover:bg-amber-700 hidden">
                 <i class="fas fa-redo text-white text-lg" aria-hidden="true"></i>
             </button>
             
-            <button onclick="window.disconnect()" id="disconnectBtn" title="${tr.disconnect}"
+            <button data-csp-on="click" data-csp-fn="window.disconnect" data-csp-args='[]' id="disconnectBtn" title="${tr.disconnect}"
                 class="control-btn control-btn-lg bg-red-600 hover:bg-red-700 hidden">
                 <i class="fas fa-stop text-white text-lg" aria-hidden="true"></i>
             </button>

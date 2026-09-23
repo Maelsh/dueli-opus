@@ -205,7 +205,7 @@ app.get('/', (c) => {
             <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${rtl ? 'right-4' : 'left-4'}">
               <i class="fas fa-search text-lg"></i>
             </div>
-            <button id="searchBtn" onclick="performSearch()" class="absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-2' : 'right-2'} p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors" title="${tr.search || 'Search'}">
+            <button id="searchBtn" data-csp-on="click" data-csp-fn="performSearch" data-csp-args='[]' class="absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-2' : 'right-2'} p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors" title="${tr.search || 'Search'}">
               <i class="fas fa-arrow-${rtl ? 'left' : 'right'}"></i>
             </button>
             <!-- Search Results Dropdown -->
@@ -225,15 +225,15 @@ app.get('/', (c) => {
       <div class="container mx-auto px-4 mb-6">
         <div class="flex justify-center">
           <div class="bg-gray-100 dark:bg-gray-800 p-1 rounded-full inline-flex gap-1">
-            <button onclick="setMainTab('live')" id="tab-live" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active" title="${tr.live}">
+            <button data-csp-on="click" data-csp-fn="setMainTab" data-csp-args='["live"]' id="tab-live" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active" title="${tr.live}">
               <span class="w-2 h-2 rounded-full bg-red-500 live-pulse"></span>
               ${tr.live}
             </button>
-            <button onclick="setMainTab('recorded')" id="tab-recorded" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive" title="${tr.recorded}">
+            <button data-csp-on="click" data-csp-fn="setMainTab" data-csp-args='["recorded"]' id="tab-recorded" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive" title="${tr.recorded}">
               <i class="fas fa-play-circle"></i>
               ${tr.recorded}
             </button>
-            <button onclick="setMainTab('upcoming')" id="tab-upcoming" data-auth-required="true" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive hidden" title="${tr.upcoming}">
+            <button data-csp-on="click" data-csp-fn="setMainTab" data-csp-args='["upcoming"]' id="tab-upcoming" data-auth-required="true" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive hidden" title="${tr.upcoming}">
               <i class="fas fa-clock"></i>
               ${tr.upcoming}
             </button>
@@ -244,19 +244,19 @@ app.get('/', (c) => {
       <!-- Category Tabs -->
       <div class="container mx-auto px-4 mb-8">
         <div class="flex justify-center gap-2 flex-wrap">
-          <button onclick="setSubTab('all')" id="subtab-all" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-active">
+          <button data-csp-on="click" data-csp-fn="setSubTab" data-csp-args='["all"]' id="subtab-all" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-active">
             <i class="fas fa-star text-xs"></i>
             ${tr.all}
           </button>
-          <button onclick="setSubTab('dialogue')" id="subtab-dialogue" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
+          <button data-csp-on="click" data-csp-fn="setSubTab" data-csp-args='["dialogue"]' id="subtab-dialogue" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
             <i class="fas fa-comments text-xs"></i>
             ${tr.categories.dialogue}
           </button>
-          <button onclick="setSubTab('science')" id="subtab-science" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
+          <button data-csp-on="click" data-csp-fn="setSubTab" data-csp-args='["science"]' id="subtab-science" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
             <i class="fas fa-flask text-xs"></i>
             ${tr.categories.science}
           </button>
-          <button onclick="setSubTab('talents')" id="subtab-talents" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
+          <button data-csp-on="click" data-csp-fn="setSubTab" data-csp-args='["talents"]' id="subtab-talents" class="px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive">
             <i class="fas fa-star text-xs"></i>
             ${tr.categories.talents}
           </button>
@@ -282,7 +282,7 @@ app.get('/', (c) => {
 
     ${getFooter(lang)}
     
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       // Global initialization variables for client-side hydration
       window.lang = '${lang}';
       window.isRTL = ${rtl};
@@ -290,7 +290,7 @@ app.get('/', (c) => {
     </script>
   `;
 
-  return c.html(generateHTML(content, lang, tr.home));
+  return c.html(generateHTML(content, lang, tr.home, (c.get('cspNonce') as string) ?? ''));
 });
 
 // Import remaining page routes
@@ -360,7 +360,7 @@ const onNotFound = (c: Context<{ Bindings: Bindings; Variables: Variables }>) =>
     ${getFooter(lang)}
   `;
 
-  return c.html(generateHTML(content, lang, '404'), 404);
+  return c.html(generateHTML(content, lang, '404', (c.get('cspNonce') as string) ?? ''), 404);
 };
 
 app.notFound(onNotFound);

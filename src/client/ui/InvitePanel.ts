@@ -269,10 +269,10 @@ export class InvitePanel {
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                        <button onclick="window._invitePanelRefresh()" class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.refresh', State.lang)}">
+                        <button data-csp-on="click" data-csp-fn="window._invitePanelRefresh" data-csp-args='[]' class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.refresh', State.lang)}">
                             <i class="fas fa-sync-alt text-sm"></i>
                         </button>
-                        <button onclick="window._invitePanelClose()" class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.close_panel', State.lang)}">
+                        <button data-csp-on="click" data-csp-fn="window._invitePanelClose" data-csp-args='[]' class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.close_panel', State.lang)}">
                             <i class="fas fa-times text-sm"></i>
                         </button>
                     </div>
@@ -286,14 +286,14 @@ export class InvitePanel {
                             id="invitePanelSearch"
                             placeholder="${t('matchmaking.search_users', State.lang)}"
                             class="w-full bg-gray-100 dark:bg-gray-800 rounded-xl py-2.5 ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} text-sm text-gray-900 dark:text-white placeholder-gray-400 border-0 focus:ring-2 focus:ring-purple-400 transition-all outline-none"
-                            oninput="window._invitePanelSearch(this.value)"
+                            data-csp-on="input" data-csp-fn="window._invitePanelSearch" data-csp-args='["@this.value"]'
                         />
                         <i class="fas fa-search absolute top-1/2 -translate-y-1/2 ${isRtl ? 'right-3' : 'left-3'} text-gray-400 text-sm"></i>
                     </div>
                 </div>
 
                 <!-- Users List -->
-                <div id="invitePanelUserList" class="flex-1 overflow-y-auto p-3 space-y-2" style="min-height: 200px; max-height: 55vh;">
+                <div id="invitePanelUserList" class="flex-1 overflow-y-auto p-3 space-y-2 min-h-[200px] max-h-[55vh]">
                     <div class="flex items-center justify-center py-12">
                         <i class="fas fa-spinner fa-spin text-3xl text-purple-400"></i>
                     </div>
@@ -318,25 +318,7 @@ export class InvitePanel {
 
         document.body.appendChild(overlay);
 
-        // Add CSS animation if not present
-        if (!document.getElementById('invitePanelStyles')) {
-            const style = document.createElement('style');
-            style.id = 'invitePanelStyles';
-            style.textContent = `
-                @keyframes slideUp {
-                    from { transform: translateY(30px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-                .animate-slide-up { animation: slideUp 0.3s ease-out; }
-                
-                @keyframes fadeInCard {
-                    from { transform: translateY(8px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
-                }
-                .animate-fade-in-card { animation: fadeInCard 0.2s ease-out; }
-            `;
-            document.head.appendChild(style);
-        }
+        // C5: keyframes live in src/styles.css (runtime <style> is CSP-blocked).
     }
 
     /**
@@ -366,9 +348,9 @@ export class InvitePanel {
 
             return `
                 <div class="bg-gray-50 dark:bg-gray-800/60 rounded-2xl p-3 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all animate-fade-in-card relative"
-                     style="animation-delay: ${index * 50}ms"
-                     onmouseenter="window._invitePanelHover(${user.id}, this)"
-                     onmouseleave="window._invitePanelHoverEnd()">
+                     data-csp-style="animation-delay: ${index * 50}ms"
+                     data-csp-on="mouseenter" data-csp-fn="window._invitePanelHover" data-csp-args='[${user.id},"@this"]'
+                     data-csp-on="mouseleave" data-csp-fn="window._invitePanelHoverEnd" data-csp-args='[]'>
                 <div class="flex items-center gap-3">
                         <!-- Avatar + Status -->
                         <div class="relative flex-shrink-0">
@@ -376,7 +358,7 @@ export class InvitePanel {
                                 src="${avatar}" 
                                 alt="${user.display_name}" 
                                 class="w-12 h-12 rounded-full object-cover border-2 ${user.is_online ? 'border-green-400' : 'border-gray-300 dark:border-gray-600'}"
-                                onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(user.display_name || user.username)}&background=7c3aed&color=fff&size=80'"
+                                data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://ui-avatars.com/api/?name=${encodeURIComponent(user.display_name || user.username)}&background=7c3aed&color=fff&size=80"]'
                             />
                             <div class="absolute -bottom-0.5 -right-0.5">
                                 ${this.getStatusDot(user)}
@@ -401,7 +383,7 @@ export class InvitePanel {
                             <!-- Compatibility Bar -->
                             <div class="flex items-center gap-2 mt-1.5">
                                 <div class="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div class="h-full rounded-full transition-all duration-500 ${compatPercent > 60 ? 'bg-green-500' : compatPercent > 30 ? 'bg-yellow-500' : 'bg-gray-400'}" style="width: ${compatPercent}%"></div>
+                                    <div class="h-full rounded-full transition-all duration-500 ${compatPercent > 60 ? 'bg-green-500' : compatPercent > 30 ? 'bg-yellow-500' : 'bg-gray-400'}" data-csp-style="width: ${compatPercent}%"></div>
                                 </div>
                                 <span class="text-[10px] text-gray-400 font-medium flex-shrink-0">${compatPercent}%</span>
                             </div>
@@ -410,7 +392,7 @@ export class InvitePanel {
                         <!-- Invite Button -->
                         <button 
                             id="invite-btn-${user.id}"
-                            onclick="window._invitePanelSendInvite(${user.id})"
+                            data-csp-on="click" data-csp-fn="window._invitePanelSendInvite" data-csp-args='[${user.id}]'
                             class="flex-shrink-0 px-3 py-2 text-xs font-bold rounded-xl transition-all ${isSent
                                 ? 'bg-green-600 text-white opacity-60 cursor-not-allowed'
                                 : 'bg-purple-600 hover:bg-purple-700 text-white hover:shadow-lg hover:shadow-purple-500/20 active:scale-95'
@@ -530,7 +512,7 @@ export class InvitePanel {
                 <p class="text-[10px] font-bold text-gray-400 uppercase mb-1.5">${t('matchmaking.stats_top_categories', lang)}</p>
                 <div class="flex flex-wrap gap-1.5">
                     ${cats.map((c: any) => `
-                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-white" style="background:${c.color || '#7c3aed'}">
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-white" data-csp-style="background:${c.color || '#7c3aed'}">
                             <i class="fas ${c.icon || 'fa-star'}"></i>${lang === 'ar' ? c.name_ar : c.name_en}
                         </span>
                     `).join('')}
@@ -538,7 +520,7 @@ export class InvitePanel {
             </div>` : ''}
 
             <a href="/profile/${user.username}?lang=${lang}"
-               onclick="window._invitePanelClose()"
+               data-csp-on="click" data-csp-fn="window._invitePanelClose" data-csp-args='[]'
                class="block text-center py-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 text-xs font-bold text-purple-600 dark:text-purple-400 transition-colors">
                 ${t('matchmaking.view_profile', lang)} <i class="fas fa-arrow-${isRtl ? 'left' : 'right'} ml-1"></i>
             </a>

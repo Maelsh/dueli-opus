@@ -192,7 +192,7 @@ export const transparencyPage = async (
                         </table>
                     </div>
                     <div class="p-4 border-t border-gray-100 dark:border-gray-800">
-                        <button id="load-more-financial" onclick="loadMoreFinancial()"
+                        <button id="load-more-financial" data-csp-on="click" data-csp-fn="loadMoreFinancial" data-csp-args='[]'
                             class="w-full py-2 text-sm text-purple-500 hover:text-purple-600 font-semibold transition-colors">
                             ${t.load_more ?? 'Load More'}
                         </button>
@@ -266,7 +266,7 @@ export const transparencyPage = async (
 
         ${getFooter(lang)}
 
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         // ══════════════════════════════════════════════
         // Transparency Dashboard — Client-Side Script
         // ══════════════════════════════════════════════
@@ -386,9 +386,9 @@ export const transparencyPage = async (
                     return \`
                         <div class="flex flex-col items-center gap-0.5 min-w-[36px] group cursor-default" title="\${s.period_date}: Rev \${fmt(s.total_ad_revenue)}">
                             <div class="flex items-end gap-0.5 h-24">
-                                <div class="w-2 bg-emerald-500 rounded-t transition-all" style="height:\${revH}%;" title="Revenue"></div>
-                                <div class="w-2 bg-amber-400 rounded-t transition-all" style="height:\${payH}%;" title="Payouts"></div>
-                                <div class="w-2 bg-red-400 rounded-t transition-all" style="height:\${opH}%;" title="OpEx"></div>
+                                <div class="w-2 bg-emerald-500 rounded-t transition-all" data-csp-style="height:\${revH}%;" title="Revenue"></div>
+                                <div class="w-2 bg-amber-400 rounded-t transition-all" data-csp-style="height:\${payH}%;" title="Payouts"></div>
+                                <div class="w-2 bg-red-400 rounded-t transition-all" data-csp-style="height:\${opH}%;" title="OpEx"></div>
                             </div>
                             <span class="text-[9px] text-gray-400 rotate-45 origin-left">\${label}</span>
                         </div>
@@ -548,7 +548,7 @@ export const transparencyPage = async (
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, t.page_title ?? 'Transparency Ledger'));
+    return c.html(generateHTML(content, lang, t.page_title ?? 'Transparency Ledger', (c.get('cspNonce') as string) ?? ''));
 };
 
 /** Helper: generates skeleton KPI card placeholders */

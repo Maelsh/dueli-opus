@@ -65,6 +65,7 @@ export type Language = string;
 export type Variables = {
   lang: Language;
   user: User | null;
+  cspNonce?: string; // C5: per-request CSP nonce set by securityHeaders()
 }
 
 // ============================================
