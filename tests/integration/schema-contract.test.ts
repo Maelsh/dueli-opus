@@ -65,6 +65,7 @@ const EXPECTED_MIGRATIONS = [
     '0029_drop_unused_posts.sql',
     '0030_chunk_upload_nonces.sql',
     '0031_realtime_tickets.sql',
+    '0032_cron_run_guard.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -88,6 +89,8 @@ const EXPECTED_TABLES = [
     'ad_impression_dedup',
     'chunk_upload_nonces',
     'realtime_tickets',
+    'cron_locks',
+    'cron_runs',
 ];
 
 let migrationOutput = '';
@@ -172,8 +175,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 32 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(32);
+    it('has exactly 33 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(33);
     });
 
     it('matches the full expected migration file name list', () => {

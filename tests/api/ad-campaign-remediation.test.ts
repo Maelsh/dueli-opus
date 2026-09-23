@@ -306,7 +306,7 @@ describe('9.A remediation — F-1 migration carry-over + F-3 admin workflow', ()
         // active/paused (previously dead-end: submitCampaign/endCampaign had
         // no buttons, so a portal-created campaign could never be submitted
         // or ended from the UI)
-        expect(html).toContain('onclick="submitCampaign(');
-        expect(html).toContain('onclick="endCampaign(');
+        expect(html).toContain('data-csp-fn="submitCampaign"');
+        expect(html).toContain('data-csp-fn="endCampaign"');
     });
 });

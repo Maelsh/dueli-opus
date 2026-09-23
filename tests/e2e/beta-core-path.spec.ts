@@ -83,7 +83,7 @@ async function getJson(request: APIRequestContext, url: string, token?: string):
 
 async function registerViaUi(page: Page, locale: string, u: { name: string; email: string; password: string }): Promise<void> {
   await page.goto(`/?lang=${locale}`);
-  await page.locator('#authSection button[onclick="showLoginModal()"]').first().click();
+  await page.locator('#authSection button[data-csp-fn="showLoginModal"]').first().click();
   await page.locator('#registerTab').click();
   await page.locator('#registerName').fill(u.name);
   await page.locator('#registerEmail').fill(u.email);
@@ -102,7 +102,7 @@ async function loginViaUi(page: Page, u: { email: string; password: string }): P
   const modal = page.locator('#loginModal');
   const isOpen = await modal.evaluate((el) => !el.classList.contains('hidden'));
   if (!isOpen) {
-    await page.locator('#authSection button[onclick="showLoginModal()"]').first().click();
+    await page.locator('#authSection button[data-csp-fn="showLoginModal"]').first().click();
   }
   await page.locator('#loginTab').click();
   await page.locator('#loginEmail').fill(u.email);

@@ -57,7 +57,7 @@ export class MessagingUI {
                 <div class="w-80 border-${rtl ? 'l' : 'r'} border-gray-200 dark:border-gray-700 flex flex-col">
                     <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                         <h2 class="text-lg font-bold text-gray-900 dark:text-white">${t('messages.title', State.lang)}</h2>
-                        <button onclick="MessagingUI.close()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <button data-csp-on="click" data-csp-fn="MessagingUI.close" data-csp-args='[]' class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -79,7 +79,7 @@ export class MessagingUI {
                         </div>
                     </div>
                     <div id="message-input-area" class="p-4 border-t border-gray-200 dark:border-gray-700 hidden">
-                        <form onsubmit="MessagingUI.sendMessage(event)" class="flex gap-2">
+                        <form data-csp-on="submit" data-csp-fn="MessagingUI.sendMessage" data-csp-args='["@event"]' class="flex gap-2">
                             <input 
                                 type="text" 
                                 id="message-input" 
@@ -122,7 +122,7 @@ export class MessagingUI {
 
         container.innerHTML = conversations.map(conv => `
             <button 
-                onclick="MessagingUI.selectConversation(${conv.id})"
+                data-csp-on="click" data-csp-fn="MessagingUI.selectConversation" data-csp-args='[${conv.id}]'
                 class="w-full p-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition ${conv.id === this.currentConversationId ? 'bg-purple-50 dark:bg-purple-900/30' : ''}"
             >
                 <img 

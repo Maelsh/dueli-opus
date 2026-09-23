@@ -15,7 +15,7 @@ const fontMap: Record<string, string> = {
 /**
  * Generate base HTML wrapper - توليد غلاف HTML الأساسي
  */
-export function generateHTML(content: string, lang: Language, title: string = 'Dueli'): string {
+export function generateHTML(content: string, lang: Language, title: string = 'Dueli', nonce: string = ''): string {
   const dir = getDir(lang);
   const tr = translations[getUILanguage(lang)];
   const fontFamily = fontMap[lang] || "'Inter'";
@@ -40,13 +40,13 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <!-- Load client bundle in head with defer so it's ready when DOMContentLoaded fires -->
     <script src="/static/app.js" defer></script>
     
-    <style>
+    <style nonce="${nonce}">
       body { font-family: ${fontFamily}, system-ui, sans-serif; }
     </style>
 </head>
 <body class="bg-white dark:bg-[#0f0f0f] text-gray-900 dark:text-gray-100 min-h-screen flex flex-col transition-colors duration-300">
     ${content}
-    <script>
+    <script nonce="${nonce}">
       // Register Service Worker
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {

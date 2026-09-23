@@ -72,7 +72,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     
     ${getFooter(lang)}
     
-    <script>
+    <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       (function() {
         const lang = '${lang}';
         const tr = ${JSON.stringify(tr)};
@@ -337,5 +337,5 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     </script>
   `;
 
-  return c.html(generateHTML(content, lang, tr.explore || 'Explore'));
+  return c.html(generateHTML(content, lang, tr.explore || 'Explore', (c.get('cspNonce') as string) ?? ''));
 }

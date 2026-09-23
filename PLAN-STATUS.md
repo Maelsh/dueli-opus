@@ -1,6 +1,32 @@
 
 
 
+## D1/D2/D3/N-2 — closure · فرع `chore/d1-d2-d3-n2-closure` (مزامن مع `main` بعد دمج C5/C6)
+
+- **D1 (docs)**: حالة Realtime في `docs/04-STREAMING-PIPELINE.md` — الإنتاج SSE/polling،
+  الـWorker/DO مسار مستقبلي اختياري بلا deploy/secrets، وإعادة الفتح بمطلب تشغيلي مثبت فقط.
+- **D2**: تدقيق + تثبيت — البذور توثق `is_fake=1` الضمني مع تثبيت الـdefault اختبارياً؛
+  `u.is_fake` في استعلامات search/matchmaking/users؛ شارة Demo في user-card وصفة
+  المنافسة؛ نجاح التقاعد يُسجَّل (auditability). الوهمي KEEP — لا حذف.
+- **D3**: `repomix-output.xml` (6.5MB) ← `docs/archive/` + توثيق الأرشيف والـSoT.
+- **N-2**: تحقيق شامل — الهوية من الجلسة حصراً، والـIDs المرسلة أهداف/فلاتر مشروعة
+  بفحوص ملكية؛ لا ثغرة، لا تغيير كود.
+
+## C6 — cron operational hardening · فرع `fix/c6-cron-operational-hardening` (مكدّس فوق C5)
+
+- أُعيد التثبيت فوق المكدس؛ العقد تراكمي (0029–0032 ← ‏33 ملفاً)؛ `cron-runs` ‏6/6؛
+  `npm test` ‏610/610 على المكدس الكامل؛ `tsc` ✅؛ `build` ✅. بلا دمج.
+
+## C5 — CSP full removal · فرع `fix/c5-csp-hardening` (مكدّس فوق C4)
+
+- إزالة كاملة: لا `unsafe-inline` ولا `unsafe-eval` في الترويسة المقدمة (مثبتة).
+  195 handler مضمّن ← تفويض `data-csp-*` (موزع خارجي + allowlist مولدة)؛ كل
+  `<script>/<style>` يحمل nonce الطلب؛ `style=` ← كلاسات أو `data-csp-style`
+  (مطبق JS)؛ CSS المحقون runtime نُقل لـ`styles.css`؛ الإيميلات مستثناة معمارياً.
+- تحقق المتصفح الحقيقي (Playwright + wrangler local): 8 تدفقات خضراء، صفر
+  CSP violations، صفر console errors (401 تسجيل خاطئ متوقعة وتثبت عمل submit).
+- الأرقام النهائية أدناه. بلا دمج.
+
 ## C4 — SSE/WS ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
 
 - أُعيد التثبيت فوق المكدس (العقد ‏32: 0029–0031)؛ وأُغلق مسار WS نهائياً داخل المستودع:
@@ -58,23 +84,6 @@
   وبقاء user_posts؛ `npm test` ‏544/544؛ `tsc` ✅؛ `build` ✅ (churn الـCSS رُجع).
   الـintegration عبر Wrangler لم يُنفَّذ محلياً (يتطلب Cloudflare) — بانتظار REMOTE.
 - الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
-
-## C4 — SSE ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
-
-- تدفق التذاكر + إزالة `query('token')` كما في التمريرة الأولى، والعقد تراكمي
-  (0029–0031 ← ‏32 ملفاً)؛ دعم WS Worker أدناه؛ الأرقام الكاملة بعد التحقق.
-
-## D1/D2/D3/N-2 — closure · فرع `chore/d1-d2-d3-n2-closure` (من `0ae9f1c`)
-
-- **D1 (docs)**: حالة Realtime في `docs/04-STREAMING-PIPELINE.md` — الإنتاج SSE/polling،
-  الـWorker/DO مسار مستقبلي اختياري بلا deploy/secrets، وإعادة الفتح بمطلب تشغيلي مثبت فقط.
-- **D2**: تدقيق + تثبيت — البذور توثق `is_fake=1` الضمني مع تثبيت الـdefault اختبارياً؛
-  `u.is_fake` أُضيفت لاستعلامات search/matchmaking/users؛ شارة Demo في user-card وصفة
-  المنافسة؛ نجاح التقاعد يُسجَّل (auditability). الوهمي KEEP — لا حذف.
-- **D3**: `repomix-output.xml` (6.5MB) ← `docs/archive/` + توثيق الأرشيف والـSoT.
-- **N-2**: تحقيق شامل (19 مساراً حساساً) — الهوية من الجلسة حصراً، والـIDs المرسلة
-  أهداف/فلاتر مشروعة بفحوص ملكية؛ لا ثغرة، لا تغيير كود.
-- ملاحظة: `main` الفعلي `0ae9f1c` (دمج #50–#54) وليس `c044a4a` (رأس فرع C5) — عُمل على الواقع.
 
 ## FINAL DEBT CLOSURE SWEEP · فرع `chore/final-debt-closure` (من `d332223`)
 

@@ -24,7 +24,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
         
         <div class="flex-1 bg-gray-50 dark:bg-[#0f0f0f]">
             <div class="container mx-auto px-4 py-6">
-                <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg overflow-hidden" style="height: calc(100vh - 180px);">
+                <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg overflow-hidden h-[calc(100vh-180px)]">
                     <div class="flex h-full">
                         <!-- Conversations List -->
                         <div class="w-full md:w-1/3 border-${rtl ? 'l' : 'r'} border-gray-200 dark:border-gray-700 flex flex-col">
@@ -73,7 +73,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             
                             <!-- Message Input -->
                             <div id="messageInput" class="p-4 border-t border-gray-200 dark:border-gray-700 hidden">
-                                <form onsubmit="sendMessage(event)" class="flex gap-2">
+                                <form data-csp-on="submit" data-csp-fn="sendMessage" data-csp-args='["@event"]' class="flex gap-2">
                                     <input 
                                         type="text" 
                                         id="newMessage" 
@@ -93,7 +93,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
         
         ${getFooter(lang)}
         
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const lang = '${lang}';
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
@@ -113,7 +113,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="p-8 text-center text-gray-400">
                         <i class="fas fa-lock text-4xl mb-4"></i>
                         <p>\${tr.login_required || 'Please login to view messages'}</p>
-                        <button onclick="showLoginModal()" class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -132,7 +132,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     
                     if (data.success && data.data?.length > 0) {
                         container.innerHTML = data.data.map(conv => \`
-                            <button onclick="openConversation(\${conv.id}, '\${conv.other_user?.username}', '\${conv.other_user?.avatar_url || ''}')" 
+                            <button data-csp-on="click" data-csp-fn="openConversation" data-csp-args='[\${conv.id},\${JSON.stringify((conv.other_user?.username))},\${JSON.stringify((conv.other_user?.avatar_url || ''))}]' 
                                 class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 \${isRTL ? 'text-right' : 'text-left'}">
                                 <img src="\${conv.other_user?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + conv.other_user?.username}" 
                                      class="w-12 h-12 rounded-full">
@@ -234,7 +234,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, tr.messages?.title || 'Messages'));
+    return c.html(generateHTML(content, lang, tr.messages?.title || 'Messages', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default messagesPage;

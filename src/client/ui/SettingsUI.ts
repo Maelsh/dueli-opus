@@ -58,12 +58,12 @@ export class SettingsUI {
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                         <i class="fas fa-cog mr-2"></i>${t('settings_page.title', State.lang)}
                     </h2>
-                    <button onclick="SettingsUI.close()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
+                    <button data-csp-on="click" data-csp-fn="SettingsUI.close" data-csp-args='[]' class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
                 
-                <form id="settings-form" onsubmit="SettingsUI.save(event)" class="p-5 space-y-5">
+                <form id="settings-form" data-csp-on="submit" data-csp-fn="SettingsUI.save" data-csp-args='["@event"]' class="p-5 space-y-5">
                     <!-- Language -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

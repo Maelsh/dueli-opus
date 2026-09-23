@@ -146,15 +146,31 @@ export function csrfProtection() {
 }
 
 /**
+ * Generate a per-request CSP nonce (base64, 128-bit).
+ */
+export function generateCspNonce(): string {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    let binary = '';
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary);
+}
+
+/**
  * Security headers middleware
  */
 export function securityHeaders() {
     return async (c: Context, next: Next) => {
-        // Content Security Policy
+        // C5 (final): per-request nonce. Inline handlers are GONE (converted to
+        // data-csp-* delegation handled by the external client bundle); page
+        // <script>/<style> blocks carry this nonce. No 'unsafe-inline', no
+        // 'unsafe-eval' anywhere. Pinned by tests/api/csp-hardening.test.ts.
+        const nonce = generateCspNonce();
+        c.set('cspNonce', nonce);
         c.header('Content-Security-Policy', [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://apis.google.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com",
-            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com",
+            `script-src 'self' 'nonce-${nonce}' https://cdnjs.cloudflare.com https://apis.google.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com`,
+            `style-src 'self' 'nonce-${nonce}' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com`,
             "img-src 'self' data: https: blob:",
             "font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com data:",
             "connect-src 'self' https: wss:",

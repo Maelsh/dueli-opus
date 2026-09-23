@@ -43,14 +43,14 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 <i class="fas fa-university ${rtl ? 'ml-2' : 'mr-2'} text-emerald-500"></i>
                                 ${tr.request_withdrawal || 'Request Withdrawal'}
                             </h3>
-                            <button onclick="closeWithdrawalModal()"
+                            <button data-csp-on="click" data-csp-fn="closeWithdrawalModal" data-csp-args='[]'
                                     id="closeWithdrawalBtn"
                                     class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
                                 <i class="fas fa-times text-xl"></i>
                             </button>
                         </div>
 
-                        <form id="withdrawalForm" onsubmit="submitWithdrawal(event)" class="space-y-5">
+                        <form id="withdrawalForm" data-csp-on="submit" data-csp-fn="submitWithdrawal" data-csp-args='["@event"]' class="space-y-5">
                             <!-- Amount -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
@@ -106,7 +106,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
 
         ${getFooter(lang)}
 
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const lang   = '${lang}';
             const isRTL  = ${rtl};
             const tr     = ${JSON.stringify(tr)};
@@ -168,7 +168,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-8 text-center shadow-lg">
                         <i class="fas fa-lock text-4xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500">\${tr.login_required || 'Please login to view earnings'}</p>
-                        <button onclick="showLoginModal()" class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -218,7 +218,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 </div>
                                 <div class="text-right">
                                     <span class="font-bold \${statusColor} text-sm capitalize">\${r.status}</span>
-                                    \${r.status === 'pending' ? \`<button onclick="cancelWithdrawal(\${r.id})" class="block text-xs text-red-400 hover:text-red-600 mt-1">\${tr.cancel || 'Cancel'}</button>\` : ''}
+                                    \${r.status === 'pending' ? \`<button data-csp-on="click" data-csp-fn="cancelWithdrawal" data-csp-args='[\${r.id}]' class="block text-xs text-red-400 hover:text-red-600 mt-1">\${tr.cancel || 'Cancel'}</button>\` : ''}
                                 </div>
                             </div>
                         \`;
@@ -274,7 +274,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                     <i class="fas fa-info-circle \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                                     \${tr.min_withdrawal || 'Minimum withdrawal is $10.00. Keep competing to earn more!'}
                                </div>\`
-                            : \`<button onclick="openWithdrawalModal()"
+                            : \`<button data-csp-on="click" data-csp-fn="openWithdrawalModal" data-csp-args='[]'
                                        id="openWithdrawBtn"
                                        class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
                                     <i class="fas fa-university"></i>
@@ -383,7 +383,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, (tr as any).earnings_nav || 'Earnings'));
+    return c.html(generateHTML(content, lang, (tr as any).earnings_nav || 'Earnings', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default earningsPage;

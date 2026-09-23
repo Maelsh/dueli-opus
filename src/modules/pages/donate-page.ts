@@ -38,18 +38,18 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 
                 <!-- Donation Options -->
                 <div class="grid md:grid-cols-3 gap-6 mb-12">
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" onclick="selectAmount(5)">
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[5]'>
                         <p class="text-4xl font-bold text-purple-600 mb-2">$5</p>
                         <p class="text-gray-500">${tr.coffee || 'Buy us a coffee'}</p>
                     </div>
                     
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-purple-500" onclick="selectAmount(25)">
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[25]'>
                         <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs px-3 py-1 rounded-full">Popular</div>
                         <p class="text-4xl font-bold text-purple-600 mb-2">$25</p>
                         <p class="text-gray-500">${tr.supporter || 'Supporter'}</p>
                     </div>
                     
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" onclick="selectAmount(100)">
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[100]'>
                         <p class="text-4xl font-bold text-purple-600 mb-2">$100</p>
                         <p class="text-gray-500">${tr.champion || 'Champion'}</p>
                     </div>
@@ -68,7 +68,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 </div>
                 
                 <!-- Donate Button -->
-                <button onclick="processDonation()" aria-label="${tr.donations?.send || 'Send donation'}" class="w-full py-4 bg-gradient-to-r from-pink-600 to-red-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg text-lg">
+                <button data-csp-on="click" data-csp-fn="processDonation" data-csp-args='[]' aria-label="${tr.donations?.send || 'Send donation'}" class="w-full py-4 bg-gradient-to-r from-pink-600 to-red-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg text-lg">
                     <i class="fas fa-heart ${rtl ? 'ml-2' : 'mr-2'}"></i>
                     ${tr.donate_now || 'Donate Now'}
                 </button>
@@ -105,7 +105,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
         
         ${getFooter(lang)}
         
-        <script>
+        <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const lang = '${lang}';
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
@@ -232,7 +232,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, tr.donate || 'Support'));
+    return c.html(generateHTML(content, lang, tr.donate || 'Support', (c.get('cspNonce') as string) ?? ''));
 };
 
 export default donatePage;

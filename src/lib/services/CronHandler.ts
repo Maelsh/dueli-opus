@@ -16,6 +16,7 @@
  */
 
 import { ScheduledTaskService } from './ScheduledTaskService';
+import { CronRunGuard } from './CronRunGuard';
 
 export interface CronEnv {
     DB: D1Database;
@@ -25,18 +26,59 @@ export interface CronEnv {
  * T1.5: Run all minute-level maintenance tasks.
  * Used by the Workers `scheduled` event AND by the secured HTTP trigger
  * (/api/cron/run) since Cloudflare Pages has no native cron support.
+ *
+ * C6 (SEC-04 operational): guarded by a D1 execution lock — a concurrent or
+ * duplicate trigger skips (returns `skipped: true`) instead of double-running
+ * payouts. Every trigger is appended to `cron_runs` for auditability.
  */
 export async function runMinuteMaintenance(env: CronEnv): Promise<{
     processed: number;
     errors: number;
+    skipped?: boolean;
 }> {
-    const taskService = new ScheduledTaskService(env.DB);
-    const taskResult = await taskService.processPendingTasks();
-    console.log(`[CRON] Processed ${taskResult.processed} tasks, ${taskResult.errors} errors`);
+    const guard = new CronRunGuard(env.DB);
+    const started = new Date().toISOString();
+    const owner = crypto.randomUUID();
+    const TASK = 'minute-maintenance';
 
-    await handleLifecycleTimers(env);
+    if (!(await guard.acquire(TASK, owner))) {
+        await guard.logRun({
+            task: TASK,
+            startedAt: started,
+            finishedAt: new Date().toISOString(),
+            success: false,
+            detail: 'skipped: duplicate execution (lock held)',
+        });
+        return { processed: 0, errors: 0, skipped: true };
+    }
 
-    return taskResult;
+    try {
+        const taskService = new ScheduledTaskService(env.DB);
+        const taskResult = await taskService.processPendingTasks();
+        console.log(`[CRON] Processed ${taskResult.processed} tasks, ${taskResult.errors} errors`);
+
+        await handleLifecycleTimers(env);
+
+        await guard.logRun({
+            task: TASK,
+            startedAt: started,
+            finishedAt: new Date().toISOString(),
+            success: true,
+            detail: `processed=${taskResult.processed} errors=${taskResult.errors}`,
+        });
+        return taskResult;
+    } catch (error) {
+        await guard.logRun({
+            task: TASK,
+            startedAt: started,
+            finishedAt: new Date().toISOString(),
+            success: false,
+            detail: `failed: ${(error as Error).message}`,
+        });
+        throw error;
+    } finally {
+        await guard.release(TASK, owner);
+    }
 }
 
 /**

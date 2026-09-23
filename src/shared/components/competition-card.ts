@@ -63,13 +63,13 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
     const rotate = Math.floor(rng * 360);
     const opacity = 0.05 + (rng * 0.1); // 0.05 - 0.15 opacity
 
-    return `<i class="${item.category_icon || 'fas fa-trophy'}" style="position: absolute; top: ${top}%; ${rtl ? 'right' : 'left'}: ${left}%; font-size: ${size}px; transform: rotate(${rotate}deg); opacity: ${opacity}; color: white; pointer-events: none;"></i>`;
+    return `<i class="${item.category_icon || 'fas fa-trophy'}" data-csp-style="position: absolute; top: ${top}%; ${rtl ? 'right' : 'left'}: ${left}%; font-size: ${size}px; transform: rotate(${rotate}deg); opacity: ${opacity}; color: white; pointer-events: none;"></i>`;
   }).join('');
 
   return `
       <div class="duel-card snap-start">
         <a href="/competition/${item.id}?lang=${lang}" class="block">
-          <div class="${commonClasses}" style="background-color: ${hexColor}">
+          <div class="${commonClasses}" data-csp-style="background-color: ${hexColor}">
             <!-- Background Gradient -->
             <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/10 z-0"></div>
             
@@ -82,7 +82,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <div class="absolute inset-0 flex items-center justify-center gap-3 z-10 p-4">
               <div class="flex flex-col items-center">
                 <div class="competitor-avatar p-0.5 transform hover:scale-105 transition-transform duration-300">
-                  <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" alt="" class="w-full h-full rounded-full" loading="lazy" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">
+                  <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" alt="" class="w-full h-full rounded-full" loading="lazy" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>
                 </div>
               </div>
 
@@ -93,7 +93,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
               <div class="flex flex-col items-center">
                 <div class="competitor-avatar p-0.5 transform hover:scale-105 transition-transform duration-300">
                   ${item.opponent_name ?
-      `<img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" alt="" class="w-full h-full rounded-full" loading="lazy" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">` :
+      `<img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" alt="" class="w-full h-full rounded-full" loading="lazy" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>` :
       `<div class="w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-bold border-2 border-white/20 animate-pulse">?</div>`
     }
                 </div>
@@ -143,14 +143,14 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${(item as any).is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${(tr.demo as any)?.title || 'Demo'}">${(tr.demo as any)?.badge || 'Demo'}</span>` : ''}</h3>
           </a>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-gray-500 font-medium whitespace-nowrap overflow-hidden">
-            <a href="/profile/${item.creator_username || item.creator_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" onclick="event.stopPropagation()">
-               <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" class="w-4 h-4 rounded-full bg-gray-200" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">
+            <a href="/profile/${item.creator_username || item.creator_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
+               <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" class="w-4 h-4 rounded-full bg-gray-200" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>
                <span class="truncate max-w-[80px]">${item.creator_name || 'User'}</span>
             </a>
             <span class="mx-0.5 text-gray-300">vs</span>
              ${item.opponent_name ?
-      `<a href="/profile/${item.opponent_username || item.opponent_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" onclick="event.stopPropagation()">
-                <img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" class="w-4 h-4 rounded-full bg-gray-200" onerror="this.src='https://api.dicebear.com/7.x/avataaars/svg?seed=default'">
+      `<a href="/profile/${item.opponent_username || item.opponent_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
+                <img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" class="w-4 h-4 rounded-full bg-gray-200" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>
                 <span class="truncate max-w-[80px]">${item.opponent_name}</span>
               </a>` :
       `<span class="text-gray-400">?</span>`

@@ -53,7 +53,7 @@ export class ScheduleUI {
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                         <i class="fas fa-calendar-alt mr-2 text-purple-500"></i>${t('schedule.title', State.lang)}
                     </h2>
-                    <button onclick="ScheduleUI.close()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
+                    <button data-csp-on="click" data-csp-fn="ScheduleUI.close" data-csp-args='[]' class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -168,7 +168,7 @@ export class ScheduleUI {
     static renderReminderButton(competitionId: number, hasReminder: boolean): string {
         return `
             <button 
-                onclick="ScheduleUI.toggleReminder(${competitionId}, ${hasReminder})"
+                data-csp-on="click" data-csp-fn="ScheduleUI.toggleReminder" data-csp-args='[${competitionId},${hasReminder}]'
                 class="flex items-center gap-2 px-3 py-1.5 rounded-full ${hasReminder ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600' : 'bg-gray-100 dark:bg-gray-800'} hover:opacity-80 transition"
                 title="${t(hasReminder ? 'schedule.remove_reminder' : 'schedule.add_reminder', State.lang)}"
             >
