@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-22T13:34:35.251Z",
-  "total": 191,
+  "generatedAt": "2026-09-23T12:32:08.982Z",
+  "total": 193,
   "routes": [
     {
       "method": "GET",
@@ -12,22 +12,22 @@
     {
       "method": "GET",
       "path": "/api/ad-blocks",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/ad-blocks/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/ad-blocks",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/ad-blocks/routes.ts"
     },
     {
       "method": "DELETE",
       "path": "/api/ad-blocks/:adId",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/ad-blocks/routes.ts"
     },
     {
@@ -936,37 +936,51 @@
     {
       "method": "GET",
       "path": "/api/payment-methods",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/payments/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/payment-methods",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/payments/routes.ts"
     },
     {
       "method": "DELETE",
       "path": "/api/payment-methods/:id",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/payments/routes.ts"
     },
     {
       "method": "PUT",
       "path": "/api/payment-methods/:id",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/payments/routes.ts"
     },
     {
       "method": "POST",
       "path": "/api/payment-methods/:id/default",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/payments/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/realtime/redeem",
       "classification": "UNGUARDED ⚠",
       "guards": "group:rateLimit, group:csrf",
-      "file": "src/modules/api/payments/routes.ts"
+      "file": "src/modules/api/realtime/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/realtime/ticket",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/realtime/routes.ts"
     },
     {
       "method": "GET",

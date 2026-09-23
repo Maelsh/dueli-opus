@@ -45,6 +45,8 @@ export type Bindings = {
   TURN_TOKEN_ID?: string;
   TURN_API_TOKEN?: string;
   UPLOAD_SERVER_ORIGINS?: string; // Allowed origins for chunk APIs, comma-separated (e.g., "https://maelshpro.com,https://stream.maelshpro.com")
+  UPLOAD_SERVER_SECRET?: string; // C2 (SEC-03): HMAC secret for upload-server verify/delete auth; unset ⇒ 503
+  REALTIME_PUBLISH_SECRET?: string; // C4: shared secret with the realtime DO worker (/publish + /redeem); unset ⇒ 503
   FFMPEG_SERVER_URL?: string; // Optional override for the ffmpeg/upload server used by chunks routes (falls back to DEFAULT_UPLOAD_URL)
   CRON_SECRET?: string;       // Shared secret required to trigger /api/cron/* via HTTP (T1.5)
   // Payments
@@ -149,6 +151,7 @@ export interface User extends BaseEntity {
   average_rating?: number;
   total_earnings?: number;
   is_verified?: boolean;
+  is_fake?: number; // C7: 1 = synthetic/demo row, 0 = real (see SyntheticRetirementService)
   // NOTE: `users.email_verified` exists in the DB schema (0001_initial_schema.sql) but is
   // dead — nothing in the codebase reads or writes it. `is_verified` above is the column
   // actually used for verification status. Kept in the DB (not dropped) because SQLite/D1
@@ -201,6 +204,7 @@ export interface Competition extends TimestampedEntity {
   creator_earnings?: number;
   opponent_earnings?: number;
   ad_revenue?: number;
+  is_fake?: number; // C7: 1 = synthetic/demo row, 0 = real (see SyntheticRetirementService)
 }
 
 /**

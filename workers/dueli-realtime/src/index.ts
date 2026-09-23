@@ -7,14 +7,16 @@
  * المعمارية:
  *   - غرفة DO لكل قناة (user:<id> | competition:<id> | global)
  *   - WebSocket Hibernation API → لا تُحاسب على الاتصالات الخاملة
- *   - التحقق من الهوية مرة واحدة عند المصافحة عبر /api/auth/session في تطبيق Pages
+ *   - التحقق من الهوية مرة واحدة عند المصافحة عبر POST /api/realtime/redeem
+ *     في تطبيق Pages (تذكرة أحادية 60s مربوطة بالقناة — C4/SEC-11: لا جلسة خام
+ *     في الـURL أبداً، لا هنا ولا في Pages)
  *   - النشر داخلياً من تطبيق Pages عبر POST /publish (محمي بـREALTIME_PUBLISH_SECRET)
  *
- * النشر:
- *   cd workers/dueli-realtime
- *   wrangler deploy
- *   ثم اضبط PAGES_API_URL وREALTIME_PUBLISH_SECRET كأسرار للـWorker،
- *   وأضف REALTIME_WS_URL=wss://<worker-domain>/ws في متغيرات صفحات Dueli.
+ * النشر (بالترتيب — كسره يعطل المصافحة):
+ *   1. انشر تطبيق Pages أولاً (يحمل POST /api/realtime/redeem).
+ *   2. cd workers/dueli-realtime && wrangler deploy
+ *   3. اضبط PAGES_API_URL وREALTIME_PUBLISH_SECRET كأسرار للـWorker،
+ *      وREALTIME_PUBLISH_SECRET + REALTIME_WS_URL=wss://<worker-domain>/ws في Pages.
  */
 
 export interface Env {
@@ -55,13 +57,14 @@ export class RealtimeRoom implements DurableObject {
 
     private async handleConnect(request: Request, url: URL): Promise<Response> {
         const channel = url.searchParams.get('channel') || '';
-        const token = url.searchParams.get('token') || '';
+        const ticket = url.searchParams.get('ticket') || '';
 
         if (!channel) return new Response('channel required', { status: 400 });
 
-        // قنوات المستخدم تتطلب جلسة صالحة وتطابق هوية المستخدم
+        // قنوات المستخدم تتطلب تذكرة صالحة مربوطة بنفس القناة (C4/SEC-11:
+        // raw session token مرفوض نهائياً — لا ?token= هنا ولا في Pages)
         if (channel.startsWith('user:')) {
-            const auth = await this.authenticate(token);
+            const auth = await this.authenticate(ticket, channel);
             if (!auth.valid) return new Response('Unauthorized', { status: 401 });
             const targetId = parseInt(channel.split(':')[1] || '0', 10);
             if (auth.userId !== targetId && !auth.isAdmin) {
@@ -78,18 +81,26 @@ export class RealtimeRoom implements DurableObject {
         return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
-    /** تحقق الجلسة عبر تطبيق Pages (مرة واحدة عند المصافحة) */
-    private async authenticate(token: string): Promise<{ valid: boolean; userId?: number; isAdmin?: boolean }> {
-        if (!token) return { valid: false };
+    /**
+     * استهلاك تذكرة المصافحة عبر تطبيق Pages (مرة واحدة عند الاتصال).
+     * العقد: POST {PAGES_API_URL}/api/realtime/redeem بترويسة X-Publish-Secret
+     * وجسم {ticket, channel} ⇒ {valid, userId, isAdmin}. التذكرة أحادية 60s.
+     */
+    private async authenticate(ticket: string, channel: string): Promise<{ valid: boolean; userId?: number; isAdmin?: boolean }> {
+        if (!ticket || !channel) return { valid: false };
         try {
-            const res = await fetch(`${this.env.PAGES_API_URL}/api/auth/session`, {
-                headers: { Authorization: 'Bearer ' + token }
+            const res = await fetch(`${this.env.PAGES_API_URL}/api/realtime/redeem`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Publish-Secret': this.env.REALTIME_PUBLISH_SECRET
+                },
+                body: JSON.stringify({ ticket, channel })
             });
             if (!res.ok) return { valid: false };
             const data: any = await res.json();
-            const user = data?.data?.user || data?.user;
-            if (!user?.id) return { valid: false };
-            return { valid: true, userId: user.id, isAdmin: !!user.is_admin };
+            if (!data?.valid || !data?.userId) return { valid: false };
+            return { valid: true, userId: data.userId, isAdmin: !!data.isAdmin };
         } catch {
             return { valid: false };
         }
@@ -173,7 +184,7 @@ export default {
             const channel = url.searchParams.get('channel') || '';
             const roomId = env.REALTIME_ROOM.idFromName(roomKeyFor(channel));
             const stub = env.REALTIME_ROOM.get(roomId);
-            return stub.fetch(`https://do/connect?channel=${encodeURIComponent(channel)}&token=${encodeURIComponent(url.searchParams.get('token') || '')}`, request);
+            return stub.fetch(`https://do/connect?channel=${encodeURIComponent(channel)}&ticket=${encodeURIComponent(url.searchParams.get('ticket') || '')}`, request);
         }
 
         return new Response('Dueli Realtime — see docs/08-PUBLIC-API.md', { status: 200 });

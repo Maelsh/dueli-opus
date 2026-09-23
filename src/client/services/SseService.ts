@@ -51,10 +51,34 @@ export class SseService {
         }
     }
 
-    /** T5.1: قناة Durable Objects عبر Worker الوقت الحقيقي */
-    private static connectWebSocket(wsBase: string, userId: number, token: string): void {
+    /**
+     * T5.1: قناة Durable Objects عبر Worker الوقت الحقيقي.
+     * C4 (SEC-11): تذكرة أحادية 60s بدل الجلسة الخام — يستهلكها الـWorker عبر
+     * POST /api/realtime/redeem عند المصافحة.
+     */
+    private static async connectWebSocket(wsBase: string, userId: number, token: string): Promise<void> {
+        const channel = `user:${userId}`;
+        let ticket = '';
         try {
-            const url = `${wsBase.replace(/\/+$/, '')}?channel=user:${userId}&token=${encodeURIComponent(token)}`;
+            const res = await fetch('/api/realtime/ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token,
+                },
+                body: JSON.stringify({ channel }),
+            });
+            if (!res.ok) throw new Error(`ticket ${res.status}`);
+            const body = await res.json() as { success: boolean; data?: { ticket: string } };
+            if (!body?.success || !body?.data?.ticket) throw new Error('ticket denied');
+            ticket = body.data.ticket;
+        } catch (err) {
+            console.error('[SseService] WS ticket mint failed, falling back to SSE:', err);
+            await this.connectSse(userId, token);
+            return;
+        }
+        try {
+            const url = `${wsBase.replace(/\/+$/, '')}?channel=${encodeURIComponent(channel)}&ticket=${encodeURIComponent(ticket)}`;
             this.ws = new WebSocket(url);
 
             this.ws.onmessage = (ev) => {
@@ -91,9 +115,32 @@ export class SseService {
 
     private static wsRetryCount: number = 0;
 
-    /** القناة الأصلية: SSE عبر تطبيق Pages */
-    private static connectSse(userId: number, token: string): void {
-        const url = `/api/sse?channel=user:${userId}&token=${encodeURIComponent(token)}`;
+    /**
+     * القناة الأصلية: SSE عبر تطبيق Pages.
+     * C4 (SEC-11): raw session NEVER goes in the URL — mint a single-use
+     * ticket (60s, bound to this user+channel) and connect with it.
+     */
+    private static async connectSse(userId: number, token: string): Promise<void> {
+        const channel = `user:${userId}`;
+        let ticket = '';
+        try {
+            const res = await fetch('/api/realtime/ticket', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token,
+                },
+                body: JSON.stringify({ channel }),
+            });
+            if (!res.ok) throw new Error(`ticket ${res.status}`);
+            const body = await res.json() as { success: boolean; data?: { ticket: string } };
+            if (!body?.success || !body?.data?.ticket) throw new Error('ticket denied');
+            ticket = body.data.ticket;
+        } catch (err) {
+            console.error('[SseService] ticket mint failed:', err);
+            return;
+        }
+        const url = `/api/sse?channel=${encodeURIComponent(channel)}&ticket=${encodeURIComponent(ticket)}`;
         try {
             this.source = new EventSource(url);
             this.connectedUserId = userId;

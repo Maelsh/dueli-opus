@@ -1,6 +1,51 @@
 
 
 
+## C4 — SSE/WS ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
+
+- أُعيد التثبيت فوق المكدس (العقد ‏32: 0029–0031)؛ وأُغلق مسار WS نهائياً داخل المستودع:
+  `POST /api/realtime/redeem` (بوابة `X-Publish-Secret`) يستهلك التذكرة للـWorker،
+  الـWorker (`workers/dueli-realtime`) يقبل `?ticket=` فقط (لا `?token=` إطلاقاً —
+  مثبت grep + اختبار)، و`SseService` (SSE وWS) يجلب تذكرة أولاً. النشر الخارجي
+  المتبقي: deploy الصفحات ثم الـWorker (موثق في ترويسة الـWorker).
+- `sse-ticket` ‏18/18 + `sse-user-auth` ‏3/3؛ `npm test` ‏596/596 على المكدس؛ `tsc` ✅؛
+  `build` ✅؛ الجرد ‏56 AUTHENTICATED (+‏redeem المحمي بالسر داخلياً).
+
+## C2 — chunks HMAC · فرع `fix/c2-chunks-hmac` (مكدّس فوق C1)
+
+- أُعيد التثبيت فوق المكدس؛ العقد تراكمي (0029+0030 ← ‏31 ملفاً)؛ `chunks-hmac` ‏11/11؛
+  `npm test` ‏577/577 على المكدس؛ `tsc` ✅؛ `build` (أدناه).
+
+## C1 — payments/ad-blocks auth · فرع `fix/c1-auth-fix` (مكدّس فوق C7)
+
+- 🔧 منفَّذ محلياً: `authMiddleware({required:true})` على مستوى الراوتر في
+  `ad-blocks/routes.ts` و`payments/routes.ts` (8 مسارات: UNGUARDED→AUTHENTICATED،
+  الجرد مولَّد من جديد) — بلا global middleware، بلا تغيير business logic.
+- **الاختبارات**: `tests/api/payment-auth.test.ts` ‏8/8 (401 بلا/خاطئة/منتهية،
+  200 + 201 بجلسة صالحة، 422 تُثبت مرور الـauth)؛ `npm test` ‏566/566 على المكدس؛
+  `tsc` ✅؛ `build` ✅. الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
+
+## C7 — D1 reconciliation · فرع `chore/c7-d1-reconciliation` (مكدّس فوق C3b) — ✅ منفَّذ
+
+- **Remote rebuild منفَّذ ومُتحقق**: backup طازج (2.4MB) → إسقاط 50 كائناً بترتيب FK
+  → replay السلسلة ‏33/33 من رأس المكدس → history مطابق للمستودع بايتاً ببايت →
+  reimport ‏22 جدولاً (544/1541 + الحقيقيون سالمون) → `foreign_key_check` فارغ →
+  `donations` والجداول المالية والجديدة حاضرة → `posts` محذوف → smoke إنتاج ‏200/200.
+  التفاصيل في `docs/C7-D1-RECONCILIATION-RUNBOOK.md` §5.
+- كود: `is_fake=0` + شارات Demo + تقاعد تدريجي عبر `SyntheticRetirementService`
+  (الأقدم أولاً، صفر dependents، مغطى PRAGMA) مربوط بالتسجيل/OAuth/إنشاء المنافسات.
+
+## C2 — chunks HMAC · فرع `fix/c2-chunks-hmac` (مكدّس فوق C1)
+
+- 🔧 منفَّذ محلياً: HMAC-SHA256 خادم-لخادم على `GET /verify` و`DELETE /:key`
+  (`X-Signature/X-Timestamp/X-Nonce`، نافذة 5min، nonce أحادي في جدول جديد
+  `chunk_upload_nonces` عبر migration ‏0030، مقارنة ثابتة الزمن، 503 عند غياب
+  السر) + فحص Origin الدقيق طبقة ثانية.
+- **الاختبارات**: `tests/api/chunks-hmac.test.ts` ‏11/11 (oracle مستقل عبر node:crypto
+  + رفض بلا/مزوّر/منتهي/معاد/origin شرير/prefix + قبول صحيح + 503)؛ RED مثبت (7 تفشل
+  على الكود القديم)؛ عدّاد العقد تراكمي ‏31 (0029+0030)؛ الأرقام الكاملة بعد التحقق أدناه.
+- **UPLOAD SERVER ACTIONS REQUIRED** في تقرير الـPR — التنفيذ على السيرفر الخارجي للمالك.
+
 ## C3b — posts cleanup · فرع `chore/c3b-posts-cleanup` (من `376b2ea` = PR #49)
 
 - 🔧 منفَّذ محلياً: جدول `posts` العاري + التابع الميت `post_likes` (FK → posts) محذوفان
@@ -13,6 +58,11 @@
   وبقاء user_posts؛ `npm test` ‏544/544؛ `tsc` ✅؛ `build` ✅ (churn الـCSS رُجع).
   الـintegration عبر Wrangler لم يُنفَّذ محلياً (يتطلب Cloudflare) — بانتظار REMOTE.
 - الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
+
+## C4 — SSE ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
+
+- تدفق التذاكر + إزالة `query('token')` كما في التمريرة الأولى، والعقد تراكمي
+  (0029–0031 ← ‏32 ملفاً)؛ دعم WS Worker أدناه؛ الأرقام الكاملة بعد التحقق.
 
 ## FINAL DEBT CLOSURE SWEEP · فرع `chore/final-debt-closure` (من `d332223`)
 

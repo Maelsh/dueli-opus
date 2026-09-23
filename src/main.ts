@@ -43,6 +43,7 @@ import advertiserRoutes from './modules/api/advertiser/routes';
 import complaintsRoutes from './modules/api/complaints/routes';
 import matchmakingRoutes from './modules/api/matchmaking/routes';
 import sseRoutes from './modules/api/sse/routes';
+import realtimeRoutes from './modules/api/realtime/routes';
 import recommendationsRoutes from './modules/api/recommendations/routes';
 import leaderboardRoutes from './modules/api/leaderboard/routes';
 import analyticsRoutes from './modules/api/analytics/routes';
@@ -157,6 +158,7 @@ app.route('/api/advertiser', advertiserRoutes);
 app.route('/api/complaints', complaintsRoutes);
 app.route('/api/matchmaking', matchmakingRoutes);
 app.route('/api/sse', sseRoutes);          // Task 9: Central SSE event stream
+app.route('/api/realtime', realtimeRoutes); // C4 (SEC-11): SSE connection tickets
 app.route('/api/recommendations', recommendationsRoutes);   // T1.2: was orphaned (404)
 app.route('/api/leaderboard', leaderboardRoutes);           // T1.2: was orphaned (404)
 app.route('/api/analytics', analyticsRoutes);               // T1.2: was orphaned (404)

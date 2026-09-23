@@ -5,9 +5,13 @@
 
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
+import { authMiddleware } from '../../../middleware/auth';
 import { PaymentController } from '../../../controllers/PaymentController';
 
 const adBlockRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+// C1 (SEC-13): every ad-block op is per-user — declare router-level auth so
+// c.get('user') is set and requireAuth() inside the controller can succeed.
+adBlockRoutes.use('*', authMiddleware({ required: true }));
 const controller = new PaymentController();
 
 /**

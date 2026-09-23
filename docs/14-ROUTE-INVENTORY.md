@@ -1,15 +1,15 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-22T13:34:35.251Z
+> تاريخ التوليد: 2026-09-23T12:32:08.982Z
 
-## الإجمالي: 191 مسار
+## الإجمالي: 193 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 91 |
-| UNGUARDED ⚠ | 50 |
-| AUTHENTICATED | 47 |
+| AUTHENTICATED | 56 |
+| UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
 
 ## الحماية على مستوى المجموعات (main.ts)
@@ -26,9 +26,9 @@
 | Method | Path | التصنيف | الحواجز | الملف |
 |---|---|---|---|---|
 | GET | `/api` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |
-| GET | `/api/ad-blocks` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
-| POST | `/api/ad-blocks` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
-| DELETE | `/api/ad-blocks/:adId` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
+| GET | `/api/ad-blocks` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
+| POST | `/api/ad-blocks` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
+| DELETE | `/api/ad-blocks/:adId` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
 | POST | `/api/ad-reports` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-reports/routes.ts` |
 | POST | `/api/ad-reports/admin/:id/review` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-reports/routes.ts` |
 | GET | `/api/ad-reports/admin/all` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-reports/routes.ts` |
@@ -158,11 +158,13 @@
 | GET | `/api/notifications` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
 | POST | `/api/notifications/:id/read` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
 | POST | `/api/notifications/read-all` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
-| GET | `/api/payment-methods` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
-| POST | `/api/payment-methods` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
-| DELETE | `/api/payment-methods/:id` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
-| PUT | `/api/payment-methods/:id` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
-| POST | `/api/payment-methods/:id/default` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
+| GET | `/api/payment-methods` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
+| POST | `/api/payment-methods` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
+| DELETE | `/api/payment-methods/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
+| PUT | `/api/payment-methods/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
+| POST | `/api/payment-methods/:id/default` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
+| POST | `/api/realtime/redeem` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/realtime/routes.ts` |
+| POST | `/api/realtime/ticket` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/realtime/routes.ts` |
 | GET | `/api/recommendations` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
 | GET | `/api/recommendations/competitor-stats/:userId` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
 | GET | `/api/reminders` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |

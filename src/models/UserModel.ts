@@ -7,6 +7,7 @@
 
 import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { User } from '../config/types';
+import { SyntheticRetirementService } from '../lib/services/SyntheticRetirementService';
 
 /**
  * User creation data
@@ -114,8 +115,8 @@ export class UserModel extends BaseModel<User> {
             INSERT INTO users (
                 email, username, display_name, password_hash, avatar_url,
                 country, language, verification_token, verification_token_expires,
-                oauth_provider, oauth_id, is_verified, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                oauth_provider, oauth_id, is_verified, is_fake, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, datetime('now'))
         `).bind(
             data.email.toLowerCase(),
             data.username.toLowerCase(),
@@ -131,7 +132,16 @@ export class UserModel extends BaseModel<User> {
             data.oauth_provider ? 1 : 0 // OAuth users are auto-verified
         ).run();
 
-        return (await this.findById(result.meta.last_row_id as number))!;
+        const created = (await this.findById(result.meta.last_row_id as number))!;
+        // C7 synthetic lifecycle: a real signup retires one dependency-free synthetic
+        // user. Best-effort — the signup itself already succeeded, so a retirement
+        // failure must never fail registration (it is logged and retried next time).
+        try {
+            await new SyntheticRetirementService(this.db).retireOneSyntheticUser();
+        } catch (error) {
+            console.error('[SyntheticRetirement] user retire skipped:', error);
+        }
+        return created;
     }
 
     /**
