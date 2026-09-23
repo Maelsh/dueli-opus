@@ -1,6 +1,11 @@
 
 
 
+## C2 — chunks HMAC · فرع `fix/c2-chunks-hmac` (مكدّس فوق C1)
+
+- أُعيد التثبيت فوق المكدس؛ العقد تراكمي (0029+0030 ← ‏31 ملفاً)؛ `chunks-hmac` ‏11/11؛
+  `npm test` ‏577/577 على المكدس؛ `tsc` ✅؛ `build` (أدناه).
+
 ## C1 — payments/ad-blocks auth · فرع `fix/c1-auth-fix` (مكدّس فوق C7)
 
 - 🔧 منفَّذ محلياً: `authMiddleware({required:true})` على مستوى الراوتر في
@@ -19,6 +24,17 @@
   التفاصيل في `docs/C7-D1-RECONCILIATION-RUNBOOK.md` §5.
 - كود: `is_fake=0` + شارات Demo + تقاعد تدريجي عبر `SyntheticRetirementService`
   (الأقدم أولاً، صفر dependents، مغطى PRAGMA) مربوط بالتسجيل/OAuth/إنشاء المنافسات.
+
+## C2 — chunks HMAC · فرع `fix/c2-chunks-hmac` (مكدّس فوق C1)
+
+- 🔧 منفَّذ محلياً: HMAC-SHA256 خادم-لخادم على `GET /verify` و`DELETE /:key`
+  (`X-Signature/X-Timestamp/X-Nonce`، نافذة 5min، nonce أحادي في جدول جديد
+  `chunk_upload_nonces` عبر migration ‏0030، مقارنة ثابتة الزمن، 503 عند غياب
+  السر) + فحص Origin الدقيق طبقة ثانية.
+- **الاختبارات**: `tests/api/chunks-hmac.test.ts` ‏11/11 (oracle مستقل عبر node:crypto
+  + رفض بلا/مزوّر/منتهي/معاد/origin شرير/prefix + قبول صحيح + 503)؛ RED مثبت (7 تفشل
+  على الكود القديم)؛ عدّاد العقد تراكمي ‏31 (0029+0030)؛ الأرقام الكاملة بعد التحقق أدناه.
+- **UPLOAD SERVER ACTIONS REQUIRED** في تقرير الـPR — التنفيذ على السيرفر الخارجي للمالك.
 
 ## C3b — posts cleanup · فرع `chore/c3b-posts-cleanup` (من `376b2ea` = PR #49)
 

@@ -6,6 +6,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
+import { CryptoUtils } from '../../../lib/services/CryptoUtils';
 import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../config/defaults';
 
 const chunksRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -49,6 +50,59 @@ const verifyUploadServerOrigin = async (c: any, next: any) => {
     if (!host || !allowedHosts.includes(host)) {
         return c.json({ valid: false, error: 'Origin not allowed' }, 403);
     }
+
+    await next();
+};
+
+// C2 (SEC-03 docs/12): server-to-server HMAC auth for the upload server.
+// Canonical message: METHOD + '\n' + path + '\n' + timestamp + '\n' + nonce + '\n' + bodyHash,
+// signature = HMAC-SHA256(UPLOAD_SERVER_SECRET, canonical), hex-encoded.
+// Required headers: X-Signature, X-Timestamp (unix ms), X-Nonce (unique per request).
+// Replay window: 5 minutes; nonces are single-use (chunk_upload_nonces, migration 0030).
+// Comparison is constant-time. Origin check above stays as a second layer.
+const UPLOAD_HMAC_SKEW_MS = 5 * 60 * 1000;
+
+const verifyUploadServerHmac = async (c: any, next: any) => {
+    const secret = c.env.UPLOAD_SERVER_SECRET as string | undefined;
+    if (!secret) {
+        return c.json({ valid: false, error: 'Upload auth not configured' }, 503);
+    }
+
+    const signature = c.req.header('X-Signature') || '';
+    const timestamp = c.req.header('X-Timestamp') || '';
+    const nonce = c.req.header('X-Nonce') || '';
+    if (!signature || !timestamp || !nonce) {
+        return c.json({ valid: false, error: 'Missing upload signature' }, 403);
+    }
+
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > UPLOAD_HMAC_SKEW_MS) {
+        return c.json({ valid: false, error: 'Stale upload signature' }, 403);
+    }
+
+    const rawBody = await c.req.text().catch(() => '');
+    const bodyHash = await CryptoUtils.sha256Hex(rawBody);
+    const path = new URL(c.req.url).pathname;
+    const canonical = `${c.req.method}\n${path}\n${timestamp}\n${nonce}\n${bodyHash}`;
+    const expected = await CryptoUtils.hmacSha256Hex(secret, canonical);
+    if (!CryptoUtils.timingSafeEqualString(signature, expected)) {
+        return c.json({ valid: false, error: 'Invalid upload signature' }, 403);
+    }
+
+    const { DB } = c.env;
+    const seen = await DB.prepare(
+        'SELECT nonce FROM chunk_upload_nonces WHERE nonce = ?'
+    ).bind(nonce).first();
+    if (seen) {
+        return c.json({ valid: false, error: 'Reused upload nonce' }, 403);
+    }
+    await DB.prepare(
+        'INSERT INTO chunk_upload_nonces (nonce) VALUES (?)'
+    ).bind(nonce).run();
+    // Opportunistic prune — keeps the table tiny without a cron dependency.
+    await DB.prepare(
+        "DELETE FROM chunk_upload_nonces WHERE created_at < datetime('now', '-10 minutes')"
+    ).run().catch(() => undefined);
 
     await next();
 };
@@ -109,7 +163,7 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
  * Verify a chunk key (called by upload server)
  * التحقق من مفتاح القطعة (يستدعيه سيرفر الرفع)
  */
-chunksRoutes.get('/verify', verifyUploadServerOrigin, async (c) => {
+chunksRoutes.get('/verify', verifyUploadServerHmac, verifyUploadServerOrigin, async (c) => {
     const { DB } = c.env;
 
     try {
@@ -153,7 +207,7 @@ chunksRoutes.get('/verify', verifyUploadServerOrigin, async (c) => {
  * Delete a chunk key after successful upload
  * حذف مفتاح القطعة بعد الرفع الناجح
  */
-chunksRoutes.delete('/:key', verifyUploadServerOrigin, async (c) => {
+chunksRoutes.delete('/:key', verifyUploadServerHmac, verifyUploadServerOrigin, async (c) => {
     const { DB } = c.env;
 
     try {
