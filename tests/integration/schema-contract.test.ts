@@ -62,6 +62,7 @@ const EXPECTED_MIGRATIONS = [
     '0026_ads_target_category.sql',
     '0027_ad_metrics_antifraud.sql',
     '0028_ad_dedup_identity.sql',
+    '0029_drop_unused_posts.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -167,8 +168,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 29 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(29);
+    it('has exactly 30 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(30);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -203,6 +204,12 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
         for (const table of EXPECTED_TABLES) {
             expect(tables, `missing table: ${table}`).toContain(table);
         }
+    });
+
+    it('dead posts/post_likes are gone, live user_posts remains (0029 C3b)', () => {
+        expect(tables).not.toContain('posts');
+        expect(tables).not.toContain('post_likes');
+        expect(tables).toContain('user_posts');
     });
 
     it('messages table exists (0001_initial_schema.sql)', () => {

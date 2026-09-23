@@ -1,6 +1,19 @@
 
 
 
+## C3b — posts cleanup · فرع `chore/c3b-posts-cleanup` (من `376b2ea` = PR #49)
+
+- 🔧 منفَّذ محلياً: جدول `posts` العاري + التابع الميت `post_likes` (FK → posts) محذوفان
+  عبر migration جديدة `0029_drop_unused_posts.sql` (forward-only، `DROP IF EXISTS`،
+  التابع أولاً) — بلا مساس بأي migration تاريخية، و`user_posts` (نظام المنشورات الحي
+  عبر `UserPostModel`) لم يُمس.
+- **الدليل**: صفر إشارة كودية لـ`posts`/`post_likes` في src/tests/workers (لا
+  SELECT/INSERT/UPDATE/DELETE/JOIN/model/route/seed)؛ seed يمس `user_posts` فقط.
+- **الاختبارات**: عدّاد `schema-contract` ‏29←30 + assertion غياب posts/post_likes
+  وبقاء user_posts؛ `npm test` ‏544/544؛ `tsc` ✅؛ `build` ✅ (churn الـCSS رُجع).
+  الـintegration عبر Wrangler لم يُنفَّذ محلياً (يتطلب Cloudflare) — بانتظار REMOTE.
+- الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
+
 ## FINAL DEBT CLOSURE SWEEP · فرع `chore/final-debt-closure` (من `d332223`)
 
 - 🔧 sweep واحد بلا scope creep: كل ما أُغلق (A1/A2/B1/B2) مخطط ومؤجل وقابل للإغلاق
