@@ -144,6 +144,9 @@ export class SyntheticRetirementService {
         for (const candidate of rows ?? []) {
             if (await hasDependent(this.db, USER_DEPENDENTS, candidate.id, tables)) continue;
             await this.db.prepare('DELETE FROM users WHERE id = ? AND is_fake = 1').bind(candidate.id).run();
+            // D2 auditability: every retirement is observable in ops logs (who/what/when
+            // is reconstructed from the log line + cron_runs/app logs timeline).
+            console.info(`[SyntheticRetirement] retired synthetic user ${candidate.id}`);
             return candidate.id;
         }
         return null;
@@ -164,6 +167,7 @@ export class SyntheticRetirementService {
         for (const candidate of rows ?? []) {
             if (await hasDependent(this.db, COMPETITION_DEPENDENTS, candidate.id, tables)) continue;
             await this.db.prepare('DELETE FROM competitions WHERE id = ? AND is_fake = 1').bind(candidate.id).run();
+            console.info(`[SyntheticRetirement] retired synthetic competition ${candidate.id}`);
             return candidate.id;
         }
         return null;

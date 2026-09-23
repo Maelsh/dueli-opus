@@ -34,7 +34,7 @@ export class UserController extends BaseController {
             const result = await DB.prepare(`
                 SELECT 
                     u.id, u.username, u.display_name, u.avatar_url, u.bio, u.country,
-                    u.is_verified,
+                    u.is_verified, u.is_fake,
                     (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
                     (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
                     (SELECT COUNT(*) FROM competitions WHERE creator_id = u.id OR opponent_id = u.id) as competitions_count

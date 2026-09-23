@@ -1,6 +1,17 @@
 
 
 
+## D1/D2/D3/N-2 — closure · فرع `chore/d1-d2-d3-n2-closure` (مزامن مع `main` بعد دمج C5/C6)
+
+- **D1 (docs)**: حالة Realtime في `docs/04-STREAMING-PIPELINE.md` — الإنتاج SSE/polling،
+  الـWorker/DO مسار مستقبلي اختياري بلا deploy/secrets، وإعادة الفتح بمطلب تشغيلي مثبت فقط.
+- **D2**: تدقيق + تثبيت — البذور توثق `is_fake=1` الضمني مع تثبيت الـdefault اختبارياً؛
+  `u.is_fake` في استعلامات search/matchmaking/users؛ شارة Demo في user-card وصفة
+  المنافسة؛ نجاح التقاعد يُسجَّل (auditability). الوهمي KEEP — لا حذف.
+- **D3**: `repomix-output.xml` (6.5MB) ← `docs/archive/` + توثيق الأرشيف والـSoT.
+- **N-2**: تحقيق شامل — الهوية من الجلسة حصراً، والـIDs المرسلة أهداف/فلاتر مشروعة
+  بفحوص ملكية؛ لا ثغرة، لا تغيير كود.
+
 ## C6 — cron operational hardening · فرع `fix/c6-cron-operational-hardening` (مكدّس فوق C5)
 
 - أُعيد التثبيت فوق المكدس؛ العقد تراكمي (0029–0032 ← ‏33 ملفاً)؛ `cron-runs` ‏6/6؛

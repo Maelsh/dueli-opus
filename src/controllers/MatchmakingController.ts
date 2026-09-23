@@ -98,6 +98,7 @@ export class MatchmakingController extends BaseController {
                     u.last_seen_at,
                     u.is_busy,
                     u.is_verified,
+                    u.is_fake,
                     u.average_rating,
                     u.total_competitions,
                     u.total_wins,
