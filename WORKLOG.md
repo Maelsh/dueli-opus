@@ -1,3 +1,10 @@
+## 2026-09-23 — C4 restack + WS worker tickets (branch `fix/c4-sse-ticket-auth` on C2)
+
+- Restack cumulative (0029–0031 → 32 files; inventory re-taken: 56 AUTH + redeem).
+  WS closed in-repo: `POST /api/realtime/redeem` + worker `?ticket=`-only + SseService
+  ticket-first. Verified: sse-ticket 18/18 + sse-user-auth 3/3, `npm test` 596/596،
+  `tsc` نظيف, worker bundle OK. No merge.
+
 ## 2026-09-23 — C2 chunks HMAC restack (branch `fix/c2-chunks-hmac` on C1)
 
 - `verifyUploadServerHmac` unchanged from first pass; schema-contract cumulative

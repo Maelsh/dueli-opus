@@ -18,6 +18,7 @@ import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
 import { EventPusher } from '../../../lib/services/EventPusher';
+import { RealtimeTicketService } from '../../../lib/services/RealtimeTicketService';
 
 const sseRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -34,11 +35,26 @@ sseRoutes.use('*', authMiddleware({ required: false }));
  */
 sseRoutes.get('/', async (c) => {
     const channel   = c.req.query('channel') || '';
-    const user      = c.get('user');
+    let user        = c.get('user');
 
     // Validate channel
     if (!channel) {
         return c.json({ error: 'channel parameter required' }, 400);
+    }
+
+    // C4 (SEC-11): single-use ticket auth for EventSource clients (no headers possible).
+    // The ticket is consumed here; the raw session never travels in URLs anymore.
+    if (!user) {
+        const ticket = c.req.query('ticket') || '';
+        if (ticket) {
+            const userId = await new RealtimeTicketService(c.env.DB).redeem(ticket, channel);
+            if (userId !== null) {
+                user = await c.env.DB.prepare(
+                    'SELECT * FROM users WHERE id = ?'
+                ).bind(userId).first();
+                c.set('user', user);
+            }
+        }
     }
 
     // User channels require authentication

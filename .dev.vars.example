@@ -29,6 +29,8 @@ UPLOAD_URL="https://example.com/ffmpeg"
 FFMPEG_SERVER_URL=""              # optional override for UPLOAD_URL used by /api/chunks
 UPLOAD_SERVER_SECRET=""           # C2 (SEC-03) SECRET — HMAC key for upload-server /api/chunks/verify+DELETE auth
                                   # (wrangler secret put UPLOAD_SERVER_SECRET); unset ⇒ 503 on those routes
+REALTIME_PUBLISH_SECRET=""        # C4 SECRET — shared with the realtime DO worker (Pages /publish + /redeem,
+                                  # worker /broadcast); unset ⇒ 503 on those routes
 
 # TURN — 7.D: all values via environment only, NEVER committed to the repo.
 # Backend A: self-hosted coturn (TURN REST auth — ephemeral per-session creds):

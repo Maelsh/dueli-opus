@@ -1,6 +1,16 @@
 
 
 
+## C4 — SSE/WS ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
+
+- أُعيد التثبيت فوق المكدس (العقد ‏32: 0029–0031)؛ وأُغلق مسار WS نهائياً داخل المستودع:
+  `POST /api/realtime/redeem` (بوابة `X-Publish-Secret`) يستهلك التذكرة للـWorker،
+  الـWorker (`workers/dueli-realtime`) يقبل `?ticket=` فقط (لا `?token=` إطلاقاً —
+  مثبت grep + اختبار)، و`SseService` (SSE وWS) يجلب تذكرة أولاً. النشر الخارجي
+  المتبقي: deploy الصفحات ثم الـWorker (موثق في ترويسة الـWorker).
+- `sse-ticket` ‏18/18 + `sse-user-auth` ‏3/3؛ `npm test` ‏596/596 على المكدس؛ `tsc` ✅؛
+  `build` ✅؛ الجرد ‏56 AUTHENTICATED (+‏redeem المحمي بالسر داخلياً).
+
 ## C2 — chunks HMAC · فرع `fix/c2-chunks-hmac` (مكدّس فوق C1)
 
 - أُعيد التثبيت فوق المكدس؛ العقد تراكمي (0029+0030 ← ‏31 ملفاً)؛ `chunks-hmac` ‏11/11؛
@@ -48,6 +58,11 @@
   وبقاء user_posts؛ `npm test` ‏544/544؛ `tsc` ✅؛ `build` ✅ (churn الـCSS رُجع).
   الـintegration عبر Wrangler لم يُنفَّذ محلياً (يتطلب Cloudflare) — بانتظار REMOTE.
 - الحالة 🔧 ريثما يعيد REMOTE التحقق — بلا دمج.
+
+## C4 — SSE ticket auth · فرع `fix/c4-sse-ticket-auth` (مكدّس فوق C2)
+
+- تدفق التذاكر + إزالة `query('token')` كما في التمريرة الأولى، والعقد تراكمي
+  (0029–0031 ← ‏32 ملفاً)؛ دعم WS Worker أدناه؛ الأرقام الكاملة بعد التحقق.
 
 ## FINAL DEBT CLOSURE SWEEP · فرع `chore/final-debt-closure` (من `d332223`)
 

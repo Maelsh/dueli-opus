@@ -1,40 +1,77 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../../src/main';
-import { UserModel } from '../../src/models/UserModel';
-import { SessionModel } from '../../src/models/SessionModel';
-import { FakeD1 } from '../helpers/fake-d1';
+import { SqliteD1 } from '../helpers/sqlite-d1';
 
-function env(db: FakeD1) {
-    return { DB: db } as any;
+function env(db: SqliteD1) {
+    return { DB: db } as unknown as Parameters<typeof app.request>[2];
 }
 
+/**
+ * SEC-11 fallback protection (C4): private user channels stay reachable for
+ * legitimate users — now via single-use ticket, never via raw `?token=`.
+ * (Incident PR #1 constraint: removing query-token must not break SSE.)
+ */
 describe('SSE user channel authentication regression test (SEC-11 fallback protection)', () => {
-    let db: FakeD1;
+    let db: SqliteD1;
 
     beforeEach(() => {
-        db = new FakeD1();
+        db = new SqliteD1();
     });
 
-    it('GET /api/sse?channel=user:1 with valid session token accepts connection', async () => {
-        const userModel = new UserModel(db as any);
-        const sessionModel = new SessionModel(db as any);
+    it('GET /api/sse?channel=user:1 with a valid ticket accepts connection', async () => {
+        await db.prepare(
+            `INSERT INTO users (id, email, username, password_hash, display_name, is_active)
+             VALUES (1, 'sse@example.com', 'sse_user', 'hash', 'SSE User', 1)`,
+        ).run();
+        await db.prepare(
+            `INSERT INTO sessions (id, user_id, expires_at)
+             VALUES ('sess-sse-u1', 1, datetime('now', '+1 day'))`,
+        ).run();
+        const minted = await app.request('/api/realtime/ticket', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: 'Bearer sess-sse-u1',
+                'X-CSRF-Token': 'sse-fallback-test',
+            },
+            body: JSON.stringify({ channel: 'user:1' }),
+        }, env(db));
+        expect(minted.status).toBe(200);
+        const { ticket } = ((await minted.json()) as { data: { ticket: string } }).data;
 
-        const user = await userModel.create({
-            username: 'sse_user',
-            display_name: 'SSE User',
-            email: 'sse@example.com',
-            password_hash: 'hash',
-        });
-        const session = await sessionModel.create({ user_id: user.id });
-
-        const res = await app.request(`/api/sse?channel=user:${user.id}&token=${session.id}`, {}, env(db));
+        const res = await app.request(
+            `/api/sse?channel=user:1&ticket=${ticket}`,
+            { headers: { 'X-CSRF-Token': 'sse-fallback-test' } },
+            env(db),
+        );
         expect(res.status).toBe(200);
         expect(res.headers.get('content-type')).toContain('text/event-stream');
         await res.body?.cancel();
     });
 
-    it('GET /api/sse?channel=user:1 without token returns 401', async () => {
-        const res = await app.request('/api/sse?channel=user:1', {}, env(db));
+    it('GET /api/sse?channel=user:1 with raw session ?token= returns 401 (leak closed)', async () => {
+        await db.prepare(
+            `INSERT INTO users (id, email, username, password_hash, display_name, is_active)
+             VALUES (1, 'sse@example.com', 'sse_user', 'hash', 'SSE User', 1)`,
+        ).run();
+        await db.prepare(
+            `INSERT INTO sessions (id, user_id, expires_at)
+             VALUES ('sess-sse-raw', 1, datetime('now', '+1 day'))`,
+        ).run();
+        const res = await app.request(
+            '/api/sse?channel=user:1&token=sess-sse-raw',
+            { headers: { 'X-CSRF-Token': 'sse-fallback-test' } },
+            env(db),
+        );
+        expect(res.status).toBe(401);
+    });
+
+    it('GET /api/sse?channel=user:1 without credential returns 401', async () => {
+        const res = await app.request(
+            '/api/sse?channel=user:1',
+            { headers: { 'X-CSRF-Token': 'sse-fallback-test' } },
+            env(db),
+        );
         expect(res.status).toBe(401);
     });
 });

@@ -1,15 +1,15 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-23T05:55:28.408Z
+> تاريخ التوليد: 2026-09-23T12:32:08.982Z
 
-## الإجمالي: 191 مسار
+## الإجمالي: 193 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 91 |
-| AUTHENTICATED | 55 |
-| UNGUARDED ⚠ | 42 |
+| AUTHENTICATED | 56 |
+| UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
 
 ## الحماية على مستوى المجموعات (main.ts)
@@ -163,6 +163,8 @@
 | DELETE | `/api/payment-methods/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
 | PUT | `/api/payment-methods/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
 | POST | `/api/payment-methods/:id/default` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/payments/routes.ts` |
+| POST | `/api/realtime/redeem` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/realtime/routes.ts` |
+| POST | `/api/realtime/ticket` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/realtime/routes.ts` |
 | GET | `/api/recommendations` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
 | GET | `/api/recommendations/competitor-stats/:userId` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
 | GET | `/api/reminders` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |

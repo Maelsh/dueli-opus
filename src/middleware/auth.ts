@@ -25,11 +25,12 @@ export function authMiddleware(options: { required?: boolean } = {}) {
     const { required = true } = options;
 
     return async (c: AppContext, next: Next) => {
-        // T2.2: Accept session via Bearer header OR ?token= query param OR sessionId cookie
-        // (EventSource cannot send custom headers, so SSE needs query-param support)
+        // C4 (SEC-11): Bearer header OR sessionId cookie ONLY. Raw `?token=`
+        // was removed — it leaked sessions into logs/history/Referer (GOV-11).
+        // EventSource clients use single-use tickets: POST /api/realtime/ticket
+        // then GET /api/sse?channel=…&ticket=… (consumed server-side, see sse/routes).
         const authHeader = c.req.header('Authorization');
         const sessionId = authHeader?.replace('Bearer ', '')
-            || c.req.query('token')
             || getCookie(c, 'sessionId');
 
         if (!sessionId) {
