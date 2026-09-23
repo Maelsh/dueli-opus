@@ -1,6 +1,11 @@
-## 2026-09-23 — C7 restack + extended closure (branch `chore/c7-d1-reconciliation` on C3b)
+## 2026-09-23 — C7 EXECUTED (branch `chore/c7-d1-reconciliation` on C3b)
 
-- (يُحدَّث أدناه بعد التنفيذ: rebuild فعلي + شارات Demo + تقاعد تدريجي)
+- Remote rebuild done + validated: fresh 2.4MB backup → dropped 50 objects (FK order,
+  `--file` reset blocked by API so per-statement batches) → replayed 33/33 from stack
+  tip → history byte-identical to repo → reimported 22 tables (544/1541, real rows
+  intact, posts 0 rows lost) → FK check [] → donations/money/new tables present →
+  prod smoke 200/200. Evidence: runbook §5. Code: is_fake=0, Demo badges,
+  SyntheticRetirementService + 11/14 model tests. No merge.
 
 ## 2026-09-23 — C3b posts cleanup (branch `chore/c3b-posts-cleanup`)
 
