@@ -140,7 +140,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
 
         <div class="mt-3 px-1">
           <a href="/competition/${item.id}?lang=${lang}">
-            <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}</h3>
+            <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${(item as any).is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${(tr.demo as any)?.title || 'Demo'}">${(tr.demo as any)?.badge || 'Demo'}</span>` : ''}</h3>
           </a>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-gray-500 font-medium whitespace-nowrap overflow-hidden">
             <a href="/profile/${item.creator_username || item.creator_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" onclick="event.stopPropagation()">

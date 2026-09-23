@@ -1,3 +1,12 @@
+## 2026-09-23 — C7 EXECUTED (branch `chore/c7-d1-reconciliation` on C3b)
+
+- Remote rebuild done + validated: fresh 2.4MB backup → dropped 50 objects (FK order,
+  `--file` reset blocked by API so per-statement batches) → replayed 33/33 from stack
+  tip → history byte-identical to repo → reimported 22 tables (544/1541, real rows
+  intact, posts 0 rows lost) → FK check [] → donations/money/new tables present →
+  prod smoke 200/200. Evidence: runbook §5. Code: is_fake=0, Demo badges,
+  SyntheticRetirementService + 11/14 model tests. No merge.
+
 ## 2026-09-23 — C3b posts cleanup (branch `chore/c3b-posts-cleanup`)
 
 - Base: `376b2ea` (merge of PR #49). Verified `posts` + `post_likes` dead: zero refs in
@@ -10,6 +19,17 @@
   reverted). Wrangler integration needs Cloudflare — left for REMOTE. No merge.
   Files: migrations/0029_drop_unused_posts.sql, tests/integration/schema-contract.test.ts,
   PLAN-STATUS.md, WORKLOG.md.
+
+## 2026-09-23 — C7 D1 reconciliation (first pass: backup proof, no destructive)
+
+- Base: `376b2ea` (PR #49). Read-only remote proof: 28 history rows (ids 2–10 pre-rewrite
+  ghosts), pending 0019–0028 unappliable (`donations` missing); 544 users (2 real) /
+  1541 competitions (12 real); 50 tables incl. legacy posts/post_likes.
+- Backup: `d1 export --remote` 2,403,011 bytes (outside repo). Restore-proof: repo
+  migrations 0001–0028 + backup INSERTs load with 0 FK violations (544/1541, 2/12 real).
+- is_fake safety: UserModel.create + CompetitionModel.create + OAuth INSERT now write
+  `is_fake=0`; synthetic/seed rows untouched. New `tests/models/IsFakeCreation.test.ts` 3/3.
+- Runbook: `docs/C7-D1-RECONCILIATION-RUNBOOK.md`. Superseded by the restack pass below.
 
 ## 2026-09-23 — FINAL DEFERRED-DEBT CLOSURE SWEEP (branch `chore/final-debt-closure`)
 

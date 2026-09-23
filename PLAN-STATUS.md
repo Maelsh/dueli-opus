@@ -1,6 +1,16 @@
 
 
 
+## C7 — D1 reconciliation · فرع `chore/c7-d1-reconciliation` (مكدّس فوق C3b) — ✅ منفَّذ
+
+- **Remote rebuild منفَّذ ومُتحقق**: backup طازج (2.4MB) → إسقاط 50 كائناً بترتيب FK
+  → replay السلسلة ‏33/33 من رأس المكدس → history مطابق للمستودع بايتاً ببايت →
+  reimport ‏22 جدولاً (544/1541 + الحقيقيون سالمون) → `foreign_key_check` فارغ →
+  `donations` والجداول المالية والجديدة حاضرة → `posts` محذوف → smoke إنتاج ‏200/200.
+  التفاصيل في `docs/C7-D1-RECONCILIATION-RUNBOOK.md` §5.
+- كود: `is_fake=0` + شارات Demo + تقاعد تدريجي عبر `SyntheticRetirementService`
+  (الأقدم أولاً، صفر dependents، مغطى PRAGMA) مربوط بالتسجيل/OAuth/إنشاء المنافسات.
+
 ## C3b — posts cleanup · فرع `chore/c3b-posts-cleanup` (من `376b2ea` = PR #49)
 
 - 🔧 منفَّذ محلياً: جدول `posts` العاري + التابع الميت `post_likes` (FK → posts) محذوفان

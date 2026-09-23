@@ -11,6 +11,7 @@ import { FacebookOAuth } from '../../../lib/oauth/facebook';
 import { MicrosoftOAuth } from '../../../lib/oauth/microsoft';
 import { TikTokOAuth } from '../../../lib/oauth/tiktok';
 import { translations, getUILanguage, DEFAULT_LANGUAGE, DEFAULT_COUNTRY, t } from '../../../i18n';
+import { SyntheticRetirementService } from '../../../lib/services/SyntheticRetirementService';
 
 const oauthRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -121,8 +122,8 @@ oauthRoutes.get('/:provider/callback', async (c) => {
       const username = `${baseUsername}_${Date.now().toString(36)}`;
 
       const result = await DB.prepare(`
-        INSERT INTO users (username, email, password_hash, display_name, country, language, oauth_provider, oauth_id, avatar_url, is_active, is_verified, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, datetime('now'))
+        INSERT INTO users (username, email, password_hash, display_name, country, language, oauth_provider, oauth_id, avatar_url, is_active, is_verified, is_fake, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 0, datetime('now'))
       `).bind(
         username,
         oauthUser.email || '',
@@ -136,6 +137,12 @@ oauthRoutes.get('/:provider/callback', async (c) => {
       ).run();
 
       user = await DB.prepare('SELECT * FROM users WHERE id = ?').bind(result.meta.last_row_id ?? 0).first();
+      // C7 synthetic lifecycle: a real OAuth signup retires one synthetic user (best-effort).
+      try {
+        await new SyntheticRetirementService(DB).retireOneSyntheticUser();
+      } catch (error) {
+        console.error('[SyntheticRetirement] oauth retire skipped:', error);
+      }
     }
 
     if (!user) {
