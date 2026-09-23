@@ -62,7 +62,11 @@ const EXPECTED_MIGRATIONS = [
     '0026_ads_target_category.sql',
     '0027_ad_metrics_antifraud.sql',
     '0028_ad_dedup_identity.sql',
+<<<<<<< HEAD
     '0029_drop_unused_posts.sql',
+=======
+    '0030_chunk_upload_nonces.sql',
+>>>>>>> 8b60053 (fix(c2): HMAC auth for upload-server chunk routes (SEC-03) + 11 security pins)
 ];
 
 const EXPECTED_TABLES = [
@@ -84,6 +88,7 @@ const EXPECTED_TABLES = [
     'ad_click_tokens',
     'ad_clicks',
     'ad_impression_dedup',
+    'chunk_upload_nonces',
 ];
 
 let migrationOutput = '';
@@ -168,8 +173,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 30 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(30);
+    it('has exactly 31 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(31);
     });
 
     it('matches the full expected migration file name list', () => {

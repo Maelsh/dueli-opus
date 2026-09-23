@@ -1,3 +1,9 @@
+## 2026-09-23 — C2 chunks HMAC restack (branch `fix/c2-chunks-hmac` on C1)
+
+- `verifyUploadServerHmac` unchanged from first pass; schema-contract cumulative
+  (0029+0030 → 31 files). Re-verified on-stack: chunks-hmac 11/11, `npm test` 577/577،
+  `tsc` نظيف. No merge.
+
 ## 2026-09-23 — C1 restack (branch `fix/c1-auth-fix` on C7)
 
 - Rebased onto C7 stack; re-verified on-stack: `payment-auth` 8/8, `npm test` 566/566،

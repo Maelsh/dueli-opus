@@ -59,6 +59,23 @@ export class CryptoUtils {
     }
 
     /**
+     * HMAC-SHA256 hex digest (SEC-03 chunks upload-server auth).
+     * Canonical message: `METHOD + '\n' + path + '\n' + timestamp + '\n' + nonce + '\n' + bodyHash`.
+     */
+    static async hmacSha256Hex(secret: string, message: string): Promise<string> {
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(secret),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        );
+        const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+        return toHex(new Uint8Array(sig));
+    }
+
+    /**
      * Hash password using PBKDF2-SHA256 with a random salt.
      * Output format: pbkdf2$<iterations>$<saltHex>$<hashHex>
      */
@@ -125,9 +142,9 @@ export class CryptoUtils {
     }
 
     /**
-     * Legacy SHA-256 hex digest (kept only for verifying old hashes)
+     * SHA-256 hex digest (SEC-03 canonical bodyHash + legacy hash checks).
      */
-    private static async sha256Hex(input: string): Promise<string> {
+    static async sha256Hex(input: string): Promise<string> {
         const data = new TextEncoder().encode(input);
         const hashBuffer = await crypto.subtle.digest('SHA-256', data);
         return toHex(new Uint8Array(hashBuffer));

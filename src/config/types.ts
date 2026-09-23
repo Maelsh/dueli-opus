@@ -45,6 +45,7 @@ export type Bindings = {
   TURN_TOKEN_ID?: string;
   TURN_API_TOKEN?: string;
   UPLOAD_SERVER_ORIGINS?: string; // Allowed origins for chunk APIs, comma-separated (e.g., "https://maelshpro.com,https://stream.maelshpro.com")
+  UPLOAD_SERVER_SECRET?: string; // C2 (SEC-03): HMAC secret for upload-server verify/delete auth; unset ⇒ 503
   FFMPEG_SERVER_URL?: string; // Optional override for the ffmpeg/upload server used by chunks routes (falls back to DEFAULT_UPLOAD_URL)
   CRON_SECRET?: string;       // Shared secret required to trigger /api/cron/* via HTTP (T1.5)
   // Payments
