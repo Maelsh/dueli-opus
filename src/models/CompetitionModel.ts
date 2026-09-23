@@ -220,8 +220,8 @@ export class CompetitionModel extends BaseModel<Competition> {
         const result = await this.db.prepare(`
             INSERT INTO competitions (
                 title, description, rules, category_id, subcategory_id,
-                creator_id, language, country, scheduled_at, competition_type, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
+                creator_id, language, country, scheduled_at, competition_type, status, is_fake, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, datetime('now'))
         `).bind(
             data.title,
             data.description || null,

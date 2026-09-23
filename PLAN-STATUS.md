@@ -1,6 +1,10 @@
 
 
 
+## C7 — D1 reconciliation · فرع `chore/c7-d1-reconciliation` (مكدّس فوق C3b)
+
+- (يُحدَّث أدناه بعد التنفيذ الموسّع: rebuild فعلي + شارات Demo + تقاعد تدريجي)
+
 ## C3b — posts cleanup · فرع `chore/c3b-posts-cleanup` (من `376b2ea` = PR #49)
 
 - 🔧 منفَّذ محلياً: جدول `posts` العاري + التابع الميت `post_likes` (FK → posts) محذوفان
