@@ -93,3 +93,18 @@
 | كاميرا سوداء / فشل اتصال خلف NAT | TURN غير مضبوط (STUN-only) | ضبط `TURN_TOKEN_ID` + `TURN_API_TOKEN` في داشبورد Cloudflare (Preview **و** Production) |
 | الكاميرا ممنوعة في كل المتصفحات | `Permissions-Policy: camera=()` | القيمة الحالية `(self)` — لا ترجعها لـ `()` |
 | VOD غير موجود بعد البث | `finalize` لم يُستدعَ | `endStream()` يجب أن تكمل قبل إغلاق الصفحة |
+
+## D1 — حالة Realtime (مغلقة توثيقياً، 2026-09-23)
+
+- **مسار الإنتاج الحالي هو SSE/polling فقط** (`GET /api/sse` بفاصل 10 ثوانٍ عبر
+  `SseEventLogModel` + `EventPusher`). لا يوجد WebSocket production flow فعلي.
+- **`workers/dueli-realtime` (Durable Objects) ليس جزءاً من production path**:
+  مكوّن اختياري لمستقبل التوسع فقط. `REALTIME_WS_URL` غير مضبوط في أي بيئة،
+  و`EventPusher` لا يوجّه فعلياً (fire-and-forget بشرط الضبط)، وفرع WebSocket في
+  `SseService` خامل (يسقط تلقائياً إلى SSE).
+- **لا حاجة حالية إلى**: deployment للـWorker، أو `REALTIME_PUBLISH_SECRET`، أو
+  تفعيل WebSocket، أو أي إعداد Durable Objects إنتاجي. لا تنشر Worker لإغلاق D1.
+- **لا تحذف الـWorker ولا تعِد تصميم realtime** — الكود يبقى كمسار مستقبلي سليم
+  (مصادقة التذاكر C4 مطبقة فيه مسبقاً).
+- **إعادة الفتح فقط عند حاجة تشغيلية مثبتة** (مثل تجاوز حدود D1 المقاسة باختبار
+  حمل، أو تدهور SSE موثق) — وليس افتراضياً.

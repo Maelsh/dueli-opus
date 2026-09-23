@@ -142,7 +142,7 @@ export class SearchModel {
         const itemsQuery = `
             SELECT 
                 u.id, u.username, u.display_name, u.avatar_url, u.bio, 
-                u.country, u.language, u.is_verified,
+                u.country, u.language, u.is_verified, u.is_fake,
                 u.total_competitions, u.total_wins, u.average_rating, u.created_at,
                 (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
                 (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,

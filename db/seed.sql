@@ -1,4 +1,11 @@
 -- Seed Data for Dueli - Comprehensive Test Data
+-- D2 SYNTHETIC-DATA POLICY (explicit, do not weaken silently):
+--   Every users/competitions row inserted below is DEMO data and intentionally
+--   OMITS the is_fake column so the schema DEFAULT (1 = synthetic) applies.
+--   Real creation paths (UserModel.create, CompetitionModel.create, OAuth)
+--   write is_fake = 0 explicitly. If the schema default ever changes, the
+--   tests/models/SyntheticRetirement.test.ts default-pin fails loudly.
+--   See: src/lib/services/SyntheticRetirementService.ts
 -- البيانات التجريبية الشاملة للمنصة
 
 PRAGMA foreign_keys = OFF;

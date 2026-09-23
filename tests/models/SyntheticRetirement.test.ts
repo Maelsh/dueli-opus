@@ -69,6 +69,24 @@ describe('C7 — dependent lists cover every FK (self-maintaining)', () => {
     });
 });
 
+describe('D2 — schema defaults keep seed synthetic (explicit policy pin)', () => {
+    let db: SqliteD1;
+    beforeEach(() => {
+        db = createSqliteD1();
+    });
+    afterEach(() => { db.close(); });
+
+    it.each(['users', 'competitions'] as const)('%s.is_fake defaults to 1 (seed omits it on purpose)', async (table) => {
+        const cols = await db.prepare(`PRAGMA table_info(${table})`).all<{
+            name: string; dflt_value: string | null;
+        }>();
+        const list = Array.isArray(cols) ? cols : (cols as unknown as { results: typeof cols }).results;
+        const col = (list ?? []).find((c) => c.name === 'is_fake');
+        expect(col).toBeDefined();
+        expect(String(col!.dflt_value)).toBe('1');
+    });
+});
+
 describe('C7 — synthetic user retirement', () => {
     let db: SqliteD1;
     beforeEach(() => {

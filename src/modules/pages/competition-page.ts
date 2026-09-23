@@ -168,7 +168,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     \${getCategoryName(comp, lang)}
                   </span>
                 </div>
-                <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">\${comp.title}</h1>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">\${comp.title}\${comp.is_fake ? \` <span data-demo-badge="1" class="inline-block align-middle text-xs font-bold px-2.5 py-1 rounded-full bg-amber-400/90 text-amber-950" title="\${tr.demo.title}">\${tr.demo.badge}</span>\` : ''}</h1>
                 <!-- T3.2: lifecycle countdown host (join/start/live-limit) -->
                 <div id="countdownTimerHost" class="mt-3"></div>
               </div>

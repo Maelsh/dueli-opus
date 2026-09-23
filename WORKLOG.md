@@ -49,6 +49,20 @@
   `is_fake=0`; synthetic/seed rows untouched. New `tests/models/IsFakeCreation.test.ts` 3/3.
 - Runbook: `docs/C7-D1-RECONCILIATION-RUNBOOK.md`. Superseded by the restack pass below.
 
+## 2026-09-23 — D1/D2/D3/N-2 closure (branch `chore/d1-d2-d3-n2-closure`)
+
+- Base: `0ae9f1c` (main; merged #50–#54 only — prompt's `c044a4a` is the C5 branch
+  head, not main; #55/#56 still open — worked on reality).
+- D1: realtime status section in docs/04 (SSE/polling = production, worker optional
+  future, no deploy/secrets, reopen on proven need). Docs-only.
+- D2: seed policy header + schema-default pin test; `u.is_fake` in 3 list queries;
+  Demo badge in user-card + competition detail; retirement success logging.
+  Policy KEEP NOW → GRADUAL LATER preserved; no deletions. Targeted: 43/43 (6 files).
+- D3: repomix 6.5MB root → docs/archive + archive README (dot-folders stay per docs/17).
+- N-2: audited actor-vs-target across sensitive routes (donations/withdrawals/messages/
+  follow/ratings/comments/invites/admin/SSE) — all session-sourced; no fix needed.
+  Files: docs ×3, seed.sql, 3 queries, user-card, competition-page, retirement svc+test.
+
 ## 2026-09-23 — FINAL DEFERRED-DEBT CLOSURE SWEEP (branch `chore/final-debt-closure`)
 
 - Base: `d332223` (merge of PR #48, 9.E closed). Reconciled every 8.G→9.E finding
