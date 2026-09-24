@@ -36,6 +36,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { translations } from '../../src/i18n';
+import { donatePage } from '../../src/modules/pages/donate-page';
 
 const root = resolve(__dirname, '../..');
 const readSrc = (rel: string) => readFileSync(resolve(root, rel), 'utf-8');
@@ -96,6 +97,58 @@ describe('R1.5 donation success/failure display', () => {
         const src = readSrc(DONATE);
         expect(src, 'dead dueli.toast chain must be gone').not.toContain('dueli?.toast?.');
         expect(src.match(/window\.dueli\?\.showToast\(/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+    });
+});
+
+describe('R1.5 B1 supporter amount reaches the card (behavioral)', () => {
+    // Real top-supporters API row (DonationModel.getTopSupporters).
+    const apiRow = {
+        donor_name: 'Karim',
+        total_amount: 125.5,
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Karim',
+    };
+
+    /** Run the page's OWN loadSupporters mapper against a real API row. */
+    function runPageMapper(src: string, row: Record<string, unknown>): Record<string, unknown> {
+        const m = src.match(/data\.data\.map\(function\(s, i\) \{\s*return (\{[^}]+\});?\s*\}\)\)/);
+        expect(m, 'page must map top-supporters rows through its own mapper').toBeTruthy();
+        return new Function('s', 'i', `return (${(m as RegExpMatchArray)[1]});`)(row, 0) as Record<
+            string,
+            unknown
+        >;
+    }
+
+    /** Run the page's OWN renderSupporters (extracted from rendered HTML) on view objects. */
+    async function renderPageCards(viewObjects: Record<string, unknown>[]): Promise<string> {
+        const ctx = {
+            get: (k: string) => (k === 'lang' ? 'en' : k === 'cspNonce' ? 'test-nonce' : null),
+            html: (s: string) => s,
+        } as never;
+        const html = (await (donatePage as (c: never) => Promise<string>)(ctx)) as string;
+        const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((x) => x[1]);
+        const pageScript = scripts.find((s) => s.includes('function renderSupporters'));
+        expect(pageScript, 'rendered page must ship its own renderSupporters').toBeTruthy();
+        const fakeEl = { innerHTML: '' };
+        const factory = new Function(
+            'document',
+            'window',
+            `${pageScript as string}\nreturn renderSupporters;`,
+        );
+        const renderSupporters = factory(
+            { addEventListener() {}, getElementById: () => fakeEl },
+            {},
+        ) as (v: Record<string, unknown>[]) => void;
+        renderSupporters(viewObjects);
+        return fakeEl.innerHTML;
+    }
+
+    it('a 125.5 supporter renders $125.5 with no $undefined (mapper -> card)', async () => {
+        const src = readSrc(DONATE);
+        const viewObject = runPageMapper(src, apiRow);
+        const cardHtml = await renderPageCards([viewObject]);
+        expect(cardHtml, 'card must show the real amount').toContain('125.5');
+        expect(cardHtml, 'card must not leak undefined amounts').not.toContain('undefined');
+        expect(cardHtml, 'card must show the donor name').toContain('Karim');
     });
 });
 

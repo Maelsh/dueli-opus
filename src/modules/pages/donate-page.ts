@@ -128,7 +128,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     const data = await res.json();
                     if (data.success && data.data?.length > 0) {
                         renderSupporters(data.data.map(function(s, i) {
-                            return { name: s.donor_name || 'Anonymous', amount: s.total_amount,
+                            return { name: s.donor_name || 'Anonymous', total_amount: s.total_amount,
                                      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(s.donor_name || i) };
                         }));
                         return;
