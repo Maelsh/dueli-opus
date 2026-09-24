@@ -129,15 +129,16 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         }
                     });
                     const data = await res.json();
+                    const conversations = data.data?.conversations || [];
                     
-                    if (data.success && data.data?.length > 0) {
-                        container.innerHTML = data.data.map(conv => \`
-                            <button data-csp-on="click" data-csp-fn="openConversation" data-csp-args='[\${conv.id},\${JSON.stringify((conv.other_user?.username))},\${JSON.stringify((conv.other_user?.avatar_url || ''))}]' 
+                    if (data.success && conversations.length > 0) {
+                        container.innerHTML = conversations.map(conv => \`
+                            <button data-csp-on="click" data-csp-fn="openConversation" data-csp-args='[\${conv.id},\${JSON.stringify((conv.other_username))},\${JSON.stringify((conv.other_avatar || ''))}]' 
                                 class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 \${isRTL ? 'text-right' : 'text-left'}">
-                                <img src="\${conv.other_user?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + conv.other_user?.username}" 
+                                <img src="\${conv.other_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + conv.other_username}" 
                                      class="w-12 h-12 rounded-full">
                                 <div class="flex-1 min-w-0">
-                                    <p class="font-semibold text-gray-900 dark:text-white truncate">\${conv.other_user?.display_name || conv.other_user?.username}</p>
+                                    <p class="font-semibold text-gray-900 dark:text-white truncate">\${conv.other_display_name || conv.other_username}</p>
                                     <p class="text-sm text-gray-500 truncate">\${conv.last_message || ''}</p>
                                 </div>
                                 \${conv.unread_count > 0 ? \`<span class="w-5 h-5 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center">\${conv.unread_count}</span>\` : ''}
@@ -183,9 +184,10 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         }
                     });
                     const data = await res.json();
+                    const messages = data.data?.messages || [];
                     
-                    if (data.success && data.data?.length > 0) {
-                        container.innerHTML = data.data.map(msg => {
+                    if (data.success && messages.length > 0) {
+                        container.innerHTML = messages.map(msg => {
                             const isMine = msg.sender_id === window.currentUser?.id;
                             return \`
                                 <div class="flex \${isMine ? (isRTL ? 'justify-start' : 'justify-end') : (isRTL ? 'justify-end' : 'justify-start')}">
