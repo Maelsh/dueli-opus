@@ -190,8 +190,8 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 <span>Connecting...</span>
                             </div>
                             
-                            <!-- Live Comment Input -->
-                            <div class="absolute bottom-0 left-0 right-0 z-30 px-4 pb-3">
+                            <!-- Live Comment Input (competitors only — hidden in viewer mode) -->
+                            <div id="commentInputBar" class="absolute bottom-0 left-0 right-0 z-30 px-4 pb-3">
                                 <div class="flex gap-2 pointer-events-auto">
                                     <input type="text" id="commentInput" placeholder="${tr.add_comment || 'Add Comment'}..." aria-label="${tr.add_comment || 'Add Comment'}"
                                         class="flex-1 px-4 py-2.5 rounded-full bg-black/60 backdrop-blur-sm border border-gray-700 text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500">
@@ -413,6 +413,9 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 document.getElementById('audioBtn').classList.add('hidden');
                 document.getElementById('videoBtn').classList.add('hidden');
                 document.getElementById('endBtn').classList.add('hidden');
+                // R1.7: comments have no visible target in viewer mode —
+                // hide the input bar so Send never promises what viewers cannot see.
+                document.getElementById('commentInputBar').classList.add('hidden');
                 
                 const hlsUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
                 
