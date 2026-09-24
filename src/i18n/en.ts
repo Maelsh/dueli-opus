@@ -446,6 +446,7 @@ export const en = {
         privacy_private: 'Private',
         notifications: 'Enable Notifications',
         email_notifications: 'Email Notifications',
+        push_notifications: 'Push Notifications',
         save: 'Save Settings',
         saved: 'Settings saved successfully',
     },

@@ -76,7 +76,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         }
                     });
                     const data = await res.json();
-                    currentSettings = data.data || {};
+                    currentSettings = data.data?.settings || {};
                     renderSettings();
                 } catch (err) {
                     console.error('Failed to load settings:', err);
@@ -120,8 +120,8 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">\${tr.language || 'Language'}</label>
                                     <select id="language" class="w-full px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white">
-                                        <option value="en" \${currentSettings.language === 'en' ? 'selected' : ''}>English</option>
-                                        <option value="ar" \${currentSettings.language === 'ar' ? 'selected' : ''}>العربية</option>
+                                        <option value="en" \${currentSettings.default_language === 'en' ? 'selected' : ''}>English</option>
+                                        <option value="ar" \${currentSettings.default_language === 'ar' ? 'selected' : ''}>العربية</option>
                                     </select>
                                 </div>
                                 
@@ -136,22 +136,22 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         
                         <!-- Notifications -->
                         <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-6 shadow-lg">
-                            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                                <i class="fas fa-bell \${isRTL ? 'ml-2' : 'mr-2'} text-purple-600"></i>
-                                \${tr.notification?.new_join_request || 'Notifications'}
-                            </h2>
+                                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                                    <i class="fas fa-bell \${isRTL ? 'ml-2' : 'mr-2'} text-purple-600"></i>
+                                    \${tr.settings_page?.notifications || 'Notifications'}
+                                </h2>
                             
                             <div class="space-y-3">
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" id="emailNotifications" \${currentSettings.email_notifications !== false ? 'checked' : ''} 
+                                    <input type="checkbox" id="emailNotifications" \${currentSettings.email_notifications ? 'checked' : ''} 
                                         class="w-5 h-5 rounded text-purple-600 focus:ring-purple-500">
-                                    <span class="text-gray-700 dark:text-gray-300">\${tr.email_notifications || 'Email notifications'}</span>
+                                    <span class="text-gray-700 dark:text-gray-300">\${tr.settings_page?.email_notifications || 'Email notifications'}</span>
                                 </label>
                                 
                                 <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" id="pushNotifications" \${currentSettings.push_notifications !== false ? 'checked' : ''} 
+                                    <input type="checkbox" id="pushNotifications" \${currentSettings.notifications_enabled ? 'checked' : ''} 
                                         class="w-5 h-5 rounded text-purple-600 focus:ring-purple-500">
-                                    <span class="text-gray-700 dark:text-gray-300">\${tr.push_notifications || 'Push notifications'}</span>
+                                    <span class="text-gray-700 dark:text-gray-300">\${tr.settings_page?.push_notifications || 'Push notifications'}</span>
                                 </label>
                             </div>
                         </div>
@@ -184,10 +184,10 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const settings = {
                     display_name: document.getElementById('displayName').value,
                     bio: document.getElementById('bio').value,
-                    language: document.getElementById('language').value,
+                    default_language: document.getElementById('language').value,
                     default_country: document.getElementById('country').value,
                     email_notifications: document.getElementById('emailNotifications').checked,
-                    push_notifications: document.getElementById('pushNotifications').checked
+                    notifications_enabled: document.getElementById('pushNotifications').checked
                 };
                 
                 try {
@@ -201,13 +201,13 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     });
                     
                     if (res.ok) {
-                        window.dueli?.toast?.success?.(\`\${tr.settings_saved || 'Settings saved!'}\`);
+                        window.dueli?.showToast(\`\${tr.settings_page?.saved || 'Settings saved!'}\`, 'success');
                         // Reload if language changed
-                        if (settings.language !== lang) {
-                            window.location.href = '/settings?lang=' + settings.language;
+                        if (settings.default_language !== lang) {
+                            window.location.href = '/settings?lang=' + settings.default_language;
                         }
                     } else {
-                        window.dueli?.toast?.error?.(\`\${tr.error_occurred || 'Failed to save settings'}\`);
+                        window.dueli?.showToast(\`\${tr.error_occurred || 'Failed to save settings'}\`, 'error');
                     }
                 } catch (err) {
                     console.error('Failed to save settings:', err);
