@@ -139,3 +139,78 @@ describe('R1.6 live room debug control (P11-006)', () => {
         expect(html).not.toContain('data-csp-fn="clearSiteData"');
     });
 });
+
+describe('R1.7 viewer mode never promises comment display (PR #64 review)', () => {
+    const fakeClassEl = () => {
+        const el: {
+            adds: string[];
+            removes: string[];
+            classList: { add: (c: string) => void; remove: (c: string) => void };
+        } = {
+            adds: [],
+            removes: [],
+            classList: {
+                add: (c: string) => void el.adds.push(c),
+                remove: (c: string) => void el.removes.push(c),
+            },
+        };
+        return el;
+    };
+
+    /** Execute the page's OWN initViewerMode with fakes; return hidden-marked ids. */
+    async function runPageViewerMode(src: string): Promise<Record<string, string[]>> {
+        const m = src.match(/async function initViewerMode\(\) \{([\s\S]*?)\r?\n            \}\r?\n/);
+        expect(m, 'page must define its own initViewerMode').toBeTruthy();
+        const byId: Record<
+            string,
+            { adds: string[]; removes: string[]; classList: { add: (c: string) => void; remove: (c: string) => void } }
+        > = {};
+        const competitorViewFake = fakeClassEl();
+        const viewerViewFake = fakeClassEl();
+        const fakeDocument = {
+            getElementById: (id: string) => (byId[id] ??= fakeClassEl()),
+        };
+        const factory = new Function(
+            'competitorView',
+            'viewerView',
+            'document',
+            'Hls',
+            'hlsPlayer',
+            'streamServerUrl',
+            'competitionId',
+            'showMessage',
+            'tr',
+            `async function initViewerMode() {${(m as RegExpMatchArray)[1]}}\nreturn initViewerMode;`,
+        );
+        const init = factory(
+            competitorViewFake,
+            viewerViewFake,
+            fakeDocument,
+            { isSupported: () => false },
+            { canPlayType: () => '' },
+            '',
+            7,
+            () => {},
+            {},
+        ) as () => Promise<void>;
+        await init();
+        return {
+            ...Object.fromEntries(Object.entries(byId).map(([id, el]) => [id, el.adds])),
+            competitorView: competitorViewFake.adds,
+            viewerView: viewerViewFake.adds,
+        };
+    }
+
+    it('marks the comment bar hidden in viewer mode (no misleading Send)', async () => {
+        const hidden = await runPageViewerMode(readSrc(PAGE));
+        expect(hidden['commentInputBar'] ?? [], 'viewer must not see the comment bar').toContain('hidden');
+        // Sanity: the viewer path itself ran (pre-existing hides intact).
+        expect(hidden['competitorView'] ?? []).toContain('hidden');
+        expect(hidden['endBtn'] ?? []).toContain('hidden');
+    });
+
+    it('ships the bar with a stable id so viewer gating can target it', async () => {
+        const html = await renderRoom('en');
+        expect(html).toContain('id="commentInputBar"');
+    });
+});
