@@ -422,6 +422,7 @@ export const ar = {
         privacy_private: 'خاص',
         notifications: 'تفعيل الإشعارات',
         email_notifications: 'إشعارات البريد',
+        push_notifications: 'إشعارات الدفع',
         save: 'حفظ الإعدادات',
         saved: 'تم حفظ الإعدادات',
     },
