@@ -79,14 +79,28 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         const rtl = ${rtl};
         const search = new URLSearchParams(window.location.search).get('search') || '';
         
-        // Display search query
+        // Display search query (R1.1: safe sink — untrusted value via textContent only)
         if (search) {
-          document.getElementById('searchQueryDisplay').innerHTML = \`
-            <div class="bg-purple-50 dark:bg-purple-900/20 rounded-xl px-4 py-3 flex items-center gap-3">
-              <i class="fas fa-search text-purple-500"></i>
-              <span class="text-gray-700 dark:text-gray-300">\${tr.search_results_for || 'Search results for'}: <strong>\${search}</strong></span>
-            </div>
-          \`;
+          const display = document.getElementById('searchQueryDisplay');
+          if (display) {
+            display.textContent = '';
+            const box = document.createElement('div');
+            box.className = 'bg-purple-50 dark:bg-purple-900/20 rounded-xl px-4 py-3 flex items-center gap-3';
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-search text-purple-500';
+            icon.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('span');
+            label.className = 'text-gray-700 dark:text-gray-300';
+            label.textContent = (tr.search_results_for || 'Search results for') + ': ';
+            const strong = document.createElement('strong');
+            strong.className = 'break-words';
+            strong.setAttribute('dir', 'auto');
+            strong.textContent = search;
+            label.appendChild(strong);
+            box.appendChild(icon);
+            box.appendChild(label);
+            display.appendChild(box);
+          }
         }
         
         // Wait for client bundle to load (only need renderCompetitionCards - users are inline now)
