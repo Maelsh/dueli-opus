@@ -62,11 +62,6 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         
                         <!-- Control Buttons - All in one row, scrollable on mobile -->
                         <div class="flex items-center gap-1 overflow-x-auto">
-                            <!-- Clear Site Data (for debugging) -->
-                            <button data-csp-on="click" data-csp-fn="clearSiteData" data-csp-args='[]' id="clearDataBtn" class="p-2 rounded-lg bg-orange-600/80 text-white hover:bg-orange-700 transition-colors" title="${tr.clear_data || 'Clear Site Data'}">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
-                            
                             <!-- Fullscreen - For Everyone -->
                             <button data-csp-on="click" data-csp-fn="toggleFullscreen" data-csp-args='[]' id="fullscreenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" title="${tr.fullscreen || 'Fullscreen'}">
                                 <i class="fas fa-expand"></i>
@@ -179,13 +174,6 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                     <!-- Comments will be inserted here -->
                                 </div>
                             </div>
-                            
-                            <!-- Live Comments Display (from viewers) -->
-                            <div id="commentsOverlay" class="absolute bottom-4 left-4 z-30 max-w-sm max-h-48 overflow-hidden pointer-events-none transition-opacity duration-300">
-                                <div id="commentsContainer" class="space-y-1 overflow-y-auto">
-                                    <!-- Comments from viewers will be inserted here -->
-                                </div>
-                            </div>
                         </div>
                         
                         <!-- Viewer View (HLS) -->
@@ -196,12 +184,24 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         <!-- Canvas for recording (hidden, host only) -->
                         <canvas id="compositeCanvas" class="hidden" width="1280" height="720"></canvas>
                         
-                        <!-- Connection Status -->
-                        <div id="connectionStatus" class="absolute top-4 ${rtl ? 'left-4' : 'right-4'} px-3 py-1 rounded-full text-sm hidden z-50">
-                            <i class="fas fa-wifi mr-2"></i>
-                            <span>Connecting...</span>
+                            <!-- Connection Status -->
+                            <div id="connectionStatus" class="absolute top-4 ${rtl ? 'left-4' : 'right-4'} px-3 py-1 rounded-full text-sm hidden z-50">
+                                <i class="fas fa-wifi mr-2"></i>
+                                <span>Connecting...</span>
+                            </div>
+                            
+                            <!-- Live Comment Input -->
+                            <div class="absolute bottom-0 left-0 right-0 z-30 px-4 pb-3">
+                                <div class="flex gap-2 pointer-events-auto">
+                                    <input type="text" id="commentInput" placeholder="${tr.add_comment || 'Add Comment'}..." aria-label="${tr.add_comment || 'Add Comment'}"
+                                        class="flex-1 px-4 py-2.5 rounded-full bg-black/60 backdrop-blur-sm border border-gray-700 text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                                    <button data-csp-on="click" data-csp-fn="sendComment" data-csp-args='[]' aria-label="${tr.send || 'Send'}"
+                                        class="w-10 h-10 flex-shrink-0 rounded-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center transition-colors">
+                                        <i class="fas fa-paper-plane text-sm"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
                     
                     <!-- Stream Stats (Host only) -->
                     <div id="streamStats" class="hidden bg-gray-800 px-4 py-2 text-sm text-gray-400 flex items-center justify-between">
@@ -980,7 +980,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 window.location.href = '/competition/' + competitionId + '?lang=' + lang;
             };
             
-            // Send comment (placeholder - needs WebSocket for real-time)
+            // Send comment (R1.6: text sink — raw text must never reach innerHTML)
             window.sendComment = function() {
                 const input = document.getElementById('commentInput');
                 const text = input.value.trim();
@@ -989,9 +989,13 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const container = document.getElementById('commentsContainer');
                 const comment = document.createElement('div');
                 comment.className = 'flex items-start gap-2 bg-black/50 rounded-lg px-3 py-2 backdrop-blur-sm';
-                comment.innerHTML = 
-                    '<span class="text-purple-400 font-semibold text-sm">' + (window.currentUser?.username || 'You') + ':</span>' +
-                    '<span class="text-white text-sm">' + text + '</span>';
+                const userSpan = document.createElement('span');
+                userSpan.className = 'text-purple-400 font-semibold text-sm';
+                userSpan.textContent = (window.currentUser?.username || 'You') + ':';
+                const textSpan = document.createElement('span');
+                textSpan.className = 'text-white text-sm';
+                textSpan.textContent = text;
+                comment.append(userSpan, textSpan);
                 container.appendChild(comment);
                 container.scrollTop = container.scrollHeight;
                 input.value = '';
