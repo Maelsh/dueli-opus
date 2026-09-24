@@ -637,6 +637,7 @@ export const ar = {
         non_refundable_required: 'يجب الموافقة على أن التبرع غير قابل للاسترداد',
         amount_confirm: 'أؤكد مبلغ هذا التبرع',
         amount_confirm_required: 'يجب تأكيد مبلغ التبرع',
+        be_first: 'كن أول الداعمين!',
     },
 
     // صفحة الشكاوى

@@ -58,11 +58,11 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 </label>
                                 <div class="relative">
                                     <span class="absolute ${rtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
-                                    <input type="number" id="withdrawAmount" min="10" step="0.01"
-                                           placeholder="10.00" required
+                                    <input type="number" id="withdrawAmount" min="50" step="0.01"
+                                           placeholder="50.00" required
                                            class="w-full ${rtl ? 'pr-8 pl-4' : 'pl-8 pr-4'} py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" />
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal || 'Minimum: $10.00'}</p>
+                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal || 'Minimum: $50.00'}</p>
                             </div>
 
                             <!-- Payment Method -->
@@ -127,7 +127,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // SSE Connection
             // =====================
             function connectSSE(channel) {
-                const sessionId = localStorage.getItem('session_id');
+                const sessionId = localStorage.getItem('sessionId');
                 const url = '/api/sse?channel=' + encodeURIComponent(channel);
                 const es  = new EventSource(url, { withCredentials: false });
 
@@ -180,7 +180,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // =====================
             async function loadEarnings() {
                 try {
-                    const sessionId = localStorage.getItem('session_id');
+                    const sessionId = localStorage.getItem('sessionId');
                     const [earningsRes, historyRes] = await Promise.all([
                         fetch('/api/withdrawals', { headers: { 'Authorization': 'Bearer ' + sessionId } }),
                         fetch('/api/withdrawals?limit=10', { headers: { 'Authorization': 'Bearer ' + sessionId } })
@@ -269,10 +269,10 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <i class="fas fa-money-bill-wave \${isRTL ? 'ml-2' : 'mr-2'} text-emerald-500"></i>
                             \${tr.withdraw || 'Cash Out'}
                         </h2>
-                        \${available < 10
+                        \${available < 50
                             ? \`<div class="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-sm">
                                     <i class="fas fa-info-circle \${isRTL ? 'ml-2' : 'mr-2'}"></i>
-                                    \${tr.min_withdrawal || 'Minimum withdrawal is $10.00. Keep competing to earn more!'}
+                                    \${tr.min_withdrawal || 'Minimum withdrawal is $50.00. Keep competing to earn more!'}
                                </div>\`
                             : \`<button data-csp-on="click" data-csp-fn="openWithdrawalModal" data-csp-args='[]'
                                        id="openWithdrawBtn"
@@ -335,7 +335,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 errDiv.classList.add('hidden');
 
                 try {
-                    const sessionId = localStorage.getItem('session_id');
+                    const sessionId = localStorage.getItem('sessionId');
                     const res = await fetch('/api/withdrawals', {
                         method: 'POST',
                         headers: {
@@ -369,7 +369,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // =====================
             async function cancelWithdrawal(id) {
                 if (!confirm(tr.confirm_cancel_withdrawal || 'Cancel this withdrawal request? Your balance will be refunded.')) return;
-                const sessionId = localStorage.getItem('session_id');
+                const sessionId = localStorage.getItem('sessionId');
                 const res = await fetch('/api/withdrawals/' + id, {
                     method: 'DELETE',
                     headers: { 'Authorization': 'Bearer ' + sessionId }

@@ -661,6 +661,7 @@ export const en = {
         non_refundable_required: 'You must accept that donations are non-refundable',
         amount_confirm: 'I confirm this donation amount',
         amount_confirm_required: 'You must confirm the donation amount',
+        be_first: 'Be the first supporter!',
     },
 
     // Reports Page

@@ -128,7 +128,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     const data = await res.json();
                     if (data.success && data.data?.length > 0) {
                         renderSupporters(data.data.map(function(s, i) {
-                            return { name: s.donor_name || 'Anonymous', amount: s.amount,
+                            return { name: s.donor_name || 'Anonymous', amount: s.total_amount,
                                      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(s.donor_name || i) };
                         }));
                         return;
@@ -140,7 +140,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             function renderSupporters(supporters) {
                 if (!supporters.length) {
                     document.getElementById('supportersList').innerHTML =
-                        '<p class="text-center text-gray-400 text-sm py-6">' + (window.translations?.be_first || 'Be the first supporter!') + '</p>';
+                        '<p class="text-center text-gray-400 text-sm py-6">' + (tr.donations?.be_first || 'Be the first supporter!') + '</p>';
                     return;
                 }
                 document.getElementById('supportersList').innerHTML = supporters.map((s, i) => \`
@@ -151,16 +151,16 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                         </div>
                         <div class="flex-1">
                             <p class="font-bold text-gray-900 dark:text-white">\${s.name}</p>
-                            <p class="text-sm text-gray-500">$\${s.amount}</p>
+                            <p class="text-sm text-gray-500">$\${s.total_amount}</p>
                         </div>
                     </div>
                 \`).join('');
             }
 
             async function processDonation() {
-                const amount = parseInt(document.getElementById('customAmount').value) || selectedAmount;
+                const amount = parseFloat(document.getElementById('customAmount').value) || selectedAmount;
                 if (amount < 1) {
-                    window.dueli?.toast?.error?.(tr.payment_min_amount);
+                    window.dueli?.showToast(tr.payment_min_amount, 'error');
                     return;
                 }
 
@@ -168,12 +168,12 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 // ضمنية بمجرد الضغط على Continue/Donate.
                 const policyAccepted = document.getElementById('nonRefundableAccept')?.checked === true;
                 if (!policyAccepted) {
-                    window.dueli?.toast?.error?.(tr.donations?.non_refundable_required || tr.payment_failed);
+                    window.dueli?.showToast(tr.donations?.non_refundable_required || tr.payment_failed, 'error');
                     return;
                 }
                 const amountOk = document.getElementById('amountConfirm')?.checked === true;
                 if (!amountOk) {
-                    window.dueli?.toast?.error?.(tr.donations?.amount_confirm_required || tr.payment_failed);
+                    window.dueli?.showToast(tr.donations?.amount_confirm_required || tr.payment_failed, 'error');
                     return;
                 }
 
@@ -224,9 +224,9 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     const thanked = params.get('competitor')
                         ? (tr.donations?.thanks || tr.donation_completed)
                         : tr.donation_completed;
-                    window.dueli?.toast?.success?.(thanked);
+                    window.dueli?.showToast(thanked, 'success');
                 } else if (params.get('cancelled') === '1') {
-                    window.dueli?.toast?.error?.(tr.payment_cancelled);
+                    window.dueli?.showToast(tr.payment_cancelled, 'error');
                 }
             }
         </script>
