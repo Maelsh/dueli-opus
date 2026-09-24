@@ -62,7 +62,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <div id="noConversation" class="flex-1 flex items-center justify-center text-gray-400">
                                 <div class="text-center">
                                     <i class="fas fa-comments text-5xl mb-4"></i>
-                                    <p>\${tr.messages?.select_conversation || 'Select a conversation'}</p>
+                                    <p>${tr.messages?.select_conversation || 'Select a conversation'}</p>
                                 </div>
                             </div>
                             
@@ -77,7 +77,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                     <input 
                                         type="text" 
                                         id="newMessage" 
-                                        placeholder="\${tr.messages?.type_message || 'Type a message...'}"
+                                        placeholder="${tr.messages?.type_message || 'Type a message...'}"
                                         class="flex-1 px-4 py-3 rounded-full bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
                                     >
                                     <button type="submit" class="px-6 py-3 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors">
