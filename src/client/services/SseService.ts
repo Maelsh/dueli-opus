@@ -43,11 +43,21 @@ export class SseService {
         const token = State.sessionId || '';
         this.connectedUserId = user.id;
 
-        const wsUrl = (window as any).REALTIME_WS_URL || '';
-        if (wsUrl) {
-            this.connectWebSocket(wsUrl, user.id, token);
+        const doConnect = () => {
+            const wsUrl = (window as any).REALTIME_WS_URL || '';
+            if (wsUrl) {
+                this.connectWebSocket(wsUrl, user.id, token);
+            } else {
+                this.connectSse(user.id, token);
+            }
+        };
+
+        if (typeof document !== 'undefined' && document.readyState === 'complete') {
+            doConnect();
+        } else if (typeof window !== 'undefined') {
+            window.addEventListener('load', () => doConnect(), { once: true });
         } else {
-            this.connectSse(user.id, token);
+            doConnect();
         }
     }
 

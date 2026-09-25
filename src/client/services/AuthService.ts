@@ -486,12 +486,16 @@ export class AuthService {
 
             if (event.data.type === 'oauth_success' && event.data.session) {
                 window.removeEventListener('message', handleOAuthCallback);
-                if (popup && !popup.closed) popup.close();
+                try {
+                    if (popup) popup.close();
+                } catch (_) {}
                 await this.handleOAuthSuccess(event.data.session, false);
             } else if (event.data.type === 'oauth_error') {
                 window.removeEventListener('message', handleOAuthCallback);
                 Modal.showOAuthError(event.data.error);
-                if (popup && !popup.closed) popup.close();
+                try {
+                    if (popup) popup.close();
+                } catch (_) {}
             }
         };
 

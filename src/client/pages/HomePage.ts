@@ -166,19 +166,19 @@ export class HomePage {
         const upcomingHidden = !State.currentUser ? ' hidden' : '';
 
         if (liveTab) {
-            liveTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive';
+            liveTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer';
             liveTab.innerHTML = `<span class="w-2 h-2 rounded-full bg-gray-400"></span> ${tr.live}`;
         }
-        if (upcomingTab) upcomingTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive' + upcomingHidden;
-        if (recordedTab) recordedTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive';
+        if (upcomingTab) upcomingTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer' + upcomingHidden;
+        if (recordedTab) recordedTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer';
 
         if (tab === 'live' && liveTab) {
-            liveTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active';
+            liveTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active cursor-pointer';
             liveTab.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-500 live-pulse"></span> ${tr.live}`;
         } else if (tab === 'upcoming' && upcomingTab) {
-            upcomingTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active';
+            upcomingTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active cursor-pointer';
         } else if (tab === 'recorded' && recordedTab) {
-            recordedTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active';
+            recordedTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-active cursor-pointer';
         }
 
         this.loadCompetitions();
@@ -191,8 +191,8 @@ export class HomePage {
             const el = document.getElementById('subtab-' + t);
             if (el) {
                 el.className = t === tab
-                    ? 'px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-active'
-                    : 'px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive';
+                    ? 'px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-active cursor-pointer'
+                    : 'px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 category-tab-inactive cursor-pointer';
             }
         });
 

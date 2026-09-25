@@ -40,8 +40,9 @@ export class MessagesUI {
     static async loadUnreadCount(): Promise<void> {
         try {
             const response = await ApiClient.get('/api/messages/unread');
-            if (response.success && typeof response.data?.count === 'number') {
-                this.unreadCount = response.data.count;
+            const unread = response.data?.unread ?? response.data?.count;
+            if (response.success && typeof unread === 'number') {
+                this.unreadCount = unread;
                 this.updateBadge();
             }
         } catch (error) {
@@ -58,9 +59,14 @@ export class MessagesUI {
             if (response.success && Array.isArray(response.data?.messages)) {
                 this.messages = response.data.messages;
                 this.renderList();
+            } else {
+                this.messages = [];
+                this.renderList();
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
+            this.messages = [];
+            this.renderList();
         }
     }
 
