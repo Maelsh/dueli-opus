@@ -30,7 +30,7 @@ export function computeCountryMenuPosition(metrics: CountryMenuMetrics): Country
         : 320;
     const safeMargin = 16;
     const available = Math.max(0, viewportWidth - (safeMargin * 2));
-    const centeredFallback = menuWidth >= available;
+    const centeredFallback = viewportWidth < 640 || menuWidth >= available;
     const naturalLeft = metrics.direction === 'rtl'
         ? metrics.triggerRight - menuWidth
         : metrics.triggerLeft;

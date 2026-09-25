@@ -224,8 +224,8 @@ describe('Header Menus & Runtime UI Remediation', () => {
         it('keeps the country menu inside safe viewport bounds for RTL, LTR and narrow screens', () => {
             const rtl = computeCountryMenuPosition({ viewportWidth: 1440, menuWidth: 320, triggerLeft: 1370, triggerRight: 1402, direction: 'rtl' });
             const ltr = computeCountryMenuPosition({ viewportWidth: 1440, menuWidth: 320, triggerLeft: 1370, triggerRight: 1402, direction: 'ltr' });
-            const narrowRtl = computeCountryMenuPosition({ viewportWidth: 320, menuWidth: 288, triggerLeft: 152, triggerRight: 184, direction: 'rtl' });
-            const narrowLtr = computeCountryMenuPosition({ viewportWidth: 320, menuWidth: 288, triggerLeft: 136, triggerRight: 168, direction: 'ltr' });
+            const narrowRtl = computeCountryMenuPosition({ viewportWidth: 390, menuWidth: 288, triggerLeft: 152, triggerRight: 184, direction: 'rtl' });
+            const narrowLtr = computeCountryMenuPosition({ viewportWidth: 390, menuWidth: 288, triggerLeft: 136, triggerRight: 168, direction: 'ltr' });
 
             expect(rtl.left).toBe(1082);
             expect(rtl.atTrigger).toBe(true);
@@ -236,9 +236,9 @@ describe('Header Menus & Runtime UI Remediation', () => {
             expect(ltr.left).toBeGreaterThanOrEqual(ltr.safeMargin);
             expect(ltr.left + 320).toBeLessThanOrEqual(1440 - ltr.safeMargin);
             expect(narrowRtl.centeredFallback).toBe(true);
-            expect(narrowRtl.left).toBe(16);
+            expect(narrowRtl.left).toBe(51);
             expect(narrowLtr.centeredFallback).toBe(true);
-            expect(narrowLtr.left).toBe(16);
+            expect(narrowLtr.left).toBe(51);
         });
 
         it('supports both data-csp-fn and legacy onclick selectors', () => {
