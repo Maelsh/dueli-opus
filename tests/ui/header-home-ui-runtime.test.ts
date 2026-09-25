@@ -47,6 +47,11 @@ class MockElement {
     children: MockElement[] = [];
     innerHTML: string = '';
     textContent: string = '';
+    style: Record<string, string> & { setProperty: (k: string, v: string) => void } = {
+        setProperty(k: string, v: string) { (this as any)[k] = v; },
+    };
+    offsetWidth = 0;
+    getBoundingClientRect(): any { return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }; }
 
     constructor(tagName: string, id: string = '', initialClasses: string[] = []) {
         this.tagName = tagName.toUpperCase();
@@ -132,6 +137,9 @@ describe('Header Menus & Runtime UI Remediation', () => {
         const body = new MockElement('BODY', 'body');
         const countryBtn = new MockElement('BUTTON', 'countryBtn');
         countryBtn.setAttribute('data-csp-fn', 'toggleCountryMenu');
+        // Real markup anchors the menu to #countryButton (see navigation.ts).
+        const countryAnchor = new MockElement('BUTTON', 'countryButton');
+        countryAnchor.setAttribute('data-csp-fn', 'toggleCountryMenu');
         const countryMenu = new MockElement('DIV', 'countryMenu', ['hidden']);
 
         const userBtn = new MockElement('BUTTON', 'userBtn');
@@ -149,6 +157,7 @@ describe('Header Menus & Runtime UI Remediation', () => {
         const outsideArea = new MockElement('DIV', 'outsideArea');
 
         body.appendChild(countryBtn);
+        body.appendChild(countryAnchor);
         body.appendChild(countryMenu);
         body.appendChild(userBtn);
         body.appendChild(userMenu);
@@ -158,7 +167,7 @@ describe('Header Menus & Runtime UI Remediation', () => {
         body.appendChild(msgDropdown);
         body.appendChild(outsideArea);
 
-        [countryBtn, countryMenu, userBtn, userMenu, notifBtn, notifDropdown, msgBtn, msgDropdown, outsideArea, body].forEach(el => {
+        [countryBtn, countryAnchor, countryMenu, userBtn, userMenu, notifBtn, notifDropdown, msgBtn, msgDropdown, outsideArea, body].forEach(el => {
             docElements.set(el.id, el);
         });
 
@@ -239,6 +248,60 @@ describe('Header Menus & Runtime UI Remediation', () => {
             expect(narrowRtl.left).toBe(51);
             expect(narrowLtr.centeredFallback).toBe(true);
             expect(narrowLtr.left).toBe(51);
+        });
+
+        it('places the menu strictly BELOW the globe button in RTL, LTR and narrow screens', () => {
+            const metrics = (direction: 'rtl' | 'ltr', triggerBottom: number) => ({
+                viewportWidth: 1440,
+                menuWidth: 320,
+                triggerLeft: 1370,
+                triggerRight: 1402,
+                triggerBottom,
+                direction,
+            });
+            const rtl = computeCountryMenuPosition(metrics('rtl', 48));
+            const ltr = computeCountryMenuPosition(metrics('ltr', 48));
+            const narrow = computeCountryMenuPosition({ viewportWidth: 390, menuWidth: 288, triggerLeft: 136, triggerRight: 168, triggerBottom: 44, direction: 'ltr' });
+
+            for (const [pos, bottom] of [[rtl, 48], [ltr, 48], [narrow, 44]] as const) {
+                expect(pos.belowTrigger).toBe(true);
+                expect(pos.top).toBeGreaterThanOrEqual(bottom + pos.triggerGap);
+                expect(pos.triggerGap).toBeGreaterThan(0);
+            }
+            expect(rtl.top).toBe(56);
+            expect(ltr.top).toBe(56);
+            expect(narrow.top).toBe(52);
+            expect(narrow.centeredFallback).toBe(true);
+        });
+
+        it('keeps the menu below the trigger even when the header is very short', () => {
+            const flatTop = computeCountryMenuPosition({
+                viewportWidth: 1440, menuWidth: 320, triggerLeft: 20, triggerRight: 52, triggerBottom: 0, direction: 'rtl',
+            });
+            expect(flatTop.top).toBeGreaterThanOrEqual(flatTop.safeMargin);
+            expect(flatTop.belowTrigger).toBe(true);
+        });
+
+        it('applies fixed positioning before the menu becomes visible', () => {
+            const menu = docElements.get('countryMenu')! as any;
+            const order: string[] = [];
+            const originalRemove = menu.classList.remove.bind(menu.classList);
+            menu.style = menu.style || {};
+            menu.classList.remove = (token: string) => {
+                if (token === 'hidden') order.push(`position:${menu.style.position}`);
+                return originalRemove(token);
+            };
+            const rect = { left: 1370, right: 1402, bottom: 48, width: 320, height: 384 };
+            docElements.get('countryButton')!.getBoundingClientRect = () => rect as any;
+            menu.getBoundingClientRect = () => rect as any;
+            menu.offsetWidth = 320;
+            (window as any).innerWidth = 1440;
+            (window as any).innerHeight = 900;
+
+            Menu.toggleCountry();
+            expect(order[0]).toBe('position:fixed');
+            expect(menu.classList.contains('hidden')).toBe(false);
+            expect(parseFloat(menu.style.top)).toBeGreaterThanOrEqual(48);
         });
 
         it('supports both data-csp-fn and legacy onclick selectors', () => {

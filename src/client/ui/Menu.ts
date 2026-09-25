@@ -10,17 +10,30 @@ export interface CountryMenuMetrics {
     triggerLeft: number;
     triggerRight: number;
     direction: 'rtl' | 'ltr';
+    triggerBottom: number;
 }
 
 export interface CountryMenuPosition {
     left: number;
     top: number;
     safeMargin: number;
+    /** Vertical gap kept between the globe button and the menu. */
+    triggerGap: number;
     atTrigger: boolean;
     centeredFallback: boolean;
+    /** True only when the menu starts strictly below the globe button. */
+    belowTrigger: boolean;
 }
 
-/** Position beneath the globe trigger, then clamp both viewport edges. */
+/** Vertical gap between the globe button's bottom edge and the menu's top. */
+export const COUNTRY_MENU_TRIGGER_GAP = 8;
+
+/**
+ * Position beneath the globe trigger, then clamp both viewport edges.
+ *
+ * The menu is always anchored BELOW `triggerBottom + COUNTRY_MENU_TRIGGER_GAP`,
+ * so it can never cover the globe button regardless of direction or width.
+ */
 export function computeCountryMenuPosition(metrics: CountryMenuMetrics): CountryMenuPosition {
     const viewportWidth = Number.isFinite(metrics.viewportWidth) && metrics.viewportWidth > 0
         ? metrics.viewportWidth
@@ -29,6 +42,7 @@ export function computeCountryMenuPosition(metrics: CountryMenuMetrics): Country
         ? metrics.menuWidth
         : 320;
     const safeMargin = 16;
+    const triggerGap = COUNTRY_MENU_TRIGGER_GAP;
     const available = Math.max(0, viewportWidth - (safeMargin * 2));
     const centeredFallback = viewportWidth < 640 || menuWidth >= available;
     const naturalLeft = metrics.direction === 'rtl'
@@ -42,12 +56,21 @@ export function computeCountryMenuPosition(metrics: CountryMenuMetrics): Country
         ? Math.max(0, (viewportWidth - menuWidth) / 2)
         : Math.min(Math.max(naturalLeft, minLeft), maxLeft);
 
+    // Vertical: always strictly below the globe button, never above it and
+    // never covering it, regardless of direction or available space.
+    const triggerBottom = Number.isFinite(metrics.triggerBottom) && metrics.triggerBottom > 0
+        ? metrics.triggerBottom
+        : 64;
+    const top = Math.max(triggerBottom + triggerGap, safeMargin);
+
     return {
         left,
-        top: 0,
+        top,
         safeMargin,
+        triggerGap,
         atTrigger: !centeredFallback && left === naturalLeft,
         centeredFallback,
+        belowTrigger: top >= triggerBottom + triggerGap,
     };
 }
 
@@ -74,9 +97,15 @@ export class Menu {
         const menu = document.getElementById('countryMenu');
         if (menu) {
             const isHidden = menu.classList.contains('hidden');
-            menu.classList.toggle('hidden');
-
             if (isHidden) {
+                // Take the panel out of the header's layout flow BEFORE it becomes
+                // visible: an in-flow panel re-measures the header row and shifts
+                // the globe button, which then made the panel cover that button.
+                menu.style.position = 'fixed';
+                menu.style.right = 'auto';
+                menu.style.bottom = 'auto';
+                menu.style.transform = 'none';
+                menu.classList.remove('hidden');
                 this.positionCountryMenu();
                 // Populate countries list when opening
                 if (typeof (window as any).filterCountries === 'function') {
@@ -87,6 +116,8 @@ export class Menu {
                     const searchInput = document.getElementById('countrySearch') as HTMLInputElement;
                     if (searchInput) searchInput.focus();
                 }, 100);
+            } else {
+                menu.classList.add('hidden');
             }
         }
     }
@@ -112,13 +143,15 @@ export class Menu {
                 menuWidth,
                 triggerLeft: triggerRect?.left || 0,
                 triggerRight: triggerRect?.right || (triggerRect?.left || 0) + 32,
+                triggerBottom: triggerRect?.bottom || 64,
                 direction,
             });
 
             menu.style.position = 'fixed';
             menu.style.width = `${Math.round(menuWidth)}px`;
             menu.style.left = `${Math.round(position.left)}px`;
-            menu.style.top = `${Math.round((triggerRect?.bottom || 64) + 8)}px`;
+            // Always below the globe button: top >= trigger.bottom + gap.
+            menu.style.top = `${Math.round(position.top)}px`;
             menu.style.transform = 'none';
             menu.style.setProperty('--country-safe-margin', `${position.safeMargin}px`);
         } catch {
