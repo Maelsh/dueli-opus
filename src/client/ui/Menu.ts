@@ -4,6 +4,53 @@
  * @module client/ui/Menu
  */
 
+export interface CountryMenuMetrics {
+    viewportWidth: number;
+    menuWidth: number;
+    triggerLeft: number;
+    triggerRight: number;
+    direction: 'rtl' | 'ltr';
+}
+
+export interface CountryMenuPosition {
+    left: number;
+    top: number;
+    safeMargin: number;
+    atTrigger: boolean;
+    centeredFallback: boolean;
+}
+
+/** Position beneath the globe trigger, then clamp both viewport edges. */
+export function computeCountryMenuPosition(metrics: CountryMenuMetrics): CountryMenuPosition {
+    const viewportWidth = Number.isFinite(metrics.viewportWidth) && metrics.viewportWidth > 0
+        ? metrics.viewportWidth
+        : 1024;
+    const menuWidth = Number.isFinite(metrics.menuWidth) && metrics.menuWidth > 0
+        ? metrics.menuWidth
+        : 320;
+    const safeMargin = 16;
+    const available = Math.max(0, viewportWidth - (safeMargin * 2));
+    const centeredFallback = menuWidth >= available;
+    const naturalLeft = metrics.direction === 'rtl'
+        ? metrics.triggerRight - menuWidth
+        : metrics.triggerLeft;
+    const minLeft = centeredFallback ? 0 : safeMargin;
+    const maxLeft = centeredFallback
+        ? 0
+        : Math.max(safeMargin, viewportWidth - menuWidth - safeMargin);
+    const left = centeredFallback
+        ? Math.max(0, (viewportWidth - menuWidth) / 2)
+        : Math.min(Math.max(naturalLeft, minLeft), maxLeft);
+
+    return {
+        left,
+        top: 0,
+        safeMargin,
+        atTrigger: !centeredFallback && left === naturalLeft,
+        centeredFallback,
+    };
+}
+
 /**
  * Menu Management Class
  * إدارة القوائم المنسدلة
@@ -30,6 +77,7 @@ export class Menu {
             menu.classList.toggle('hidden');
 
             if (isHidden) {
+                this.positionCountryMenu();
                 // Populate countries list when opening
                 if (typeof (window as any).filterCountries === 'function') {
                     (window as any).filterCountries('');
@@ -40,6 +88,41 @@ export class Menu {
                     if (searchInput) searchInput.focus();
                 }, 100);
             }
+        }
+    }
+
+    /**
+     * Anchor the dropdown to the globe's real viewport position, then clamp
+     * its horizontal position inside the header's safe margin.
+     */
+    static positionCountryMenu(): void {
+        try {
+            const menu = document.getElementById('countryMenu') as HTMLElement | null;
+            const trigger = document.getElementById('countryButton');
+            if (!menu || !trigger || typeof window === 'undefined') return;
+
+            const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
+            const menuRect = menu.getBoundingClientRect?.();
+            const triggerRect = trigger.getBoundingClientRect?.();
+            const requestedWidth = (menuRect && menuRect.width > 0 ? menuRect.width : menu.offsetWidth) || 320;
+            const menuWidth = Math.min(requestedWidth, Math.max(0, viewportWidth - (16 * 2)));
+            const direction = document.documentElement?.dir === 'rtl' ? 'rtl' : 'ltr';
+            const position = computeCountryMenuPosition({
+                viewportWidth,
+                menuWidth,
+                triggerLeft: triggerRect?.left || 0,
+                triggerRight: triggerRect?.right || (triggerRect?.left || 0) + 32,
+                direction,
+            });
+
+            menu.style.position = 'fixed';
+            menu.style.width = `${Math.round(menuWidth)}px`;
+            menu.style.left = `${Math.round(position.left)}px`;
+            menu.style.top = `${Math.round((triggerRect?.bottom || 64) + 8)}px`;
+            menu.style.transform = 'none';
+            menu.style.setProperty('--country-safe-margin', `${position.safeMargin}px`);
+        } catch {
+            // Positioning is best-effort: never break menu open/close.
         }
     }
 
