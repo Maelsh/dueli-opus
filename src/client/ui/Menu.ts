@@ -67,28 +67,28 @@ export class Menu {
             const target = e.target as HTMLElement;
 
             // Country menu
-            const countryBtn = target.closest('[onclick*="toggleCountryMenu"]');
+            const countryBtn = target.closest('[data-csp-fn="toggleCountryMenu"], [onclick*="toggleCountryMenu"]');
             const countryMenu = document.getElementById('countryMenu');
             if (!countryBtn && countryMenu && !countryMenu.contains(target)) {
                 countryMenu.classList.add('hidden');
             }
 
             // User menu - use 'show' class
-            const userBtn = target.closest('[onclick*="toggleUserMenu"]');
+            const userBtn = target.closest('[data-csp-fn="toggleUserMenu"], [onclick*="toggleUserMenu"]');
             const userMenu = document.getElementById('userMenu');
             if (!userBtn && userMenu && !userMenu.contains(target)) {
                 userMenu.classList.remove('show');
             }
 
             // Notifications dropdown
-            const notifBtn = target.closest('[onclick*="toggleNotifications"]');
+            const notifBtn = target.closest('[data-csp-fn="toggleNotifications"], [onclick*="toggleNotifications"]');
             const notifDropdown = document.getElementById('notificationsDropdown');
             if (!notifBtn && notifDropdown && !notifDropdown.contains(target)) {
                 notifDropdown.classList.add('hidden');
             }
 
             // Messages dropdown
-            const msgBtn = target.closest('[onclick*="toggleMessages"]');
+            const msgBtn = target.closest('[data-csp-fn="toggleMessages"], [onclick*="toggleMessages"]');
             const msgDropdown = document.getElementById('messagesDropdown');
             if (!msgBtn && msgDropdown && !msgDropdown.contains(target)) {
                 msgDropdown.classList.add('hidden');

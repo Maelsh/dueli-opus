@@ -69,7 +69,7 @@ export function getNavigation(lang: Language): string {
 
           <!-- Auth Section - Login Button (hidden when logged in) -->
           <div id="authSection">
-            <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30" title="${tr.login || 'Login'}">
+            <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30 cursor-pointer" title="${tr.login || 'Login'}">
               <i class="fas fa-sign-in-alt text-lg"></i>
             </button>
           </div>
@@ -78,7 +78,7 @@ export function getNavigation(lang: Language): string {
           <div id="userSection" class="flex items-center gap-2 hidden">
             <!-- Notifications Button -->
             <div class="relative">
-              <button data-csp-on="click" data-csp-fn="toggleNotifications" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.notifications || 'Notifications'}">
+              <button data-csp-on="click" data-csp-fn="toggleNotifications" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors cursor-pointer" title="${tr.notifications || 'Notifications'}">
                 <i class="fas fa-bell text-xl"></i>
                 <span id="notificationBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
@@ -86,7 +86,7 @@ export function getNavigation(lang: Language): string {
               <div id="notificationsDropdown" class="dropdown-panel hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <span class="font-bold text-gray-900 dark:text-white">${tr.notifications || 'Notifications'}</span>
-                  <button data-csp-on="click" data-csp-fn="markAllNotificationsRead" data-csp-args='[]' class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
+                  <button data-csp-on="click" data-csp-fn="markAllNotificationsRead" data-csp-args='[]' class="text-xs text-purple-600 hover:underline cursor-pointer" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
                 </div>
                 <div id="notificationsList" class="overflow-y-auto max-h-72">
                   <div class="p-4 text-center text-gray-400 text-sm">
@@ -102,7 +102,7 @@ export function getNavigation(lang: Language): string {
 
             <!-- Messages Button with Dropdown -->
             <div class="relative">
-              <button data-csp-on="click" data-csp-fn="toggleMessages" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.messages?.title || 'Messages'}">
+              <button data-csp-on="click" data-csp-fn="toggleMessages" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors cursor-pointer" title="${tr.messages?.title || 'Messages'}">
                 <i class="fas fa-envelope text-xl"></i>
                 <span id="messagesBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
@@ -110,7 +110,7 @@ export function getNavigation(lang: Language): string {
               <div id="messagesDropdown" class="dropdown-panel hidden absolute ${isRTL ? 'left-0' : 'right-0'} top-full mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 overflow-hidden">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                   <span class="font-bold text-gray-900 dark:text-white">${tr.messages?.title || 'Messages'}</span>
-                  <button data-csp-on="click" data-csp-fn="markAllMessagesRead" data-csp-args='[]' class="text-xs text-purple-600 hover:underline" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
+                  <button data-csp-on="click" data-csp-fn="markAllMessagesRead" data-csp-args='[]' class="text-xs text-purple-600 hover:underline cursor-pointer" title="${tr.mark_all_read || 'Mark all read'}">${tr.mark_all_read || 'Mark all read'}</button>
                 </div>
                 <div id="messagesList" class="overflow-y-auto max-h-72">
                   <div class="p-4 text-center text-gray-400 text-sm">
@@ -126,7 +126,7 @@ export function getNavigation(lang: Language): string {
 
             <!-- User Avatar & Menu -->
             <div class="relative">
-              <button data-csp-on="click" data-csp-fn="toggleUserMenu" data-csp-args='[]' class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all" title="${tr.profile || 'Profile'}">
+              <button data-csp-on="click" data-csp-fn="toggleUserMenu" data-csp-args='[]' class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer" title="${tr.profile || 'Profile'}">
                 <img id="userAvatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="" class="w-12 h-12 rounded-full border-2 border-purple-400">
               </button>
               <div id="userMenu" class="user-menu ${isRTL ? 'left-0' : 'right-0'}">

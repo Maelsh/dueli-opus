@@ -3831,13 +3831,15 @@ body.dark .btn-secondary:hover {
   background: #4b5563;
 }
 .tab-active {
-  background: #8B5CF6;
+  background: linear-gradient(to bottom right, #9333ea, #4f46e5);
   color: white;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 10px 15px -3px rgba(168, 85, 247, 0.3), 0 4px 6px -4px rgba(168, 85, 247, 0.3);
+  cursor: pointer;
 }
 .tab-inactive {
   background: transparent;
   color: #6b7280;
+  cursor: pointer;
 }
 body.dark .tab-inactive {
   color: #9ca3af;
@@ -3855,6 +3857,7 @@ body.dark .tab-inactive:hover {
   color: white;
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
 }
 body.dark .category-tab-active {
   background: white;
@@ -3864,11 +3867,20 @@ body.dark .category-tab-active {
   background: #f3f4f6;
   color: #6b7280;
   border: 1px solid #e5e7eb;
+  cursor: pointer;
 }
 body.dark .category-tab-inactive {
   background: #1f1f1f;
   color: #9ca3af;
   border: 1px solid #374151;
+}
+[dir="rtl"] #authSection .fa-sign-in-alt {
+  transform: rotateY(180deg);
+  display: inline-block;
+}
+[dir="rtl"] #moonIcon {
+  transform: rotateY(180deg);
+  display: inline-block;
 }
 .search-input {
   background: #f3f4f6;
