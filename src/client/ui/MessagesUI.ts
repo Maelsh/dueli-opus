@@ -8,14 +8,17 @@ import { State } from '../core/State';
 import { ApiClient } from '../core/ApiClient';
 import { translations, getUILanguage } from '../../i18n';
 
-interface Message {
+/** Conversation row served by GET /api/conversations (ConversationModel.getUserConversations). */
+interface ConversationPreview {
     id: number;
-    sender_id: number;
-    sender_name?: string;
-    sender_avatar?: string;
-    content: string;
-    is_read: boolean;
-    created_at: string;
+    other_user_id: number;
+    other_username: string;
+    other_display_name?: string;
+    other_avatar?: string | null;
+    last_message?: string | null;
+    last_message_at?: string | null;
+    created_at?: string;
+    unread_count: number;
 }
 
 /**
@@ -24,7 +27,8 @@ interface Message {
  */
 export class MessagesUI {
     private static unreadCount: number = 0;
-    private static messages: Message[] = [];
+    private static conversations: ConversationPreview[] = [];
+    private static loadFailed: boolean = false;
 
     /**
      * Initialize messages badge
@@ -51,21 +55,39 @@ export class MessagesUI {
     }
 
     /**
-     * Load unread messages for dropdown
+     * Load conversations preview for the header dropdown.
+     * Contract (backend, unchanged): GET /api/conversations (mounted at /api by
+     * messagesRoutes.get('/conversations')) -> { success, data: { conversations:
+     * ConversationWithUser[] } } — flat rows with other_user_id / other_username /
+     * other_display_name / other_avatar / last_message / unread_count.
      */
     static async loadMessages(): Promise<void> {
         try {
-            const response = await ApiClient.get('/api/messages/unread-list');
-            if (response.success && Array.isArray(response.data?.messages)) {
-                this.messages = response.data.messages;
+            const response = await ApiClient.get('/api/conversations?limit=10&offset=0');
+            const list = response?.data?.conversations;
+            if (response?.success && Array.isArray(list)) {
+                // Genuine result (possibly empty inbox).
+                this.loadFailed = false;
+                this.conversations = list as ConversationPreview[];
+                this.renderList();
+            } else if (response && typeof response.success === 'boolean') {
+                // API envelope answered (e.g. success:false on 404/empty):
+                // genuine empty state, not a transport failure.
+                this.loadFailed = false;
+                this.conversations = [];
                 this.renderList();
             } else {
-                this.messages = [];
+                // Malformed/missing envelope: cannot prove an empty inbox.
+                this.loadFailed = true;
+                this.conversations = [];
                 this.renderList();
             }
         } catch (error) {
             console.error('Failed to load messages:', error);
-            this.messages = [];
+            // Network failure is NOT an empty inbox: keep the error state
+            // distinct so the UI never lies about "no messages".
+            this.loadFailed = true;
+            this.conversations = [];
             this.renderList();
         }
     }
@@ -92,7 +114,7 @@ export class MessagesUI {
     }
 
     /**
-     * Render messages list
+     * Render conversations list (header dropdown preview)
      */
     static renderList(): void {
         const container = document.getElementById('messagesList');
@@ -100,9 +122,19 @@ export class MessagesUI {
 
         const tr = translations[getUILanguage(State.lang || 'en')];
 
-        if (this.messages.length === 0) {
+        if (this.loadFailed) {
             container.innerHTML = `
-                <div class="p-4 text-center text-gray-400 text-sm">
+                <div class="p-4 text-center text-gray-400 text-sm" role="alert" data-messages-state="error">
+                    <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+                    <p>${(tr as any).messages_load_failed || (tr as any).error_loading || 'Failed to load messages'}</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (this.conversations.length === 0) {
+            container.innerHTML = `
+                <div class="p-4 text-center text-gray-400 text-sm" data-messages-state="empty">
                     <i class="fas fa-envelope-open text-2xl mb-2"></i>
                     <p>${tr.no_messages || 'No messages'}</p>
                 </div>
@@ -110,17 +142,17 @@ export class MessagesUI {
             return;
         }
 
-        container.innerHTML = this.messages.map(msg => `
-            <a href="/messages?id=${msg.id}" class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800">
+        container.innerHTML = this.conversations.map(conv => `
+            <a href="/messages?conversation=${conv.id}" class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800">
                 <div class="flex items-start gap-3">
-                    <img src="${msg.sender_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.sender_id}`}" 
+                    <img src="${conv.other_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${conv.other_username}`}" 
                          alt="" class="w-10 h-10 rounded-full flex-shrink-0">
                     <div class="flex-1 min-w-0">
-                        <p class="font-medium text-gray-900 dark:text-white text-sm">${msg.sender_name || 'User'}</p>
-                        <p class="text-gray-500 text-xs truncate">${msg.content}</p>
-                        <p class="text-gray-400 text-xs mt-1">${this.formatTime(msg.created_at)}</p>
+                        <p class="font-medium text-gray-900 dark:text-white text-sm">${conv.other_display_name || conv.other_username}</p>
+                        <p class="text-gray-500 text-xs truncate">${conv.last_message || ''}</p>
+                        <p class="text-gray-400 text-xs mt-1">${this.formatTime(conv.last_message_at || conv.created_at || '')}</p>
                     </div>
-                    ${!msg.is_read ? '<span class="w-2 h-2 bg-purple-500 rounded-full flex-shrink-0"></span>' : ''}
+                    ${conv.unread_count > 0 ? '<span class="w-2 h-2 bg-purple-500 rounded-full flex-shrink-0"></span>' : ''}
                 </div>
             </a>
         `).join('');
@@ -131,10 +163,14 @@ export class MessagesUI {
      */
     static async markAllRead(): Promise<void> {
         try {
-            await ApiClient.post('/api/messages/mark-all-read');
+            // No dedicated mark-all-read endpoint exists on the backend
+            // (MessageController marks a conversation read only when its thread
+            // is opened via GET /api/conversations/:id/messages). The header
+            // dropdown is a preview of conversations, so clearing here is a
+            // local badge reset only — it never fabricates a server state.
             this.unreadCount = 0;
             this.updateBadge();
-            this.messages = this.messages.map(m => ({ ...m, is_read: true }));
+            this.conversations = this.conversations.map(c => ({ ...c, unread_count: 0 }));
             this.renderList();
         } catch (error) {
             console.error('Failed to mark messages as read:', error);
@@ -160,7 +196,9 @@ export class MessagesUI {
      * Format time for display
      */
     private static formatTime(dateStr: string): string {
+        if (!dateStr) return '';
         const date = new Date(dateStr);
+        if (Number.isNaN(date.getTime())) return '';
         const now = new Date();
         const diff = now.getTime() - date.getTime();
         const minutes = Math.floor(diff / 60000);

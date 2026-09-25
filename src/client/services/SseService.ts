@@ -28,6 +28,39 @@ export class SseService {
     private static ws: WebSocket | null = null;
     private static wsRetryTimer: ReturnType<typeof setTimeout> | null = null;
     private static connectedUserId: number | null = null;
+    /**
+     * B3: lifecycle guard for a connect() deferred until window load.
+     * - loadListenerArmed: exactly one pending load listener per connect generation.
+     * - connectGeneration: invalidates a stale deferred connect after
+     *   disconnect()/logout() (or a newer connect()) so it never opens a
+     *   connection afterwards.
+     */
+    private static loadListenerArmed = false;
+    private static pendingUserId: number | null = null;
+    private static connectGeneration = 0;
+
+    /** Safe window.load hook: never assumes window.addEventListener exists. */
+    private static onWindowLoad(callback: () => void): boolean {
+        try {
+            const w = (typeof window !== 'undefined' ? (window as any) : undefined) as
+                | { addEventListener?: unknown; document?: { readyState?: string } }
+                | undefined;
+            // jsdom/Vitest partial windows, web workers, or SSR: no functional
+            // addEventListener — caller must fall back to an immediate connect
+            // attempt instead of throwing (B2 regression).
+            if (!w || typeof w.addEventListener !== 'function') return false;
+            // Document already complete (or no document state to consult):
+            // run now to avoid a listener that never fires in test envs.
+            const readyState =
+                (typeof document !== 'undefined' ? (document as any).readyState : undefined) ??
+                w.document?.readyState;
+            if (readyState === 'complete') return false;
+            w.addEventListener('load', callback, { once: true });
+            return true;
+        } catch {
+            return false;
+        }
+    }
 
     /**
      * فتح القناة اللحظية للمستخدم الحالي (تُستدعى بعد تسجيل الدخول)
@@ -38,13 +71,33 @@ export class SseService {
         if (!user?.id) return;
         // تجنب الاتصال المزدوج لنفس المستخدم
         if ((this.source || this.ws) && this.connectedUserId === user.id) return;
+        // B3: coalesce repeated pre-load connect() calls for the same pending
+        // user into the single armed load listener (no duplicate listeners,
+        // one EventSource). disconnect() clears pendingUserId + bumps the
+        // generation, so a stale deferred connect can never fire afterwards.
+        if (this.loadListenerArmed && this.pendingUserId === user.id) return;
+        // B3: an already-live socket for another user is torn down first; the
+        // disconnect bumps the generation so any older deferred connect below
+        // becomes stale and can never fire afterwards.
         this.disconnect();
 
         const token = State.sessionId || '';
         this.connectedUserId = user.id;
+        const generation = ++this.connectGeneration;
 
         const doConnect = () => {
-            const wsUrl = (window as any).REALTIME_WS_URL || '';
+            // Stale deferred connect (disconnect/logout or newer connect won
+            // the race): never open a connection afterwards. Also clear the
+            // armed flag only for the generation that owns the listener.
+            if (generation !== this.connectGeneration) return;
+            this.loadListenerArmed = false;
+            this.pendingUserId = null;
+            let wsUrl = '';
+            try {
+                wsUrl = (typeof window !== 'undefined' ? (window as any).REALTIME_WS_URL : '') || '';
+            } catch {
+                wsUrl = '';
+            }
             if (wsUrl) {
                 this.connectWebSocket(wsUrl, user.id, token);
             } else {
@@ -54,11 +107,16 @@ export class SseService {
 
         if (typeof document !== 'undefined' && document.readyState === 'complete') {
             doConnect();
-        } else if (typeof window !== 'undefined') {
-            window.addEventListener('load', () => doConnect(), { once: true });
-        } else {
-            doConnect();
+            return;
         }
+        // B3: multiple pre-load connect() calls arm exactly one load listener;
+        // the guarded fallback below also covers B2 partial-window envs.
+        if (!this.loadListenerArmed && this.onWindowLoad(doConnect)) {
+            this.loadListenerArmed = true;
+            this.pendingUserId = user.id;
+            return;
+        }
+        doConnect();
     }
 
     /**
@@ -204,6 +262,12 @@ export class SseService {
      * إغلاق القناة (عند الخروج أو تغيير المستخدم)
      */
     static disconnect(): void {
+        // B3: invalidate any deferred pre-load connect() so it can never open
+        // a connection after this disconnect/logout, then release the armed
+        // load listener slot for the next generation.
+        this.connectGeneration++;
+        this.loadListenerArmed = false;
+        this.pendingUserId = null;
         if (this.wsRetryTimer) { clearTimeout(this.wsRetryTimer); this.wsRetryTimer = null; }
         if (this.source) {
             try { this.source.close(); } catch { /* ignore */ }
