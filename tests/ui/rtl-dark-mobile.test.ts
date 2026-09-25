@@ -50,8 +50,12 @@ describe('B15 RTL direction', () => {
         // user menu + notification/message dropdowns anchor to the inline-end side
         expect(arNav).toContain('user-menu left-0');
         expect(enNav).toContain('user-menu right-0');
-        expect(arNav).toContain('sm:left-0');
-        expect(enNav).toContain('sm:right-0');
+        // Country menu receives its inline-end offset at runtime from the globe
+        // button; no static RTL/LTR class may push it outside the viewport.
+        expect(arNav).toContain('id="countryButton"');
+        expect(enNav).toContain('id="countryButton"');
+        expect(arNav).toContain('id="countryMenu" class="dropdown-panel hidden w-80');
+        expect(enNav).toContain('id="countryMenu" class="dropdown-panel hidden w-80');
     });
 
     it('competition card mirrors corner badges per direction', () => {

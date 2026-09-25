@@ -33,10 +33,10 @@ export function getNavigation(lang: Language): string {
           
           <!-- Country/Language Switcher -->
           <div class="relative">
-            <button data-csp-on="click" data-csp-fn="toggleCountryMenu" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.country_language || 'Language & Country'}">
+            <button id="countryButton" data-csp-on="click" data-csp-fn="toggleCountryMenu" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.country_language || 'Language & Country'}">
               <i class="fas fa-globe text-xl"></i>
             </button>
-            <div id="countryMenu" class="dropdown-panel hidden fixed sm:absolute ${isRTL ? 'sm:left-0' : 'sm:right-0'} left-1/2 sm:left-auto transform -translate-x-1/2 sm:translate-x-0 top-20 sm:top-full sm:mt-2 w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
+            <div id="countryMenu" class="dropdown-panel hidden w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
               <!-- Search Box -->
               <div class="p-3 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-[#1a1a1a]">
                 <div class="relative">
