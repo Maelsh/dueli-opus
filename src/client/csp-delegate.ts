@@ -85,6 +85,18 @@ const BUILTINS: Record<string, AnyFn> = {
         }
         if (node instanceof HTMLElement) node.style.display = 'none';
     },
+    /**
+     * B6: navigate to a user profile. Used where the surrounding markup is
+     * already an anchor, so a nested <a> would be invalid HTML. The canonical
+     * route is /profile/:username; anything else is ignored.
+     */
+    __navigateProfile: (username: unknown) => {
+        if (typeof username !== 'string') return;
+        const clean = username.trim();
+        if (!clean || clean.includes('/') || clean.includes('..')) return;
+        const lang = new URLSearchParams(window.location.search).get('lang');
+        window.location.assign(`/profile/${encodeURIComponent(clean)}${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`);
+    },
 };
 
 /**
@@ -167,6 +179,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'setReplyTo',
     'setSubTab',
     'setTab',
+    'loadCompetitions',
     'shareScreen',
     'showCreateCampaignForm',
     'showForgotPassword',

@@ -293,14 +293,28 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">\${tr.competitors}</h3>
                   <div class="grid grid-cols-2 gap-6">
                     <div class="text-center">
-                      <img src="\${comp.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.creator_name}" class="w-20 h-20 rounded-full mx-auto mb-3 border-4 border-purple-200 dark:border-purple-800">
+                      \${window.renderUserAvatar({
+                        username: comp.creator_username,
+                        displayName: comp.creator_name,
+                        avatarUrl: comp.creator_avatar,
+                        fallbackSeed: comp.creator_name,
+                        imgClassName: 'w-20 h-20 rounded-full mx-auto mb-3 border-4 border-purple-200 dark:border-purple-800',
+                        className: 'block'
+                      })}
                       <h4 class="font-bold text-gray-900 dark:text-white">\${comp.creator_name}</h4>
                       <p class="text-sm text-gray-500">@\${comp.creator_username}</p>
                     </div>
                     
                     <div class="text-center">
                       \${comp.opponent_id ? \`
-                        <img src="\${comp.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.opponent_name}" class="w-20 h-20 rounded-full mx-auto mb-3 border-4 border-amber-200 dark:border-amber-800">
+                        \${window.renderUserAvatar({
+                          username: comp.opponent_username,
+                          displayName: comp.opponent_name,
+                          avatarUrl: comp.opponent_avatar,
+                          fallbackSeed: comp.opponent_name,
+                          imgClassName: 'w-20 h-20 rounded-full mx-auto mb-3 border-4 border-amber-200 dark:border-amber-800',
+                          className: 'block'
+                        })}
                         <h4 class="font-bold text-gray-900 dark:text-white">\${comp.opponent_name}</h4>
                         <p class="text-sm text-gray-500">@\${comp.opponent_username}</p>
                       \` : \`
@@ -360,7 +374,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     <div class="space-y-4">
                       <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2 min-w-0">
-                          <img src="\${comp.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.creator_name}" class="w-9 h-9 rounded-full" alt="">
+                          \${window.renderUserAvatar({
+                            username: comp.creator_username,
+                            displayName: comp.creator_name,
+                            avatarUrl: comp.creator_avatar,
+                            fallbackSeed: comp.creator_name,
+                            imgClassName: 'w-9 h-9 rounded-full',
+                            className: 'block'
+                          })}
                           <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.creator_name}</span>
                         </div>
                         <div class="flex gap-1" dir="ltr">
@@ -374,7 +395,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       \${comp.opponent_id ? \`
                       <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
                         <div class="flex items-center gap-2 min-w-0">
-                          <img src="\${comp.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + comp.opponent_name}" class="w-9 h-9 rounded-full" alt="">
+                          \${window.renderUserAvatar({
+                            username: comp.opponent_username,
+                            displayName: comp.opponent_name,
+                            avatarUrl: comp.opponent_avatar,
+                            fallbackSeed: comp.opponent_name,
+                            imgClassName: 'w-9 h-9 rounded-full',
+                            className: 'block'
+                          })}
                           <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.opponent_name}</span>
                         </div>
                         <div class="flex gap-1" dir="ltr">

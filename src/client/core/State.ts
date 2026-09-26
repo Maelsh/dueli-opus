@@ -84,11 +84,14 @@ export class State {
         if (typeof window !== 'undefined') {
             (window as any).currentUser = user;
         }
-        // Update language/country from user preferences if available
+        // Update language/country from user preferences if available.
+        // B2: a user.language arriving late (checkAuth/login) must NOT silently
+        // flip a page that the server already rendered in the URL/cookie
+        // language — that produced RTL/LTR contradictions between the initial
+        // render and client rerenders.
         if (user) {
-            if (user.language) {
-                this._lang = user.language;
-                (window as any).lang = user.language;
+            if (user.language && !this.hasExplicitLanguagePreference()) {
+                this.lang = user.language;
             }
             if (user.country) {
                 this._country = user.country;
@@ -119,6 +122,31 @@ export class State {
         if (typeof window !== 'undefined') {
             (window as any).lang = l;
         }
+        // B2: keep the document (which the server rendered) and State in sync
+        this.applyDocumentLanguage(l);
+    }
+
+    /**
+     * B2: true when the current page has an explicit language selection
+     * (`?lang=` in the URL or the persisted `lang` cookie). Such a choice is a
+     * user/page contract and outranks a late-arriving user.language.
+     */
+    static hasExplicitLanguagePreference(): boolean {
+        if (typeof window === 'undefined') return false;
+        const urlLang = new URLSearchParams(window.location.search).get('lang');
+        if (urlLang) return true;
+        return !!CookieUtils.get('lang');
+    }
+
+    /**
+     * B2: single place that keeps document.documentElement.dir/lang aligned
+     * with State.lang so client rerenders can never contradict the SSR markup.
+     */
+    static applyDocumentLanguage(lang: string): void {
+        if (typeof document === 'undefined' || !document.documentElement) return;
+        const normalized = (lang || DEFAULT_LANGUAGE).toLowerCase().startsWith('ar') ? 'ar' : 'en';
+        document.documentElement.lang = normalized;
+        document.documentElement.dir = normalized === 'ar' ? 'rtl' : 'ltr';
     }
 
     // Country
@@ -154,21 +182,21 @@ export class State {
      * 5. Default (en)
      */
     static getLanguage(): string {
-        // 1. User database preference (highest priority when logged in)
+        // B2: an explicit page-level choice (?lang= / persisted lang cookie) is
+        // the same source of truth the server used for this render, so it wins.
+        // Without this, a user.language arriving after checkAuth would flip the
+        // language of an already-rendered page (RTL/LTR contradiction).
+        if (typeof window !== 'undefined') {
+            const urlLang = new URLSearchParams(window.location.search).get('lang');
+            if (urlLang) return urlLang;
+        }
+        const cookieLang = CookieUtils.get('lang');
+        if (cookieLang) return cookieLang;
+
+        // User database preference (only when the page has no explicit choice)
         if (this._currentUser?.language) {
             return this._currentUser.language;
         }
-
-        // 2. URL parameter
-        if (typeof window !== 'undefined') {
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlLang = urlParams.get('lang');
-            if (urlLang) return urlLang;
-        }
-
-        // 3. Cookie
-        const cookieLang = CookieUtils.get('lang');
-        if (cookieLang) return cookieLang;
 
         // 4. Browser/Device preference
         const browserLang = getBrowserLanguage();
@@ -207,9 +235,8 @@ export class State {
      * Initialize state from URL, cookies, user data, and browser settings
      */
     static init(): void {
-        // Initialize language with priority chain
-        this._lang = this.getLanguage();
-        (window as any).lang = this._lang;
+        // Use the setters so the document direction stays aligned (B2).
+        this.lang = this.getLanguage();
 
         // Initialize country with priority chain
         this._country = this.getCountry();

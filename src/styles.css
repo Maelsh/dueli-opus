@@ -473,6 +473,15 @@ body.dark .badge-recorded {
     color: #9ca3af;
 }
 
+/* B3: the "recorded" play glyph is a directional affordance. In an Arabic
+   (RTL) context the visual arrow must point left, matching the approved
+   design; LTR keeps the default right-pointing glyph. A rotation is used
+   instead of a scale flip so it stays a glyph-level affordance, never a
+   full-page mirror. */
+.recorded-play-rtl {
+    transform: rotate(180deg);
+}
+
 .badge-pending {
     background: #fef3c7;
     color: #d97706;

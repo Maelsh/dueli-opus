@@ -31,6 +31,47 @@ interface ApiResponse {
  */
 export class AuthService {
     /**
+     * B1: bounded wait for /api/auth/session so a hung request can never leave
+     * the page in a permanent "checking" state. Client-side only — it does not
+     * change the server contract; a timeout is treated as transient.
+     */
+    static readonly AUTH_CHECK_TIMEOUT_MS = 10000;
+
+    /**
+     * B1: bounded wrapper for the auth check. Aborting only cancels the client
+     * wait; the server contract is untouched.
+     */
+    private static async withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+        if (typeof AbortController === 'undefined' || !Number.isFinite(ms) || ms <= 0) {
+            return promise;
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            return await Promise.race([
+                promise,
+                new Promise<never>((_resolve, reject) => {
+                    timer = setTimeout(() => reject(new Error('auth_check_timeout')), ms);
+                })
+            ]);
+        } finally {
+            if (timer !== undefined) clearTimeout(timer);
+        }
+    }
+
+    /**
+     * B1: central auth-success notification. Login (modal), OAuth and session
+     * re-validation all publish the same event so page scripts can refresh
+     * their own state without a full reload.
+     */
+    static emitAuthSuccess(user?: unknown): void {
+        State.currentUser = (user as never) ?? State.currentUser;
+        if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+        window.dispatchEvent(new CustomEvent('dueli:auth-success', {
+            detail: { user: State.currentUser }
+        }));
+    }
+
+    /**
      * Check authentication status
      */
     static async checkAuth(): Promise<boolean> {
@@ -39,19 +80,35 @@ export class AuthService {
 
         if (savedSession) {
             try {
-                const res = await fetch('/api/auth/session', {
+                const res = await this.withTimeout(fetch('/api/auth/session', {
                     method: 'GET',
                     headers: {
                         'Authorization': 'Bearer ' + savedSession,
                         'Content-Type': 'application/json'
                     },
                     credentials: 'include'
-                });
+                }), AuthService.AUTH_CHECK_TIMEOUT_MS);
 
                 // Rate-limited (429): the session is NOT invalid — keep local
                 // auth state untouched so a throttled check never logs the user
                 // out. Return false without clearing.
                 if (res.status === 429) {
+                    this.updateAuthUI();
+                    return false;
+                }
+
+                if (res.status === 401) {
+                    // Genuine unauthenticated/expired session per the current contract.
+                    this.clearAuth();
+                    this.updateAuthUI();
+                    return false;
+                }
+
+                // B1: only a genuine 401 proves the session is invalid. Any other
+                // status (5xx, 404, gateway errors) is a transient failure and must
+                // never wipe a valid session.
+                if (!res.ok) {
+                    console.error('Auth check returned a transient status:', res.status);
                     this.updateAuthUI();
                     return false;
                 }
@@ -63,8 +120,11 @@ export class AuthService {
                     State.currentUser = user;
                     State.sessionId = savedSession;
 
-                    // Apply user's language/country preferences from database
-                    if (user.language) {
+                    // Apply user's language/country preferences from database.
+                    // B2: an explicit page/URL/cookie language choice is the
+                    // current contract and must not be silently overridden by a
+                    // late-arriving user.language on a client rerender.
+                    if (user.language && !State.hasExplicitLanguagePreference()) {
                         State.lang = user.language;
                         CookieUtils.set('lang', user.language, 365);
                     }
@@ -256,6 +316,9 @@ export class AuthService {
                 this.updateAuthUI();
                 Modal.hideLogin();
                 Toast.success(t('client.toast.welcome', State.lang));
+                // B1: let page scripts (My Competitions, …) refresh immediately
+                // instead of waiting for a full reload.
+                this.emitAuthSuccess(user);
             } else {
 
                 Modal.showAuthMessage(data.error || t('auth_invalid_credentials', State.lang), 'error');

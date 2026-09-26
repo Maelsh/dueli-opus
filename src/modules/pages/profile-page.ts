@@ -8,7 +8,7 @@ import type { Context } from 'hono';
 import { getCookie } from 'hono/cookie';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
-import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { getNavigation, getLoginModal, getFooter, getCompetitionCard, type CompetitionCardProps } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
 import { UserModel, SessionModel, CompetitionModel } from '../../models';
 import { FollowModel } from '../../models/FollowModel';
@@ -184,26 +184,8 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                         <!-- Competitions Tab -->
                         <div id="content-competitions">
                             ${competitions.length > 0 ? `
-                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                    ${competitions.map((comp: any) => `
-                                        <a href="/competition/${comp.id}?lang=${lang}" 
-                                           class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-all group">
-                                            <div class="relative aspect-video bg-gradient-to-br ${comp.category_id === 1 ? 'from-purple-600 to-indigo-600' : comp.category_id === 2 ? 'from-cyan-500 to-blue-600' : 'from-amber-500 to-orange-600'}">
-                                                <div class="absolute inset-0 flex items-center justify-center">
-                                                    <i class="${comp.category_icon || 'fas fa-trophy'} text-white/30 text-5xl"></i>
-                                                </div>
-                                                <div class="absolute top-2 ${rtl ? 'right-2' : 'left-2'}">
-                                                    <span class="px-2 py-1 rounded-full text-xs font-bold ${comp.status === 'live' ? 'bg-red-500' : comp.status === 'pending' ? 'bg-amber-500' : 'bg-gray-600'} text-white">
-                                                        ${comp.status === 'live' ? '🔴 ' + (tr.status_live || 'Live') : comp.status === 'pending' ? tr.status_pending || 'Pending' : tr.recorded || 'Recorded'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div class="p-4">
-                                                <h3 class="font-bold text-gray-900 dark:text-white line-clamp-2 group-hover:text-purple-600 transition-colors">${comp.title}</h3>
-                                                <p class="text-sm text-gray-500 mt-1">${comp.total_views || comp.views || 0} ${tr.viewers || 'views'}</p>
-                                            </div>
-                                        </a>
-                                    `).join('')}
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    ${competitions.map((comp: any) => getCompetitionCard(comp as CompetitionCardProps, lang)).join('')}
                                 </div>
                             ` : `
                                 <div class="text-center py-16">

@@ -76,6 +76,7 @@ describe('C5 — no inline executable markup in served render code', () => {
         const builtins = new Set([
             '__fallbackSrc', '__closestRemove', '__byIdRemove', '__byIdClass',
             '__byIdScroll', '__oauthDone', '__winClose', '__ancestorDisplayNone',
+            '__navigateProfile',
         ]);
         for (const b of builtins) expect(delegate).toContain(`    ${b}:`);
         const allow = new Set([

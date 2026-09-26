@@ -146,7 +146,8 @@ export class MessagesUI {
             <a href="/messages?conversation=${conv.id}" class="block p-3 hover:bg-gray-50 dark:hover:bg-gray-800 border-b border-gray-100 dark:border-gray-800">
                 <div class="flex items-start gap-3">
                     <img src="${conv.other_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${conv.other_username}`}" 
-                         alt="" class="w-10 h-10 rounded-full flex-shrink-0">
+                         alt="${conv.other_display_name || conv.other_username || ''}" class="w-10 h-10 rounded-full flex-shrink-0" loading="lazy"
+                         ${conv.other_username ? `role="link" tabindex="0" class="cursor-pointer" aria-label="${conv.other_display_name || conv.other_username}" data-csp-on="click" data-csp-fn="__navigateProfile" data-csp-args='["${conv.other_username}"]' data-csp-stop="1"` : ''}>
                     <div class="flex-1 min-w-0">
                         <p class="font-medium text-gray-900 dark:text-white text-sm">${conv.other_display_name || conv.other_username}</p>
                         <p class="text-gray-500 text-xs truncate">${conv.last_message || ''}</p>

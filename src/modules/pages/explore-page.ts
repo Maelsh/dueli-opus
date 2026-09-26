@@ -144,18 +144,99 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           if (retryBtn) retryBtn.addEventListener('click', loadSearchResults);
         }
 
-        async function loadCompetitions() {
+        // B7: progressive loading state for competitions.
+        // GET /api/competitions supports limit/offset, so "view all" is
+        // replaced by appending the next batch at the current offset.
+        const COMP_BATCH = 12;
+        let compOffset = 0;
+        const compSeen = new Set();
+        let compLoading = false;
+        let compDone = false;
+        let compObserver = null;
+
+        function compCardHtml(items) {
+          const fresh = items.filter(c => c && c.id != null && !compSeen.has(c.id));
+          fresh.forEach(c => compSeen.add(c.id));
+          return fresh.map(c => window.renderCompetitionCard(c, lang)).join('');
+        }
+
+        function ensureCompShell() {
+          const container = document.getElementById('competitionsContainer');
+          if (!container) return null;
+          if (!document.getElementById('competitionsGrid')) {
+            container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="competitionsGrid"></div>' +
+                                  '<div id="competitionsStatus" class="text-center mt-4"></div>';
+          }
+          return container;
+        }
+
+        function setCompStatus(state) {
+          const status = document.getElementById('competitionsStatus');
+          if (!status) return;
+          if (state === 'loading') {
+            status.innerHTML = \`<div class="py-4" role="status" aria-live="polite" data-explore-state="loading">
+              <i class="fas fa-spinner fa-spin text-purple-500" aria-hidden="true"></i>
+              <span class="sr-only">\${tr.loading || 'Loading...'}</span>
+            </div>\`;
+            return;
+          }
+          if (state === 'error') {
+            status.innerHTML = \`<div class="py-4 text-red-500 dark:text-red-400" role="alert" data-explore-state="error">
+              <p>\${tr.errors?.service_unavailable || tr.error_occurred || 'Error'}</p>
+              <button type="button" class="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-semibold" data-action="retry-competitions">
+                <i class="fas fa-rotate-right" aria-hidden="true"></i>\${tr.discovery?.retry || 'Retry'}
+              </button>
+            </div>\`;
+            const btn = status.querySelector('[data-action="retry-competitions"]');
+            if (btn) btn.addEventListener('click', () => loadCompetitions({ append: true }));
+            return;
+          }
+          if (state === 'end') {
+            status.innerHTML = \`<p class="text-sm text-gray-400" data-explore-state="end">\${tr.discovery?.no_more_results || 'No more results'}</p>\`;
+            return;
+          }
+          status.innerHTML = \`<button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-semibold" data-action="load-more-competitions">
+            \${tr.load_more || 'Load more'}
+          </button>\`;
+          const more = status.querySelector('[data-action="load-more-competitions"]');
+          if (more) more.addEventListener('click', () => loadCompetitions({ append: true }));
+        }
+
+        // Auto-append near the end of the list; the button above is the
+        // keyboard-accessible fallback, so it is never IO-only.
+        function observeCompEnd() {
+          if (compObserver || typeof IntersectionObserver === 'undefined') return;
+          const status = document.getElementById('competitionsStatus');
+          if (!status) return;
+          compObserver = new IntersectionObserver((entries) => {
+            if (entries.some(e => e.isIntersecting)) loadCompetitions({ append: true });
+          }, { rootMargin: '200px' });
+          compObserver.observe(status);
+        }
+
+        async function loadCompetitions(opts) {
+          const append = !!(opts && opts.append);
+          if (compLoading) return;
+          const container = ensureCompShell();
+          if (!container) return;
+          if (append && compDone) { setCompStatus('end'); return; }
+
+          compLoading = true;
+          setCompStatus('loading');
+
           try {
-            let url = '/api/competitions?limit=50';
+            let url = '/api/competitions?limit=' + COMP_BATCH + '&offset=' + compOffset;
             if (search) url += '&search=' + encodeURIComponent(search);
-            
+            // The query stays in the URL params: this is not a navigation.
             const res = await fetch(url);
+            if (!res.ok) throw new Error('status ' + res.status);
             const data = await res.json();
-            
-            const container = document.getElementById('competitionsContainer');
+
+            const items = (data && data.success && data.data) ? data.data : [];
             const countEl = document.getElementById('compsCount');
-            
-            if (!data.success || !data.data?.length) {
+            if (countEl) countEl.textContent = '(' + compSeen.size + ')';
+
+            if (compOffset === 0 && items.length === 0) {
               container.innerHTML = \`
                 <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
                   <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
@@ -164,94 +245,106 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
                   <p class="text-gray-500 dark:text-gray-400">\${tr.no_competitions || 'No competitions found'}</p>
                 </div>
               \`;
-              countEl.textContent = '(0)';
+              compDone = true;
               return;
             }
-            
-            countEl.textContent = '(' + data.data.length + ')';
-            
-            // Responsive grid: 1 col mobile, 2 cols tablet, 3-4 cols desktop
-            // Max rows: 2 on mobile, 3 on tablet/desktop
-            const maxItems = window.innerWidth < 640 ? 2 : window.innerWidth < 1024 ? 6 : 12;
-            const displayItems = data.data.slice(0, maxItems);
-            const hasMore = data.data.length > maxItems;
-            
-            container.innerHTML = \`
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                \${window.renderCompetitionCards(displayItems, lang)}
-              </div>
-              \${hasMore ? \`
-                <div class="text-center mt-4">
-                  <a href="/explore?search=\${encodeURIComponent(search)}&type=competitions&lang=\${lang}" 
-                     class="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors">
-                    \${tr.view_all || 'View all'} (\${data.data.length})
-                    <i class="fas fa-arrow-\${rtl ? 'left' : 'right'}"></i>
-                  </a>
-                </div>
-              \` : ''}
-            \`;
+
+            const grid = document.getElementById('competitionsGrid');
+            if (grid) {
+              const html = compCardHtml(items);
+              if (html) grid.insertAdjacentHTML('beforeend', html);
+            }
+
+            compOffset += items.length;
+            // A short batch means the result set is exhausted.
+            compDone = items.length < COMP_BATCH;
+            if (compDone) {
+              setCompStatus('end');
+            } else {
+              setCompStatus('more');
+              observeCompEnd();
+            }
           } catch (err) {
             console.error('Failed to load competitions:', err);
-            showDiscoveryError('competitionsContainer');
+            if (compOffset === 0) {
+              showDiscoveryError('competitionsContainer');
+            } else {
+              setCompStatus('error');
+            }
+          } finally {
+            compLoading = false;
           }
         }
-        
-        async function loadUsers() {
-          try {
-            // Both /api/search/users and /api/users require q parameter
-            // Only fetch users if there's a search query (matching homepage behavior)
-            if (!search || search.length < 2) {
-              document.getElementById('usersContainer').innerHTML = \`
-                <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-                  <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-users text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
-                  </div>
-                  <p class="text-gray-500 dark:text-gray-400">\${tr.search_users_prompt || 'Enter a search term to find users'}</p>
-                </div>
-              \`;
-              document.getElementById('usersCount').textContent = '';
-              return;
-            }
-            
-            // Use the same API that works in search dropdown
-            const url = '/api/search/users?q=' + encodeURIComponent(search) + '&limit=20';
-            const res = await fetch(url);
-            const data = await res.json();
-            
-            const container = document.getElementById('usersContainer');
-            const countEl = document.getElementById('usersCount');
-            
-            // API returns data.items (array) - same as homepage dropdown
-            const users = data.data?.items || data.data || [];
-            
-            if (!data.success || !users.length) {
-              container.innerHTML = \`
-                <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-                  <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-users text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
-                  </div>
-                  <p class="text-gray-500 dark:text-gray-400">\${tr.discovery?.no_results || tr.no_users || 'No users found'}</p>
-                </div>
-              \`;
-              countEl.textContent = '(0)';
-              return;
-            }
-            
-            countEl.textContent = '(' + users.length + ')';
-            
-            // Responsive: 1 col mobile, 2 cols tablet, 3 cols desktop
-            const maxItems = window.innerWidth < 640 ? 2 : window.innerWidth < 1024 ? 4 : 9;
-            const displayItems = users.slice(0, maxItems);
-            const hasMore = users.length > maxItems;
-            
-            // Helper function to format rating as stars
-            function formatRating(rating) {
-              const stars = Math.round((rating || 0) / 20); // 0-100 to 0-5 stars
-              return '★'.repeat(stars) + '☆'.repeat(5 - stars);
-            }
-            
-            // Build user cards HTML with full profile info
-            const usersHtml = displayItems.map(user => \`
+
+        // B7: progressive loading for users. /api/search/users accepts
+        // limit/offset, so the batch is appended instead of reloading the page.
+        const USER_BATCH = 9;
+        let userOffset = 0;
+        const userSeen = new Set();
+        let userLoading = false;
+        let userDone = false;
+        let userObserver = null;
+
+        function ensureUserShell() {
+          const container = document.getElementById('usersContainer');
+          if (!container) return null;
+          if (!document.getElementById('usersGrid')) {
+            container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="usersGrid"></div>' +
+                                  '<div id="usersStatus" class="text-center mt-4"></div>';
+          }
+          return container;
+        }
+
+        function setUserStatus(state) {
+          const status = document.getElementById('usersStatus');
+          if (!status) return;
+          if (state === 'loading') {
+            status.innerHTML = \`<div class="py-4" role="status" aria-live="polite" data-explore-state="loading">
+              <i class="fas fa-spinner fa-spin text-blue-500" aria-hidden="true"></i>
+              <span class="sr-only">\${tr.loading || 'Loading...'}</span>
+            </div>\`;
+            return;
+          }
+          if (state === 'error') {
+            status.innerHTML = \`<div class="py-4 text-red-500 dark:text-red-400" role="alert" data-explore-state="error">
+              <p>\${tr.errors?.service_unavailable || tr.error_occurred || 'Error'}</p>
+              <button type="button" class="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold" data-action="retry-users">
+                <i class="fas fa-rotate-right" aria-hidden="true"></i>\${tr.discovery?.retry || 'Retry'}
+              </button>
+            </div>\`;
+            const btn = status.querySelector('[data-action="retry-users"]');
+            if (btn) btn.addEventListener('click', () => loadUsers({ append: true }));
+            return;
+          }
+          if (state === 'end') {
+            status.innerHTML = \`<p class="text-sm text-gray-400" data-explore-state="end">\${tr.discovery?.no_more_results || 'No more results'}</p>\`;
+            return;
+          }
+          status.innerHTML = \`<button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold" data-action="load-more-users">
+            \${tr.load_more || 'Load more'}
+          </button>\`;
+          const more = status.querySelector('[data-action="load-more-users"]');
+          if (more) more.addEventListener('click', () => loadUsers({ append: true }));
+        }
+
+        function observeUserEnd() {
+          if (userObserver || typeof IntersectionObserver === 'undefined') return;
+          const status = document.getElementById('usersStatus');
+          if (!status) return;
+          userObserver = new IntersectionObserver((entries) => {
+            if (entries.some(e => e.isIntersecting)) loadUsers({ append: true });
+          }, { rootMargin: '200px' });
+          userObserver.observe(status);
+        }
+
+        // Renders one user result card (unchanged markup, now reusable per item).
+        function formatRating(rating) {
+          const stars = Math.round((rating || 0) / 20); // 0-100 to 0-5 stars
+          return '★'.repeat(stars) + '☆'.repeat(5 - stars);
+        }
+
+        function renderUserCard(user) {
+          return \`
               <a href="/profile/\${user.username}?lang=\${lang}" 
                  class="user-card group block bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 relative">
                 
@@ -314,25 +407,81 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
                   \` : ''}
                 </div>
               </a>
-            \`).join('');
-            
-            container.innerHTML = \`
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                \${usersHtml}
-              </div>
-              \${hasMore ? \`
-                <div class="text-center mt-4">
-                  <a href="/explore?search=\${encodeURIComponent(search)}&type=users&lang=\${lang}" 
-                     class="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors">
-                    \${tr.view_all || 'View all'} (\${users.length})
-                    <i class="fas fa-arrow-\${rtl ? 'left' : 'right'}" aria-hidden="true"></i>
-                  </a>
-                </div>
-              \` : ''}
             \`;
+        }
+
+        async function loadUsers(opts) {
+          const append = !!(opts && opts.append);
+          // Both /api/search/users and /api/users require q
+          if (!search || search.length < 2) {
+            document.getElementById('usersContainer').innerHTML = \`
+              <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <i class="fas fa-users text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
+                </div>
+                <p class="text-gray-500 dark:text-gray-400">\${tr.search_users_prompt || 'Enter a search term to find users'}</p>
+              </div>
+            \`;
+            document.getElementById('usersCount').textContent = '';
+            return;
+          }
+          if (userLoading) return;
+          const container = ensureUserShell();
+          if (!container) return;
+          if (append && userDone) { setUserStatus('end'); return; }
+
+          userLoading = true;
+          setUserStatus('loading');
+
+          try {
+            const url = '/api/search/users?q=' + encodeURIComponent(search) +
+                        '&limit=' + USER_BATCH + '&offset=' + userOffset;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('status ' + res.status);
+            const data = await res.json();
+
+            const users = (data.data && data.data.items) ? data.data.items : (data.data || []);
+            const countEl = document.getElementById('usersCount');
+            if (countEl) countEl.textContent = '(' + userSeen.size + ')';
+
+            if (userOffset === 0 && users.length === 0) {
+              container.innerHTML = \`
+                <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                  <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-users text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
+                  </div>
+                  <p class="text-gray-500 dark:text-gray-400">\${tr.discovery?.no_results || tr.no_users || 'No users found'}</p>
+                </div>
+              \`;
+              userDone = true;
+              return;
+            }
+
+            const grid = document.getElementById('usersGrid');
+            if (grid) {
+              const fresh = users.filter(u => u && u.username && !userSeen.has(u.username));
+              fresh.forEach(u => userSeen.add(u.username));
+              const html = fresh.map(renderUserCard).join('');
+              if (html) grid.insertAdjacentHTML('beforeend', html);
+            }
+
+            userOffset += users.length;
+            userDone = users.length < USER_BATCH;
+            if (userDone) {
+              setUserStatus('end');
+            } else {
+              setUserStatus('more');
+              observeUserEnd();
+            }
           } catch (err) {
             console.error('Failed to load users:', err);
-            showDiscoveryError('usersContainer');
+            if (userOffset === 0) {
+              showDiscoveryError('usersContainer');
+            } else {
+              setUserStatus('error');
+            }
+          } finally {
+            userLoading = false;
           }
         }
         
