@@ -85,6 +85,29 @@ const BUILTINS: Record<string, AnyFn> = {
         }
         if (node instanceof HTMLElement) node.style.display = 'none';
     },
+    /**
+     * B6: navigate to a user profile. Used where the surrounding markup is
+     * already an anchor/button, so a nested <a> would be invalid HTML. The
+     * canonical route is /profile/:username; anything else is ignored.
+     *
+     * The event is required: without preventDefault the parent anchor's own
+     * navigation still fires and races this one, so the user can land on the
+     * competition/conversation instead of the profile. stopPropagation keeps
+     * a parent row handler from reacting as well.
+     */
+    __navigateProfile: (username: unknown, event?: unknown) => {
+        if (typeof username !== 'string') return;
+        const clean = username.trim();
+        if (!clean || clean.includes('/') || clean.includes('..')) return;
+        if (event && typeof (event as Event).preventDefault === 'function') {
+            (event as Event).preventDefault();
+        }
+        // stopPropagation is intentionally NOT called here: the dispatcher
+        // already honours data-csp-stop centrally, so a parent row handler
+        // cannot react either.
+        const lang = new URLSearchParams(self.location.search).get('lang');
+        self.location.assign(`/profile/${encodeURIComponent(clean)}${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`);
+    },
 };
 
 /**
@@ -167,6 +190,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'setReplyTo',
     'setSubTab',
     'setTab',
+    'loadCompetitions',
     'shareScreen',
     'showCreateCampaignForm',
     'showForgotPassword',
@@ -224,26 +248,81 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     // __ALLOWLIST_END__
 ]);
 
+/**
+ * Walks up from the event target to the nearest delegated action.
+ * `type` filters on the declared event type; pass null to accept any.
+ */
+function findAction(start: Element, type: string | null): HTMLElement | null {
+    let node: Node | null = start;
+    while (node) {
+        const el = node as HTMLElement;
+        if (typeof el.getAttribute === 'function' && el instanceof HTMLElement) {
+            const declared = el.getAttribute('data-csp-on');
+            const fn = el.getAttribute('data-csp-fn');
+            if (fn && declared && (type === null || declared === type)) return el;
+        }
+        node = node.parentElement ?? node.parentNode;
+    }
+    return null;
+}
+
 function dispatch(event: Event): void {
     const target = event.target as Element | null;
-    if (!target || typeof (target as Element).closest !== 'function') return;
-    const el = (target as Element).closest('[data-csp-on][data-csp-fn]');
+    if (!target) return;
+    // Find the nearest ancestor action. Two passes:
+    //  1. an action bound to THIS event type - this must win, otherwise a click
+    //     landing on an element carrying a different handler (e.g. an
+    //     <img data-csp-on="error" data-csp-fn="__fallbackSrc">) selects that
+    //     unrelated handler and the enclosing action never runs, so the click
+    //     falls through to the parent link;
+    //  2. any action, which is what the keydown path needs (there the element
+    //     is deliberately bound to "click").
+    const el = findAction(target as Element, event.type) ?? findAction(target as Element, null);
     if (!el || !(el instanceof HTMLElement)) return;
     const want = el.getAttribute('data-csp-on');
-    if (!want || want !== event.type) return;
+    // B6: a delegated target that is not natively activatable (e.g. the
+    // span[role=link] avatar used where an <a> would nest invalidly) must still
+    // respond to Enter/Space, or it is keyboard-dead. Native elements
+    // (button, a[href], input, select, textarea) already emit click, so they
+    // are excluded here to avoid a double activation.
+    if (want !== event.type) {
+        if (event.type === 'keydown' && want === 'click' && !isNativelyActivatable(el)) {
+            const key = (event as KeyboardEvent).key;
+            if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+                event.preventDefault();
+                // Same arguments the click would have received, so a handler
+                // that navigates can still cancel the default action.
+                runHandler(el, event, [...parseArgs(el), '@event']);
+            }
+        }
+        return;
+    }
+    runHandler(el, event, parseArgs(el));
+}
+
+function parseArgs(el: HTMLElement): unknown[] {
+    const rawArgs = el.getAttribute('data-csp-args');
+    if (!rawArgs) return [];
+    try {
+        const parsed: unknown = JSON.parse(rawArgs);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+const NATIVELY_ACTIVATABLE = new Set(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'OPTION']);
+
+function isNativelyActivatable(el: HTMLElement): boolean {
+    if (el.tagName === 'A' && el.getAttribute('href')) return true;
+    return NATIVELY_ACTIVATABLE.has(el.tagName);
+}
+
+function runHandler(el: HTMLElement, event: Event, args: unknown[]): void {
+    // Honoured centrally so every delegated action can opt out of a parent
+    // handler, on both the click and the keyboard path.
     if (el.hasAttribute('data-csp-stop')) event.stopPropagation();
     const fnName = el.getAttribute('data-csp-fn') || '';
-    let args: unknown[] = [];
-    const rawArgs = el.getAttribute('data-csp-args');
-    if (rawArgs) {
-        try {
-            const parsed: unknown = JSON.parse(rawArgs);
-            if (!Array.isArray(parsed)) return;
-            args = parsed;
-        } catch {
-            return;
-        }
-    }
     const fn: AnyFn | null = fnName.startsWith('__') && !fnName.includes('.') && fnName in BUILTINS
         ? BUILTINS[fnName] as AnyFn
         : resolveFn(fnName);

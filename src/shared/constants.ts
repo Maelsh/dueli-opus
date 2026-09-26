@@ -1,4 +1,19 @@
 
+// ── Canonical Dueli primary gradient (B4) ────────────────────────────────
+// Extracted verbatim from the components already approved on main
+// (create/competition CTAs, header primary actions). It is NOT a new design:
+// it is the existing `from-purple-600 to-indigo-600` treatment, centralised so
+// pages stop falling back to a flat `bg-purple-600`.
+export const DUELI_PRIMARY_GRADIENT = 'bg-gradient-to-r from-purple-600 to-indigo-600';
+export const DUELI_PRIMARY_GRADIENT_HOVER = 'hover:from-purple-700 hover:to-indigo-700';
+
+// Full class set for a primary action (button/link).
+export const DUELI_PRIMARY_BTN = `${DUELI_PRIMARY_GRADIENT} text-white rounded-full font-bold shadow-lg shadow-purple-500/20`;
+
+// Tab styling that uses the same canonical gradient for its active state.
+export const DUELI_TAB_ACTIVE = DUELI_PRIMARY_GRADIENT;
+export const DUELI_TAB_INACTIVE = 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800';
+
 // Main category colors (from database)
 export const CATEGORY_COLORS: Record<string, string> = {
     'dialogue': '#08771a',  // Green (as updated in seed.sql)

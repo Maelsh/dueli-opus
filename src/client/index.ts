@@ -46,6 +46,7 @@ import { CountdownTimer } from './ui/CountdownTimer';
 // Shared Components (View layer - single source of truth)
 import { getCompetitionCard, type CompetitionCardProps } from '../shared/components/competition-card';
 import { getUserCard, getUserCards, type UserCardProps } from '../shared/components/user-card';
+import { getUserAvatarLink, getProfilePath, type UserAvatarOptions } from '../shared/components/user-avatar';
 
 // Pages
 import { HomePage } from './pages/HomePage';
@@ -222,6 +223,10 @@ declare global {
         renderUserCard: (user: UserCardProps, lang?: string) => string;
         renderUserCards: (users: UserCardProps[], lang?: string) => string;
 
+        // Shared user avatar -> profile link (B6)
+        renderUserAvatar: (opts: UserAvatarOptions) => string;
+        profilePathFor: (username: unknown) => string | null;
+
         // Streaming Services (for live room page)
         P2PConnection: typeof P2PConnection;
         VideoCompositor: typeof VideoCompositor;
@@ -325,6 +330,13 @@ if (typeof window !== 'undefined') {
     // Bind User Card Renderer (uses shared View component)
     window.renderUserCard = (user: UserCardProps, lang: string = State.lang) => getUserCard(user, lang);
     window.renderUserCards = (users: UserCardProps[], lang: string = State.lang) => getUserCards(users, lang);
+
+    // Bind the shared avatar -> profile link helper (B6)
+    window.renderUserAvatar = (opts: UserAvatarOptions) =>
+        getUserAvatarLink({ ...opts, lang: opts.lang || State.lang });
+
+    // Canonical profile path builder, so page scripts never hand-roll the URL.
+    window.profilePathFor = (username: unknown) => getProfilePath(username, State.lang);
 
     // Bind Streaming Services (for live room page)
     window.P2PConnection = P2PConnection;

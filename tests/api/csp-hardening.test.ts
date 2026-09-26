@@ -33,6 +33,40 @@ function walkTs(dir: string, out: string[] = []): string[] {
 const HANDLER_ATTR = /\son(click|submit|change|error|input|keyup|keydown|mouseover|mouseout|mouseenter|mouseleave|focus|blur|dblclick|contextmenu)\s*=/;
 const EVAL_CALL = /(^|[^\w$])eval\s*\(|new\s+Function\s*\(|setTimeout\s*\(\s*['"`]|setInterval\s*\(\s*['"`]/;
 
+/**
+ * 2026-09-26: the user-reported "hundreds of first-party CSP violations" were
+ * caused by a STALE service-worker bundle, not by the current code. These
+ * assertions pin that distinction so the same symptom cannot be reintroduced
+ * by a runtime style write:
+ *  - the served policy keeps its strict nonce-only style-src;
+ *  - no source file writes a style ATTRIBUTE at runtime (which CSP blocks);
+ *  - SettingsUI (named in the report) performs no style writes at all.
+ * CSSOM writes (style.cssText / setProperty) and data-csp-style remain the
+ * sanctioned mechanisms, because CSSOM is not blocked by style-src.
+ */
+describe('C5 — runtime style writes stay CSP-safe', () => {
+    it('served style-src remains nonce-based (never relaxed)', async () => {
+        const csp = await servedCsp('/');
+        const styleSrc = /style-src ([^;]+)/.exec(csp)?.[1] ?? '';
+        expect(styleSrc).toContain("'nonce-");
+        expect(styleSrc).not.toContain("'unsafe-inline'");
+    });
+
+    it('no source file sets a style attribute at runtime', () => {
+        const offenders = walkTs(join(process.cwd(), 'src')).filter((f) => (
+            /setAttribute\(\s*['"`]style['"`]/.test(readFileSync(f, 'utf8'))
+        ));
+        expect(offenders).toEqual([]);
+    });
+
+    it('SettingsUI performs no style writes at all', () => {
+        const src = readFileSync(join(process.cwd(), 'src/client/ui/SettingsUI.ts'), 'utf8');
+        expect(src).not.toMatch(/\.style\s*\./);
+        expect(src).not.toMatch(/setAttribute\(\s*['"`]style['"`]/);
+    });
+});
+
+
 describe('C5 — served policy has no unsafe directives', () => {
     it.each(['/','/about', '/explore'])('1. %s serves CSP without unsafe-inline/unsafe-eval', async (path) => {
         const res = await app.request(path);
@@ -76,6 +110,7 @@ describe('C5 — no inline executable markup in served render code', () => {
         const builtins = new Set([
             '__fallbackSrc', '__closestRemove', '__byIdRemove', '__byIdClass',
             '__byIdScroll', '__oauthDone', '__winClose', '__ancestorDisplayNone',
+            '__navigateProfile',
         ]);
         for (const b of builtins) expect(delegate).toContain(`    ${b}:`);
         const allow = new Set([

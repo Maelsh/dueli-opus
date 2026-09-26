@@ -260,6 +260,7 @@ export const en = {
     // Discovery (B13: resilient discovery pages)
     discovery: {
         no_results: 'No results to show',
+        no_more_results: 'No more results',
         retry: 'Retry',
     },
 

@@ -1,5 +1,6 @@
 import { translations, getUILanguage, isRTL } from '../../i18n';
 import type { Competition, Language } from '../../config/types';
+import { getUserAvatarLink, getProfilePath } from './user-avatar';
 
 export interface CompetitionCardProps extends Competition {
   subcategory_slug?: string;
@@ -82,7 +83,15 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <div class="absolute inset-0 flex items-center justify-center gap-3 z-10 p-4">
               <div class="flex flex-col items-center">
                 <div class="competitor-avatar p-0.5 transform hover:scale-105 transition-transform duration-300">
-                  <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" alt="" class="w-full h-full rounded-full" loading="lazy" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>
+                  ${getUserAvatarLink({
+                    username: item.creator_username,
+                    displayName: item.creator_name,
+                    avatarUrl: item.creator_avatar,
+                    fallbackSeed: item.creator_name || 'user',
+                    lang,
+                    nested: true,
+                    className: 'block w-full h-full rounded-full cursor-pointer'
+                  })}
                 </div>
               </div>
 
@@ -93,7 +102,15 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
               <div class="flex flex-col items-center">
                 <div class="competitor-avatar p-0.5 transform hover:scale-105 transition-transform duration-300">
                   ${item.opponent_name ?
-      `<img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" alt="" class="w-full h-full rounded-full" loading="lazy" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>` :
+      getUserAvatarLink({
+        username: item.opponent_username,
+        displayName: item.opponent_name,
+        avatarUrl: item.opponent_avatar,
+        fallbackSeed: item.opponent_name || 'opponent',
+        lang,
+        nested: true,
+        className: 'block w-full h-full rounded-full cursor-pointer'
+      }) :
       `<div class="w-full h-full rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-white text-2xl font-bold border-2 border-white/20 animate-pulse">?</div>`
     }
                 </div>
@@ -104,7 +121,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
               ${isLive ? `<span class="badge-live shadow-md"><span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>${tr.status_live}</span>` :
       isPending ? `<span class="badge-pending shadow-md">${tr.status_pending}</span>` :
         isAccepted ? `<span class="px-2.5 py-1 rounded-full bg-blue-500 text-white text-xs font-bold shadow-md"><i class="fas fa-check me-1"></i>${tr.status_accepted || 'Ready'}</span>` :
-          `<span class="badge-recorded shadow-md"><i class="fas fa-play text-xs"></i>${tr.recorded}</span>`}
+          `<span class="badge-recorded shadow-md"><i class="fas fa-play text-xs ${rtl ? 'recorded-play-rtl' : ''}"></i>${tr.recorded}</span>`}
             </div>
             
             <!-- Date/Time in top right corner -->
@@ -143,16 +160,52 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${(item as any).is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${(tr.demo as any)?.title || 'Demo'}">${(tr.demo as any)?.badge || 'Demo'}</span>` : ''}</h3>
           </a>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-gray-500 font-medium whitespace-nowrap overflow-hidden">
-            <a href="/profile/${item.creator_username || item.creator_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
-               <img src="${item.creator_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.creator_name || 'user')}" class="w-4 h-4 rounded-full bg-gray-200" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>
+            ${getProfilePath(item.creator_username, lang) ? `<a href="${getProfilePath(item.creator_username, lang)}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
+               ${getUserAvatarLink({
+                 username: item.creator_username,
+                 displayName: item.creator_name,
+                 avatarUrl: item.creator_avatar,
+                 fallbackSeed: item.creator_name || 'user',
+                 lang,
+                 imgClassName: 'w-4 h-4 rounded-full bg-gray-200',
+                 linkToProfile: false
+               })}
                <span class="truncate max-w-[80px]">${item.creator_name || 'User'}</span>
-            </a>
+            </a>` : `<span class="flex items-center gap-1">
+               ${getUserAvatarLink({
+                 username: item.creator_username,
+                 displayName: item.creator_name,
+                 avatarUrl: item.creator_avatar,
+                 fallbackSeed: item.creator_name || 'user',
+                 lang,
+                 imgClassName: 'w-4 h-4 rounded-full bg-gray-200'
+               })}
+               <span class="truncate max-w-[80px]">${item.creator_name || 'User'}</span>
+            </span>`}
             <span class="mx-0.5 text-gray-300">vs</span>
              ${item.opponent_name ?
-      `<a href="/profile/${item.opponent_username || item.opponent_id}?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
-                <img src="${item.opponent_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (item.opponent_name || 'opponent')}" class="w-4 h-4 rounded-full bg-gray-200" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>
+      (getProfilePath(item.opponent_username, lang) ? `<a href="${getProfilePath(item.opponent_username, lang)}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
+                ${getUserAvatarLink({
+                  username: item.opponent_username,
+                  displayName: item.opponent_name,
+                  avatarUrl: item.opponent_avatar,
+                  fallbackSeed: item.opponent_name || 'opponent',
+                  lang,
+                  imgClassName: 'w-4 h-4 rounded-full bg-gray-200',
+                  linkToProfile: false
+                })}
                 <span class="truncate max-w-[80px]">${item.opponent_name}</span>
-              </a>` :
+              </a>` : `<span class="flex items-center gap-1">
+                ${getUserAvatarLink({
+                  username: item.opponent_username,
+                  displayName: item.opponent_name,
+                  avatarUrl: item.opponent_avatar,
+                  fallbackSeed: item.opponent_name || 'opponent',
+                  lang,
+                  imgClassName: 'w-4 h-4 rounded-full bg-gray-200'
+                })}
+                <span class="truncate max-w-[80px]">${item.opponent_name}</span>
+              </span>`) :
       `<span class="text-gray-400">?</span>`
     }
           </div>

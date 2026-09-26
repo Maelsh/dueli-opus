@@ -50,7 +50,9 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <!-- Chat Header -->
                             <div id="chatHeader" class="p-4 border-b border-gray-200 dark:border-gray-700 hidden">
                                 <div class="flex items-center gap-3">
-                                    <img id="chatUserAvatar" src="" class="w-10 h-10 rounded-full">
+                                    <a id="chatUserLink" class="shrink-0 hidden" aria-label="">
+                                        <img id="chatUserAvatar" src="" class="w-10 h-10 rounded-full" alt="">
+                                    </a>
                                     <div>
                                         <p id="chatUserName" class="font-bold text-gray-900 dark:text-white"></p>
                                         <p id="chatUserStatus" class="text-sm text-gray-500"></p>
@@ -135,8 +137,11 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         container.innerHTML = conversations.map(conv => \`
                             <button data-csp-on="click" data-csp-fn="openConversation" data-csp-args='[\${conv.id},\${JSON.stringify((conv.other_username))},\${JSON.stringify((conv.other_avatar || ''))}]' 
                                 class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 \${isRTL ? 'text-right' : 'text-left'}">
-                                <img src="\${conv.other_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + conv.other_username}" 
-                                     class="w-12 h-12 rounded-full">
+                                \${conv.other_username ? \`<span role="link" tabindex="0" class="cursor-pointer shrink-0" aria-label="\${conv.other_display_name || conv.other_username}"
+                                    data-csp-on="click" data-csp-fn="__navigateProfile" data-csp-args='["\${conv.other_username}","@event"]' data-csp-stop="1">
+                                    <img src="\${conv.other_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + conv.other_username}"
+                                         class="w-12 h-12 rounded-full" alt="\${conv.other_display_name || conv.other_username}">
+                                </span>\` : \`<img src="\${conv.other_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}" class="w-12 h-12 rounded-full shrink-0" alt="">\`}
                                 <div class="flex-1 min-w-0">
                                     <p class="font-semibold text-gray-900 dark:text-white truncate">\${conv.other_display_name || conv.other_username}</p>
                                     <p class="text-sm text-gray-500 truncate">\${conv.last_message || ''}</p>
@@ -168,6 +173,21 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 
                 document.getElementById('chatUserAvatar').src = avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + username;
                 document.getElementById('chatUserName').textContent = username;
+                // B6: the chat header avatar is a real user's avatar, so it
+                // links to their profile whenever the identity is known.
+                // Hidden otherwise, so a placeholder never becomes a dead link.
+                const link = document.getElementById('chatUserLink');
+                const path = username && typeof profilePathFor === 'function' ? profilePathFor(username) : null;
+                if (link) {
+                    if (path) {
+                        link.setAttribute('href', path);
+                        link.setAttribute('aria-label', username);
+                        link.classList.remove('hidden');
+                    } else {
+                        link.classList.add('hidden');
+                        link.removeAttribute('href');
+                    }
+                }
                 
                 // Load messages
                 await loadMessages(id);

@@ -3986,6 +3986,9 @@ body.dark .badge-recorded {
   background: #374151;
   color: #9ca3af;
 }
+.recorded-play-rtl {
+  transform: rotate(180deg);
+}
 .badge-pending {
   background: #fef3c7;
   color: #d97706;

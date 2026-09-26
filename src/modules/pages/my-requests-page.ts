@@ -152,8 +152,15 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 return \`
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg p-6">
                         <div class="flex items-start gap-4">
-                            <img src="\${user?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (user?.username || 'user')}" 
-                                 class="w-14 h-14 rounded-full">
+                            \${window.renderUserAvatar({
+                                username: user?.username,
+                                displayName: user?.display_name,
+                                avatarUrl: user?.avatar_url,
+                                fallbackSeed: user?.username || 'user',
+                                lang,
+                                className: 'shrink-0',
+                                imgClassName: 'w-14 h-14 rounded-full'
+                            })}
                             <div class="flex-1">
                                 <div class="flex items-center gap-2 mb-1">
                                     <span class="font-bold text-gray-900 dark:text-white">\${user?.display_name || user?.username || 'User'}</span>
