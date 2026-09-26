@@ -50,7 +50,9 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <!-- Chat Header -->
                             <div id="chatHeader" class="p-4 border-b border-gray-200 dark:border-gray-700 hidden">
                                 <div class="flex items-center gap-3">
-                                    <img id="chatUserAvatar" src="" class="w-10 h-10 rounded-full">
+                                    <a id="chatUserLink" class="shrink-0 hidden" aria-label="">
+                                        <img id="chatUserAvatar" src="" class="w-10 h-10 rounded-full" alt="">
+                                    </a>
                                     <div>
                                         <p id="chatUserName" class="font-bold text-gray-900 dark:text-white"></p>
                                         <p id="chatUserStatus" class="text-sm text-gray-500"></p>
@@ -168,6 +170,21 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 
                 document.getElementById('chatUserAvatar').src = avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + username;
                 document.getElementById('chatUserName').textContent = username;
+                // B6: the chat header avatar is a real user's avatar, so it
+                // links to their profile whenever the identity is known.
+                // Hidden otherwise, so a placeholder never becomes a dead link.
+                const link = document.getElementById('chatUserLink');
+                const path = username && typeof profilePathFor === 'function' ? profilePathFor(username) : null;
+                if (link) {
+                    if (path) {
+                        link.setAttribute('href', path);
+                        link.setAttribute('aria-label', username);
+                        link.classList.remove('hidden');
+                    } else {
+                        link.classList.add('hidden');
+                        link.removeAttribute('href');
+                    }
+                }
                 
                 // Load messages
                 await loadMessages(id);

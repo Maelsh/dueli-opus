@@ -71,8 +71,11 @@ export function getUserAvatarLink(opts: UserAvatarOptions): string {
 
     const cls = opts.className || '';
     if (opts.nested) {
+        // Valid-HTML alternative to a nested anchor: the image carries the
+        // profile target as a delegated action. The event is passed so the
+        // handler can cancel the parent anchor/row navigation.
         const username = escapeAttr(String(opts.username).trim());
-        return `<span role="link" tabindex="0" aria-label="${label}" class="${cls}" data-csp-on="click" data-csp-fn="__navigateProfile" data-csp-args='["${username}"]'>${img}</span>`;
+        return `<span role="link" tabindex="0" aria-label="${label}" class="${cls}" data-csp-on="click" data-csp-fn="__navigateProfile" data-csp-args='["${username}","@event"]' data-csp-stop="1">${img}</span>`;
     }
     return `<a href="${path}" aria-label="${label}" class="${cls}">${img}</a>`;
 }

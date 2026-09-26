@@ -125,11 +125,15 @@ export class MessagingUI {
                 data-csp-on="click" data-csp-fn="MessagingUI.selectConversation" data-csp-args='[${conv.id}]'
                 class="w-full p-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition ${conv.id === this.currentConversationId ? 'bg-purple-50 dark:bg-purple-900/30' : ''}"
             >
-                <img 
-                    src="${conv.other_avatar || '/assets/default-avatar.png'}" 
-                    class="w-12 h-12 rounded-full object-cover"
-                    alt="${conv.other_display_name}"
+                <span
+                    ${conv.other_username ? `role="link" tabindex="0" class="cursor-pointer shrink-0" aria-label="${conv.other_display_name || conv.other_username}" data-csp-on="click" data-csp-fn="__navigateProfile" data-csp-args='["${conv.other_username}","@event"]' data-csp-stop="1"` : 'class="shrink-0"'}
                 >
+                    <img 
+                        src="${conv.other_avatar || '/assets/default-avatar.png'}" 
+                        class="w-12 h-12 rounded-full object-cover"
+                        alt="${conv.other_display_name}"
+                    >
+                </span>
                 <div class="flex-1 text-${isRTL(State.lang) ? 'right' : 'left'} min-w-0">
                     <div class="font-medium text-gray-900 dark:text-white truncate">${conv.other_display_name}</div>
                     <div class="text-sm text-gray-500 truncate">${conv.last_message || ''}</div>
