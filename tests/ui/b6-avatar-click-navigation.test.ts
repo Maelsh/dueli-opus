@@ -35,6 +35,14 @@ class FakeNode {
         return this.tag.toUpperCase();
     }
 
+    /** The dispatcher walks parentElement/parentNode. */
+    get parentElement(): FakeNode | null {
+        return this.parent;
+    }
+    get parentNode(): FakeNode | null {
+        return this.parent;
+    }
+
     getAttribute(name: string): string | null {
         return name in this.attrs ? this.attrs[name] : null;
     }
@@ -44,6 +52,8 @@ class FakeNode {
     setAttribute(name: string, value: string): void {
         this.attrs[name] = value;
     }
+    /** __fallbackSrc assigns the `src` property, not the attribute. */
+    src = '';
     removeAttribute(name: string): void {
         delete this.attrs[name];
     }
@@ -75,7 +85,7 @@ function installGlobals() {
     assigned.length = 0;
     vi.stubGlobal('HTMLElement', FakeNode);
     vi.stubGlobal('Element', FakeNode);
-    vi.stubGlobal('HTMLImageElement', class extends FakeNode {});
+    vi.stubGlobal('HTMLImageElement', FakeImage);
     vi.stubGlobal('MutationObserver', class { observe() { return undefined; } });
     vi.stubGlobal('document', {
         addEventListener: (t: string, fn: (ev: unknown) => void) => { (docListeners[t] = docListeners[t] || []).push(fn); },
@@ -107,6 +117,9 @@ function fire(type: string, target: FakeNode, key?: string) {
     return ev;
 }
 
+/** An <img>: __fallbackSrc only acts on HTMLImageElement instances. */
+class FakeImage extends FakeNode {}
+
 /** The exact markup shape the shared competition card emits for an avatar. */
 function competitionCardAvatar(username = 'sara') {
     const card = new FakeNode('a', { href: '/competition/42?lang=ar' });
@@ -119,8 +132,18 @@ function competitionCardAvatar(username = 'sara') {
         tabindex: '0',
     });
     span.parent = card;
-    new FakeNode('img').parent = span;
-    return { card, avatar: span };
+    // The avatar <img> also carries an `error` handler (image fallback), which
+    // is what previously shadowed the enclosing click action: the dispatcher
+    // used closest('[data-csp-on][data-csp-fn]'), so a click landing on the
+    // image selected the image's error handler instead of the profile action.
+    const img = new FakeImage('img', {
+        'data-csp-on': 'error',
+        'data-csp-fn': '__fallbackSrc',
+        'data-csp-args': '["@this","https://fallback/default.svg"]',
+    });
+    img.src = 'https://img/sara.png';
+    img.parent = span;
+    return { card, avatar: span, img };
 }
 
 describe('B6 â€” avatar click navigates to the profile', () => {
@@ -155,6 +178,33 @@ describe('B6 â€” avatar click navigates to the profile', () => {
         expect(assigned).toEqual(['/profile/omar?lang=ar']);
         expect(avatar.preventDefaultCount).toBe(1);
         expect(assigned.some(u => u.includes('/messages'))).toBe(false);
+    });
+
+    it('competition card: a click ON THE IMG also goes to the profile', () => {
+        // Regression: the image carries data-csp-on="error"; the dispatcher used
+        // to select that handler for any click, so the parent competition link won.
+        const { img } = competitionCardAvatar('sara');
+        fire('click', img);
+
+        expect(assigned).toEqual(['/profile/sara?lang=ar']);
+        expect(img.preventDefaultCount).toBe(1);
+        expect(assigned.some(u => u.includes('/competition/'))).toBe(false);
+    });
+
+    it('the image error fallback still fires for a real error event', () => {
+        const { img } = competitionCardAvatar('sara');
+        fire('error', img);
+        // __fallbackSrc rewrites src on the element it was bound to.
+        expect(img.src).toBe('https://fallback/default.svg');
+    });
+
+    it('a click on the card outside the avatar does not navigate to the profile', () => {
+        const { card } = competitionCardAvatar('sara');
+        // Somewhere in the card that is not the avatar (e.g. the title).
+        const title = new FakeNode('h3');
+        title.parent = card;
+        fire('click', title);
+        expect(assigned).toHaveLength(0);
     });
 
     it('is keyboard reachable: Enter and Space activate the avatar', () => {

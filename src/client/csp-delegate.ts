@@ -248,10 +248,36 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     // __ALLOWLIST_END__
 ]);
 
+/**
+ * Walks up from the event target to the nearest delegated action.
+ * `type` filters on the declared event type; pass null to accept any.
+ */
+function findAction(start: Element, type: string | null): HTMLElement | null {
+    let node: Node | null = start;
+    while (node) {
+        const el = node as HTMLElement;
+        if (typeof el.getAttribute === 'function' && el instanceof HTMLElement) {
+            const declared = el.getAttribute('data-csp-on');
+            const fn = el.getAttribute('data-csp-fn');
+            if (fn && declared && (type === null || declared === type)) return el;
+        }
+        node = node.parentElement ?? node.parentNode;
+    }
+    return null;
+}
+
 function dispatch(event: Event): void {
     const target = event.target as Element | null;
-    if (!target || typeof (target as Element).closest !== 'function') return;
-    const el = (target as Element).closest('[data-csp-on][data-csp-fn]');
+    if (!target) return;
+    // Find the nearest ancestor action. Two passes:
+    //  1. an action bound to THIS event type - this must win, otherwise a click
+    //     landing on an element carrying a different handler (e.g. an
+    //     <img data-csp-on="error" data-csp-fn="__fallbackSrc">) selects that
+    //     unrelated handler and the enclosing action never runs, so the click
+    //     falls through to the parent link;
+    //  2. any action, which is what the keydown path needs (there the element
+    //     is deliberately bound to "click").
+    const el = findAction(target as Element, event.type) ?? findAction(target as Element, null);
     if (!el || !(el instanceof HTMLElement)) return;
     const want = el.getAttribute('data-csp-on');
     // B6: a delegated target that is not natively activatable (e.g. the

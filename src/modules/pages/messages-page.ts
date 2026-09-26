@@ -137,8 +137,11 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         container.innerHTML = conversations.map(conv => \`
                             <button data-csp-on="click" data-csp-fn="openConversation" data-csp-args='[\${conv.id},\${JSON.stringify((conv.other_username))},\${JSON.stringify((conv.other_avatar || ''))}]' 
                                 class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 \${isRTL ? 'text-right' : 'text-left'}">
-                                <img src="\${conv.other_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + conv.other_username}" 
-                                     class="w-12 h-12 rounded-full">
+                                \${conv.other_username ? \`<span role="link" tabindex="0" class="cursor-pointer shrink-0" aria-label="\${conv.other_display_name || conv.other_username}"
+                                    data-csp-on="click" data-csp-fn="__navigateProfile" data-csp-args='["\${conv.other_username}","@event"]' data-csp-stop="1">
+                                    <img src="\${conv.other_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + conv.other_username}"
+                                         class="w-12 h-12 rounded-full" alt="\${conv.other_display_name || conv.other_username}">
+                                </span>\` : \`<img src="\${conv.other_avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default'}" class="w-12 h-12 rounded-full shrink-0" alt="">\`}
                                 <div class="flex-1 min-w-0">
                                     <p class="font-semibold text-gray-900 dark:text-white truncate">\${conv.other_display_name || conv.other_username}</p>
                                     <p class="text-sm text-gray-500 truncate">\${conv.last_message || ''}</p>
