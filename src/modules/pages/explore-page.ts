@@ -74,7 +74,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       (function() {
-        const lang = '${lang}';
+        const lang = ${JSON.stringify(getUILanguage(lang))};
         const tr = ${JSON.stringify(tr)};
         const rtl = ${rtl};
         const search = new URLSearchParams(window.location.search).get('search') || '';

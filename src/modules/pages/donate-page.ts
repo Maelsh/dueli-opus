@@ -106,7 +106,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
         ${getFooter(lang)}
         
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             let selectedAmount = 25;

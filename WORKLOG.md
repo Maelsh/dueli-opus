@@ -1,3 +1,16 @@
+## 2026-09-27 — Post-#69 language script hardening (branch `fix/ui-language-script-hardening`)
+
+- **BASE / branch**: `c9e0dccdbaf84386329972adc301b8048f77dfcf` (origin/main verified equal before branching) · `fix/ui-language-script-hardening` · no merge, no deploy.
+- **Proven pattern**: raw request language interpolated into CSP-authorized nonce scripts (`const lang = '${lang}'` / `window.lang = '${lang}'`), same sink class #69 fixed on notifications-page.
+- **Confirmed vulnerable → fixed (14 lang sinks)**: home `/` (`window.lang`, main.ts) + messages, explore, profile, settings, my-competitions, my-requests, earnings, reports, create, competition, donate, live-room, transparency. Canonical fix everywhere: `JSON.stringify(getUILanguage(lang))` — executable value can only be `"ar"`/`"en"`; normal ar/en behavior unchanged; no ad-hoc escaping; i18n untouched.
+- **Same-class sinks found while editing → fixed (3)**: competition-page `competitionId` (path `id`), profile-page `profileUsername` (path `username`), live-room-page `competitionId` (path `id`, unquoted — strongest) — all now `JSON.stringify(...)` quoted (all consumers use string concat/`Number()`, verified).
+- **Already safe (verified, untouched)**: notifications-page lang; all `tr`/`countries`/constants via `JSON.stringify`; `isRTL`/ids booleans/DB ints; live-room `streamServerUrl` (hardcoded server constant); live test-script constants (server constants/i18n).
+- **Flagged follow-up, deliberately untouched**: `live-finance-page.ts:76` (`const competitionId = '${competitionId}'`, path id) — page has no language sink and sits outside this batch; pinned as the single documented exception in the source-scan test.
+- **Tests:** new `tests/ui/page-language-script-hardening.test.ts` (102): repo source scan (zero raw sinks except flagged live-finance); 14 surfaces × 7 lang forms (ar/en/fr/en-US/`../..`/2× malicious) asserting valid response, exact `const lang = "<ar|en>"`, no execution markers, strict CSP; `/live/801` validity (scriptless in-process; sink covered by source scan); malicious competition-id and profile-username quoting (404 stays safe). RED on BASE `c9e0dcc` via isolated worktree + `npm ci` (no junctions): 94 fail / 8 pass — the 8 passes are exactly the already-fixed notifications page (7) + scriptless live-room (1). Fixed branch: 102/102.
+- **Regression:** #69 suites intact (auth lifecycle, notifications remediation, rec lang, CSP) · full `npm test` 88 files / 910 tests ✅ · `tsc` ✅ · `npm run build` ✅ (exit 0).
+- **Scope:** B7/VOD/ranking untouched · backend contracts untouched · no middleware/schema/migration/dependency changes · CSP unchanged (nonce-only, no unsafe-inline/eval).
+- **PLAN-STATUS:** untouched — no phase claimed.
+
 ## 2026-09-27 — PR #69 REMOTE remediation: notifications mark-all collision + nonced-script lang sink (same branch/PR)
 
 - **OLD HEAD / scope**: `e518966` → same branch `fix/post-r1-acceptance-blockers`, same PR #69. Two REMOTE blockers only; A–F implementation untouched, B7/VOD/ranking/schema untouched, no merge, no deploy.

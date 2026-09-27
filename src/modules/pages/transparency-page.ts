@@ -273,7 +273,7 @@ export const transparencyPage = async (
         (function() {
             'use strict';
 
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${trJson};
             const t = tr.transparency || {};
