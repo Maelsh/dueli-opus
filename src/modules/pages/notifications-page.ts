@@ -33,7 +33,7 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
                         <i class="fas fa-bell ${rtl ? 'ml-3' : 'mr-3'} text-purple-600"></i>
                         ${tr.notifications || 'Notifications'}
                     </h1>
-                    <button data-csp-on="click" data-csp-fn="markAllNotificationsRead" data-csp-args='[]' id="markAllBtn" class="hidden px-5 py-2 rounded-full text-sm font-bold text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors" title="${tr.mark_all_read || 'Mark all read'}">
+                    <button data-csp-on="click" data-csp-fn="markAllNotificationsPageRead" data-csp-args='[]' id="markAllBtn" class="hidden px-5 py-2 rounded-full text-sm font-bold text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors" title="${tr.mark_all_read || 'Mark all read'}">
                         ${tr.mark_all_read || 'Mark all read'}
                     </button>
                 </div>
@@ -50,7 +50,7 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
         ${getFooter(lang)}
 
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
 
@@ -80,7 +80,9 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
             window.retryPageAuth = initPageAuth;
             window.loadNotifications = loadNotifications;
             window.markNotificationRead = markNotificationRead;
-            window.markAllNotificationsRead = markAllNotificationsRead;
+            // PR #69 blocker 1: this name must stay unambiguous — the deferred
+            // bundle owns window.markAllNotificationsRead (navbar dropdown).
+            window.markAllNotificationsPageRead = markAllNotificationsPageRead;
 
             function esc(value) {
                 return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
@@ -241,13 +243,16 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
                         showLoginRequired();
                         return;
                     }
-                    if (res.ok) loadNotifications();
+                    if (res.ok) {
+                        loadNotifications();
+                        syncNavbarNotifications();
+                    }
                 } catch (err) {
                     console.error('Failed to mark notification as read:', err);
                 }
             }
 
-            async function markAllNotificationsRead() {
+            async function markAllNotificationsPageRead() {
                 try {
                     const res = await fetch('/api/notifications/read-all?lang=' + encodeURIComponent(lang), {
                         method: 'POST',
@@ -257,9 +262,25 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
                         showLoginRequired();
                         return;
                     }
-                    if (res.ok) loadNotifications();
+                    if (res.ok) {
+                        loadNotifications();
+                        syncNavbarNotifications();
+                    }
                 } catch (err) {
                     console.error('Failed to mark all notifications as read:', err);
+                }
+            }
+
+            // Best-effort navbar badge/dropdown refresh when the client bundle
+            // is present. Guarded so the page stays fully correct standalone.
+            function syncNavbarNotifications() {
+                try {
+                    const ui = window.NotificationsUI;
+                    if (ui && typeof ui.loadNotifications === 'function') {
+                        ui.loadNotifications();
+                    }
+                } catch (err) {
+                    console.error('Navbar notifications sync failed:', err);
                 }
             }
         </script>

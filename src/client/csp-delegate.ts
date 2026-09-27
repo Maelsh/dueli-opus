@@ -167,6 +167,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'logout',
     'markAllMessagesRead',
     'markAllNotificationsRead',
+    'markAllNotificationsPageRead',
     'markNotificationRead',
     'openApproveModal',
     'openConversation',

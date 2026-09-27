@@ -12,7 +12,7 @@ export interface ShimElement {
     id: string;
     innerHTML: string;
     textContent: string;
-    classList: { add(...c: string[]): void; remove(...c: string[]): void; contains(c: string): boolean; toArray(): string[] };
+    classList: { add(...c: string[]): void; remove(...c: string[]): void; toggle(c: string, force?: boolean): boolean; contains(c: string): boolean; toArray(): string[] };
     appendLog: string[];
     children: ShimElement[];
     insertAdjacentHTML(_pos: string, html: string): void;
@@ -44,6 +44,12 @@ function makeElement(id: string): ShimElement {
         classList: {
             add: (...c) => c.forEach((x) => x && classes.add(x)),
             remove: (...c) => c.forEach((x) => classes.delete(x)),
+            toggle: (c, force) => {
+                const next = force === undefined ? !classes.has(c) : !!force;
+                if (next) classes.add(c);
+                else classes.delete(c);
+                return next;
+            },
             contains: (c) => classes.has(c),
             toArray: () => [...classes],
         },
