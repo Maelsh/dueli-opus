@@ -196,18 +196,37 @@ export class CompetitionModel extends BaseModel<Competition> {
     }
 
     /**
-     * Find user's competitions
+     * Find user's competitions.
+     *
+     * Post-R1 acceptance (contract C): returns the SAME joined shape as
+     * findByFilters (the working competition listing) so the shared
+     * getCompetitionCard renders identical identities/metadata here —
+     * creator + opponent identity/avatars and category color/icon. Only the
+     * ordering differs (newest-first for a profile shelf); B7 ranking/order
+     * semantics are untouched.
      */
     async findByUser(userId: number, options: QueryOptions = {}): Promise<CompetitionWithDetails[]> {
         const { limit = 20, offset = 0 } = options;
 
         return this.query<CompetitionWithDetails>(`
-            SELECT c.*, 
+            SELECT c.*,
                    cat.name_ar as category_name_ar,
                    cat.name_en as category_name_en,
-                   cat.slug as category_slug
+                   cat.slug as category_slug,
+                   cat.icon as category_icon,
+                   COALESCE(subcat.color, cat.color) as category_color,
+                   subcat.slug as subcategory_slug,
+                   creator.display_name as creator_name,
+                   creator.avatar_url as creator_avatar,
+                   creator.username as creator_username,
+                   opponent.display_name as opponent_name,
+                   opponent.avatar_url as opponent_avatar,
+                   opponent.username as opponent_username
             FROM competitions c
             JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
+            JOIN users creator ON c.creator_id = creator.id
+            LEFT JOIN users opponent ON c.opponent_id = opponent.id
             WHERE c.creator_id = ? OR c.opponent_id = ?
             ORDER BY c.created_at DESC
             LIMIT ? OFFSET ?

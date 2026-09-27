@@ -84,14 +84,22 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
             // B1: a successful modal login must update this page immediately,
             // with no manual refresh and no full reload.
             window.addEventListener('dueli:auth-success', () => {
-                loadCompetitions();
+                if (window.currentUser) loadCompetitions();
+                else initPageAuth();
             });
 
             // CSP-delegated handlers must be reachable from window.
             window.setTab = setTab;
             window.loadCompetitions = loadCompetitions;
+            window.retryPageAuth = initPageAuth;
 
-            document.addEventListener('DOMContentLoaded', async () => {
+            document.addEventListener('DOMContentLoaded', initPageAuth);
+
+            // Post-R1 acceptance: canonical auth lifecycle shared with
+            // App.init. A transient 429/5xx/network ('unknown') renders a
+            // retrying state — never a false Login Required; only an
+            // authoritative 'guest' does.
+            async function initPageAuth() {
                 try {
                     await checkAuth();
                 } catch (err) {
@@ -101,10 +109,24 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
                 }
                 if (window.currentUser) {
                     loadCompetitions();
+                } else if (typeof authStatus === 'function' && authStatus() === 'unknown') {
+                    showAuthPending();
                 } else {
                     showLoginRequired();
                 }
-            });
+            }
+
+            function showAuthPending() {
+                renderInto(\`
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg" data-competitions-state="auth-checking">
+                        <i class="fas fa-spinner fa-spin text-5xl text-purple-400 mb-4"></i>
+                        <p class="text-gray-500 text-lg">\${tr.loading || 'Checking your session...'}</p>
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
+                            <i class="fas fa-rotate-right me-1"></i>\${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
+                        </button>
+                    </div>
+                \`);
+            }
             
             function renderInto(html) {
                 const container = document.getElementById('competitionsContent');

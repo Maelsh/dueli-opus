@@ -10,6 +10,7 @@ export { createPage } from './create-page';
 export { explorePage } from './explore-page';
 export { profilePage } from './profile-page';
 export { messagesPage } from './messages-page';
+export { notificationsPage } from './notifications-page';
 export { settingsPage } from './settings-page';
 export { myCompetitionsPage } from './my-competitions-page';
 export { myRequestsPage } from './my-requests-page';

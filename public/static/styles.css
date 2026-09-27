@@ -130,6 +130,7 @@
     --container-lg: 32rem;
     --container-xl: 36rem;
     --container-2xl: 42rem;
+    --container-3xl: 48rem;
     --container-4xl: 56rem;
     --container-6xl: 72rem;
     --container-7xl: 80rem;
@@ -925,6 +926,9 @@
   }
   .max-w-2xl {
     max-width: var(--container-2xl);
+  }
+  .max-w-3xl {
+    max-width: var(--container-3xl);
   }
   .max-w-4xl {
     max-width: var(--container-4xl);
@@ -3597,6 +3601,14 @@
     @supports (color: color-mix(in lab, red, red)) {
       .dark\:hover\:bg-purple-900\/50:where(.dark, .dark *):hover {
         background-color: color-mix(in oklab, var(--color-purple-900) 50%, transparent);
+      }
+    }
+    .dark\:hover\:bg-purple-900\/60:where(.dark, .dark *):hover {
+      background-color: color-mix(in srgb, oklch(38.1% 0.176 304.987) 60%, transparent);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .dark\:hover\:bg-purple-900\/60:where(.dark, .dark *):hover {
+        background-color: color-mix(in oklab, var(--color-purple-900) 60%, transparent);
       }
     }
     .dark\:hover\:bg-white\/5:where(.dark, .dark *):hover {

@@ -10,6 +10,7 @@ import { BaseController } from './base/BaseController';
 import { CompetitionModel } from '../models/CompetitionModel';
 import { WatchHistoryModel } from '../models/WatchHistoryModel';
 import { RecommendationEngine } from '../lib/services/RecommendationEngine';
+import { normalizeContentLanguage } from '../i18n';
 
 /**
  * Recommendation Controller Class
@@ -30,7 +31,10 @@ export class RecommendationController extends BaseController {
             const user = this.getCurrentUser(c);
             const limit = this.getQueryInt(c, 'limit') || 20;
             const offset = this.getQueryInt(c, 'offset') || 0;
-            const lang = c.get('lang') || 'ar';
+            // Post-R1 acceptance (E): the request language is user input and
+            // only ar/en have backing columns — normalize BEFORE any SQL
+            // interpolation so unsupported values can never become identifiers.
+            const lang = normalizeContentLanguage(c.get('lang') || 'ar');
 
             if (!user) {
                 return await this.getGuestRecommendations(c, limit, offset, lang);

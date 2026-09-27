@@ -135,7 +135,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <!-- Views in bottom right, Likes in bottom left -->
             <div class="absolute bottom-3 ${rtl ? 'right-3' : 'left-3'} z-20">
               <span class="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-medium flex items-center gap-3 border border-white/10 shadow-sm">
-                <span class="flex items-center gap-1.5 transition-colors hover:text-green-400" title="${(tr.like as any)?.title || (tr.like as any)?.already_liked || 'Likes'}">
+                <span class="flex items-center gap-1.5 transition-colors hover:text-green-400" title="${(tr.like as any)?.title || 'Likes'}">
                   <i class="fas fa-thumbs-up text-green-400"></i>
                   ${(item.likes_count || 0).toLocaleString()}
                 </span>

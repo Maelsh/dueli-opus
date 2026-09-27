@@ -18,6 +18,29 @@ import { CryptoUtils } from '../lib/services/CryptoUtils';
 export class AuthController extends BaseController {
 
     /**
+     * Post-R1 acceptance (contract B) — canonical authenticated-user DTO.
+     * Consumers (header, profile, messages) read `display_name`, `avatar_url`
+     * and `username`; the legacy `name` / `avatar` aliases are kept so older
+     * payloads keep working. One shape, produced at this boundary, instead of
+     * every consumer guessing incompatible field names.
+     */
+    private toUserDTO(user: any) {
+        return {
+            id: user.id,
+            username: user.username ?? null,
+            display_name: user.display_name ?? user.username ?? null,
+            avatar_url: user.avatar_url ?? null,
+            email: user.email,
+            language: user.language ?? null,
+            country: user.country ?? null,
+            is_admin: user.is_admin ?? false,
+            // Legacy aliases (compatibility — prefer the canonical keys).
+            name: user.display_name ?? user.username ?? null,
+            avatar: user.avatar_url ?? null,
+        };
+    }
+
+    /**
      * Register new user
      * POST /api/auth/register
      */
@@ -268,13 +291,7 @@ export class AuthController extends BaseController {
 
             return this.success(c, {
                 sessionId: session.id,
-                user: {
-                    id: user.id,
-                    name: user.display_name,
-                    email: user.email,
-                    avatar: user.avatar_url,
-                    is_admin: (user as any).is_admin
-                }
+                user: this.toUserDTO(user)
             });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -302,14 +319,7 @@ export class AuthController extends BaseController {
             }
 
             return this.success(c, {
-                user: {
-                    id: result.user.id,
-                    name: result.user.display_name,
-                    email: result.user.email,
-                    avatar: result.user.avatar_url,
-                    username: result.user.username,
-                    is_admin: (result.user as any).is_admin
-                }
+                user: this.toUserDTO(result.user)
             });
         } catch (error) {
             return this.success(c, { user: null });

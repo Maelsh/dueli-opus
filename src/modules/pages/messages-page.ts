@@ -101,14 +101,43 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const tr = ${JSON.stringify(tr)};
             let currentConversationId = null;
             
-            document.addEventListener('DOMContentLoaded', async () => {
-                await checkAuth();
+            document.addEventListener('DOMContentLoaded', initPageAuth);
+
+            // Post-R1 acceptance: canonical auth lifecycle shared with
+            // App.init. A transient 429/5xx/network ('unknown') renders a
+            // retrying state — never a false Login Required; only an
+            // authoritative 'guest' does. Login updates this page live.
+            async function initPageAuth() {
+                try {
+                    await checkAuth();
+                } catch (err) {
+                    console.error('Auth check failed:', err);
+                }
                 if (window.currentUser) {
                     loadConversations();
+                } else if (typeof authStatus === 'function' && authStatus() === 'unknown') {
+                    showAuthPending();
                 } else {
                     showLoginRequired();
                 }
+            }
+            window.addEventListener('dueli:auth-success', () => {
+                if (window.currentUser) loadConversations();
+                else initPageAuth();
             });
+            window.retryPageAuth = initPageAuth;
+
+            function showAuthPending() {
+                document.getElementById('conversationsList').innerHTML = \`
+                    <div class="p-8 text-center text-gray-400">
+                        <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                        <p>\${tr.loading || 'Checking your session...'}</p>
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                            \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
+                        </button>
+                    </div>
+                \`;
+            }
             
             function showLoginRequired() {
                 document.getElementById('conversationsList').innerHTML = \`

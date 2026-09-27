@@ -41,10 +41,38 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
       const tr = ${JSON.stringify(tr)};
       let categories = [];
       
-      document.addEventListener('DOMContentLoaded', async () => {
-        await checkAuth();
-        
-        if (!window.currentUser) {
+      document.addEventListener('DOMContentLoaded', initCreatePage);
+
+      // Post-R1 acceptance: canonical auth lifecycle shared with App.init —
+      // transient 'unknown' renders retrying, never a false Login Required;
+      // login renders the form without a reload.
+      async function initCreatePage() {
+        try {
+          await checkAuth();
+        } catch (err) {
+          console.error('Auth check failed:', err);
+        }
+
+        if (window.currentUser) {
+          // Load categories
+          const catRes = await fetch('/api/categories');
+          const catData = await catRes.json();
+          if (catData.success) {
+            categories = catData.data;
+          }
+
+          renderCreateForm();
+        } else if (typeof authStatus === 'function' && authStatus() === 'unknown') {
+          document.getElementById('createFormContainer').innerHTML = \`
+            <div class="card p-8 text-center">
+              <i class="fas fa-spinner fa-spin text-3xl text-purple-400 mb-4"></i>
+              <p class="text-gray-500 mb-4">\${tr.loading || 'Checking your session...'}</p>
+              <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="btn-primary">
+                \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
+              </button>
+            </div>
+          \`;
+        } else {
           document.getElementById('createFormContainer').innerHTML = \`
             <div class="card p-8 text-center">
               <div class="w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
@@ -59,16 +87,11 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           \`;
           return;
         }
-        
-        // Load categories
-        const catRes = await fetch('/api/categories');
-        const catData = await catRes.json();
-        if (catData.success) {
-          categories = catData.data;
-        }
-        
-        renderCreateForm();
+      }
+      window.addEventListener('dueli:auth-success', () => {
+        if (window.currentUser) initCreatePage();
       });
+      window.retryPageAuth = initCreatePage;
       
       function renderCreateForm() {
         const mainCats = categories.filter(c => !c.parent_id);

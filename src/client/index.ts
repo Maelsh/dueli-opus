@@ -205,6 +205,7 @@ declare global {
         selectCountry: (code: string) => void;
         showHelp: typeof Modal.showHelp;
         checkAuth: typeof AuthService.checkAuth;
+        authStatus: typeof AuthService.getAuthStatus;
         toggleNotifications: typeof NotificationsUI.toggle;
         markAllNotificationsRead: typeof NotificationsUI.markAllAsRead;
         toggleMessages: typeof MessagesUI.toggle;
@@ -248,6 +249,7 @@ declare global {
 const dueliAPI = {
     // Auth
     checkAuth: () => AuthService.checkAuth(),
+    authStatus: () => AuthService.getAuthStatus(),
     updateAuthUI: () => AuthService.updateAuthUI(),
     loginWith: (provider: string) => AuthService.loginWith(provider),
     logout: () => AuthService.logout(),
@@ -306,6 +308,10 @@ if (typeof window !== 'undefined') {
     window.selectCountry = (code: string) => CountryFunctions.select(code);
     window.showHelp = () => Modal.showHelp();
     window.checkAuth = () => AuthService.checkAuth();
+    // Post-R1 acceptance: canonical auth resolution state for page guards
+    // ('authenticated' | 'guest' | 'unknown'). Guards must treat 'unknown'
+    // (fresh page + transient 429/5xx/network) as "retrying", never as guest.
+    window.authStatus = () => AuthService.getAuthStatus();
     window.toggleNotifications = () => NotificationsUI.toggle();
     window.markAllNotificationsRead = () => NotificationsUI.markAllAsRead();
     window.toggleMessages = () => MessagesUI.toggle();

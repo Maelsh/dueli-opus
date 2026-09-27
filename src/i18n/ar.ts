@@ -466,6 +466,7 @@ export const ar = {
 
     // الإعجابات
     like: {
+        title: 'الإعجابات',
         already_liked: 'أعجبت بها مسبقاً',
         not_found: 'الإعجاب غير موجود',
     },
@@ -578,6 +579,11 @@ export const ar = {
     contact_admin: 'مراسلة الإدارة',
     submit_report: 'تقديم شكوى',
     no_notifications: 'لا توجد إشعارات',
+
+    // صفحة الإشعارات (قبول ما بعد R1: مسار /notifications)
+    notifications_page: {
+        mark_read: 'تعليم كمقروء',
+    },
 
     // صفحة الأرباح
     available: 'متاح',

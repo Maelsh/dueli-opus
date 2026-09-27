@@ -671,7 +671,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   <button data-csp-on="click" data-csp-fn="setReplyTo" data-csp-args='[\${cm.id},\${JSON.stringify((cm.display_name || "").replace(/['"]/g, ""))}]' class="text-xs text-gray-400 hover:text-purple-500 transition-colors">
                     <i class="fas fa-reply me-1"></i>\${tr.reply || 'Reply'}
                   </button>
-                  <button data-csp-on="click" data-csp-fn="showReportModal" data-csp-args='["comment",\${cm.id}]' class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="\${tr.report || 'Report'}">
+                  <button data-csp-on="click" data-csp-fn="showReportModal" data-csp-args='["comment",\${cm.id}]' class="text-xs text-gray-400 hover:text-red-500 transition-colors" aria-label="\${(tr.report && tr.report.title) || 'Report'}">
                     <i class="fas fa-flag"></i>
                   </button>
                 </span>
@@ -833,7 +833,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 transform animate-scale-up">
             <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">
               <i class="fas fa-flag text-red-500 me-2"></i>
-              \${tr.report || 'Report'}
+              \${(tr.report && tr.report.title) || 'Report'}
             </h3>
             <div class="space-y-3 mb-6">
               \${reasonOptions}

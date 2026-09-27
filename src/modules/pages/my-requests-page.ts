@@ -61,14 +61,42 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
             const tr = ${JSON.stringify(tr)};
             let currentTab = 'received';
             
-            document.addEventListener('DOMContentLoaded', async () => {
-                await checkAuth();
+            document.addEventListener('DOMContentLoaded', initPageAuth);
+
+            // Post-R1 acceptance: canonical auth lifecycle shared with
+            // App.init — transient 'unknown' renders retrying, never a false
+            // Login Required; login updates this page without a reload.
+            async function initPageAuth() {
+                try {
+                    await checkAuth();
+                } catch (err) {
+                    console.error('Auth check failed:', err);
+                }
                 if (window.currentUser) {
                     loadRequests();
+                } else if (typeof authStatus === 'function' && authStatus() === 'unknown') {
+                    showAuthPending();
                 } else {
                     showLoginRequired();
                 }
+            }
+            window.addEventListener('dueli:auth-success', () => {
+                if (window.currentUser) loadRequests();
+                else initPageAuth();
             });
+            window.retryPageAuth = initPageAuth;
+
+            function showAuthPending() {
+                document.getElementById('requestsContent').innerHTML = \`
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
+                        <i class="fas fa-spinner fa-spin text-5xl text-purple-400 mb-4"></i>
+                        <p class="text-gray-500 text-lg">\${tr.loading || 'Checking your session...'}</p>
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                            \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
+                        </button>
+                    </div>
+                \`;
+            }
             
             function showLoginRequired() {
                 document.getElementById('requestsContent').innerHTML = \`
