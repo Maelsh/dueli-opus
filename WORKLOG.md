@@ -1,3 +1,10 @@
+## 2026-09-27 — PR #70 closure: final same-class sink (live-finance competitionId)
+
+- **Scope**: exactly one known remaining sink — `live-finance-page.ts:76` (`const competitionId = '${competitionId}'`, path `id` into the nonce script). Fix: `JSON.stringify(competitionId ?? '')`; sole consumer is string concat in a fetch URL, so runtime type/behavior preserved. No finance behavior/contract change; no Plan16 financial work reopened.
+- **Tests**: source-scan assertion tightened to ZERO exceptions (allowlist removed); new runtime proof for malicious live-finance competitionId (quoted JSON, no breakout). Suite now 103 tests.
+- **RED**: isolated worktree @`bfdca51` + `npm ci` with the updated test file — exactly 2 fail (source scan + live-finance runtime), 101 pass. Fixed HEAD: 103/103.
+- **Regression**: #69 suites (auth lifecycle, notifications remediation/page, rec lang, CSP) green · full `npm test` 88 files / 911 tests ✅ · `tsc` ✅ · `npm run build` ✅ (exit 0). B7/VOD untouched; no middleware/schema/migration/dependency changes; CSP unchanged.
+
 ## 2026-09-27 — Post-#69 language script hardening (branch `fix/ui-language-script-hardening`)
 
 - **BASE / branch**: `c9e0dccdbaf84386329972adc301b8048f77dfcf` (origin/main verified equal before branching) · `fix/ui-language-script-hardening` · no merge, no deploy.

@@ -2,15 +2,10 @@
  * Post-#69 language script hardening — the proven `const lang = '${lang}'`
  * pattern (raw request value inside a CSP-authorized nonce script) existed
  * on 13 sibling page scripts + home `/`, plus same-class request-derived
- * sinks (competition/profile/live-room ids).
+ * sinks (competition/profile/live-room/live-finance ids).
  *
  * Canonical fix (same as #69): JSON.stringify(getUILanguage(lang)) — the
  * executable value can only ever be "ar" or "en".
- *
- * NOTE: live-finance-page.ts still carries `const competitionId =
- * '${competitionId}'` (path id) but has no language sink and is outside this
- * batch's affected set — it is pinned below as the single documented
- * exception (follow-up), not silently allowed.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -101,7 +96,7 @@ function assertStrictCsp(res: Response) {
     expect(csp).not.toContain('unsafe-eval');
 }
 
-describe('post-#69: no raw request-into-JS sinks remain (except flagged live-finance)', () => {
+describe('post-#69: zero raw request-into-JS sinks remain', () => {
     it('repo source scan', () => {
         const offenders: string[] = [];
         for (const f of walkTs(join(process.cwd(), 'src'))) {
@@ -110,11 +105,7 @@ describe('post-#69: no raw request-into-JS sinks remain (except flagged live-fin
                 if (re.test(text)) offenders.push(`${f} :: ${re.source}`);
             }
         }
-        // Single documented exception: live-finance-page has no language sink
-        // and sits outside this batch — flagged follow-up, not a free pass.
-        const unexpected = offenders.filter((o) => !o.startsWith(join(process.cwd(), 'src/modules/pages/live-finance-page.ts')));
-        expect(unexpected).toEqual([]);
-        expect(offenders.some((o) => o.includes('live-finance-page.ts'))).toBe(true);
+        expect(offenders).toEqual([]);
     });
 });
 
@@ -181,6 +172,23 @@ describe('post-#69: every affected surface serves canonical serialized language'
         }
         for (const body of scripts) {
             expect(body).not.toMatch(/const competitionId = '/);
+        }
+    });
+
+    it('live-finance competitionId cannot break out (same-class closure)', async () => {
+        const evil = encodeURIComponent(`801${ALERT}`);
+        const res = await app.request(`/live/${evil}/finance?lang=en`, {}, env(db));
+        expect(res.status).toBe(200);
+        assertStrictCsp(res);
+        const scripts = inlineScripts(await res.text());
+        const idStmt = scripts.flatMap((b) => [...b.matchAll(/const competitionId = (".*?");/g)]);
+        expect(idStmt.length).toBeGreaterThan(0);
+        for (const m of idStmt) {
+            expect(JSON.parse(m[1])).toContain(`801${ALERT}`);
+        }
+        for (const body of scripts) {
+            expect(body).not.toMatch(/const competitionId = '/);
+            expect(body).not.toContain('__xss');
         }
     });
 

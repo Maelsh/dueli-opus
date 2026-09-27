@@ -73,7 +73,7 @@ export function liveFinanceDashboardPage(c: Context<{ Bindings: Bindings; Variab
     </div>
     ${getFooter(lang)}
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-        const competitionId = '${competitionId}';
+        const competitionId = ${JSON.stringify(competitionId ?? '')};
         async function pollLiveFinance() {
             try {
                 const token = localStorage.getItem('session_id');
