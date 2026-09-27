@@ -103,8 +103,18 @@ app.use('*', securityHeaders());
 // General API rate limit: 100 requests/minute per IP
 app.use('/api/*', rateLimit({ windowMs: 60000, maxRequests: 100 }));
 
-// Stricter rate limit for auth endpoints (login/register/oauth): 10 requests/15min per IP
-app.use('/api/auth/*', rateLimit({ windowMs: 900000, maxRequests: 10 }));
+// Stricter rate limit for auth endpoints (login/register/oauth): 10 requests/15min per IP.
+// Post-R1 acceptance: GET /api/auth/session is a READ-ONLY session check, not
+// an authentication attempt — every page load fires it (App.init + page guard),
+// so sharing the brute-force bucket 429s ordinary navigation and visually logs
+// users out. It is exempt from the strict bucket here but still covered by the
+// general 100/min API limit above. Login/register/password-reset/OAuth stay
+// strictly limited (proven by tests/api/auth-session-ratelimit.test.ts).
+const authAttemptLimit = rateLimit({ windowMs: 900000, maxRequests: 10 });
+app.use('/api/auth/*', async (c, next) => {
+    if (c.req.method === 'GET' && c.req.path === '/api/auth/session') return next();
+    return authAttemptLimit(c, next);
+});
 
 // CSRF protection on all state-changing API requests (GET/HEAD/OPTIONS are skipped internally)
 app.use('/api/*', csrfProtection());
@@ -205,7 +215,7 @@ app.get('/', (c) => {
             <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${rtl ? 'right-4' : 'left-4'}">
               <i class="fas fa-search text-lg"></i>
             </div>
-            <button id="searchBtn" data-csp-on="click" data-csp-fn="performSearch" data-csp-args='[]' class="absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-2' : 'right-2'} p-2 bg-gradient-to-br from-purple-600 to-indigo-600 hover:opacity-90 text-white rounded-full transition-all shadow-lg shadow-purple-500/30 cursor-pointer" title="${tr.search || 'Search'}">
+            <button id="searchBtn" data-csp-on="click" data-csp-fn="performSearch" data-csp-args='[]' class="absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-2' : 'right-2'} p-2 bg-gradient-to-br from-purple-600 to-indigo-600 hover:opacity-90 text-white rounded-full transition-all shadow-lg shadow-purple-500/30 cursor-pointer" title="${tr.search_placeholder || 'Search'}">
               <i class="fas fa-arrow-${rtl ? 'left' : 'right'}"></i>
             </button>
             <!-- Search Results Dropdown -->
@@ -294,7 +304,7 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
+import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
@@ -305,6 +315,7 @@ app.get('/explore', explorePage);
 app.get('/profile', profilePage); // Own profile
 app.get('/profile/:username', profilePage);
 app.get('/messages', messagesPage);
+app.get('/notifications', notificationsPage);
 app.get('/settings', settingsPage);
 app.get('/my-competitions', myCompetitionsPage);
 app.get('/my-requests', myRequestsPage);

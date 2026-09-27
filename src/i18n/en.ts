@@ -490,6 +490,7 @@ export const en = {
 
     // Likes
     like: {
+        title: 'Likes',
         already_liked: 'Already liked',
         not_found: 'Like not found',
     },
@@ -602,6 +603,11 @@ export const en = {
     contact_admin: 'Contact Admin',
     submit_report: 'Submit Report',
     no_notifications: 'No notifications',
+
+    // Notifications page (post-R1 acceptance: the /notifications route)
+    notifications_page: {
+        mark_read: 'Mark read',
+    },
 
     // Earnings Page
     available: 'Available',

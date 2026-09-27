@@ -151,7 +151,7 @@ export function getNavigation(lang: Language): string {
                   <span>${tr.my_requests || 'My Requests'}</span>
                 </a>
                 <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
-                <a href="/reports?lang=${lang}" class="user-menu-item" title="${tr.report || 'Report'}">
+                <a href="/reports?lang=${lang}" class="user-menu-item" title="${(tr.report && tr.report.title) || 'Report'}">
                   <i class="fas fa-flag text-gray-500"></i>
                   <span>${tr.submit_report || 'Submit Report'}</span>
                 </a>

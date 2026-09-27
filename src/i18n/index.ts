@@ -114,6 +114,23 @@ export function getDir(lang: Language): 'rtl' | 'ltr' {
 }
 
 /**
+ * Post-R1 acceptance (E) — canonical content-language normalization.
+ * Only 'ar' and 'en' have backing data (e.g. `categories.name_ar/name_en`).
+ * Any other value (fr, ca, xx, malformed, …) MUST fall back to the
+ * application default instead of ever reaching SQL as a column identifier.
+ * This is the single boundary every dynamic column selection must use.
+ */
+export function normalizeContentLanguage(lang: unknown): TranslatedLanguage {
+    if (typeof lang === 'string') {
+        const code = lang.trim().toLowerCase().split(/[^a-z]/)[0];
+        if (TRANSLATED_LANGUAGES.includes(code as TranslatedLanguage)) {
+            return code as TranslatedLanguage;
+        }
+    }
+    return DEFAULT_LANGUAGE;
+}
+
+/**
  * Get localized name for category/item based on language
  * Priority: name_key (i18n) → slug as key → name_${lang} → name_en → any available
  */

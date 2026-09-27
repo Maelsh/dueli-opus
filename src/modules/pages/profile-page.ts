@@ -218,10 +218,19 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             
-            document.addEventListener('DOMContentLoaded', () => {
-                checkAuth();
+            document.addEventListener('DOMContentLoaded', async () => {
+                // Post-R1 acceptance: await the canonical resolution (shared
+                // single-flight with App.init) instead of racing it — a
+                // fire-and-forget check always read a false guest on fresh
+                // pages. Re-render on login so actions appear without reload.
+                try {
+                    await checkAuth();
+                } catch (err) {
+                    console.error('Auth check failed:', err);
+                }
                 updateProfileActions();
             });
+            window.addEventListener('dueli:auth-success', updateProfileActions);
             
             function updateProfileActions() {
                 const container = document.getElementById('profileActions');

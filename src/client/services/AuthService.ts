@@ -38,6 +38,36 @@ export class AuthService {
     static readonly AUTH_CHECK_TIMEOUT_MS = 10000;
 
     /**
+     * Post-R1 acceptance — canonical auth resolution state for one page.
+     * 'unknown'  = no authoritative answer yet (fresh page, or the last check
+     *              hit a transient 429/5xx/network/timeout). Page guards must
+     *              render a safe "checking/retrying" state here — NEVER a false
+     *              "Login Required".
+     * 'authenticated' = the server returned a valid user for this session.
+     * 'guest'    = ONLY an authoritative unauthenticated answer (normally a
+     *              401, or a 200 with user:null) may set this.
+     * Server APIs stay the authority for protected actions: 'unknown' grants
+     * nothing, it only withholds the false logged-out UI.
+     */
+    static authStatus: 'unknown' | 'authenticated' | 'guest' = 'unknown';
+
+    /**
+     * Post-R1 acceptance — last `retryAfter` (seconds) communicated by a 429
+     * response body. Preserved so the UI can back off appropriately. The
+     * existing contract carries it in the JSON body (no Retry-After header
+     * required); both `retryAfter` and `retry_after` spellings are accepted.
+     */
+    static lastRetryAfterSec = 0;
+
+    /**
+     * Post-R1 acceptance — single-flight for /api/auth/session. App.init and
+     * every page guard call checkAuth() during one page initialization;
+     * concurrent callers share ONE network request instead of racing
+     * duplicates that exhaust the session-check budget.
+     */
+    private static _pendingAuthCheck: Promise<boolean> | null = null;
+
+    /**
      * B1: bounded wrapper for the auth check. Aborting only cancels the client
      * wait; the server contract is untouched.
      */
@@ -64,7 +94,11 @@ export class AuthService {
      * their own state without a full reload.
      */
     static emitAuthSuccess(user?: unknown): void {
-        State.currentUser = (user as never) ?? State.currentUser;
+        const normalized = user === undefined ? undefined : AuthService.normalizeUser(user);
+        State.currentUser = (normalized as never) ?? State.currentUser;
+        // A published auth success is authoritative: forget any transient
+        // 'unknown' so guards render the authenticated state immediately.
+        if (State.currentUser) AuthService.authStatus = 'authenticated';
         if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
         window.dispatchEvent(new CustomEvent('dueli:auth-success', {
             detail: { user: State.currentUser }
@@ -72,9 +106,50 @@ export class AuthService {
     }
 
     /**
-     * Check authentication status
+     * Post-R1 acceptance — canonical auth-user normalization (contract B).
+     * The server emits the canonical DTO (`display_name`, `avatar_url`,
+     * `username`) plus legacy aliases (`name`, `avatar`); older payloads may
+     * carry only the aliases. Normalize once here so State.currentUser always
+     * exposes the canonical shape and no consumer has to guess field names.
+     * NEVER invents an avatar: a missing avatar stays null so the UI falls
+     * back to its placeholder instead of a random DiceBear identity.
      */
-    static async checkAuth(): Promise<boolean> {
+    static normalizeUser(raw: any): any {
+        if (!raw || typeof raw !== 'object') return raw;
+        const display_name = raw.display_name ?? raw.name ?? raw.username ?? null;
+        const avatar_url = raw.avatar_url ?? raw.avatar ?? null;
+        return {
+            ...raw,
+            display_name,
+            avatar_url,
+            username: raw.username ?? null,
+            // Legacy aliases, kept for compatibility with older consumers.
+            name: raw.name ?? display_name,
+            avatar: raw.avatar ?? avatar_url,
+        };
+    }
+
+    /** Read the canonical auth resolution state (for page guards). */
+    static getAuthStatus(): 'unknown' | 'authenticated' | 'guest' {
+        return AuthService.authStatus;
+    }
+
+    /**
+     * Check authentication status — canonical single-flight entry point.
+     * Concurrent callers (App.init + page guards) share one resolution.
+     */
+    static checkAuth(): Promise<boolean> {
+        if (AuthService._pendingAuthCheck) return AuthService._pendingAuthCheck;
+        AuthService._pendingAuthCheck = AuthService.resolveAuth().finally(() => {
+            AuthService._pendingAuthCheck = null;
+        });
+        return AuthService._pendingAuthCheck;
+    }
+
+    /**
+     * The actual session resolution. Only this method performs the fetch.
+     */
+    private static async resolveAuth(): Promise<boolean> {
         const cookieSession = CookieUtils.get('sessionId');
         const savedSession = cookieSession || localStorage.getItem('sessionId');
 
@@ -91,14 +166,24 @@ export class AuthService {
 
                 // Rate-limited (429): the session is NOT invalid — keep local
                 // auth state untouched so a throttled check never logs the user
-                // out. Return false without clearing.
+                // out. Preserve the server's retryAfter hint when present.
                 if (res.status === 429) {
+                    try {
+                        const body = (await res.json()) as any;
+                        const hint = Number(body?.retryAfter ?? body?.retry_after ?? 0);
+                        if (Number.isFinite(hint) && hint > 0) {
+                            AuthService.lastRetryAfterSec = hint;
+                        }
+                    } catch {
+                        // Body unreadable — still transient, still not a logout.
+                    }
                     this.updateAuthUI();
                     return false;
                 }
 
                 if (res.status === 401) {
                     // Genuine unauthenticated/expired session per the current contract.
+                    AuthService.authStatus = 'guest';
                     this.clearAuth();
                     this.updateAuthUI();
                     return false;
@@ -114,9 +199,10 @@ export class AuthService {
                 }
 
                 const data = await res.json() as ApiResponse;
-                const user = data.user || data.data?.user || data;
+                const user = AuthService.normalizeUser(data.user || data.data?.user || data);
 
                 if (user && (user.id || user.user_id || user.email)) {
+                    AuthService.authStatus = 'authenticated';
                     State.currentUser = user;
                     State.sessionId = savedSession;
 
@@ -141,6 +227,8 @@ export class AuthService {
                     this.updateAuthUI();
                     return true;
                 } else {
+                    // Authoritative 200 with no user: the session is invalid.
+                    AuthService.authStatus = 'guest';
                     this.clearAuth();
                 }
             } catch (err) {
@@ -149,6 +237,10 @@ export class AuthService {
                 // report unauthenticated for this check only.
                 console.error('Auth check failed:', err);
             }
+        } else {
+            // No session token anywhere: there is nothing to validate, so the
+            // client is authoritatively a guest (first-visit visitor).
+            AuthService.authStatus = 'guest';
         }
 
         this.updateAuthUI();
@@ -162,6 +254,7 @@ export class AuthService {
         localStorage.removeItem('user');
         localStorage.removeItem('sessionId');
         CookieUtils.delete('sessionId');
+        AuthService.authStatus = 'guest';
         State.currentUser = null;
         State.sessionId = null;
         // T2.2: Close the real-time channel on logout
@@ -238,20 +331,13 @@ export class AuthService {
                 );
             }
 
-            // Fetch user info
-            const response = await fetch('/api/auth/session', {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Bearer ' + session,
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-            });
+            // Fetch user info through the canonical single-flight resolution
+            // (storage was just primed above) instead of a second bespoke
+            // /api/auth/session call racing App.init/page guards.
+            const ok = await this.checkAuth();
+            const user = State.currentUser;
 
-            const data = await response.json() as ApiResponse;
-            const user = data.user || data.data?.user || data;
-
-            if (user && (user.id || user.user_id || user.email)) {
+            if ((ok || user) && user && (user.id || user.user_id || user.email)) {
                 localStorage.setItem('user', JSON.stringify(user));
                 State.currentUser = user;
                 State.sessionId = session;
@@ -300,7 +386,7 @@ export class AuthService {
             if (data.success) {
                 // Server wraps response in data.data
                 const responseData = data.data || data;
-                const user = responseData.user;
+                const user = AuthService.normalizeUser(responseData.user);
                 const sessionId = responseData.sessionId;
 
 
