@@ -62,7 +62,9 @@ function avatarSrc(opts: UserAvatarOptions): string {
 export function getUserAvatarLink(opts: UserAvatarOptions): string {
     const label = escapeAttr(getUserLabel(opts.displayName, opts.username));
     const imgClass = opts.imgClassName || 'w-full h-full rounded-full';
-    const img = `<img src="${escapeAttr(avatarSrc(opts))}" alt="${label}" class="${imgClass}" loading="${opts.loading || 'lazy'}" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>`;
+    // Explicit intrinsic dimensions reserve space before the image loads (no CLS);
+    // CSS classes control the rendered size. decoding="async" avoids blocking.
+    const img = `<img src="${escapeAttr(avatarSrc(opts))}" alt="${label}" width="40" height="40" decoding="async" class="${imgClass}" loading="${opts.loading || 'lazy'}" data-csp-on="error" data-csp-fn="__fallbackSrc" data-csp-args='["@this","https://api.dicebear.com/7.x/avataaars/svg?seed=default"]'>`;
 
     if (opts.linkToProfile === false) return img;
 

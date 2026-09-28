@@ -7,6 +7,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { DUELI_PRIMARY_BTN } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 import { getCountriesList } from '../../countries';
 
@@ -45,6 +46,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             const countries = ${JSON.stringify(countries)};
+            const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
             let currentSettings = {};
             
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -77,7 +79,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-8 text-center shadow-lg">
                         <i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i>
                         <p class="text-gray-500">\${tr.loading || 'Checking your session...'}</p>
-                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-4 px-6 py-2 \${PRIMARY_BTN}">
                             \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
                         </button>
                     </div>
@@ -89,7 +91,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-8 text-center shadow-lg">
                         <i class="fas fa-lock text-4xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500">\${tr.login_required || 'Please login to access settings'}</p>
-                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 \${PRIMARY_BTN}">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -185,7 +187,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         </div>
                         
                         <!-- Save Button -->
-                        <button type="submit" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg">
+                        <button type="submit" class="w-full py-4 ${DUELI_PRIMARY_BTN} hover:opacity-90 transition-opacity rounded-xl">
                             <i class="fas fa-save \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.save || 'Save Settings'}
                         </button>

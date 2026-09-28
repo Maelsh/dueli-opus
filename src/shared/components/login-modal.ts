@@ -5,6 +5,7 @@
 
 import type { Language } from '../../config/types';
 import { translations, getUILanguage, isRTL } from '../../i18n';
+import { DUELI_AUTH_GRADIENT } from '../constants';
 
 /**
  * Get Login Modal HTML - الحصول على HTML نافذة تسجيل الدخول
@@ -14,15 +15,15 @@ export function getLoginModal(lang: Language): string {
   const rtl = isRTL(lang);
 
   return `
-    <div id="loginModal" class="hidden fixed inset-0 z-[100]">
+    <div id="loginModal" class="hidden fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalSubtitle">
       <div class="modal-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm" data-csp-on="click" data-csp-fn="hideLoginModal" data-csp-args='[]'></div>
-      <div class="modal-content bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-md p-8">
-        <button data-csp-on="click" data-csp-fn="hideLoginModal" data-csp-args='[]' class="absolute top-4 ${rtl ? 'left-4' : 'right-4'} text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-          <i class="fas fa-times text-xl"></i>
+      <div class="modal-content bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-md p-8" role="document">
+        <button data-csp-on="click" data-csp-fn="hideLoginModal" data-csp-args='[]' aria-label="${tr.close}" title="${tr.close}" class="absolute top-4 ${rtl ? 'left-4' : 'right-4'} text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+          <i class="fas fa-times text-xl" aria-hidden="true"></i>
         </button>
         
         <div class="text-center mb-6">
-          <div class="flex justify-center mb-4"><img src="/static/dueli-icon.png" alt="Dueli" class="w-12 h-12 object-contain"></div>
+          <div class="flex justify-center mb-4"><img src="/static/dueli-icon.png" alt="Dueli" width="48" height="48" decoding="async" class="w-12 h-12 object-contain"></div>
           <h2 class="text-2xl font-bold text-gray-900 dark:text-white" id="modalTitle">${tr.login_welcome}</h2>
           <p class="text-gray-500 mt-2 text-sm" id="modalSubtitle">${tr.login_subtitle}</p>
         </div>
@@ -56,7 +57,7 @@ export function getLoginModal(lang: Language): string {
               </div>
               <input type="password" id="loginPassword" required title="${tr.password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
-            <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
+            <button type="submit" class="w-full py-3 ${DUELI_AUTH_GRADIENT} text-white rounded-lg font-semibold hover:opacity-90 transition-all">
               ${tr.login_button}
             </button>
           </form>
@@ -134,7 +135,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
           <input type="email" id="resetEmail" required title="${tr.email_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
-        <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
+        <button type="submit" class="w-full py-3 ${DUELI_AUTH_GRADIENT} text-white rounded-lg font-semibold hover:opacity-90 transition-all">
           ${tr.send_code}
         </button>
       </form>
@@ -146,7 +147,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
           <input type="text" id="resetCode" required title="${tr.verification_code_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl tracking-widest">
           <p class="text-xs text-gray-500 mt-2 text-center">${tr.code_sent_to_email}</p>
         </div>
-        <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
+        <button type="submit" class="w-full py-3 ${DUELI_AUTH_GRADIENT} text-white rounded-lg font-semibold hover:opacity-90 transition-all">
           ${tr.verify_code}
         </button>
       </form>
@@ -157,7 +158,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.new_password_label}</label>
           <input type="password" id="newPassword" required minlength="6" title="${tr.new_password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
-        <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
+        <button type="submit" class="w-full py-3 ${DUELI_AUTH_GRADIENT} text-white rounded-lg font-semibold hover:opacity-90 transition-all">
           ${tr.change_password}
         </button>
       </form>
@@ -185,7 +186,7 @@ function getRegisterForm(lang: Language, tr: any): string {
           <input type="password" id="registerPassword" required minlength="6" title="${tr.password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
           <p class="text-xs text-gray-500 mt-1">${tr.password_min_length}</p>
         </div>
-        <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold hover:opacity-90 transition-all">
+        <button type="submit" class="w-full py-3 ${DUELI_AUTH_GRADIENT} text-white rounded-lg font-semibold hover:opacity-90 transition-all">
           ${tr.register_button}
         </button>
       </form>

@@ -7,6 +7,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { DUELI_PRIMARY_BTN, DUELI_TAB_ACTIVE, DUELI_TAB_INACTIVE } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 /**
@@ -59,6 +60,11 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
             const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
+            const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
+            const ACTIVE_TAB = ${JSON.stringify(DUELI_TAB_ACTIVE)};
+            const INACTIVE_TAB = ${JSON.stringify(DUELI_TAB_INACTIVE)};
+            const ACTIVE_TAB_CLASSES = ACTIVE_TAB.split(' ').filter(Boolean);
+            const INACTIVE_TAB_CLASSES = INACTIVE_TAB.split(' ').filter(Boolean);
             let currentTab = 'received';
             
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -91,7 +97,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-spinner fa-spin text-5xl text-purple-400 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.loading || 'Checking your session...'}</p>
-                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
                             \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
                         </button>
                     </div>
@@ -103,7 +109,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-lock text-5xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.login_required || 'Please login to view your requests'}</p>
-                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -112,12 +118,17 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
             
             function setTab(tab) {
                 currentTab = tab;
+                // Canonical Dueli gradient for the active tab (same token as the
+                // CTAs); previously a flat solid purple background.
                 document.querySelectorAll('[id^="tab-"]').forEach(el => {
-                    el.classList.remove('bg-purple-600', 'text-white');
-                    el.classList.add('text-gray-600');
+                    el.classList.remove(...ACTIVE_TAB_CLASSES);
+                    el.classList.add(...INACTIVE_TAB_CLASSES);
                 });
-                document.getElementById('tab-' + tab).classList.add('bg-purple-600', 'text-white');
-                document.getElementById('tab-' + tab).classList.remove('text-gray-600');
+                const active = document.getElementById('tab-' + tab);
+                if (active) {
+                    active.classList.add(...ACTIVE_TAB_CLASSES);
+                    active.classList.remove(...INACTIVE_TAB_CLASSES);
+                }
                 loadRequests();
             }
             

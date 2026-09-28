@@ -12,6 +12,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { DUELI_PRIMARY_BTN } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 /**
@@ -53,6 +54,7 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
             const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
+            const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
 
             document.addEventListener('DOMContentLoaded', initPageAuth);
 
@@ -102,7 +104,7 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-lock text-5xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.login_required || 'Please login to view notifications'}</p>
-                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -115,7 +117,7 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-spinner fa-spin text-5xl text-purple-400 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.loading || 'Checking your session...'}</p>
-                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
                             \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
                         </button>
                     </div>
@@ -128,7 +130,7 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-exclamation-triangle text-5xl text-yellow-400 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${(tr.errors && tr.errors.service_unavailable) || 'Could not load notifications'}</p>
-                        <button data-csp-on="click" data-csp-fn="loadNotifications" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="loadNotifications" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
                             <i class="fas fa-rotate-right me-1"></i>\${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
                         </button>
                     </div>

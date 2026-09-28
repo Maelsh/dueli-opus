@@ -7,6 +7,20 @@
 export const DUELI_PRIMARY_GRADIENT = 'bg-gradient-to-r from-purple-600 to-indigo-600';
 export const DUELI_PRIMARY_GRADIENT_HOVER = 'hover:from-purple-700 hover:to-indigo-700';
 
+// ── Shared UI gradients ────────────────────────────────────────────────────
+// Aliases over the canonical treatment so auth CTAs and the custom confirm
+// modal cannot drift from the approved gradient. Card overlays use a black
+// scrim instead and are untouched.
+export const DUELI_AUTH_GRADIENT = DUELI_PRIMARY_GRADIENT;
+export const DUELI_MODAL_GRADIENT = 'bg-gradient-to-r from-purple-600 to-blue-600';
+export const DUELI_MODAL_GRADIENT_HOVER = 'hover:from-purple-700 hover:to-blue-700';
+
+// Full-bleed page hero (profile header). The diagonal variant of the same
+// purple→indigo pair: the previous `via-indigo-600 to-purple-700` treatment was
+// blue-dominant in the middle, which read as an isolated blue banner instead of
+// the Dueli identity.
+export const DUELI_HERO_GRADIENT = 'bg-gradient-to-br from-purple-600 to-indigo-600';
+
 // Full class set for a primary action (button/link).
 export const DUELI_PRIMARY_BTN = `${DUELI_PRIMARY_GRADIENT} text-white rounded-full font-bold shadow-lg shadow-purple-500/20`;
 
