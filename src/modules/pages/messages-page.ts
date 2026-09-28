@@ -96,7 +96,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
         ${getFooter(lang)}
         
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             let currentConversationId = null;

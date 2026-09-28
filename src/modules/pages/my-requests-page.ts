@@ -56,7 +56,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
         ${getFooter(lang)}
         
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             let currentTab = 'received';

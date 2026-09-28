@@ -235,9 +235,9 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // They are available on window after DOMContentLoaded
             
             // Configuration
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
-            const competitionId = ${competitionId};
+            const competitionId = ${JSON.stringify(competitionId ?? '')};
             const streamServerUrl = '${streamServerUrl}';
             const tr = ${JSON.stringify(tr)};
             

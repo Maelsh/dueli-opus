@@ -71,7 +71,7 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
         ${getFooter(lang)}
         
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             const PRIMARY_BTN = ${JSON.stringify(PRIMARY_BTN)};

@@ -212,9 +212,9 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
         ${getFooter(lang)}
         
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-            const profileUsername = '${username}';
+            const profileUsername = ${JSON.stringify(username ?? '')};
             const profileUserId = ${user?.id || 'null'};
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             

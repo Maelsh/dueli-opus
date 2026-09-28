@@ -294,7 +294,7 @@ app.get('/', (c) => {
     
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       // Global initialization variables for client-side hydration
-      window.lang = '${lang}';
+      window.lang = ${JSON.stringify(getUILanguage(lang))};
       window.isRTL = ${rtl};
       // Logic has been moved to src/client/pages/HomePage.ts
     </script>

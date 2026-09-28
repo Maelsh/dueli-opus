@@ -41,9 +41,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
     </script>
     
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-      const lang = '${lang}';
+      const lang = ${JSON.stringify(getUILanguage(lang))};
       const isRTL = ${rtl};
-      const competitionId = '${id}';
+      const competitionId = ${JSON.stringify(id ?? '')};
       const tr = ${JSON.stringify(tr)};
       let competitionData = null;
       

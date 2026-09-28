@@ -39,7 +39,7 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
         ${getFooter(lang)}
         
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
-            const lang = '${lang}';
+            const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             
