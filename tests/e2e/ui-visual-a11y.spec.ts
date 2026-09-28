@@ -164,6 +164,78 @@ test.describe('login modal accessibility (real browser)', () => {
         expect(activeId, 'focus restored to the opener').toBe('a11yTrigger');
     });
 });
+test.describe('my-requests tab state (PR #71 blocker)', () => {
+    test.use({ viewport: { width: 1440, height: 900 } });
+
+    /** Reads every tab's state-relevant classes after each switch. */
+    const readTabs = (page) => page.evaluate(() => {
+        const ACTIVE = ['bg-gradient-to-r', 'from-purple-600', 'to-indigo-600'];
+        const INACTIVE = ['text-gray-600'];
+        const out: Record<string, string[]> = {};
+        for (const el of document.querySelectorAll('[id^="tab-"]')) {
+            out[el.id] = [...el.classList].filter(
+                (c) => ACTIVE.includes(c) || INACTIVE.includes(c) || c === 'bg-purple-600' || c === 'text-white',
+            );
+        }
+        return out;
+    });
+
+    const conflicting = (tabs: Record<string, string[]>, active: string[], inactive: string[]) =>
+        Object.entries(tabs)
+            .filter(([, cls]) => {
+                const hasActive = active.some((c) => cls.includes(c));
+                const hasInactive = inactive.some((c) => cls.includes(c));
+                return hasActive && hasInactive;
+            })
+            .map(([id]) => id);
+
+    const ACTIVE = ['bg-gradient-to-r', 'from-purple-600', 'to-indigo-600'];
+    const INACTIVE = ['text-gray-600'];
+
+    test('Received starts active, then each switch leaves exactly ONE active tab', async ({ page }) => {
+        await page.goto('/my-requests?lang=ar', { waitUntil: 'load' });
+        await page.waitForTimeout(400);
+
+        // 1. Initially Received is the only active tab, and carries no legacy
+        //    flat active classes alongside the canonical token.
+        let tabs = await readTabs(page);
+        expect(conflicting(tabs, ACTIVE, INACTIVE), 'conflicting classes on load').toEqual([]);
+        const activeOnLoad = Object.entries(tabs)
+            .filter(([, c]) => ACTIVE.some((a) => c.includes(a)))
+            .map(([id]) => id);
+        expect(activeOnLoad, 'exactly one active tab on load').toEqual(['tab-received']);
+        expect(tabs['tab-received'], 'no legacy flat active class remains')
+            .not.toContain('bg-purple-600');
+        expect(tabs['tab-received']).not.toContain('text-white');
+
+        // 2. Click Invitations.
+        await page.click('#tab-invitations');
+        await page.waitForTimeout(400);
+        tabs = await readTabs(page);
+        expect(conflicting(tabs, ACTIVE, INACTIVE), 'conflicting after -> invitations').toEqual([]);
+        let active = Object.entries(tabs)
+            .filter(([, c]) => ACTIVE.some((a) => c.includes(a)))
+            .map(([id]) => id);
+        expect(active, 'only invitations active').toEqual(['tab-invitations']);
+        // 3. Received is fully inactive now.
+        expect(tabs['tab-received'], 'received went inactive').toEqual(
+            expect.arrayContaining(['text-gray-600']),
+        );
+        expect(tabs['tab-received'].some((c) => ACTIVE.includes(c))).toBe(false);
+
+        // 4. Click Sent.
+        await page.click('#tab-sent');
+        await page.waitForTimeout(400);
+        tabs = await readTabs(page);
+        expect(conflicting(tabs, ACTIVE, INACTIVE), 'conflicting after -> sent').toEqual([]);
+        active = Object.entries(tabs)
+            .filter(([, c]) => ACTIVE.some((a) => c.includes(a)))
+            .map(([id]) => id);
+        expect(active, 'only sent active').toEqual(['tab-sent']);
+        expect(tabs['tab-invitations'].some((c) => ACTIVE.includes(c))).toBe(false);
+    });
+});
+
 test.describe('card centre logo', () => {
     test.use({ viewport: { width: 1440, height: 900 } });
 

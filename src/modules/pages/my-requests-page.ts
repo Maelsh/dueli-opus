@@ -17,6 +17,11 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
     const lang = c.get('lang') as Language;
     const tr = translations[getUILanguage(lang)];
     const rtl = checkRTL(lang);
+    // One source of truth for the tab state: the server-rendered active tab and
+    // setTab() both use these tokens, so a switch can never leave a tab holding
+    // the legacy flat `bg-purple-600 text-white` next to the inactive token.
+    const ACTIVE_TAB = DUELI_TAB_ACTIVE;
+    const INACTIVE_TAB = DUELI_TAB_INACTIVE;
 
     const content = `
         ${getNavigation(lang)}
@@ -31,15 +36,15 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 
                 <!-- Tabs -->
                 <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg mb-6 p-2 inline-flex gap-2 flex-wrap">
-                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["received"]' id="tab-received" class="px-5 py-2 rounded-lg font-semibold transition-colors bg-purple-600 text-white">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["received"]' id="tab-received" class="px-5 py-2 rounded-lg font-semibold transition-colors ${ACTIVE_TAB}">
                         <i class="fas fa-inbox ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.received_requests || 'Received'}
                     </button>
-                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["sent"]' id="tab-sent" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["sent"]' id="tab-sent" class="px-5 py-2 rounded-lg font-semibold transition-colors ${INACTIVE_TAB}">
                         <i class="fas fa-paper-plane ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.sent_requests || 'Sent'}
                     </button>
-                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["invitations"]' id="tab-invitations" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["invitations"]' id="tab-invitations" class="px-5 py-2 rounded-lg font-semibold transition-colors ${INACTIVE_TAB}">
                         <i class="fas fa-envelope-open-text ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.invitations || 'Invitations'}
                     </button>
@@ -91,6 +96,9 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 else initPageAuth();
             });
             window.retryPageAuth = initPageAuth;
+            // CSP-delegated handlers must be reachable from window, otherwise
+            // data-csp-fn="setTab" resolves to nothing and the tab strip is dead.
+            window.setTab = setTab;
 
             function showAuthPending() {
                 document.getElementById('requestsContent').innerHTML = \`
