@@ -7,6 +7,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { DUELI_PRIMARY_BTN, DUELI_TAB_ACTIVE, DUELI_TAB_INACTIVE } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 /**
@@ -16,6 +17,11 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
     const lang = c.get('lang') as Language;
     const tr = translations[getUILanguage(lang)];
     const rtl = checkRTL(lang);
+    // One source of truth for the tab state: the server-rendered active tab and
+    // setTab() both use these tokens, so a switch can never leave a tab holding
+    // the legacy flat `bg-purple-600 text-white` next to the inactive token.
+    const ACTIVE_TAB = DUELI_TAB_ACTIVE;
+    const INACTIVE_TAB = DUELI_TAB_INACTIVE;
 
     const content = `
         ${getNavigation(lang)}
@@ -30,15 +36,15 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 
                 <!-- Tabs -->
                 <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg mb-6 p-2 inline-flex gap-2 flex-wrap">
-                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["received"]' id="tab-received" class="px-5 py-2 rounded-lg font-semibold transition-colors bg-purple-600 text-white">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["received"]' id="tab-received" class="px-5 py-2 rounded-lg font-semibold transition-colors ${ACTIVE_TAB}">
                         <i class="fas fa-inbox ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.received_requests || 'Received'}
                     </button>
-                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["sent"]' id="tab-sent" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["sent"]' id="tab-sent" class="px-5 py-2 rounded-lg font-semibold transition-colors ${INACTIVE_TAB}">
                         <i class="fas fa-paper-plane ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.sent_requests || 'Sent'}
                     </button>
-                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["invitations"]' id="tab-invitations" class="px-5 py-2 rounded-lg font-semibold transition-colors text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <button data-csp-on="click" data-csp-fn="setTab" data-csp-args='["invitations"]' id="tab-invitations" class="px-5 py-2 rounded-lg font-semibold transition-colors ${INACTIVE_TAB}">
                         <i class="fas fa-envelope-open-text ${rtl ? 'ml-1' : 'mr-1'}"></i>
                         ${tr.invitations || 'Invitations'}
                     </button>
@@ -59,6 +65,11 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
             const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
+            const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
+            const ACTIVE_TAB = ${JSON.stringify(DUELI_TAB_ACTIVE)};
+            const INACTIVE_TAB = ${JSON.stringify(DUELI_TAB_INACTIVE)};
+            const ACTIVE_TAB_CLASSES = ACTIVE_TAB.split(' ').filter(Boolean);
+            const INACTIVE_TAB_CLASSES = INACTIVE_TAB.split(' ').filter(Boolean);
             let currentTab = 'received';
             
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -85,13 +96,16 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 else initPageAuth();
             });
             window.retryPageAuth = initPageAuth;
+            // CSP-delegated handlers must be reachable from window, otherwise
+            // data-csp-fn="setTab" resolves to nothing and the tab strip is dead.
+            window.setTab = setTab;
 
             function showAuthPending() {
                 document.getElementById('requestsContent').innerHTML = \`
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-spinner fa-spin text-5xl text-purple-400 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.loading || 'Checking your session...'}</p>
-                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
                             \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
                         </button>
                     </div>
@@ -103,7 +117,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-12 text-center shadow-lg">
                         <i class="fas fa-lock text-5xl text-gray-300 mb-4"></i>
                         <p class="text-gray-500 text-lg">\${tr.login_required || 'Please login to view your requests'}</p>
-                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 bg-purple-600 text-white rounded-full font-bold">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-6 px-8 py-3 \${PRIMARY_BTN}">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
@@ -112,12 +126,17 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
             
             function setTab(tab) {
                 currentTab = tab;
+                // Canonical Dueli gradient for the active tab (same token as the
+                // CTAs); previously a flat solid purple background.
                 document.querySelectorAll('[id^="tab-"]').forEach(el => {
-                    el.classList.remove('bg-purple-600', 'text-white');
-                    el.classList.add('text-gray-600');
+                    el.classList.remove(...ACTIVE_TAB_CLASSES);
+                    el.classList.add(...INACTIVE_TAB_CLASSES);
                 });
-                document.getElementById('tab-' + tab).classList.add('bg-purple-600', 'text-white');
-                document.getElementById('tab-' + tab).classList.remove('text-gray-600');
+                const active = document.getElementById('tab-' + tab);
+                if (active) {
+                    active.classList.add(...ACTIVE_TAB_CLASSES);
+                    active.classList.remove(...INACTIVE_TAB_CLASSES);
+                }
                 loadRequests();
             }
             

@@ -96,7 +96,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
               </div>
 
               <div class="w-12 h-12 bg-white rounded-full shadow-lg z-20 flex items-center justify-center transform hover:rotate-180 transition-transform duration-500">
-                <img src="/static/dueli-icon.png" alt="VS" class="w-full h-full object-contain" loading="lazy">
+                <img src="/static/dueli-icon.png" alt="VS" width="48" height="48" decoding="async" class="w-full h-full object-contain">
               </div>
 
               <div class="flex flex-col items-center">

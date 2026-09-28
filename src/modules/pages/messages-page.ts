@@ -8,6 +8,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { DUELI_PRIMARY_BTN } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 /**
@@ -82,7 +83,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                         placeholder="${tr.messages?.type_message || 'Type a message...'}"
                                         class="flex-1 px-4 py-3 rounded-full bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
                                     >
-                                    <button type="submit" class="px-6 py-3 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors">
+                                    <button type="submit" class="px-6 py-3 ${DUELI_PRIMARY_BTN} hover:opacity-90 transition-colors">
                                         <i class="fas fa-paper-plane ${rtl ? 'fa-flip-horizontal' : ''}"></i>
                                     </button>
                                 </form>
@@ -99,6 +100,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
+            const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
             let currentConversationId = null;
             
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -132,7 +134,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="p-8 text-center text-gray-400">
                         <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
                         <p>\${tr.loading || 'Checking your session...'}</p>
-                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="retryPageAuth" data-csp-args='[]' class="mt-4 px-6 py-2 \${PRIMARY_BTN}">
                             \${(tr.discovery && tr.discovery.retry) || tr.retry || 'Retry'}
                         </button>
                     </div>
@@ -144,7 +146,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="p-8 text-center text-gray-400">
                         <i class="fas fa-lock text-4xl mb-4"></i>
                         <p>\${tr.login_required || 'Please login to view messages'}</p>
-                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 bg-purple-600 text-white rounded-full">
+                        <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 \${PRIMARY_BTN}">
                             \${tr.login || 'Login'}
                         </button>
                     </div>
