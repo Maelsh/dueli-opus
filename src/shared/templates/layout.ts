@@ -34,6 +34,12 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <!-- Owner acceptance (post-#71): the shared competition-card centre logo
+         is the same single /static/dueli-icon.png on every surface. Preload it
+         at parse time so SSR cards (profile) and client-injected cards
+         (home / my-competitions / explore) never paint the blank white disc
+         first. One URL => the preload de-duplicates, never multiplies. -->
+    <link rel="preload" as="image" href="/static/dueli-icon.png" fetchpriority="high">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
     

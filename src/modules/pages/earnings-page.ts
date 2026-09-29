@@ -7,7 +7,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
-import { DUELI_PRIMARY_BTN } from '../../shared/constants';
+import { DUELI_PRIMARY_BTN, DUELI_CARD, DUELI_SECTION_TITLE } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 /**
@@ -40,10 +40,10 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 <div id="withdrawalModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-8 w-full max-w-md shadow-2xl mx-4">
                         <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-bold text-gray-900 dark:text-white">
-                                <i class="fas fa-university ${rtl ? 'ml-2' : 'mr-2'} text-emerald-500"></i>
-                                ${tr.request_withdrawal || 'Request Withdrawal'}
-                            </h3>
+                                <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+                                    <i class="fas fa-university ${rtl ? 'ml-2' : 'mr-2'} text-emerald-500"></i>
+                                    ${tr.request_withdrawal}
+                                </h3>
                             <button data-csp-on="click" data-csp-fn="closeWithdrawalModal" data-csp-args='[]'
                                     id="closeWithdrawalBtn"
                                     class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
@@ -55,7 +55,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <!-- Amount -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                    ${tr.amount || 'Amount'} (USD)
+                                    ${tr.amount} (USD)
                                 </label>
                                 <div class="relative">
                                     <span class="absolute ${rtl ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
@@ -63,17 +63,17 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                            placeholder="50.00" required
                                            class="w-full ${rtl ? 'pr-8 pl-4' : 'pl-8 pr-4'} py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" />
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal || 'Minimum: $50.00'}</p>
+                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal}</p>
                             </div>
 
                             <!-- Payment Method -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                    ${tr.payment_method || 'Payment Method'}
+                                    ${tr.payment_method}
                                 </label>
                                 <select id="withdrawMethod" required
                                         class="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition">
-                                    <option value="bank_transfer">${tr.bank_transfer || 'Bank Transfer'}</option>
+                                    <option value="bank_transfer">${tr.bank_transfer}</option>
                                     <!-- PayPal hidden until a real integration exists (SEC-01) -->
                                     <option value="wise">Wise</option>
                                     <option value="crypto_usdt">Crypto USDT (TRC-20)</option>
@@ -83,10 +83,10 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <!-- Payment Details -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                                    ${tr.payment_details || 'Payment Details'}
+                                    ${tr.payment_details}
                                 </label>
                                 <textarea id="withdrawDetails" rows="3" required
-                                          placeholder="${tr.payment_details_placeholder || 'IBAN / Wise email / Wallet address...'}"
+                                          placeholder="${tr.payment_details_placeholder}"
                                           class="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition resize-none"></textarea>
                             </div>
 
@@ -97,7 +97,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <button type="submit" id="withdrawSubmitBtn"
                                     class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-bold hover:opacity-90 transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
                                 <i class="fas fa-paper-plane"></i>
-                                ${tr.submit_withdrawal || 'Submit Withdrawal Request'}
+                                ${tr.submit_withdrawal}
                             </button>
                         </form>
                     </div>
@@ -112,6 +112,8 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const isRTL  = ${rtl};
             const tr     = ${JSON.stringify(tr)};
             const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
+            const CARD = ${JSON.stringify(DUELI_CARD)};
+            const SECTION_TITLE = ${JSON.stringify(DUELI_SECTION_TITLE)};
             let currentEarnings = {};
 
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -174,8 +176,8 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const data = JSON.parse(e.data);
                     showToast(
                         data.status === 'completed'
-                            ? '✅ ' + (tr.withdrawal_approved || 'Withdrawal approved!')
-                            : '❌ ' + (tr.withdrawal_rejected || 'Withdrawal rejected: ') + (data.note || ''),
+                            ? '✅ ' + tr.withdrawal_approved
+                            : '❌ ' + tr.withdrawal_rejected + (data.note || ''),
                         data.status === 'completed' ? 'success' : 'error'
                     );
                     loadEarnings(); // Refresh wallet
@@ -246,8 +248,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const withdrawn = (wallet.withdrawn || 0);
 
                 const historyRows = requests.length === 0
-                    ? \`<p class="text-center text-gray-400 py-6">\${tr.no_withdrawal_history || 'No withdrawal history yet'}</p>\`
-                    : requests.map(r => {
+                    ? \`<p class="text-center text-gray-400 py-6">\${tr.no_withdrawal_history}</p>\`                    : requests.map(r => {
                         const statusColor = { pending: 'text-amber-500', processing: 'text-blue-500', completed: 'text-emerald-500', rejected: 'text-red-500' }[r.status] || 'text-gray-400';
                         return \`
                             <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl mb-2">
@@ -293,8 +294,8 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     </div>
 
                     <!-- Ad Revenue Summary -->
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg mb-6 border border-gray-100 dark:border-gray-800">
-                        <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                    <div class="\${CARD} mb-6">
+                        <h2 class="\${SECTION_TITLE}">
                             <i class="fas fa-chart-line \${isRTL ? 'ml-2' : 'mr-2'} text-purple-500"></i>
                             \${tr.total_earnings || 'Total Lifetime Earnings'}
                         </h2>
@@ -303,8 +304,8 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     </div>
 
                     <!-- Cash Out -->
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg mb-6 border border-gray-100 dark:border-gray-800">
-                        <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                    <div class="\${CARD} mb-6">
+                        <h2 class="\${SECTION_TITLE}">
                             <i class="fas fa-money-bill-wave \${isRTL ? 'ml-2' : 'mr-2'} text-emerald-500"></i>
                             \${tr.withdraw || 'Cash Out'}
                         </h2>
@@ -323,10 +324,10 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     </div>
 
                     <!-- History -->
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-800">
-                        <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                    <div class="\${CARD}">
+                        <h2 class="\${SECTION_TITLE}">
                             <i class="fas fa-history \${isRTL ? 'ml-2' : 'mr-2'} text-gray-400"></i>
-                            \${tr.withdrawal_history || 'Withdrawal History'}
+                            \${tr.withdrawal_history}
                         </h2>
                         \${historyRows}
                     </div>
@@ -359,18 +360,18 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const details  = document.getElementById('withdrawDetails').value.trim();
 
                 if (!amount || amount < 50) {
-                    errDiv.textContent = tr.min_withdrawal || 'Minimum withdrawal is $50.';
+                    errDiv.textContent = tr.min_withdrawal;
                     errDiv.classList.remove('hidden');
                     return;
                 }
                 if (!details) {
-                    errDiv.textContent = tr.payment_details_required || 'Payment details are required.';
+                    errDiv.textContent = tr.payment_details_required;
                     errDiv.classList.remove('hidden');
                     return;
                 }
 
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>' + (tr.processing || 'Processing...');
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>' + tr.processing;
                 errDiv.classList.add('hidden');
 
                 try {
@@ -387,19 +388,19 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
 
                     if (data.success) {
                         closeWithdrawalModal();
-                        showToast('✅ ' + (tr.withdrawal_submitted || 'Withdrawal request submitted!'), 'success');
+                        showToast('✅ ' + tr.withdrawal_submitted, 'success');
                         loadEarnings();
                     } else {
                         errDiv.textContent = data.error || tr.error_occurred || 'An error occurred.';
                         errDiv.classList.remove('hidden');
                         btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>${tr.submit_withdrawal || "Submit"}';
+                        btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>' + tr.submit_withdrawal;
                     }
                 } catch (e) {
-                    errDiv.textContent = tr.network_error || 'Network error. Please try again.';
+                    errDiv.textContent = tr.network_error;
                     errDiv.classList.remove('hidden');
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>${tr.submit_withdrawal || "Submit"}';
+                    btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>' + tr.submit_withdrawal;
                 }
             }
 
@@ -407,7 +408,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // Cancel Withdrawal
             // =====================
             async function cancelWithdrawal(id) {
-                if (!confirm(tr.confirm_cancel_withdrawal || 'Cancel this withdrawal request? Your balance will be refunded.')) return;
+                if (!confirm(tr.confirm_cancel_withdrawal)) return;
                 const sessionId = localStorage.getItem('sessionId');
                 const res = await fetch('/api/withdrawals/' + id, {
                     method: 'DELETE',
@@ -415,7 +416,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 });
                 const data = await res.json();
                 if (data.success) {
-                    showToast(tr.withdrawal_cancelled || 'Withdrawal cancelled and funds refunded.', 'info');
+                    showToast(tr.withdrawal_cancelled, 'info');
                     loadEarnings();
                 }
             }

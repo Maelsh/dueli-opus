@@ -15,11 +15,25 @@ export const DUELI_AUTH_GRADIENT = DUELI_PRIMARY_GRADIENT;
 export const DUELI_MODAL_GRADIENT = 'bg-gradient-to-r from-purple-600 to-blue-600';
 export const DUELI_MODAL_GRADIENT_HOVER = 'hover:from-purple-700 hover:to-blue-700';
 
-// Full-bleed page hero (profile header). The diagonal variant of the same
-// purple→indigo pair: the previous `via-indigo-600 to-purple-700` treatment was
-// blue-dominant in the middle, which read as an isolated blue banner instead of
-// the Dueli identity.
-export const DUELI_HERO_GRADIENT = 'bg-gradient-to-br from-purple-600 to-indigo-600';
+// Full-bleed page hero (profile header). Owner acceptance (post-#71): the
+// previous two-stop `from-purple-600 to-indigo-600` read as one flat purple
+// field on the large hero surface. This stays inside the Dueli violet /
+// purple / indigo family (no blue banner, no rainbow) but carries a real
+// luminance transition — deep violet, vivid purple, luminous indigo — so the
+// blend is perceptible across the surface. Depth blobs are layered on top in
+// the page markup (see DUELI_HERO_DECOR).
+export const DUELI_HERO_GRADIENT = 'bg-gradient-to-br from-violet-800 via-purple-600 to-indigo-500';
+
+// Depth overlay for the hero: two soft analogous glows (fuchsia/indigo at low
+// opacity) plus a faint white texture. Pure Tailwind — no inline style, so the
+// nonce-only CSP model is untouched. Rendered as the first children of the
+// hero container, which must be `relative overflow-hidden`.
+export const DUELI_HERO_DECOR = `
+    <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-fuchsia-400/20 blur-3xl"></div>
+        <div class="absolute -bottom-32 -right-16 w-[28rem] h-[28rem] rounded-full bg-indigo-300/20 blur-3xl"></div>
+        <div class="absolute inset-0 bg-white/[0.04]"></div>
+    </div>`;
 
 // Full class set for a primary action (button/link).
 export const DUELI_PRIMARY_BTN = `${DUELI_PRIMARY_GRADIENT} text-white rounded-full font-bold shadow-lg shadow-purple-500/20`;
@@ -27,6 +41,17 @@ export const DUELI_PRIMARY_BTN = `${DUELI_PRIMARY_GRADIENT} text-white rounded-f
 // Tab styling that uses the same canonical gradient for its active state.
 export const DUELI_TAB_ACTIVE = DUELI_PRIMARY_GRADIENT;
 export const DUELI_TAB_INACTIVE = 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800';
+
+// ── Canonical product-language tokens (owner coherence pass) ───────────────
+// One card / input / section treatment reused by earnings, reports, donate and
+// the auth-state panels — the radius / shadow / border / dark-mode contract in
+// one place instead of a slightly different literal per page. Accent colour
+// stays semantic per surface (emerald wallet, orange report, pink donate):
+// these tokens carry NO colour, only shape and elevation.
+export const DUELI_CARD = 'bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg border border-gray-100 dark:border-gray-800';
+export const DUELI_CARD_FLAT = 'bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg';
+export const DUELI_INPUT = 'w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition';
+export const DUELI_SECTION_TITLE = 'text-lg font-bold text-gray-900 dark:text-white mb-4';
 
 // Main category colors (from database)
 export const CATEGORY_COLORS: Record<string, string> = {
