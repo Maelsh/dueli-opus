@@ -38,21 +38,22 @@ function escapeHtml(value: string): string {
 }
 
 /** Normalise the incoming category: slug, any language name, or '' (all). */
-function normaliseCategory(raw: string, tr: Record<string, any>): string {
+function normaliseCategory(raw: string): string {
     const v = (raw || '').trim().toLowerCase();
     if (!v) return '';
     for (const slug of CATEGORY_SLUGS) {
         if (v === slug) return slug;
     }
     // Legacy home "View All" links pass the translated section title.
-    const names = translations.ar.categories as Record<string, string>;
-    const namesEn = translations.en.categories as Record<string, string>;
+    const names = translations.ar.categories;
+    const namesEn = translations.en.categories;
     for (const slug of CATEGORY_SLUGS) {
         if (v === (names[slug] || '').toLowerCase() || v === (namesEn[slug] || '').toLowerCase()) return slug;
     }
-    void tr;
     return '';
 }
+
+/** Normalise the incoming status filter. */
 
 function normaliseStatus(raw: string): string {
     const v = (raw || '').trim().toLowerCase();
@@ -82,19 +83,19 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     }
   };
   const rawSearch = queryOf('search');
-  const category = normaliseCategory(queryOf('category'), tr as Record<string, any>);
+  const category = normaliseCategory(queryOf('category'));
   const status = normaliseStatus(queryOf('status'));
   const viewParam = queryOf('view');
   const view = viewParam === 'competitions' || viewParam === 'users' ? viewParam : '';
   const uiLang = getUILanguage(lang);
 
   const categoryOptions = CATEGORY_SLUGS.map(
-    (s) => `<option value="${s}"${category === s ? ' selected' : ''}>${escapeHtml((tr.categories as any)[s] || s)}</option>`,
+    (s) => `<option value="${s}"${category === s ? ' selected' : ''}>${escapeHtml(tr.categories[s] || s)}</option>`,
   ).join('');
   const statusLabels: Record<string, string> = {
-    live: (tr as any).status_live || 'Live',
-    recorded: (tr as any).recorded || 'Recorded',
-    upcoming: (tr as any).upcoming || 'Upcoming',
+    live: tr.status_live || 'Live',
+    recorded: tr.recorded || 'Recorded',
+    upcoming: tr.upcoming || 'Upcoming',
   };
   const statusOptions = STATUS_VALUES.map(
     (s) => `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(statusLabels[s])}</option>`,
@@ -140,14 +141,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
               <i class="fas fa-search text-lg" aria-hidden="true"></i>
             </div>
           </div>
-          <select id="categoryFilter" name="category" aria-label="${escapeAttr((tr.categories as any).title || tr.filters || 'Filters')}"
+          <select id="categoryFilter" name="category" aria-label="${escapeAttr(tr.categories.title || tr.filters || 'Filters')}"
                   class="px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
-            <option value="">${escapeHtml((tr as any).all || 'All')}</option>
+            <option value="">${escapeHtml(tr.all || 'All')}</option>
             ${categoryOptions}
           </select>
-          <select id="statusFilter" name="status" aria-label="${escapeAttr((tr as any).status_live ? ((tr as any).status || 'Status') : 'Status')}"
+          <select id="statusFilter" name="status" aria-label="${escapeAttr(tr.status_live ? (tr.status || 'Status') : 'Status')}"
                   class="px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
-            <option value="">${escapeHtml((tr as any).all || 'All')}</option>
+            <option value="">${escapeHtml(tr.all || 'All')}</option>
             ${statusOptions}
           </select>
           <input type="hidden" name="lang" value="${uiLang}" />
@@ -166,7 +167,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         <a id="backToResults" href="${escapeAttr(backHref)}"
            class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
           <i class="fas fa-arrow-${rtl ? 'right' : 'left'}" aria-hidden="true"></i>
-          ${escapeHtml((tr as any).back_to_results || 'Back to results')}
+          ${escapeHtml(tr.back_to_results || 'Back to results')}
         </a>
       </div>
       ` : ''}
@@ -182,7 +183,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           ${view === '' ? `
           <a id="compsViewAll" href="${escapeAttr(compsViewAll)}"
              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">
-            <span>${escapeHtml((tr as any).view_all_competitions || (tr as any).view_all || 'View all')}</span>
+            <span>${escapeHtml(tr.view_all_competitions || tr.view_all || 'View all')}</span>
             <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
           </a>
           ` : ''}
@@ -206,7 +207,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           ${view === '' ? `
           <a id="usersViewAll" href="${escapeAttr(usersViewAll)}"
              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-            <span>${escapeHtml((tr as any).view_all_users || (tr as any).view_all || 'View all')}</span>
+            <span>${escapeHtml(tr.view_all_users || tr.view_all || 'View all')}</span>
             <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
           </a>
           ` : ''}
