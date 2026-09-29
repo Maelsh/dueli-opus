@@ -53,17 +53,23 @@ describe('canonical primary treatment on every auth-gated surface', () => {
 describe('profile hero uses the canonical identity', () => {
     const src = () => readFileSync(resolve(__dirname, '../../src/modules/pages/profile-page.ts'), 'utf-8');
 
-    it('the hero renders the canonical token, not blue-dominant classes', () => {
+    it('the hero renders the canonical token, not the rejected flat treatments', () => {
         const s = src();
         // The hero must be driven by the shared token …
         expect(s).toContain('${DUELI_HERO_GRADIENT}');
-        // … and the rejected blue-dominant treatment must be gone entirely.
+        // … and the owner-rejected treatments must be gone entirely: the
+        // blue-dominant banner (via-indigo-600 … to-purple-700) and the flat
+        // two-stop purple field it was replaced with in #71.
         expect(s).not.toContain('via-indigo-600');
         expect(s).not.toContain('to-purple-700');
+        // Depth layers so the large surface never reads as one flat field.
+        expect(s).toContain('DUELI_HERO_DECOR');
     });
 
-    it('the hero token is the canonical purple→indigo pair', () => {
-        expect(DUELI_HERO_GRADIENT).toBe('bg-gradient-to-br from-purple-600 to-indigo-600');
+    it('the hero token is a visibly blended multi-stop Dueli composition', () => {
+        expect(DUELI_HERO_GRADIENT).toBe('bg-gradient-to-br from-violet-800 via-purple-600 to-indigo-500');
+        const stops = DUELI_HERO_GRADIENT.match(/(from-|via-|to-)[a-z-\[\]#0-9]+/g) ?? [];
+        expect(stops.length).toBeGreaterThanOrEqual(3);
     });
 
     it('profile data, avatar, stats and RTL/LTR wiring are preserved', () => {

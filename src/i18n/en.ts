@@ -39,6 +39,12 @@ export const en = {
     search_results_for: 'Search results for',
     no_users: 'No users found',
     search_users_prompt: 'Enter a search term to find users',
+    // Search results — 6+6 structure with view-all (owner acceptance, no retrieval change)
+    view_all_competitions: 'View all competitions',
+    view_all_users: 'View all users',
+    back_to_results: 'Back to results',
+    filters: 'Filters',
+    showing_first: 'Showing first results',
 
     // Categories
     categories: {
@@ -621,6 +627,22 @@ export const en = {
     withdraw: 'Withdraw',
     min_withdrawal: 'Minimum withdrawal: $50.00',
     request_withdrawal: 'Request Withdrawal',
+    withdrawal_history: 'Withdrawal History',
+    no_withdrawal_history: 'No withdrawal history yet',
+    submit_withdrawal: 'Submit Withdrawal Request',
+    withdrawal_submitted: 'Withdrawal request submitted!',
+    withdrawal_approved: 'Withdrawal request approved!',
+    withdrawal_rejected: 'Withdrawal rejected: ',
+    withdrawal_cancelled: 'Withdrawal cancelled and funds refunded.',
+    confirm_cancel_withdrawal: 'Cancel this withdrawal request? Your balance will be refunded.',
+    amount: 'Amount',
+    payment_method: 'Payment Method',
+    bank_transfer: 'Bank Transfer',
+    payment_details: 'Payment Details',
+    payment_details_placeholder: 'IBAN / Wise email / Wallet address...',
+    payment_details_required: 'Payment details are required.',
+    processing: 'Processing...',
+    network_error: 'Network error. Please try again.',
     // Nested earnings keys for earnings page components
     earnings: {
         total: 'Total',
@@ -679,6 +701,7 @@ export const en = {
     other: 'Other',
     other_desc: 'Something else',
     subject: 'Subject',
+    description: 'Description',
     enter_subject: 'Enter subject',
     describe_issue: 'Please describe the issue in detail',
 
@@ -690,6 +713,7 @@ export const en = {
     champion: 'Champion',
     custom_amount: 'Or enter a custom amount',
     donate_now: 'Donate Now',
+    popular: 'Popular',
     top_supporters: 'Top Supporters',
 
     // Test Stream Pages

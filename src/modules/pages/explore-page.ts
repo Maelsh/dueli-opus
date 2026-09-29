@@ -1,22 +1,112 @@
 /**
  * Explore Page
  * صفحة الاستكشاف والبحث
- * 
- * تعرض قسمين:
- * - القسم العلوي: المنافسات
- * - القسم السفلي: المستخدمين
+ *
+ * Owner-approved structure (post-#71, retrieval untouched):
+ * - the search input + competition filters live ON this page (GET form, so the
+ *   query/filter context is the URL itself — back navigation preserves it);
+ * - default preview shows the first 6 competitions AND the first 6 users as
+ *   two independent sections (competition loading can never push Users down);
+ * - each section has a "View all" link to a dedicated view (?view=...) that
+ *   keeps the same query/filter context and owns the progressive loading.
+ *
+ * Retrieval contracts are unchanged: competitions via GET /api/competitions
+ * (search/category/status/limit/offset — the same params Home already uses)
+ * and users via GET /api/search/users (q/limit/offset). No ranking change.
  */
 
 import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
 import { translations, getUILanguage, isRTL, type Language } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter, getCompetitionCard, getUserCard } from '../../shared/components';
+import { DUELI_PRIMARY_BTN } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
+
+const CATEGORY_SLUGS = ['dialogue', 'science', 'talents'] as const;
+const STATUS_VALUES = ['live', 'recorded', 'upcoming'] as const;
+
+function escapeAttr(value: string): string {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function escapeHtml(value: string): string {
+    return escapeAttr(value).replace(/'/g, '&#39;');
+}
+
+/** Normalise the incoming category: slug, any language name, or '' (all). */
+function normaliseCategory(raw: string): string {
+    const v = (raw || '').trim().toLowerCase();
+    if (!v) return '';
+    for (const slug of CATEGORY_SLUGS) {
+        if (v === slug) return slug;
+    }
+    // Legacy home "View All" links pass the translated section title.
+    const names = translations.ar.categories;
+    const namesEn = translations.en.categories;
+    for (const slug of CATEGORY_SLUGS) {
+        if (v === (names[slug] || '').toLowerCase() || v === (namesEn[slug] || '').toLowerCase()) return slug;
+    }
+    return '';
+}
+
+/** Normalise the incoming status filter. */
+
+function normaliseStatus(raw: string): string {
+    const v = (raw || '').trim().toLowerCase();
+    return (STATUS_VALUES as readonly string[]).includes(v) ? v : '';
+}
+
+function withParams(search: string, category: string, status: string, lang: string, view: string): string {
+    const p = new URLSearchParams();
+    if (search) p.set('search', search);
+    if (category) p.set('category', category);
+    if (status) p.set('status', status);
+    if (view) p.set('view', view);
+    p.set('lang', lang);
+    return `/explore?${p.toString()}`;
+}
 
 export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang') as Language;
   const tr = translations[getUILanguage(lang)];
   const rtl = isRTL(lang);
+
+  const queryOf = (name: string): string => {
+    try {
+      return (c.req?.query(name) || '').slice(0, 100);
+    } catch {
+      return '';
+    }
+  };
+  const rawSearch = queryOf('search');
+  const category = normaliseCategory(queryOf('category'));
+  const status = normaliseStatus(queryOf('status'));
+  const viewParam = queryOf('view');
+  const view = viewParam === 'competitions' || viewParam === 'users' ? viewParam : '';
+  const uiLang = getUILanguage(lang);
+
+  const categoryOptions = CATEGORY_SLUGS.map(
+    (s) => `<option value="${s}"${category === s ? ' selected' : ''}>${escapeHtml(tr.categories[s] || s)}</option>`,
+  ).join('');
+  const statusLabels: Record<string, string> = {
+    live: tr.status_live || 'Live',
+    recorded: tr.recorded || 'Recorded',
+    upcoming: tr.upcoming || 'Upcoming',
+  };
+  const statusOptions = STATUS_VALUES.map(
+    (s) => `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(statusLabels[s])}</option>`,
+  ).join('');
+
+  const compsViewAll = withParams(rawSearch, category, status, uiLang, 'competitions');
+  const usersViewAll = withParams(rawSearch, '', '', uiLang, 'users');
+  const backHref = withParams(rawSearch, category, status, uiLang, '');
+
+  const compsHidden = view === 'users' ? ' hidden' : '';
+  const usersHidden = view === 'competitions' ? ' hidden' : '';
 
   const content = `
     ${getNavigation(lang)}
@@ -31,18 +121,72 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         </a>
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">${tr.explore || 'Explore'}</h1>
       </div>
+
+      <!-- Search + filters live on the results page (GET: context stays in the URL) -->
+      <form method="GET" action="/explore" role="search" aria-label="${escapeAttr(tr.search_placeholder || 'Search')}"
+            class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-4 shadow-lg border border-gray-100 dark:border-gray-800 mb-6">
+        <div class="flex flex-col md:flex-row gap-3">
+          <div class="relative flex-1">
+            <input
+              type="text"
+              id="searchInput"
+              name="search"
+              value="${escapeAttr(rawSearch)}"
+              placeholder="${escapeAttr(tr.search_placeholder || 'Search')}"
+              maxlength="100"
+              autocomplete="off"
+              class="w-full ${rtl ? 'pl-12 pr-4' : 'pr-12 pl-4'} py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition"
+            />
+            <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${rtl ? 'right-4' : 'left-4'}">
+              <i class="fas fa-search text-lg" aria-hidden="true"></i>
+            </div>
+          </div>
+          <select id="categoryFilter" name="category" aria-label="${escapeAttr(tr.categories.title || tr.filters || 'Filters')}"
+                  class="px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
+            <option value="">${escapeHtml(tr.all || 'All')}</option>
+            ${categoryOptions}
+          </select>
+          <select id="statusFilter" name="status" aria-label="${escapeAttr(tr.status_live ? (tr.status || 'Status') : 'Status')}"
+                  class="px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
+            <option value="">${escapeHtml(tr.all || 'All')}</option>
+            ${statusOptions}
+          </select>
+          <input type="hidden" name="lang" value="${uiLang}" />
+          <button type="submit" title="${escapeAttr(tr.search_placeholder || 'Search')}" aria-label="${escapeAttr(tr.search_placeholder || 'Search')}"
+                  class="px-6 py-3 ${DUELI_PRIMARY_BTN} flex items-center justify-center gap-2">
+            <i class="fas fa-search" aria-hidden="true"></i>
+          </button>
+        </div>
+      </form>
       
       <!-- Search Query Display -->
       <div id="searchQueryDisplay" class="mb-6"></div>
+
+      ${view ? `
+      <div class="mb-6">
+        <a id="backToResults" href="${escapeAttr(backHref)}"
+           class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+          <i class="fas fa-arrow-${rtl ? 'right' : 'left'}" aria-hidden="true"></i>
+          ${escapeHtml(tr.back_to_results || 'Back to results')}
+        </a>
+      </div>
+      ` : ''}
       
       <!-- Competitions Section -->
-      <section class="mb-10" aria-labelledby="comps-title">
+      <section id="compsSection" class="mb-10${compsHidden}" aria-labelledby="comps-title">
         <div class="flex items-center justify-between mb-4">
           <h2 id="comps-title" class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <i class="fas fa-trophy text-purple-500" aria-hidden="true"></i>
             ${tr.competitions || 'Competitions'}
             <span id="compsCount" class="text-sm font-normal text-gray-400"></span>
           </h2>
+          ${view === '' ? `
+          <a id="compsViewAll" href="${escapeAttr(compsViewAll)}"
+             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">
+            <span>${escapeHtml(tr.view_all_competitions || tr.view_all || 'View all')}</span>
+            <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
+          </a>
+          ` : ''}
         </div>
         <div id="competitionsContainer">
           <div class="flex flex-col items-center justify-center py-12">
@@ -53,13 +197,20 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
       </section>
       
       <!-- Users Section -->
-      <section aria-labelledby="users-title">
+      <section id="usersSection" aria-labelledby="users-title" class="${usersHidden}">
         <div class="flex items-center justify-between mb-4">
           <h2 id="users-title" class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <i class="fas fa-users text-blue-500" aria-hidden="true"></i>
             ${tr.users || 'Users'}
             <span id="usersCount" class="text-sm font-normal text-gray-400"></span>
           </h2>
+          ${view === '' ? `
+          <a id="usersViewAll" href="${escapeAttr(usersViewAll)}"
+             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+            <span>${escapeHtml(tr.view_all_users || tr.view_all || 'View all')}</span>
+            <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
+          </a>
+          ` : ''}
         </div>
         <div id="usersContainer">
           <div class="flex flex-col items-center justify-center py-12">
@@ -74,10 +225,23 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
       (function() {
-        const lang = ${JSON.stringify(getUILanguage(lang))};
+        const lang = ${JSON.stringify(uiLang)};
         const tr = ${JSON.stringify(tr)};
         const rtl = ${rtl};
-        const search = new URLSearchParams(window.location.search).get('search') || '';
+        const initialCategory = ${JSON.stringify(category)};
+        const initialStatus = ${JSON.stringify(status)};
+        const initialView = ${JSON.stringify(view)};
+        const params = new URLSearchParams(window.location.search);
+        const search = params.get('search') || '';
+        const viewMode = params.get('view') === 'competitions' || params.get('view') === 'users'
+          ? params.get('view')
+          : initialView;
+        const isPreview = viewMode !== 'competitions' && viewMode !== 'users';
+        // Preview shows the first 6 of each section, independently — competition
+        // loading can never push the Users section down. Progressive loading
+        // lives only in the dedicated view-all modes below.
+        var PREVIEW_COMPETITIONS = 6;
+        var PREVIEW_USERS = 6;
         
         // Display search query (R1.1: safe sink — untrusted value via textContent only)
         if (search) {
@@ -102,13 +266,19 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             display.appendChild(box);
           }
         }
+
+        // Keep the on-page controls in sync with the URL (back-nav safe).
+        var searchInput = document.getElementById('searchInput');
+        if (searchInput && typeof searchInput.value === 'string' && document.activeElement !== searchInput) {
+          searchInput.value = search;
+        }
         
         // Wait for client bundle to load (only need renderCompetitionCards - users are inline now)
         function waitForBundle(callback, maxAttempts = 50) {
           let attempts = 0;
           const check = setInterval(() => {
             attempts++;
-            if (typeof window.renderCompetitionCards === 'function') {
+            if (typeof window.renderCompetitionCard === 'function') {
               clearInterval(check);
               callback();
             } else if (attempts >= maxAttempts) {
@@ -120,10 +290,29 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         }
         
         async function loadSearchResults() {
-          await Promise.all([
-            loadCompetitions(),
-            loadUsers()
-          ]);
+          applyViewMode();
+          if (isPreview) {
+            await Promise.all([
+              loadCompetitionsPreview(),
+              loadUsersPreview()
+            ]);
+          } else if (viewMode === 'competitions') {
+            await loadCompetitions();
+          } else {
+            await loadUsers();
+          }
+        }
+
+        // Dedicated views hide the other section; preview keeps both.
+        function applyViewMode() {
+          var comps = document.getElementById('compsSection');
+          var users = document.getElementById('usersSection');
+          if (!comps || !users) return;
+          if (viewMode === 'competitions') {
+            users.classList.add('hidden');
+          } else if (viewMode === 'users') {
+            comps.classList.add('hidden');
+          }
         }
         
         // B13: translated error fallback with a retry button — never a blank screen
@@ -144,9 +333,109 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           if (retryBtn) retryBtn.addEventListener('click', loadSearchResults);
         }
 
-        // B7: progressive loading state for competitions.
-        // GET /api/competitions supports limit/offset, so "view all" is
-        // replaced by appending the next batch at the current offset.
+        function categoryParam() {
+          const v = (initialCategory || '').toLowerCase();
+          return v === 'dialogue' || v === 'science' || v === 'talents' ? v : '';
+        }
+
+        function statusParam() {
+          const v = (initialStatus || '').toLowerCase();
+          return v === 'live' || v === 'recorded' || v === 'upcoming' ? v : '';
+        }
+
+        function competitionsUrl(limit, offset) {
+          let url = '/api/competitions?limit=' + limit + '&offset=' + offset;
+          if (search) url += '&search=' + encodeURIComponent(search);
+          const cat = categoryParam();
+          if (cat) url += '&category=' + encodeURIComponent(cat);
+          const st = statusParam();
+          if (st) url += '&status=' + encodeURIComponent(st);
+          return url;
+        }
+
+        // Preview: first 6 competitions only, no progressive loading here.
+        async function loadCompetitionsPreview() {
+          const container = document.getElementById('competitionsContainer');
+          if (!container) return;
+          try {
+            const res = await fetch(competitionsUrl(PREVIEW_COMPETITIONS, 0));
+            if (!res.ok) throw new Error('status ' + res.status);
+            const data = await res.json();
+            const items = (data && data.success && data.data) ? data.data : [];
+            renderPreviewGrid(container, 'competitionsGrid', items.slice(0, PREVIEW_COMPETITIONS),
+              'compsCount', 'competitions');
+          } catch (err) {
+            console.error('Failed to load competitions:', err);
+            showDiscoveryError('competitionsContainer');
+          }
+        }
+
+        // Preview: first 6 users only, no progressive loading here.
+        async function loadUsersPreview() {
+          const container = document.getElementById('usersContainer');
+          if (!container) return;
+          // Both /api/search/users and /api/users require q
+          if (!search || search.length < 2) {
+            container.innerHTML = \`
+              <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <i class="fas fa-users text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
+                </div>
+                <p class="text-gray-500 dark:text-gray-400">\${tr.search_users_prompt || 'Enter a search term to find users'}</p>
+              </div>
+            \`;
+            const countEl = document.getElementById('usersCount');
+            if (countEl) countEl.textContent = '';
+            return;
+          }
+          try {
+            const url = '/api/search/users?q=' + encodeURIComponent(search) +
+                        '&limit=' + PREVIEW_USERS + '&offset=0';
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('status ' + res.status);
+            const data = await res.json();
+            const users = (data.data && data.data.items) ? data.data.items : (data.data || []);
+            renderPreviewGrid(container, 'usersGrid', users.slice(0, PREVIEW_USERS),
+              'usersCount', 'users');
+          } catch (err) {
+            console.error('Failed to load users:', err);
+            showDiscoveryError('usersContainer');
+          }
+        }
+
+        // Shared preview renderer: one capped grid per section + explicit count.
+        // No load-more, no observer — the section stays independent.
+        function renderPreviewGrid(container, gridId, items, countId, kind) {
+          const countEl = document.getElementById(countId);
+          if (!items || items.length === 0) {
+            if (countEl) countEl.textContent = '(0)';
+            const icon = kind === 'users' ? 'fa-users' : 'fa-trophy';
+            const msg = kind === 'users'
+              ? (tr.discovery?.no_results || tr.no_users || 'No users found')
+              : (tr.no_competitions || 'No competitions found');
+            container.innerHTML = \`
+              <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
+                  <i class="fas \${icon} text-2xl text-gray-400 dark:text-gray-500" aria-hidden="true"></i>
+                </div>
+                <p class="text-gray-500 dark:text-gray-400">\${msg}</p>
+              </div>
+            \`;
+            return;
+          }
+          if (countEl) countEl.textContent = '(' + items.length + ')';
+          const cards = kind === 'users'
+            ? items.map(renderUserCard).join('')
+            : items.map(c => window.renderCompetitionCard(c, lang)).join('');
+          container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="' + gridId + '">' +
+                                cards + '</div>' +
+                                '<p class="text-center text-sm text-gray-400 mt-4">' +
+                                (tr.showing_first || 'Showing first results') + ' (' + items.length + ')</p>';
+        }
+
+        // B7: progressive loading state for competitions (dedicated view only).
+        // GET /api/competitions supports limit/offset, so batches are appended
+        // at the current offset. Retrieval semantics are unchanged.
         const COMP_BATCH = 12;
         let compOffset = 0;
         const compSeen = new Set();
@@ -225,8 +514,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           setCompStatus('loading');
 
           try {
-            let url = '/api/competitions?limit=' + COMP_BATCH + '&offset=' + compOffset;
-            if (search) url += '&search=' + encodeURIComponent(search);
+            const url = competitionsUrl(COMP_BATCH, compOffset);
             // The query stays in the URL params: this is not a navigation.
             const res = await fetch(url);
             if (!res.ok) throw new Error('status ' + res.status);
@@ -276,8 +564,9 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           }
         }
 
-        // B7: progressive loading for users. /api/search/users accepts
-        // limit/offset, so the batch is appended instead of reloading the page.
+        // B7: progressive loading for users (dedicated view only).
+        // /api/search/users accepts limit/offset, so the batch is appended
+        // instead of reloading the page.
         const USER_BATCH = 9;
         let userOffset = 0;
         const userSeen = new Set();

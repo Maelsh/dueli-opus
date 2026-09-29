@@ -40,6 +40,12 @@ export const ar = {
     search_results_for: 'نتائج البحث عن',
     no_users: 'لا يوجد مستخدمون',
     search_users_prompt: 'أدخل كلمة للبحث عن المستخدمين',
+    // نتائج البحث — بنية 6+6 وعرض الكل (قبول المالك، بلا تغيير في الاسترجاع)
+    view_all_competitions: 'عرض كل المنافسات',
+    view_all_users: 'عرض كل المستخدمين',
+    back_to_results: 'عودة إلى النتائج',
+    filters: 'تصفية',
+    showing_first: 'عرض أول النتائج',
 
     // الأقسام الرئيسية
     categories: {
@@ -597,6 +603,22 @@ export const ar = {
     withdraw: 'سحب',
     min_withdrawal: 'الحد الأدنى للسحب: 50 دولار',
     request_withdrawal: 'طلب سحب',
+    withdrawal_history: 'سجل السحوبات',
+    no_withdrawal_history: 'لا يوجد سجل سحوبات بعد',
+    submit_withdrawal: 'إرسال طلب السحب',
+    withdrawal_submitted: 'تم إرسال طلب السحب!',
+    withdrawal_approved: 'تمت الموافقة على طلب السحب!',
+    withdrawal_rejected: 'تم رفض طلب السحب: ',
+    withdrawal_cancelled: 'تم إلغاء طلب السحب وإعادة الرصيد.',
+    confirm_cancel_withdrawal: 'إلغاء طلب السحب هذا؟ سيُعاد المبلغ إلى رصيدك.',
+    amount: 'المبلغ',
+    payment_method: 'طريقة الدفع',
+    bank_transfer: 'تحويل بنكي',
+    payment_details: 'بيانات الدفع',
+    payment_details_placeholder: 'IBAN / بريد Wise / عنوان المحفظة...',
+    payment_details_required: 'بيانات الدفع مطلوبة.',
+    processing: 'جارٍ المعالجة...',
+    network_error: 'خطأ في الشبكة. يرجى المحاولة مرة أخرى.',
     // Nested earnings keys for earnings split components (8.B)
     earnings: {
         total: 'الإجمالي',
@@ -655,6 +677,7 @@ export const ar = {
     other: 'أخرى',
     other_desc: 'شيء آخر',
     subject: 'الموضوع',
+    description: 'الوصف',
     enter_subject: 'أدخل الموضوع',
     describe_issue: 'يرجى وصف المشكلة بالتفصيل',
 
@@ -666,6 +689,7 @@ export const ar = {
     champion: 'بطل',
     custom_amount: 'أو أدخل مبلغاً مخصصاً',
     donate_now: 'تبرع الآن',
+    popular: 'الأكثر شيوعاً',
     top_supporters: 'أبرز الداعمين',
 
     // صفحات اختبار البث

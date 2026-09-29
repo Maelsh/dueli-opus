@@ -7,6 +7,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
+import { DUELI_CARD, DUELI_CARD_FLAT, DUELI_INPUT, DUELI_SECTION_TITLE } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 /**
@@ -38,32 +39,32 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 
                 <!-- Donation Options -->
                 <div class="grid md:grid-cols-3 gap-6 mb-12">
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[5]'>
+                    <div class="${DUELI_CARD_FLAT} text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[5]'>
                         <p class="text-4xl font-bold text-purple-600 mb-2">$5</p>
                         <p class="text-gray-500">${tr.coffee || 'Buy us a coffee'}</p>
                     </div>
                     
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[25]'>
-                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs px-3 py-1 rounded-full">Popular</div>
+                    <div class="${DUELI_CARD_FLAT} relative text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[25]'>
+                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-purple-600 text-white text-xs px-3 py-1 rounded-full">${tr.popular}</div>
                         <p class="text-4xl font-bold text-purple-600 mb-2">$25</p>
                         <p class="text-gray-500">${tr.supporter || 'Supporter'}</p>
                     </div>
                     
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[100]'>
+                    <div class="${DUELI_CARD_FLAT} text-center hover:shadow-xl transition-shadow cursor-pointer border-2 border-transparent hover:border-purple-500" data-csp-on="click" data-csp-fn="selectAmount" data-csp-args='[100]'>
                         <p class="text-4xl font-bold text-purple-600 mb-2">$100</p>
                         <p class="text-gray-500">${tr.champion || 'Champion'}</p>
                     </div>
                 </div>
                 
                 <!-- Custom Amount -->
-                <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg mb-8">
-                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+                <div class="${DUELI_CARD} mb-8">
+                    <h2 class="${DUELI_SECTION_TITLE} text-center">
                         ${tr.custom_amount || 'Or enter a custom amount'}
                     </h2>
                     <div class="flex items-center gap-4 max-w-md mx-auto">
                         <span class="text-2xl font-bold text-gray-500">$</span>
-                        <input type="number" id="customAmount" min="1" placeholder="0" 
-                            class="flex-1 px-4 py-3 text-center text-2xl font-bold rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white">
+                        <input type="number" id="customAmount" min="1" placeholder="0" aria-label="${tr.custom_amount || 'Or enter a custom amount'}"
+                            class="${DUELI_INPUT} text-center text-2xl font-bold">
                     </div>
                 </div>
                 
@@ -144,7 +145,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     return;
                 }
                 document.getElementById('supportersList').innerHTML = supporters.map((s, i) => \`
-                    <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-lg flex items-center gap-4">
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-4 shadow border border-gray-100 dark:border-gray-800 flex items-center gap-4">
                         <div class="relative">
                             <img src="\${s.avatar}" class="w-12 h-12 rounded-full">
                             <span class="absolute -top-1 -\${isRTL ? 'left' : 'right'}-1 w-6 h-6 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center font-bold">\${i + 1}</span>

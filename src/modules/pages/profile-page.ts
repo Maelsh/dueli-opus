@@ -9,7 +9,7 @@ import { getCookie } from 'hono/cookie';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter, getCompetitionCard, type CompetitionCardProps } from '../../shared/components';
-import { DUELI_HERO_GRADIENT } from '../../shared/constants';
+import { DUELI_HERO_GRADIENT, DUELI_HERO_DECOR } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 import { UserModel, SessionModel, CompetitionModel } from '../../models';
 import { FollowModel } from '../../models/FollowModel';
@@ -92,8 +92,9 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
         
         <div class="flex-1">
             <!-- Profile Header -->
-            <div class="${DUELI_HERO_GRADIENT} pb-24 pt-8">
-                <div class="container mx-auto px-4">
+            <div class="${DUELI_HERO_GRADIENT} relative overflow-hidden pb-24 pt-8">
+                ${DUELI_HERO_DECOR}
+                <div class="container mx-auto px-4 relative">
                     ${user ? `
                         <div class="flex flex-col md:flex-row items-center gap-6 text-white">
                             <!-- Avatar -->
