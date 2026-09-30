@@ -63,7 +63,11 @@ export const DUELI_SECTION_TITLE = 'text-lg font-bold text-gray-900 dark:text-wh
 // readable; amounts/rules/ledger semantics are untouched.
 export const DUELI_EARNINGS_AVAILABLE = 'bg-gradient-to-br from-violet-700 via-purple-600 to-indigo-600';
 export const DUELI_EARNINGS_PENDING = 'bg-gradient-to-br from-purple-600 via-fuchsia-500 to-pink-500';
-export const DUELI_EARNINGS_WITHDRAWN = 'bg-gradient-to-br from-indigo-700 via-indigo-600 to-blue-600';
+// Owner final visual evidence (post-#73): the progression must read purple
+// → lighter purple/fuchsia → lighter pink/fuchsia/purple — never blue.
+// Withdrawn is therefore pink-dominant (lighter than the pending card),
+// keeping the three states distinguishable with accessible white text.
+export const DUELI_EARNINGS_WITHDRAWN = 'bg-gradient-to-br from-pink-500 via-fuchsia-400 to-purple-400';
 
 // Main category colors (from database)
 export const CATEGORY_COLORS: Record<string, string> = {

@@ -26,7 +26,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
         <div class="flex-1 bg-gray-50 dark:bg-[#0f0f0f]">
             <div class="container mx-auto px-4 py-8 max-w-4xl">
                 <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-                    <i class="fas fa-wallet ${rtl ? 'ml-3' : 'mr-3'} text-emerald-500"></i>
+                    <i class="fas fa-wallet ${rtl ? 'ml-3' : 'mr-3'} text-purple-500"></i>
                     ${(tr as any).earnings_nav || 'Earnings & Wallet'}
                 </h1>
 
@@ -41,7 +41,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-8 w-full max-w-md shadow-2xl mx-4">
                         <div class="flex items-center justify-between mb-6">
                                 <h3 class="text-xl font-bold text-gray-900 dark:text-white">
-                                    <i class="fas fa-university ${rtl ? 'ml-2' : 'mr-2'} text-emerald-500"></i>
+                                    <i class="fas fa-university ${rtl ? 'ml-2' : 'mr-2'} text-purple-500"></i>
                                     ${tr.request_withdrawal}
                                 </h3>
                             <button data-csp-on="click" data-csp-fn="closeWithdrawalModal" data-csp-args='[]'
@@ -309,7 +309,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     <!-- Cash Out -->
                     <div class="\${CARD} mb-6">
                         <h2 class="\${SECTION_TITLE}">
-                            <i class="fas fa-money-bill-wave \${isRTL ? 'ml-2' : 'mr-2'} text-emerald-500"></i>
+                            <i class="fas fa-money-bill-wave \${isRTL ? 'ml-2' : 'mr-2'} text-purple-500"></i>
                             \${tr.withdraw || 'Cash Out'}
                         </h2>
                         \${available < 50
