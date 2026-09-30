@@ -135,22 +135,28 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
               placeholder="${escapeAttr(tr.search_placeholder || 'Search')}"
               maxlength="100"
               autocomplete="off"
-              class="w-full ${rtl ? 'pl-12 pr-4' : 'pr-12 pl-4'} py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition"
+              class="w-full ${rtl ? 'pr-12 pl-4' : 'pl-12 pr-4'} py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition"
             />
             <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none ${rtl ? 'right-4' : 'left-4'}">
               <i class="fas fa-search text-lg" aria-hidden="true"></i>
             </div>
           </div>
-          <select id="categoryFilter" name="category" aria-label="${escapeAttr(tr.categories.title || tr.filters || 'Filters')}"
-                  class="px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
-            <option value="">${escapeHtml(tr.all || 'All')}</option>
-            ${categoryOptions}
-          </select>
-          <select id="statusFilter" name="status" aria-label="${escapeAttr(tr.status_live ? (tr.status || 'Status') : 'Status')}"
-                  class="px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
-            <option value="">${escapeHtml(tr.all || 'All')}</option>
-            ${statusOptions}
-          </select>
+          <div class="relative">
+            <select id="categoryFilter" name="category" aria-label="${escapeAttr(tr.categories.title || tr.filters || 'Filters')}"
+                    class="w-full md:w-auto appearance-none ps-4 pe-10 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
+              <option value="">${escapeHtml(tr.all || 'All')}</option>
+              ${categoryOptions}
+            </select>
+            <i class="fas fa-chevron-down absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-4' : 'right-4'} text-gray-400 pointer-events-none" aria-hidden="true"></i>
+          </div>
+          <div class="relative">
+            <select id="statusFilter" name="status" aria-label="${escapeAttr(tr.status_live ? (tr.status || 'Status') : 'Status')}"
+                    class="w-full md:w-auto appearance-none ps-4 pe-10 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
+              <option value="">${escapeHtml(tr.all || 'All')}</option>
+              ${statusOptions}
+            </select>
+            <i class="fas fa-chevron-down absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-4' : 'right-4'} text-gray-400 pointer-events-none" aria-hidden="true"></i>
+          </div>
           <input type="hidden" name="lang" value="${uiLang}" />
           <button type="submit" title="${escapeAttr(tr.search_placeholder || 'Search')}" aria-label="${escapeAttr(tr.search_placeholder || 'Search')}"
                   class="px-6 py-3 ${DUELI_PRIMARY_BTN} flex items-center justify-center gap-2">
@@ -180,13 +186,6 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             ${tr.competitions || 'Competitions'}
             <span id="compsCount" class="text-sm font-normal text-gray-400"></span>
           </h2>
-          ${view === '' ? `
-          <a id="compsViewAll" href="${escapeAttr(compsViewAll)}"
-             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">
-            <span>${escapeHtml(tr.view_all_competitions || tr.view_all || 'View all')}</span>
-            <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
-          </a>
-          ` : ''}
         </div>
         <div id="competitionsContainer">
           <div class="flex flex-col items-center justify-center py-12">
@@ -194,23 +193,25 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             <p class="text-gray-500">${tr.loading || 'Loading...'}</p>
           </div>
         </div>
+        ${view === '' ? `
+        <div class="text-center mt-6">
+          <a id="compsViewAllUnder" href="${escapeAttr(compsViewAll)}"
+             class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-bold shadow-lg shadow-purple-500/20 hover:opacity-90 transition-opacity">
+            <span>${escapeHtml(tr.view_all_competitions || tr.view_all || 'View all')}</span>
+            <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
+          </a>
+        </div>
+        ` : ''}
       </section>
       
       <!-- Users Section -->
       <section id="usersSection" aria-labelledby="users-title" class="${usersHidden}">
         <div class="flex items-center justify-between mb-4">
           <h2 id="users-title" class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <i class="fas fa-users text-blue-500" aria-hidden="true"></i>
+            <i class="fas fa-users text-purple-500" aria-hidden="true"></i>
             ${tr.users || 'Users'}
             <span id="usersCount" class="text-sm font-normal text-gray-400"></span>
           </h2>
-          ${view === '' ? `
-          <a id="usersViewAll" href="${escapeAttr(usersViewAll)}"
-             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-            <span>${escapeHtml(tr.view_all_users || tr.view_all || 'View all')}</span>
-            <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
-          </a>
-          ` : ''}
         </div>
         <div id="usersContainer">
           <div class="flex flex-col items-center justify-center py-12">
@@ -218,6 +219,15 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             <p class="text-gray-500">${tr.loading || 'Loading...'}</p>
           </div>
         </div>
+        ${view === '' ? `
+        <div class="text-center mt-6">
+          <a id="usersViewAllUnder" href="${escapeAttr(usersViewAll)}"
+             class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-bold shadow-lg shadow-purple-500/20 hover:opacity-90 transition-opacity">
+            <span>${escapeHtml(tr.view_all_users || tr.view_all || 'View all')}</span>
+            <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs" aria-hidden="true"></i>
+          </a>
+        </div>
+        ` : ''}
       </section>
     </div>
     
@@ -427,10 +437,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           const cards = kind === 'users'
             ? items.map(renderUserCard).join('')
             : items.map(c => window.renderCompetitionCard(c, lang)).join('');
+          // No "showing first" line: the six results are self-evident and the
+          // under-section View-all action carries the onward journey.
           container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="' + gridId + '">' +
-                                cards + '</div>' +
-                                '<p class="text-center text-sm text-gray-400 mt-4">' +
-                                (tr.showing_first || 'Showing first results') + ' (' + items.length + ')</p>';
+                                cards + '</div>';
         }
 
         // B7: progressive loading state for competitions (dedicated view only).
@@ -645,19 +655,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
                 \` : ''}
                 
                 <div class="flex items-center gap-4">
-                  <!-- Avatar with verified badge -->
-                  <div class="relative flex-shrink-0">
+                  <!-- Avatar with Dueli gradient ring (no verification badge, no red ring) -->
+                  <div class="relative flex-shrink-0 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 p-0.5">
                     <img 
                       src="\${user.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username}" 
                       alt="\${user.display_name || user.username}" 
-                      class="w-16 h-16 rounded-full object-cover border-2 \${user.is_busy ? 'border-red-500' : 'border-purple-100 dark:border-purple-900'}"
+                      class="w-16 h-16 rounded-full object-cover border-2 border-white dark:border-gray-800"
                       loading="lazy"
                     >
-                    \${user.is_verified ? \`
-                      <div class="absolute -bottom-1 \${rtl ? '-left-1' : '-right-1'} bg-blue-500 rounded-full p-1" title="\${tr.verified || 'Verified'}">
-                        <i class="fas fa-check text-white text-xs" aria-hidden="true"></i>
-                      </div>
-                    \` : ''}
                   </div>
                   
                   <!-- User Info -->

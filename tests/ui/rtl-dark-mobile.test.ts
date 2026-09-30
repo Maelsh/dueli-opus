@@ -65,14 +65,13 @@ describe('B15 RTL direction', () => {
         expect(enCard).toContain('top-3 right-3');
     });
 
-    it('user-card verified badge uses static RTL/LTR classes (Tailwind-JIT visible)', () => {
+    it('user-card carries no verification badge (owner R1: no badge system in this UI)', () => {
         const arCard = getUserCard({ id: 1, username: 'u', is_verified: true }, 'ar' as any);
         const enCard = getUserCard({ id: 1, username: 'u', is_verified: true }, 'en' as any);
-        expect(arCard).toContain('-bottom-1 -left-1');
-        expect(enCard).toContain('-bottom-1 -right-1');
-        // لا فئات مبنية ديناميكياً (Tailwind لا يراها في المسح)
-        const src = readSrc('src/shared/components/user-card.ts');
-        expect(src).not.toMatch(/-\$\{rtl/);
+        expect(arCard).not.toMatch(/fa-check/);
+        expect(enCard).not.toMatch(/bg-blue-500/);
+        expect(arCard).toContain('/profile/u?lang=ar');
+        expect(enCard).toContain('/profile/u?lang=en');
     });
 
     it('no forbidden full-page/icon flip hacks (scaleX) in UI sources', () => {

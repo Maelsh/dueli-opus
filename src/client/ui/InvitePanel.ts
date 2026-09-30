@@ -371,7 +371,6 @@ export class InvitePanel {
                                 <span class="font-semibold text-sm text-gray-900 dark:text-white truncate">
                                     ${user.display_name || user.username}
                                 </span>
-                                ${user.is_verified ? '<i class="fas fa-check-circle text-blue-500 text-xs flex-shrink-0"></i>' : ''}
                             </div>
                             <div class="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                                 <span>${this.getStatusText(user)}</span>
@@ -481,7 +480,6 @@ export class InvitePanel {
                 <div class="min-w-0">
                     <div class="flex items-center gap-1">
                         <span class="font-bold text-sm text-gray-900 dark:text-white truncate">${user.display_name || user.username}</span>
-                        ${user.is_verified ? '<i class="fas fa-check-circle text-blue-500 text-xs"></i>' : ''}
                     </div>
                     <span class="text-xs text-gray-400">@${user.username}</span>
                 </div>

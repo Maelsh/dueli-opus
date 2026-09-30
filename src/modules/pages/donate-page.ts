@@ -26,7 +26,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             <div class="container mx-auto px-4 py-8 max-w-4xl">
                 <!-- Hero Section -->
                 <div class="text-center mb-12">
-                    <div class="w-24 h-24 mx-auto bg-gradient-to-br from-pink-500 to-red-600 rounded-full flex items-center justify-center mb-6 shadow-lg">
+                    <div class="w-24 h-24 mx-auto bg-gradient-to-br from-violet-600 via-fuchsia-500 to-indigo-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-purple-500/30">
                         <i class="fas fa-heart text-4xl text-white"></i>
                     </div>
                     <h1 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -69,7 +69,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 </div>
                 
                 <!-- Donate Button -->
-                <button data-csp-on="click" data-csp-fn="processDonation" data-csp-args='[]' aria-label="${tr.donations?.send || 'Send donation'}" class="w-full py-4 bg-gradient-to-r from-pink-600 to-red-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg text-lg">
+                <button data-csp-on="click" data-csp-fn="processDonation" data-csp-args='[]' aria-label="${tr.donations?.send || 'Send donation'}" class="w-full py-4 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-600 text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg shadow-purple-500/30 text-lg">
                     <i class="fas fa-heart ${rtl ? 'ml-2' : 'mr-2'}"></i>
                     ${tr.donate_now || 'Donate Now'}
                 </button>

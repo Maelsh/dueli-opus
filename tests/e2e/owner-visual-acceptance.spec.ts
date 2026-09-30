@@ -117,10 +117,10 @@ test.describe('D — explore structure', () => {
         expect(compCount, 'preview competitions capped').toBeLessThanOrEqual(6);
         await expect(page.locator('[data-action="load-more-competitions"]')).toHaveCount(0);
 
-        const compsHref = await page.locator('#compsViewAll').getAttribute('href');
+        const compsHref = await page.locator('#compsViewAllUnder').getAttribute('href');
         expect(compsHref).toContain('view=competitions');
         expect(compsHref).toContain('search=Challenge');
-        const usersHref = await page.locator('#usersViewAll').getAttribute('href');
+        const usersHref = await page.locator('#usersViewAllUnder').getAttribute('href');
         expect(usersHref).toContain('view=users');
     });
 

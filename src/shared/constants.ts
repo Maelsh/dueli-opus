@@ -39,7 +39,10 @@ export const DUELI_HERO_DECOR = `
 export const DUELI_PRIMARY_BTN = `${DUELI_PRIMARY_GRADIENT} text-white rounded-full font-bold shadow-lg shadow-purple-500/20`;
 
 // Tab styling that uses the same canonical gradient for its active state.
-export const DUELI_TAB_ACTIVE = DUELI_PRIMARY_GRADIENT;
+// Owner acceptance (R1): the gradient alone left black text on purple — the
+// token now carries white text/icons, so every surface swapping to it
+// (my-competitions, my-requests) gets a readable active tab from one place.
+export const DUELI_TAB_ACTIVE = `${DUELI_PRIMARY_GRADIENT} text-white`;
 export const DUELI_TAB_INACTIVE = 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800';
 
 // ── Canonical product-language tokens (owner coherence pass) ───────────────
@@ -52,6 +55,15 @@ export const DUELI_CARD = 'bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg 
 export const DUELI_CARD_FLAT = 'bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 shadow-lg';
 export const DUELI_INPUT = 'w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition';
 export const DUELI_SECTION_TITLE = 'text-lg font-bold text-gray-900 dark:text-white mb-4';
+
+// ── Earnings summary gradients (owner R1 acceptance) ───────────────────────
+// The three financial states as distinct multi-stop Dueli-brand gradients
+// (violet/purple/indigo + pink + blue — the logo palette), replacing the
+// rejected giant solid emerald/orange/slate blocks. All keep white text
+// readable; amounts/rules/ledger semantics are untouched.
+export const DUELI_EARNINGS_AVAILABLE = 'bg-gradient-to-br from-violet-700 via-purple-600 to-indigo-600';
+export const DUELI_EARNINGS_PENDING = 'bg-gradient-to-br from-purple-600 via-fuchsia-500 to-pink-500';
+export const DUELI_EARNINGS_WITHDRAWN = 'bg-gradient-to-br from-indigo-700 via-indigo-600 to-blue-600';
 
 // Main category colors (from database)
 export const CATEGORY_COLORS: Record<string, string> = {

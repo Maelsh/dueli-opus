@@ -7,7 +7,7 @@ import type { Context } from 'hono';
 import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
-import { DUELI_PRIMARY_BTN, DUELI_CARD, DUELI_SECTION_TITLE } from '../../shared/constants';
+import { DUELI_PRIMARY_BTN, DUELI_CARD, DUELI_SECTION_TITLE, DUELI_EARNINGS_AVAILABLE, DUELI_EARNINGS_PENDING, DUELI_EARNINGS_WITHDRAWN } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 /**
@@ -114,6 +114,9 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
             const CARD = ${JSON.stringify(DUELI_CARD)};
             const SECTION_TITLE = ${JSON.stringify(DUELI_SECTION_TITLE)};
+            const EARN_AVAILABLE = ${JSON.stringify(DUELI_EARNINGS_AVAILABLE)};
+            const EARN_PENDING = ${JSON.stringify(DUELI_EARNINGS_PENDING)};
+            const EARN_WITHDRAWN = ${JSON.stringify(DUELI_EARNINGS_WITHDRAWN)};
             let currentEarnings = {};
 
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -267,7 +270,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 document.getElementById('earningsContent').innerHTML = \`
                     <!-- Balance Cards -->
                     <div class="grid sm:grid-cols-3 gap-5 mb-8">
-                        <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20">
+                        <div class="\${EARN_AVAILABLE} rounded-2xl p-6 text-white shadow-lg shadow-purple-500/20">
                             <div class="flex items-center justify-between mb-3">
                                 <i class="fas fa-wallet text-2xl opacity-80"></i>
                                 <span class="text-xs bg-white/20 px-2 py-1 rounded-full font-medium">\${tr.available || 'Available'}</span>
@@ -275,7 +278,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <p class="text-4xl font-black">\$\${available.toFixed(2)}</p>
                             <p class="text-sm opacity-70 mt-1">USD</p>
                         </div>
-                        <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg shadow-amber-500/20">
+                        <div class="\${EARN_PENDING} rounded-2xl p-6 text-white shadow-lg shadow-fuchsia-500/20">
                             <div class="flex items-center justify-between mb-3">
                                 <i class="fas fa-clock text-2xl opacity-80"></i>
                                 <span class="text-xs bg-white/20 px-2 py-1 rounded-full font-medium">\${tr.pending || 'Pending'}</span>
@@ -283,7 +286,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <p class="text-4xl font-black">\$\${pending.toFixed(2)}</p>
                             <p class="text-sm opacity-70 mt-1">USD</p>
                         </div>
-                        <div class="bg-gradient-to-br from-slate-600 to-gray-700 rounded-2xl p-6 text-white shadow-lg">
+                        <div class="\${EARN_WITHDRAWN} rounded-2xl p-6 text-white shadow-lg shadow-indigo-500/20">
                             <div class="flex items-center justify-between mb-3">
                                 <i class="fas fa-check-circle text-2xl opacity-80"></i>
                                 <span class="text-xs bg-white/20 px-2 py-1 rounded-full font-medium">\${tr.withdrawn || 'Withdrawn'}</span>

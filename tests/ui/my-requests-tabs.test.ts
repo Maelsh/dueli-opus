@@ -15,7 +15,10 @@ import app from '../../src/main';
 import { DUELI_TAB_ACTIVE, DUELI_TAB_INACTIVE } from '../../src/shared/constants';
 import { FakeD1 } from '../helpers/fake-d1';
 
-const LEGACY_ACTIVE = ['bg-purple-600', 'text-white'];
+const LEGACY_ACTIVE = ['bg-purple-600'];
+// NOTE (R1): `text-white` used to be part of the legacy flat pair, but the
+// canonical DUELI_TAB_ACTIVE token now carries it (white text on the Dueli
+// gradient). The remaining legacy marker is the flat purple background.
 
 const tabClass = (html: string, id: string): string => {
     const m = new RegExp(`id="${id}"[^>]*class="([^"]*)"`).exec(html);
