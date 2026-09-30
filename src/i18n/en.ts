@@ -164,6 +164,12 @@ export const en = {
     delete: 'Delete',
     follow: 'Follow',
     unfollow: 'Unfollow',
+    block: 'Block',
+    unblock: 'Unblock',
+    confirm_block: 'Block this user? They will not be able to message or interact with you.',
+    confirm_unblock: 'Unblock this user?',
+    user_blocked: 'User blocked.',
+    user_unblocked: 'User unblocked.',
 
     // Rating
     rate: 'Rate',
@@ -1009,6 +1015,9 @@ export const en = {
     confirm_delete_post: 'Delete this post?',
 
     // ── T3.2: Account deletion (GDPR) ──────────────
+    danger_zone: 'Danger Zone',
+    delete_account: 'Delete Account',
+    delete_account_warning: 'Deleting your account is permanent and cannot be undone.',
     confirm_delete_account: 'Are you sure you want to permanently delete your account? Your identity will be anonymized and your data removed.',
     account_deleted: 'Your account has been deleted. Sorry to see you go.',
 

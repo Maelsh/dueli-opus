@@ -168,13 +168,16 @@ test.describe('my-requests tab state (PR #71 blocker)', () => {
     test.use({ viewport: { width: 1440, height: 900 } });
 
     /** Reads every tab's state-relevant classes after each switch. */
+    // NOTE (R1): `text-white` is now part of the canonical DUELI_TAB_ACTIVE
+    // token (white text on the Dueli gradient). The legacy flat marker that
+    // must never reappear is the flat purple background `bg-purple-600`.
     const readTabs = (page) => page.evaluate(() => {
-        const ACTIVE = ['bg-gradient-to-r', 'from-purple-600', 'to-indigo-600'];
+        const ACTIVE = ['bg-gradient-to-r', 'from-purple-600', 'to-indigo-600', 'text-white'];
         const INACTIVE = ['text-gray-600'];
         const out: Record<string, string[]> = {};
         for (const el of document.querySelectorAll('[id^="tab-"]')) {
             out[el.id] = [...el.classList].filter(
-                (c) => ACTIVE.includes(c) || INACTIVE.includes(c) || c === 'bg-purple-600' || c === 'text-white',
+                (c) => ACTIVE.includes(c) || INACTIVE.includes(c) || c === 'bg-purple-600',
             );
         }
         return out;
@@ -189,7 +192,7 @@ test.describe('my-requests tab state (PR #71 blocker)', () => {
             })
             .map(([id]) => id);
 
-    const ACTIVE = ['bg-gradient-to-r', 'from-purple-600', 'to-indigo-600'];
+    const ACTIVE = ['bg-gradient-to-r', 'from-purple-600', 'to-indigo-600', 'text-white'];
     const INACTIVE = ['text-gray-600'];
 
     test('Received starts active, then each switch leaves exactly ONE active tab', async ({ page }) => {
@@ -204,9 +207,11 @@ test.describe('my-requests tab state (PR #71 blocker)', () => {
             .filter(([, c]) => ACTIVE.some((a) => c.includes(a)))
             .map(([id]) => id);
         expect(activeOnLoad, 'exactly one active tab on load').toEqual(['tab-received']);
-        expect(tabs['tab-received'], 'no legacy flat active class remains')
+        // R1: `text-white` is canonical now (see NOTE above); the legacy
+        // flat background must stay gone, and the token text must be present.
+        expect(tabs['tab-received'], 'no legacy flat background remains')
             .not.toContain('bg-purple-600');
-        expect(tabs['tab-received']).not.toContain('text-white');
+        expect(tabs['tab-received']).toContain('text-white');
 
         // 2. Click Invitations.
         await page.click('#tab-invitations');

@@ -211,6 +211,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'switchAuthTab',
     'switchCamera',
     'toggleAudio',
+    'toggleBlock',
     'toggleComments',
     'toggleCountryMenu',
     'toggleDarkMode',

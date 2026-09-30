@@ -149,17 +149,23 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             <div class="grid md:grid-cols-2 gap-4">
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">\${tr.language || 'Language'}</label>
-                                    <select id="language" class="w-full px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white">
-                                        <option value="en" \${currentSettings.default_language === 'en' ? 'selected' : ''}>English</option>
-                                        <option value="ar" \${currentSettings.default_language === 'ar' ? 'selected' : ''}>العربية</option>
-                                    </select>
+                                    <div class="relative">
+                                        <select id="language" class="w-full appearance-none ps-4 pe-10 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#111] focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-900 dark:text-white">
+                                            <option value="en" \${currentSettings.default_language === 'en' ? 'selected' : ''}>English</option>
+                                            <option value="ar" \${currentSettings.default_language === 'ar' ? 'selected' : ''}>العربية</option>
+                                        </select>
+                                        <i class="fas fa-chevron-down absolute top-1/2 -translate-y-1/2 \${isRTL ? 'left-4' : 'right-4'} text-gray-400 pointer-events-none" aria-hidden="true"></i>
+                                    </div>
                                 </div>
                                 
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">\${tr.country || 'Country'}</label>
-                                    <select id="country" class="w-full px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white">
-                                        \${countries.map(c => \`<option value="\${c.code}" \${currentSettings.default_country === c.code ? 'selected' : ''}>\${c.nativeName}</option>\`).join('')}
-                                    </select>
+                                    <div class="relative">
+                                        <select id="country" class="w-full appearance-none ps-4 pe-10 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#111] focus:ring-2 focus:ring-purple-500 outline-none transition text-gray-900 dark:text-white">
+                                            \${countries.map(c => \`<option value="\${c.code}" \${currentSettings.default_country === c.code ? 'selected' : ''}>\${c.nativeName}</option>\`).join('')}
+                                        </select>
+                                        <i class="fas fa-chevron-down absolute top-1/2 -translate-y-1/2 \${isRTL ? 'left-4' : 'right-4'} text-gray-400 pointer-events-none" aria-hidden="true"></i>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -194,15 +200,15 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     </form>
                     
                     <!-- Danger Zone -->
-                    <div class="bg-red-50 dark:bg-red-900/20 rounded-xl p-6 mt-6 border border-red-200 dark:border-red-800">
-                        <h2 class="text-lg font-bold text-red-600 mb-4">
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-6 mt-6 shadow-lg border border-gray-100 dark:border-gray-800">
+                        <h2 class="text-lg font-bold text-red-600 dark:text-red-400 mb-4 motion-safe:animate-pulse motion-reduce:animate-none">
                             <i class="fas fa-exclamation-triangle \${isRTL ? 'ml-2' : 'mr-2'}"></i>
-                            \${tr.danger_zone || 'Danger Zone'}
+                            \${tr.danger_zone}
                         </h2>
-                        <p class="text-red-600/80 mb-4">\${tr.delete_account_warning || 'Deleting your account is permanent and cannot be undone.'}</p>
-                        <button data-csp-on="click" data-csp-fn="deleteAccount" data-csp-args='[]' class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                        <p class="text-gray-500 dark:text-gray-400 mb-4">\${tr.delete_account_warning}</p>
+                        <button data-csp-on="click" data-csp-fn="deleteAccount" data-csp-args='[]' class="px-6 py-2.5 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20">
                             <i class="fas fa-trash \${isRTL ? 'ml-2' : 'mr-2'}"></i>
-                            \${tr.delete_account || 'Delete Account'}
+                            \${tr.delete_account}
                         </button>
                     </div>
                 \`;

@@ -182,7 +182,10 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
                })}
                <span class="truncate max-w-[80px]">${item.creator_name || 'User'}</span>
             </span>`}
-            <span class="mx-0.5 text-gray-300">vs</span>
+            <span class="mx-0.5 text-gray-300 flex items-center">
+                <img src="/static/dueli-icon.png" alt="" aria-hidden="true" width="20" height="20" decoding="async" class="w-5 h-5 object-contain grayscale opacity-50">
+                <span class="sr-only">vs</span>
+             </span>
              ${item.opponent_name ?
       (getProfilePath(item.opponent_username, lang) ? `<a href="${getProfilePath(item.opponent_username, lang)}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
                 ${getUserAvatarLink({

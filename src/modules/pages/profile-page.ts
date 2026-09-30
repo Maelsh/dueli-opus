@@ -163,7 +163,9 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
             </div>
             
             <!-- Profile Content -->
-            <div class="container mx-auto px-4 -mt-16">
+            <!-- R1: the tabs card overlaps the hero (-mt-16), so it must sit
+                 ABOVE the positioned hero or the hero swallows tab clicks. -->
+            <div class="container mx-auto px-4 -mt-16 relative z-10">
                 ${user ? `
                     <!-- Tabs -->
                     <div class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl mb-6">
@@ -261,7 +263,62 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                             <i class="fas fa-envelope \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.send_message || 'Message'}
                         </a>
+                        <button data-csp-on="click" data-csp-fn="toggleBlock" data-csp-args='[]' id="blockBtn"
+                            class="px-6 py-2.5 bg-white/20 hover:bg-white/30 rounded-full font-semibold transition-colors">
+                            <i class="fas fa-ban \${isRTL ? 'ml-2' : 'mr-2'}"></i>
+                            \${tr.block || 'Block'}
+                        </button>
                     \`;
+                    refreshBlockState();
+                }
+            }
+
+            // Block state comes from the existing blocks contract (GET /api/blocks,
+            // auth required — same contract the toggle below writes through).
+            async function refreshBlockState() {
+                const btn = document.getElementById('blockBtn');
+                if (!btn || !window.currentUser) return;
+                try {
+                    const res = await fetch('/api/blocks', {
+                        headers: { 'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')) }
+                    });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    const list = (data && data.success && data.data) ? data.data : [];
+                    const blocked = list.some(b => (b.blocked_id ?? b.user_id ?? b.id) === profileUserId);
+                    paintBlockButton(btn, blocked);
+                } catch (err) {
+                    console.error('Block state error:', err);
+                }
+            }
+
+            function paintBlockButton(btn, blocked) {
+                if (blocked) btn.classList.add('is-blocked');
+                else btn.classList.remove('is-blocked');
+                btn.innerHTML = blocked
+                    ? \`<i class="fas fa-check-circle \${isRTL ? 'ml-2' : 'mr-2'}"></i>\${tr.unblock || 'Unblock'}\`
+                    : \`<i class="fas fa-ban \${isRTL ? 'ml-2' : 'mr-2'}"></i>\${tr.block || 'Block'}\`;
+            }
+
+            async function toggleBlock() {
+                const btn = document.getElementById('blockBtn');
+                if (!btn || !profileUserId) return;
+                const blocked = btn.classList.contains('is-blocked');
+                if (!confirm(blocked ? (tr.confirm_unblock || 'Unblock this user?') : (tr.confirm_block || 'Block this user?'))) return;
+                try {
+                    const headers = {
+                        'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                        'Content-Type': 'application/json'
+                    };
+                    const res = blocked
+                        ? await fetch(\`/api/blocks/\${profileUserId}\`, { method: 'DELETE', headers })
+                        : await fetch('/api/blocks', { method: 'POST', headers, body: JSON.stringify({ user_id: profileUserId }) });
+                    if (res.ok) {
+                        paintBlockButton(btn, !blocked);
+                        window.dueli?.showToast?.(!blocked ? (tr.user_blocked || 'User blocked.') : (tr.user_unblocked || 'User unblocked.'), !blocked ? 'error' : 'success');
+                    }
+                } catch (err) {
+                    console.error('Block error:', err);
                 }
             }
             

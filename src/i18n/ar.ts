@@ -138,6 +138,12 @@ export const ar = {
     delete: 'حذف',
     follow: 'متابعة',
     unfollow: 'إلغاء المتابعة',
+    block: 'حظر',
+    unblock: 'إلغاء الحظر',
+    confirm_block: 'حظر هذا المستخدم؟ لن يتمكن من مراسلتك أو التفاعل معك.',
+    confirm_unblock: 'إلغاء حظر هذا المستخدم؟',
+    user_blocked: 'تم حظر المستخدم.',
+    user_unblocked: 'تم إلغاء حظر المستخدم.',
 
     // التقييم
     rate: 'قيّم',
@@ -985,6 +991,9 @@ export const ar = {
     confirm_delete_post: 'حذف هذا المنشور؟',
 
     // ── T3.2: حذف الحساب (GDPR) ──────────────
+    danger_zone: 'منطقة الخطر',
+    delete_account: 'حذف الحساب',
+    delete_account_warning: 'حذف حسابك نهائي ولا يمكن التراجع عنه.',
     confirm_delete_account: 'هل أنت متأكد من حذف حسابك نهائياً؟ سيتم إخفاء هويتك وحذف بياناتك.',
     account_deleted: 'تم حذف حسابك. نأسف لرحيلك.',
 

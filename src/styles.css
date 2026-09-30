@@ -466,6 +466,11 @@ body.dark .badge-live {
     border-radius: 20px;
     font-size: 12px;
     font-weight: 600;
+    /* R1 card polish: same icon+gap treatment as .badge-live so the play
+       glyph never sticks to the word. */
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 body.dark .badge-recorded {
