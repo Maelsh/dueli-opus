@@ -1,3 +1,11 @@
+## 2026-09-30 — R1 earnings palette micro-fix (branch `fix/r1-earnings-palette-microfix`)
+
+- **Owner final visual evidence**: R1 design accepted except the Earnings palette — Withdrawn card's blue-heavy gradient breaks the purple→fuchsia progression, and three green decorative icons remain (title wallet, withdrawal money, modal bank).
+- **Changes (earnings-page.ts + `DUELI_EARNINGS_WITHDRAWN` only)**: Withdrawn card `from-indigo-700 via-indigo-600 to-blue-600` → `from-pink-500 via-fuchsia-400 to-purple-400` (pink-dominant, lighter than Pending, same Dueli family; white 4xl values stay readable); the three decorative icons `text-emerald-500` → `text-purple-500`. Untouched: layout/sizes, amounts, $50 rule, APIs, ledger, semantic greens (completed status, success toast, emerald money CTA + rings), and every other #73 surface. No B7 investigation.
+- **BASE / HEAD**: BASE `ad23c65` (origin/main verified equal) → HEAD `8ced699`.
+- **Tests**: RED first — new `tests/ui/r1-earnings-palette.test.ts` 3/5 failed on BASE → 5/5 green (token value, no-blue literal, icon swaps, exactly-one-green = semantic completed, finance contracts intact). Full `npm test` **1001/1001** (97 files), `tsc` clean, `build` OK, G2 **296 = BASE 296** (zero new `any`, no bypass). Chromium smoke 5/5: earnings ar/en × desktop/mobile + dark (stubbed session; wallet renders, contrast asserted white, zero console errors modulo the stub-only SSE-ticket 401). Screenshots reviewed outside the tree.
+- **Constraints**: R1 design owner-accepted subject to this micro-fix; B7 remains to be resolved/verified before R1 closure. No R1/R2/R3 global claim.
+- **ROLLBACK (G8)**: revert the single commit (token + 3 icon classes + test; styles.css regenerates via `build:css`).
 ## 2026-09-30 — R1 final owner-acceptance remediation (branch `fix/r1-final-owner-acceptance`)
 
 - **BASE / HEAD**: BASE `7f1fdd7` (origin/main verified equal before branching) → PR branch `fix/r1-final-owner-acceptance`. No merge, no deploy, no schema/migration. Governing sources read: completion-plan `01-MASTER-PLAN.md` (raw; plan16 closures stay closed, visual-defect-only scope, OOP/MVC/i18n/CSP), historical plan16 constraints (UI-only, RED-first, ar+en, no closed-service rework), `docs/11` (G2 ratchet), PLAN-STATUS + WORKLOG.
