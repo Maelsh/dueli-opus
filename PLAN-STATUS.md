@@ -1,6 +1,12 @@
 
 
 
+## R1 earnings palette micro-fix · فرع `fix/r1-earnings-palette-microfix` (من `ad23c65`)
+
+- 🔧 بطاقة Withdrawn إلى `from-pink-500 via-fuchsia-400 to-purple-400` (تكملة التدرج البنفسجي بدل الأزرق) + الأيقونات الخضراء الزخرفية الثلاث إلى بنفسجي Dueli؛ الأخضر الدلالي (completed/toasts/CTA) والمنطق المالي كما هما.
+- **الأدلة**: ‏RED أولاً (3/5 فشلت على BASE)؛ ‏`npm test` ‏1001/1001؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏296 = ‏BASE؛ دخان Chromium ‏5/5 (ar/en × desktop/mobile + ‏dark). بلا دمج، بلا نشر.
+- R1 design owner-accepted subject to this micro-fix; B7 remains to be resolved/verified before R1 closure. لا ادعاء R1/R2/R3.
+
 ## R1 final owner-acceptance remediation · فرع `fix/r1-final-owner-acceptance` (من `7f1fdd7`)
 
 - 🔧 منفَّذ ومُتحقَّق محلياً: عودة Posts/Block (علّة حقيقية: `relative` الهيرو ‏#72 غطّى التبويبات — أُصلحت بـ`z-10`؛ الحظر عبر عقد `/api/blocks` القائم)؛ بطاقات الأرباح بتدرجات Dueli؛ نص أبيض في token التبويب النشط؛ تلميع البطاقة (gap + فاصل رمادي)؛ Reports/Donate بلوحة Dueli؛ selects متماسكة وDanger Zone مضبوطة ومترجمة؛ إصلاح تداخل بحث Explore؛ View-all تحت الأقسام؛ إزالة شارة التوثيق والحلقة الحمراء؛ ترقيم مستخدمي View-all مؤمَّن باختبارات.
