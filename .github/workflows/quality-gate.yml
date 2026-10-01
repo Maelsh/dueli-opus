@@ -45,12 +45,11 @@ jobs:
         run: npm run build
 
       # ---- فحوص أمنية نمطية (docs/12-SECURITY-REMEDIATION.md §4) ----
+      # SEC-06 strips // and /* */ comments before matching, so documentation
+      # that names Math.random() (e.g. "never Math.random(), WebCrypto instead")
+      # no longer false-positives — while a real executable call still fails.
       - name: SEC-06 — no Math.random() in security-sensitive code
-        run: |
-          if grep -rn "Math.random" src/middleware src/lib src/modules/api; then
-            echo "::error::Math.random() found in security-sensitive path — see SEC-06"
-            exit 1
-          fi
+        run: node dev-tools/check-sec06-math-random.mjs
 
       # SEC-11 — TRANSITIONAL (GRACE-PERIOD, no fixed expiry date):
       # (a) Incident rollback (PR #1, merge e38a2d3, 2026-09-07) restored the raw
