@@ -1,5 +1,15 @@
 name: Deploy to Cloudflare Pages
 
+# cloudflare/pages-action@v1 is no longer resolvable
+# ("Unable to resolve action, not found"), which stalled production deploys.
+# This workflow uses Cloudflare's own Wrangler CLI (already a devDependency,
+# so the deploy mechanism is pinned to the repo, not to a third-party action).
+# Same semantics as before: same Pages project (project-8e7c178d, also the
+# `name` in wrangler.jsonc), same build output (dist, also
+# `pages_build_output_dir` in wrangler.jsonc), production on push to main,
+# preview deployments for PRs / other branches. Same secrets — no new ones:
+# CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID.
+
 on:
   push:
     branches: [main, develop]
@@ -12,32 +22,36 @@ jobs:
     name: Deploy to Cloudflare Pages
     permissions:
       contents: read
-      deployments: write
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Build
         run: npm run build
-      
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: project-8e7c178d
-          directory: dist
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          
+
+      - name: Deploy to Cloudflare Pages (production)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: npx wrangler pages deploy dist --project-name=project-8e7c178d --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy preview to Cloudflare Pages
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main')
+        run: npx wrangler pages deploy dist --project-name=project-8e7c178d --branch=${{ github.head_ref || github.ref_name }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deployment Status
         run: echo "✅ Deployment completed successfully!"

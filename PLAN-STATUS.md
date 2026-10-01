@@ -1,6 +1,12 @@
 
 
 
+## CI/CD DEPLOYMENT RECOVERY · فرع `fix/ci-cd-deployment-recovery` (من `f3942c3` = origin/main)
+
+- 🔧 عيبان مثبتان (PRs ‏#75–#78 مدموجة في main وليست مفقودة؛ production متوقف على نسخة قديمة لأن الـdeploy يفشل): ‏(1) ‏`deploy.yml` يستخدم `cloudflare/pages-action@v1` غير القابل للحل ("not found") → النشر الآن عبر Wrangler الرسمي (`npx wrangler pages deploy dist`, مثبّت devDependency — بلا action خارجي)، نفس المشروع والمخرجات والـtriggers، production على push-to-main فقط وpreviews صريحة للـPRs، نفس الـsecrets بلا أسماء جديدة؛ ‏(2) ‏SEC-06 كان grep خام يسقط على تعليق توثيقي في `ExploreSessionService.ts:11` رغم WebCrypto الفعلي → فاحص `dev-tools/check-sec06-math-random.mjs` يجرّد التعليقات ويرصد الاستخدام التنفيذي فقط (مثبت: الحقيقي يفشل بسطر/ملف، التعليق يمر — الحماية لم تُخفَّف).
+- **الأدلة**: ‏`tsc` ✅؛ ‏`build` ✅؛ ‏SEC-06 ‏PASS على الشجرة؛ ‏any ‏286 ≤ ‏310 (بلا مساس `src/`)؛ ‏YAML الملفين صالح + هيكل الـdeploy مؤكَّد آلياً؛ الكاملة ‏1041/1041 (‏101 ملفاً). صفر تغيير وظيفي (`git diff` بلا `src/`).
+- **الصادق**: ‏**لا ادعاء production recovered — النشر الحقيقي يحدث بعد الدمج عبر الـworkflow المُصلَّح فقط**؛ بلا deploy يدوي. بلا migration. لا ادعاء R2 — بانتظار REMOTE.
+
 ## EMAIL DELIVERABILITY CLEANUP · فرع `fix/email-deliverability-cleanup` (من `1376c04` = origin/main)
 
 - 🔧 تنظيف هوية الدومين في البريد فقط (لا DNS/DKIM/SPF/DMARC — مثبتة PASS من المالك خارج المستودع ولم تُمس؛ ولا provider ولا `send-email.php` ولا معنى مُفترض لـX-MC-Relay: Bad الخارجي): ‏3 مواضع hardcoded ‏`project-8e7c178d.pages.dev` في `EmailService` (الشعار، زر Visit Platform، fallback رابط التفعيل) → ‏SSOT القائم `DEFAULT_PLATFORM_URL` ‏(`https://dueli.maelshpro.com`) بلا literals جديدة؛ ‏origin الصريح يغلب عند توفره.
