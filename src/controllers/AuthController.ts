@@ -354,21 +354,34 @@ export class AuthController extends BaseController {
         try {
             const { DB, EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM } = c.env;
 
-            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
-                return this.error(c, 'Server configuration error', 500);
-            }
-
             const body = await this.getBody<{ email: string }>(c);
-            if (!body?.email) {
+            if (!body?.email || !body.email.trim()) {
                 return this.validationError(c, this.t('auth_email_required', c));
             }
 
+            // R2-AUTH-1: normalize once — lookup AND recipient use the same
+            // address. Without trim/lowercase here, " User@X.com " looks up
+            // nothing (stored lowercased, no spaces) yet returns generic
+            // success, so the user waits for an email that is never attempted.
+            const email = body.email.trim().toLowerCase();
+
+            // Anti-enumeration: every outcome below (missing user,
+            // misconfigured/mailing failure, success) returns the SAME generic
+            // message so callers can't probe account existence or server config
+            // via status codes (matches resend-verification behavior).
+            const genericOk = () => this.success(c, { message: this.t('auth_reset_code_sent', c) });
+
             const userModel = new UserModel(DB);
-            const user = await userModel.findByEmail(body.email);
+            const user = await userModel.findByEmail(email);
 
             // Always return success to not reveal if email exists
             if (!user) {
-                return this.success(c, { message: this.t('auth_reset_code_sent', c) });
+                return genericOk();
+            }
+
+            if (!EMAIL_API_KEY || !EMAIL_API_URL) {
+                console.error('[ForgotPassword] EMAIL_API_KEY/EMAIL_API_URL not configured — no reset email attempted');
+                return genericOk();
             }
 
             const resetCode = CryptoUtils.generateNumericCode(6);
@@ -377,13 +390,25 @@ export class AuthController extends BaseController {
             await userModel.setResetToken(user.id, resetCode, expiresAt);
 
             const emailService = new EmailService(EMAIL_API_KEY, EMAIL_API_URL, EMAIL_FROM);
-            await emailService.sendPasswordResetEmail(
-                body.email,
-                resetCode,
-                this.getLanguage(c)
-            );
+            try {
+                await emailService.sendPasswordResetEmail(
+                    email,
+                    resetCode,
+                    this.getLanguage(c)
+                );
+                let apiHost = EMAIL_API_URL;
+                try { apiHost = new URL(EMAIL_API_URL).host; } catch { /* keep raw value */ }
+                console.log(`[ForgotPassword] reset code queued to ${email} via ${apiHost}`);
+            } catch (emailError) {
+                // Provider failure must not become a 500 enumeration oracle
+                // (200-vs-500 distinguished existing accounts). The code is
+                // already persisted, so a retry after provider recovery works.
+                // Never log the code itself.
+                console.error('[ForgotPassword] Email sending failed:', emailError);
+                return genericOk();
+            }
 
-            return this.success(c, { message: this.t('auth_reset_code_sent', c) });
+            return genericOk();
         } catch (error) {
             return this.serverError(c, error as Error);
         }
@@ -403,7 +428,7 @@ export class AuthController extends BaseController {
             }
 
             const userModel = new UserModel(DB);
-            const user = await userModel.findByEmail(body.email);
+            const user = await userModel.findByEmail(body.email.trim().toLowerCase());
 
             if (!user) {
                 return this.error(c, this.t('auth_invalid_code', c));
@@ -448,7 +473,7 @@ export class AuthController extends BaseController {
             }
 
             const userModel = new UserModel(DB);
-            const user = await userModel.findByEmail(body.email);
+            const user = await userModel.findByEmail(body.email.trim().toLowerCase());
 
             if (!user) {
                 return this.error(c, this.t('auth_invalid_code', c));

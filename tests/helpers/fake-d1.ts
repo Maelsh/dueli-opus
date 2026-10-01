@@ -660,11 +660,17 @@ class FakeStmt {
         if (q.startsWith('update users set')) {
             const setPart = q.slice('update users set'.length).split(' where ')[0];
             const cols = [...setPart.matchAll(/(\w+)\s*=\s*\?/g)].map((m) => m[1]);
+            // Real D1 also applies `col = NULL` literals (e.g. updatePassword
+            // clears reset_token); honor them so one-time-use is testable.
+            const nullCols = [...setPart.matchAll(/(\w+)\s*=\s*null(?!\?)/g)].map((m) => m[1]);
             const id = p[p.length - 1];
             const user = this.db.users.find((u) => u.id === id);
             if (!user) return ok({ last_row_id: null, changes: 0 });
             cols.forEach((col, i) => {
                 user[col] = p[i];
+            });
+            nullCols.forEach((col) => {
+                user[col] = null;
             });
             return ok({ last_row_id: null, changes: 1 });
         }
