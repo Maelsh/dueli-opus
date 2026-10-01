@@ -163,12 +163,19 @@ describe('D — explore/search structure (no ranking change)', () => {
         expect(src).toMatch(/PREVIEW_USERS\s*=\s*6/);
     });
 
-    it('retrieval contracts are unchanged (same endpoints, same params)', () => {
+    it('retrieval contracts: competitions page through a frozen session, users unchanged', () => {
         const src = readSrc('src/modules/pages/explore-page.ts');
-        expect(src).toContain('/api/competitions?');
+        // R3-B7: competitions freeze ONE session (POST …/explore-sessions)
+        // then page it with an opaque cursor (GET …/explore-sessions/:id/page)
+        // — no per-batch RANDOM()+OFFSET, no newest-first, no new ranking.
+        expect(src).toContain('/api/competitions/explore-sessions');
+        expect(src).toContain('/explore-sessions/');
+        expect(src).toContain('/page?limit=');
         expect(src).toContain('/api/search/users?');
+        // Legacy offset paging survives ONLY for the untouched users flow.
+        expect(src).toContain('USER_BATCH');
         // No retrieval/ranking semantics live in this page: no SQL, no
-        // scoring, no ordering — it only pages the existing contracts.
+        // scoring, no ordering — it only pages the frozen session contract.
         expect(src).not.toMatch(/ORDER BY|orderBy|\.sort\(|score\(|recommendation/i);
     });
 

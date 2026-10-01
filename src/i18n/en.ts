@@ -267,6 +267,7 @@ export const en = {
         comment_not_found: 'Comment not found',
         not_comment_owner: 'Only the comment owner or an admin can delete it',
         service_unavailable: 'Service temporarily unavailable. Please try again later.',
+        session_expired: 'Session expired — refresh the results to see the latest',
     },
 
     // Discovery (B13: resilient discovery pages)
@@ -274,6 +275,8 @@ export const en = {
         no_results: 'No results to show',
         no_more_results: 'No more results',
         retry: 'Retry',
+        session_expired: 'These results expired',
+        refresh: 'Refresh',
     },
 
     // Competition Error Messages

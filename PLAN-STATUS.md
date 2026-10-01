@@ -1,6 +1,14 @@
 
 
 
+## R3-B7 stable result session · فرع `feat/r3-b7-explore-result-sessions` (من `409dd8a` = origin/main)
+
+- 🔧 Explore competitions فقط + بنية جلسة/chunks/cursor مشتركة قابلة لإعادة الاستخدام في D1/D2 (نفس مخزن الجلسة والمؤشر، يتبدل لاحقاً مزود الترتيب/الأهلية فقط — لا محرك تصفح ثانٍ).
+- **العقد**: ‏POST /api/competitions/explore-sessions ‏(تجميد الترتيب الحالي مرة: نفس المرشحين + خلطة Fisher–Yates واحدة بـWebCrypto — بلا RANDOM+OFFSET لكل دفعة، بلا newest-first، بلا أوزان جديدة، بلا سقف إجمالي) → ‏GET …/explore-sessions/:id/page ‏(cursor مبهم، فحص أهلية حي لكل صف، ملء من المواقع التالية، hasMore/nextCursor من التقدم الحقيقي فقط). الهوية مستخدم (Bearer) أو Guest first-party (‏X-Guest-Token ‏يُصدَر أول زيارة، يُخزَّن محلياً — لا IP)؛ الغريب ‏404، المنتهية ‏410 مع مسار تحديث، drift السياق ‏409. الشكل ‏6+6 وسلوك Explore محفوظان (المعاينة أول ‏6، view-all يعيد فتح نفس الجلسة من بدايتها عبر ‏esession).
+- **الأدلة**: ‏RED أولاً (‏9/12 فشلت على BASE)؛ ‏`tests/api/explore-result-sessions` ‏14/14 (‏1200 مؤهل عبر ‏12 chunk، ties، retry، drift بعد T0، فقد أهلية، وصول جديد بعد refresh، filter/identity/TTL، preview→view-all، continuation، نفاد حقيقي، بلا duplicate/skip/hidden cap)؛ ‏b7 harness ‏9/9؛ ‏E2E حقيقي (wrangler+D1 محلي) ‏2/2 ar + ‏2/2 en؛ ‏`npm test` ‏1017/1017 (‏98 ملفاً)؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏295 ≤ ‏BASE ‏296 (صفر `any` جديد، بلا bypass).
+- **التكلفة (محلية، node:sqlite)**: بناء جلسة ‏1200 صف ‏60ms ‏(12 chunk)؛ اجتياز كامل ‏(limit=50، ‏24 صفحة) ‏361ms ‏(~15ms/صفحة).
+- **المحافَظ عليه**: ‏GET /api/competitions ‏القائم (limit/offset) كما هو لبقية الأسطح؛ تدفق المستخدمين في Explore untouched؛ R1/خطة16/المال/الإعلانات/الخوادم/TURN كما هي. بلا migration تاريخية (‏0033 جديدة فقط)، بلا deploy، بلا دمج. لا ادعاء R3 — بانتظار مراجعة REMOTE.
+
 ## R1 earnings palette micro-fix · فرع `fix/r1-earnings-palette-microfix` (من `ad23c65`)
 
 - 🔧 بطاقة Withdrawn إلى `from-pink-500 via-fuchsia-400 to-purple-400` (تكملة التدرج البنفسجي بدل الأزرق) + الأيقونات الخضراء الزخرفية الثلاث إلى بنفسجي Dueli؛ الأخضر الدلالي (completed/toasts/CTA) والمنطق المالي كما هما.

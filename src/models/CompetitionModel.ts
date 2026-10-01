@@ -97,11 +97,90 @@ export class CompetitionModel extends BaseModel<Competition> {
     }
 
     /**
-     * Find competitions with filters
+     * Shared WHERE predicate for filtered competition listings.
+     *
+     * R3-B7: the SAME predicate feeds the legacy RANDOM() listing, the
+     * session-build ID extraction, and the per-row eligibility re-check, so
+     * the frozen snapshot and the live listing can never disagree on what
+     * "eligible" means. No behaviour change to findByFilters.
      */
-    async findByFilters(filters: CompetitionFilters): Promise<CompetitionWithDetails[]> {
-        let query = `
-            SELECT c.*, 
+    private buildFilterWhere(filters: CompetitionFilters): { clause: string; params: Array<string | number> } {
+        let clause = '';
+        const params: Array<string | number> = [];
+
+        // Status filter
+        if (filters.status) {
+            if (filters.status === 'recorded' || filters.status === 'completed') {
+                clause += ' AND c.status = ?';
+                params.push('completed');
+            } else if (filters.status === 'live') {
+                clause += ' AND c.status = ?';
+                params.push('live');
+            } else if (filters.status === 'pending') {
+                // pending فقط (بانتظار خصم)
+                clause += ' AND c.status = ?';
+                params.push('pending');
+            } else if (filters.status === 'accepted') {
+                // accepted فقط (مجدولة)
+                clause += ' AND c.status = ?';
+                params.push('accepted');
+            } else if (filters.status === 'upcoming') {
+                // upcoming = pending + accepted (اللاحقة: فورية ومجدولة)
+                clause += ' AND (c.status = ? OR c.status = ?)';
+                params.push('pending', 'accepted');
+            }
+        }
+
+        // Category filter
+        if (filters.category) {
+            clause += ' AND (c.category_id = ? OR c.subcategory_id = ? OR cat.slug = ?)';
+            params.push(filters.category, filters.category, filters.category);
+        }
+
+        // Subcategory filter (filter by subcategory slug)
+        if (filters.subcategory) {
+            clause += ' AND subcat.slug = ?';
+            params.push(filters.subcategory);
+        }
+
+        // Country filter
+        if (filters.country) {
+            clause += ' AND c.country = ?';
+            params.push(filters.country);
+        }
+
+        // Language filter
+        if (filters.language) {
+            clause += ' AND c.language = ?';
+            params.push(filters.language);
+        }
+
+        // Creator filter
+        if (filters.creatorId) {
+            clause += ' AND c.creator_id = ?';
+            params.push(filters.creatorId);
+        }
+
+        // User filter (creator OR opponent)
+        if (filters.userId) {
+            clause += ' AND (c.creator_id = ? OR c.opponent_id = ?)';
+            params.push(filters.userId, filters.userId);
+        }
+
+        // Search filter
+        if (filters.search) {
+            clause += ' AND c.title LIKE ?';
+            params.push(`%${filters.search}%`);
+        }
+
+        return { clause, params };
+    }
+
+    /**
+     * The joined details SELECT shared by every filtered listing.
+     */
+    private static readonly DETAILS_SELECT = `
+            SELECT c.*,
                    cat.name_ar as category_name_ar,
                    cat.name_en as category_name_en,
                    cat.slug as category_slug,
@@ -121,78 +200,64 @@ export class CompetitionModel extends BaseModel<Competition> {
             LEFT JOIN users opponent ON c.opponent_id = opponent.id
             WHERE 1=1
         `;
-        const params: any[] = [];
 
-        // Status filter
-        if (filters.status) {
-            if (filters.status === 'recorded' || filters.status === 'completed') {
-                query += ' AND c.status = ?';
-                params.push('completed');
-            } else if (filters.status === 'live') {
-                query += ' AND c.status = ?';
-                params.push('live');
-            } else if (filters.status === 'pending') {
-                // pending فقط (بانتظار خصم)
-                query += ' AND c.status = ?';
-                params.push('pending');
-            } else if (filters.status === 'accepted') {
-                // accepted فقط (مجدولة)
-                query += ' AND c.status = ?';
-                params.push('accepted');
-            } else if (filters.status === 'upcoming') {
-                // upcoming = pending + accepted (اللاحقة: فورية ومجدولة)
-                query += ' AND (c.status = ? OR c.status = ?)';
-                params.push('pending', 'accepted');
-            }
-        }
-
-        // Category filter
-        if (filters.category) {
-            query += ' AND (c.category_id = ? OR c.subcategory_id = ? OR cat.slug = ?)';
-            params.push(filters.category, filters.category, filters.category);
-        }
-
-        // Subcategory filter (filter by subcategory slug)
-        if (filters.subcategory) {
-            query += ' AND subcat.slug = ?';
-            params.push(filters.subcategory);
-        }
-
-        // Country filter
-        if (filters.country) {
-            query += ' AND c.country = ?';
-            params.push(filters.country);
-        }
-
-        // Language filter
-        if (filters.language) {
-            query += ' AND c.language = ?';
-            params.push(filters.language);
-        }
-
-        // Creator filter
-        if (filters.creatorId) {
-            query += ' AND c.creator_id = ?';
-            params.push(filters.creatorId);
-        }
-
-        // User filter (creator OR opponent)
-        if (filters.userId) {
-            query += ' AND (c.creator_id = ? OR c.opponent_id = ?)';
-            params.push(filters.userId, filters.userId);
-        }
-
-        // Search filter
-        if (filters.search) {
-            query += ' AND c.title LIKE ?';
-            params.push(`%${filters.search}%`);
-        }
+    /**
+     * Find competitions with filters
+     */
+    async findByFilters(filters: CompetitionFilters): Promise<CompetitionWithDetails[]> {
+        const { clause, params } = this.buildFilterWhere(filters);
 
         // Order and pagination
-        query += ' ORDER BY RANDOM() LIMIT ? OFFSET ?';
-        params.push(filters.limit || 20, filters.offset || 0);
+        const query = CompetitionModel.DETAILS_SELECT + clause + ' ORDER BY RANDOM() LIMIT ? OFFSET ?';
+        const allParams: Array<string | number> = [...params, filters.limit || 20, filters.offset || 0];
 
-        return this.query<CompetitionWithDetails>(query, ...params);
+        return this.query<CompetitionWithDetails>(query, ...allParams);
+    }
+
+    /**
+     * R3-B7: extract EVERY eligible competition id for the given filters.
+     *
+     * Same joins + same predicate as findByFilters, but with NO ORDER BY
+     * RANDOM(), NO LIMIT/OFFSET and NO total cap — the caller (the shared
+     * result-session service) freezes the order once. Returns ids only;
+     * card hydration happens per page with a live eligibility re-check.
+     */
+    async findEligibleIds(filters: CompetitionFilters): Promise<number[]> {
+        const { clause, params } = this.buildFilterWhere(filters);
+        const query = `
+            SELECT c.id as id
+            FROM competitions c
+            JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
+            JOIN users creator ON c.creator_id = creator.id
+            LEFT JOIN users opponent ON c.opponent_id = opponent.id
+            WHERE 1=1
+        ` + clause;
+        const rows = await this.query<{ id: number }>(query, ...params);
+        return rows.map((row) => row.id);
+    }
+
+    /**
+     * R3-B7: hydrate full card rows for an explicit id set.
+     *
+     * Batched (90 ids per statement) so the bound-parameter count stays
+     * within the D1 per-statement budget. Result order is unspecified —
+     * callers re-order against their frozen snapshot.
+     */
+    async findByIds(ids: number[]): Promise<CompetitionWithDetails[]> {
+        const unique = [...new Set(ids.filter((id) => Number.isInteger(id) && id > 0))];
+        if (unique.length === 0) return [];
+        const out: CompetitionWithDetails[] = [];
+        for (let i = 0; i < unique.length; i += 90) {
+            const batch = unique.slice(i, i + 90);
+            const placeholders = batch.map(() => '?').join(',');
+            const rows = await this.query<CompetitionWithDetails>(
+                CompetitionModel.DETAILS_SELECT + ` AND c.id IN (${placeholders})`,
+                ...batch
+            );
+            out.push(...rows);
+        }
+        return out;
     }
 
     /**

@@ -18,6 +18,8 @@ import {
     UserBlockModel
 } from '../models';
 import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
+import { ExploreSessionService } from '../lib/services/ExploreSessionService';
+import { getUILanguage } from '../i18n';
 import { EventPusher } from '../lib/services/EventPusher';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
@@ -52,6 +54,102 @@ export class CompetitionController extends BaseController {
 
             const competitions = await model.findByFilters(filters);
             return this.success(c, competitions);
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R3-B7: freeze one Explore result session.
+     * POST /api/competitions/explore-sessions
+     *
+     * Public (auth-optional): the caller is the logged-in user when a valid
+     * session is present, otherwise a first-party guest token — issued here
+     * on first visit, persisted in the caller's own storage, never an IP.
+     * The response carries the frozen total; rows are read via readExploreSessionPage.
+     * MVC: all persistence lives in the Models + ExploreSessionService.
+     */
+    async createExploreSession(c: AppContext) {
+        try {
+            const body = await this.getBody<{ search?: unknown; category?: unknown; status?: unknown }>(c);
+            const raw = body ?? {};
+            for (const key of ['search', 'category', 'status'] as const) {
+                const value = raw[key];
+                if (value !== undefined && value !== null && typeof value !== 'string') {
+                    return this.validationError(c, this.t('errors.invalid_request', c));
+                }
+                if (typeof value === 'string' && value.length > 200) {
+                    return this.validationError(c, this.t('errors.invalid_request', c));
+                }
+            }
+
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const presentedGuest = c.req.header('X-Guest-Token') ?? null;
+            const { identity, issuedGuestToken } = ExploreSessionService.identityForCreate(userId, presentedGuest);
+
+            const service = new ExploreSessionService(c.env.DB);
+            const { session } = await service.createSession(
+                identity,
+                { search: raw.search, category: raw.category, status: raw.status },
+                getUILanguage(this.getLanguage(c))
+            );
+
+            return this.success(c, {
+                session: { id: session.id, total: session.total_count, expires_at: session.expires_at },
+                guest_token: issuedGuestToken,
+            }, 201);
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R3-B7: read one page of a frozen Explore result session.
+     * GET /api/competitions/explore-sessions/:id/page?cursor&limit&search&category&status
+     *
+     * The cursor is opaque; progress, expiry and context checks all happen
+     * server-side against the stored session. MVC: no persistence calls here
+     * beyond the shared service.
+     */
+    async readExploreSessionPage(c: AppContext) {
+        try {
+            const sessionId = this.getParam(c, 'id');
+
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const presentedGuest = c.req.header('X-Guest-Token') ?? null;
+            const identity = ExploreSessionService.identityForRead(userId, presentedGuest);
+
+            const service = new ExploreSessionService(c.env.DB);
+            const outcome = await service.readPage(identity, sessionId, {
+                cursor: c.req.query('cursor') ?? null,
+                limit: c.req.query('limit') ?? undefined,
+                filters: {
+                    search: c.req.query('search'),
+                    category: c.req.query('category'),
+                    status: c.req.query('status'),
+                },
+                uiLang: getUILanguage(this.getLanguage(c)),
+            });
+
+            if ('failure' in outcome) {
+                const code = outcome.failure;
+                if (code === 'session_not_found') return this.notFound(c);
+                if (code === 'session_expired') return this.error(c, this.t('errors.session_expired', c), 410);
+                if (code === 'session_building') return this.error(c, this.t('errors.retry', c), 409);
+                if (code === 'session_context_mismatch') {
+                    return this.error(c, this.t('errors.invalid_request', c), 409);
+                }
+                return this.validationError(c, this.t('errors.invalid_request', c));
+            }
+
+            return this.success(c, {
+                items: outcome.page.items,
+                nextCursor: outcome.page.nextCursor,
+                hasMore: outcome.page.hasMore,
+                session: outcome.page.session,
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }

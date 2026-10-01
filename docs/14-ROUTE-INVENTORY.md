@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-09-27T14:37:51.188Z
+> تاريخ التوليد: 2026-10-01T07:42:29.938Z
 
-## الإجمالي: 193 مسار
+## الإجمالي: 195 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 91 |
+| PUBLIC(auth-optional, in-handler check required) | 93 |
 | AUTHENTICATED | 56 |
 | UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -130,6 +130,8 @@
 | GET | `/api/competitions/:id/requests` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/start` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/update-vod` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| POST | `/api/competitions/explore-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| GET | `/api/competitions/explore-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/complaints` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/complaints/routes.ts` |
 | GET | `/api/complaints/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/complaints/routes.ts` |
 | GET | `/api/complaints/my` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/complaints/routes.ts` |
