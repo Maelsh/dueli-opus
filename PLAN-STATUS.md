@@ -1,6 +1,12 @@
 
 
 
+## R3-GUEST-1 suggested-rail continuation · فرع `fix/r3-guest1-suggested-continuation` (من `d192047` = origin/main)
+
+- 🔧 عيب «مقترح لك» يعرض 3 للزائر: السبب المثبت (لا hardcoded 3 — مسح شامل) فرع الضيف كان `status='completed' AND vod_url IS NOT NULL` (حفنة صفوف) بلا أي continuation (دفعة `limit=15` واحدة، ‏allowSeeAll=false)، بينما المسجل يرى `live+completed` عبر المحرك. الإصلاح: مجموعة الضيف = كل المحتوى العام (pending/accepted/live + completed بتسجيل صالح — ‏05 §4؛ ‏suspended/cancelled/archived وcompleted بلا تسجيل خارج السكة)، نفس الأوزان، والسكّة Guest تُجمَّد في جلسة `suggested_guest` على نفس مخزن/مؤشر #75 (provider جديد — لا محرك ثانٍ) مع scroll-append حتى hasMore=false الحقيقي. المسجل كما هو بلا مساس.
+- **الأدلة**: ‏RED أولاً (‏8/9 فشلت قبل الإصلاح)؛ ‏T ‏`guest-suggested-continuation` ‏9/9 (‏31 مؤهلاً مقابل ‏9 مستبعدين، ties، retry، ar/en، ‏404/410/409، فقد أهلية، وصول متأخر، عدم SQL في المتحكم، تثبيت الأوزان)؛ ‏E2E حقيقي ‏2/2 ar + ‏2/2 en (سكّة ~190 صفاً حتى النفاد، هويات فريدة، بلا أخطاء)؛ المستهدفة ‏77/77 (ranking/lang/explore/b7/smoke/visual)؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏295 ≤ ‏BASE ‏296.
+- **التكلفة (محلية)**: اجتياز ‏31 صفاً ‏(limit=6) ‏31ms. بلا migration (إعادة استعمال جداول ‏0033)، الجرد ‏195←197. بلا دمج/نشر. لا ادعاء R3 — بانتظار REMOTE.
+
 ## R3-B7 stable result session · فرع `feat/r3-b7-explore-result-sessions` (من `409dd8a` = origin/main)
 
 - 🔧 Explore competitions فقط + بنية جلسة/chunks/cursor مشتركة قابلة لإعادة الاستخدام في D1/D2 (نفس مخزن الجلسة والمؤشر، يتبدل لاحقاً مزود الترتيب/الأهلية فقط — لا محرك تصفح ثانٍ).
