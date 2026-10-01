@@ -1,3 +1,12 @@
+## 2026-10-01 — EMAIL DELIVERABILITY CLEANUP (branch `fix/email-deliverability-cleanup`)
+
+- **BASE**: `1376c04` (origin/main at branch time). No merge, no deploy, no production writes/secrets. Scope: EmailService + email templates only.
+- **Owner-proven context (outside repo, not touched)**: password-reset now physically reaches Gmail but lands in Spam; SPF/DKIM (d=maelshpro.com, s=default)/DMARC all PASS verified by owner; From/Return-Path = dueli@maelshpro.com; DNS/DKIM fixed outside the repo. X-MC-Relay: Bad is an external finding, out of scope, no meaning assumed.
+- **Change (domain identity only)**: `EmailService` used hardcoded `project-8e7c178d.pages.dev` in 3 email spots (logo img, Visit Platform button, verification-link fallback). Now all three use existing SSOT `DEFAULT_PLATFORM_URL` (`https://dueli.maelshpro.com`) — no new URL literals. Explicit `origin` still wins for verification links when provided; only the fallback changed. Constructor placeholder defaults (`your-subdomain…`) untouched (not email content, would be architecture change). `static-pages.ts` deletion-status pages.dev link is a page URL, not email — untouched. `send-email.php`, DNS/DKIM/SPF/DMARC, provider architecture untouched.
+- **List-Unsubscribe**: added by the PHP script outside this repo, so it cannot be changed here. Documented: owner may later need it removed from transactional auth emails; NOT claimed as the Spam cause.
+- **Tests**: new `tests/api/email-domain-identity.test.ts` 6/6 (no pages.dev in subject+html ar/en for both templates; logo + platform href on official domain; fallback verify link on official domain; explicit origin honored). Neighbors `password-reset` + `auth-email` green (19/19 total). `tsc` ✅; `build` ✅ (CSS churn reverted); zero new `any`.
+- **Honest limits: inbox placement NOT PROVEN — no claim that Spam is fixed. This PR cleans domain identity only.** X-MC-Relay: Bad remains an external finding outside scope.
+- **ROLLBACK (G8)**: revert the branch (template strings + test only; no migration/data/flags).
 ## 2026-10-01 — R2-AUTH-1 password-reset email (branch `fix/r2-auth1-password-reset`)
 
 - **BASE**: `79edbf2` (origin/main = PR #76 merge, verified equal before branching). No merge, no deploy, no production writes, no secrets. Read 08-OWNER-DECISIONS (R2-AUTH-1 scope) + 03-PHASE-PROMPTS + 04-EXECUTION-TRACKER + 05-PRODUCT-COMPLETION-ADDENDUM + docs/11. Auth audit/redesign, DNS/provider change, closed phases untouched.
