@@ -28,6 +28,18 @@ competitionsRoutes.use('*', authMiddleware({ required: false }));
 competitionsRoutes.get('/', (c) => controller.list(c));
 
 /**
+ * R3-B7: freeze one Explore result session (stable order in D1 chunks).
+ * POST /api/competitions/explore-sessions
+ */
+competitionsRoutes.post('/explore-sessions', (c) => controller.createExploreSession(c));
+
+/**
+ * R3-B7: read one page of a frozen Explore result session.
+ * GET /api/competitions/explore-sessions/:id/page
+ */
+competitionsRoutes.get('/explore-sessions/:id/page', (c) => controller.readExploreSessionPage(c));
+
+/**
  * Get single competition with details
  * GET /api/competitions/:id
  */

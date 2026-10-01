@@ -10,9 +10,11 @@
  * - each section has a "View all" link to a dedicated view (?view=...) that
  *   keeps the same query/filter context and owns the progressive loading.
  *
- * Retrieval contracts are unchanged: competitions via GET /api/competitions
- * (search/category/status/limit/offset — the same params Home already uses)
- * and users via GET /api/search/users (q/limit/offset). No ranking change.
+ * Retrieval contracts: competitions page through a frozen Explore result
+ * session (POST /api/competitions/explore-sessions once, then
+ * GET .../explore-sessions/:id/page with an opaque cursor) that captures the
+ * current shuffle ONCE — no per-batch RANDOM()+OFFSET, no newest-first, no
+ * new ranking; users via GET /api/search/users (q/limit/offset), unchanged.
  */
 
 import type { Context } from 'hono';
@@ -363,15 +365,121 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           return url;
         }
 
-        // Preview: first 6 competitions only, no progressive loading here.
+        // R3-B7: stable result session for competitions (Explore only).
+        // The server freezes the current shuffle ONCE per session and pages
+        // it with an opaque cursor. Progress and the end of results come
+        // from the server (hasMore/nextCursor) — this client never infers
+        // the end from batch length or from its own de-duplication set.
+        // Users browsing below is a separate contract and is untouched.
+        var compSessionId = null;
+        var compCursor = null;
+        var compSessionRetried = false;
+        var compHintConsumed = false;
+
+        function safeStorageGet(key) {
+          try {
+            if (typeof window.localStorage === 'undefined' || !window.localStorage) return null;
+            return window.localStorage.getItem(key);
+          } catch (err) { return null; }
+        }
+
+        function safeStorageSet(key, value) {
+          try {
+            if (typeof window.localStorage === 'undefined' || !window.localStorage) return;
+            window.localStorage.setItem(key, value);
+          } catch (err) {}
+        }
+
+        function exploreHeaders(extra) {
+          var h = extra || {};
+          var sess = safeStorageGet('sessionId');
+          if (sess) h['Authorization'] = 'Bearer ' + sess;
+          var guest = safeStorageGet('dueli_guest_token');
+          if (guest) h['X-Guest-Token'] = guest;
+          return h;
+        }
+
+        function sessionCreateBody() {
+          return JSON.stringify({ search: search, category: categoryParam(), status: statusParam() });
+        }
+
+        function sessionPageUrl(sid, limit, cursor) {
+          var url = '/api/competitions/explore-sessions/' + encodeURIComponent(sid) + '/page?limit=' + limit;
+          if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
+          if (search) url += '&search=' + encodeURIComponent(search);
+          var cat = categoryParam();
+          if (cat) url += '&category=' + encodeURIComponent(cat);
+          var st = statusParam();
+          if (st) url += '&status=' + encodeURIComponent(st);
+          url += '&lang=' + encodeURIComponent(lang);
+          return url;
+        }
+
+        // Resolve the frozen session for this view: the preview creates it,
+        // the dedicated view reopens the preview's session from its start
+        // (same order — first rows are never lost or repeated) or freezes a
+        // new one when opened directly. Any filter/search change is a fresh
+        // page load, hence a fresh session by construction.
+        async function ensureCompSession() {
+          if (compSessionId) return compSessionId;
+          if (viewMode === 'competitions' && !compHintConsumed) {
+            compHintConsumed = true;
+            var hint = params.get('esession') || '';
+            if (hint) { compSessionId = hint; compCursor = null; return hint; }
+          }
+          var res = await fetch('/api/competitions/explore-sessions?lang=' + encodeURIComponent(lang), {
+            method: 'POST',
+            headers: exploreHeaders({ 'Content-Type': 'application/json' }),
+            body: sessionCreateBody()
+          });
+          if (!res.ok) throw new Error('session status ' + res.status);
+          var data = await res.json();
+          var sid = data && data.success && data.data && data.data.session && data.data.session.id;
+          if (!sid) throw new Error('no session id');
+          if (data.data.guest_token) safeStorageSet('dueli_guest_token', data.data.guest_token);
+          compSessionId = sid;
+          compCursor = null;
+          var viewAll = document.getElementById('compsViewAllUnder');
+          if (viewAll && viewAll.getAttribute && viewAll.setAttribute) {
+            var href = viewAll.getAttribute('href') || '';
+            if (href && href.indexOf('esession=') === -1) {
+              viewAll.setAttribute('href', href + (href.indexOf('?') === -1 ? '?' : '&') + 'esession=' + encodeURIComponent(sid));
+            }
+          }
+          return sid;
+        }
+
+        // An expired session is a refresh signal, never a dead end: the
+        // frozen order lapsed, so a reload freezes a new one.
+        function showSessionExpired(containerId) {
+          var el = document.getElementById(containerId);
+          if (!el) return;
+          el.innerHTML = \`
+            <div class="text-center py-8" role="alert" data-explore-state="expired">
+              <p class="text-gray-500 dark:text-gray-400 mb-3">\${tr.discovery?.session_expired || tr.errors?.session_expired || 'Session expired'}</p>
+              <button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full text-sm font-semibold transition-colors" data-action="refresh-explore">
+                <i class="fas fa-rotate-right" aria-hidden="true"></i>\${tr.discovery?.refresh || 'Refresh'}
+              </button>
+            </div>
+          \`;
+          var btn = el.querySelector('[data-action="refresh-explore"]');
+          if (btn) btn.addEventListener('click', function() {
+            if (window.location && window.location.reload) window.location.reload();
+          });
+        }
+
+        // Preview: first 6 of the frozen session, no progressive loading here.
         async function loadCompetitionsPreview() {
           const container = document.getElementById('competitionsContainer');
           if (!container) return;
           try {
-            const res = await fetch(competitionsUrl(PREVIEW_COMPETITIONS, 0));
+            const sid = await ensureCompSession();
+            const res = await fetch(sessionPageUrl(sid, PREVIEW_COMPETITIONS, null), { headers: exploreHeaders({}) });
+            if (res.status === 410) { showSessionExpired('competitionsContainer'); return; }
             if (!res.ok) throw new Error('status ' + res.status);
             const data = await res.json();
-            const items = (data && data.success && data.data) ? data.data : [];
+            const payload = (data && data.success && data.data) ? data.data : null;
+            const items = payload && payload.items ? payload.items : [];
             renderPreviewGrid(container, 'competitionsGrid', items.slice(0, PREVIEW_COMPETITIONS),
               'compsCount', 'competitions');
           } catch (err) {
@@ -443,11 +551,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
                                 cards + '</div>';
         }
 
-        // B7: progressive loading state for competitions (dedicated view only).
-        // GET /api/competitions supports limit/offset, so batches are appended
-        // at the current offset. Retrieval semantics are unchanged.
+        // B7 view-all: cursor-driven paging over the frozen session
+        // (dedicated view only). End/retry semantics:
+        // - the end comes ONLY from the server hasMore flag;
+        // - a retry re-reads the SAME cursor (the server keeps no mutable
+        //   position, so a retry can neither skip nor repeat rows);
+        // - 410 renders the refresh path; 404/409 recreate the session once
+        //   (stale esession hint, identity drift) and replay the same call.
         const COMP_BATCH = 12;
-        let compOffset = 0;
         const compSeen = new Set();
         let compLoading = false;
         let compDone = false;
@@ -524,17 +635,34 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           setCompStatus('loading');
 
           try {
-            const url = competitionsUrl(COMP_BATCH, compOffset);
-            // The query stays in the URL params: this is not a navigation.
-            const res = await fetch(url);
+            const sid = await ensureCompSession();
+            const res = await fetch(sessionPageUrl(sid, COMP_BATCH, append ? compCursor : null),
+              { headers: exploreHeaders({}) });
+            if (res.status === 410) {
+              compDone = true;
+              showSessionExpired('competitionsContainer');
+              return;
+            }
+            if (res.status === 404 || res.status === 409) {
+              if (!compSessionRetried) {
+                compSessionRetried = true;
+                compSessionId = null;
+                compCursor = null;
+                compLoading = false;
+                return loadCompetitions(opts);
+              }
+              throw new Error('session status ' + res.status);
+            }
             if (!res.ok) throw new Error('status ' + res.status);
             const data = await res.json();
+            const payload = (data && data.success && data.data) ? data.data : null;
+            if (!payload || !Array.isArray(payload.items)) throw new Error('bad payload');
 
-            const items = (data && data.success && data.data) ? data.data : [];
+            const items = payload.items;
             const countEl = document.getElementById('compsCount');
             if (countEl) countEl.textContent = '(' + compSeen.size + ')';
 
-            if (compOffset === 0 && items.length === 0) {
+            if (!append && compCursor === null && items.length === 0) {
               container.innerHTML = \`
                 <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
                   <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
@@ -553,9 +681,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
               if (html) grid.insertAdjacentHTML('beforeend', html);
             }
 
-            compOffset += items.length;
-            // A short batch means the result set is exhausted.
-            compDone = items.length < COMP_BATCH;
+            compCursor = payload.nextCursor || null;
+            // The end of results is a server fact (hasMore over the frozen
+            // snapshot) — never inferred from batch length or client dedup.
+            compDone = !payload.hasMore;
             if (compDone) {
               setCompStatus('end');
             } else {
@@ -564,7 +693,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             }
           } catch (err) {
             console.error('Failed to load competitions:', err);
-            if (compOffset === 0) {
+            if (!append && compCursor === null) {
               showDiscoveryError('competitionsContainer');
             } else {
               setCompStatus('error');

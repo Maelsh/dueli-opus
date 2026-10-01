@@ -93,7 +93,7 @@ app.use('/api/*', (c, next) => {
         origin: (origin) => (origin && allowList.includes(origin) ? origin : ''),
         credentials: true,
         allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Session-Token'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Session-Token', 'X-Guest-Token'],
     })(c, next);
 });
 

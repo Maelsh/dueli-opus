@@ -26,4 +26,14 @@ export { StripeWebhookService } from './StripeWebhookService';
 export type { WebhookEventResult, StripeEventShape } from './StripeWebhookService';
 export { MoneyTransparencyService, fingerprintSummary, TRANSPARENCY_CACHE_TTL_MS } from './MoneyTransparencyService';
 export type { MoneyTransparencySummary } from './MoneyTransparencyService';
+export { ExploreSessionService } from './ExploreSessionService';
+export type { ExploreCanonicalFilters, ExploreIdentity, ExplorePage, ExploreSessionFailure, ExploreSessionStats } from './ExploreSessionService';
+export {
+    EXPLORE_SURFACE,
+    EXPLORE_SESSION_TTL_SECONDS,
+    EXPLORE_CHUNK_SIZE,
+    EXPLORE_DEFAULT_PAGE_LIMIT,
+    EXPLORE_MAX_PAGE_LIMIT,
+    EXPLORE_MAX_SCAN_PER_PAGE,
+} from './ExploreSessionService';
 

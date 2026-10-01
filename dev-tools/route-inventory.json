@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-09-27T14:37:51.188Z",
-  "total": 193,
+  "generatedAt": "2026-10-01T07:42:29.938Z",
+  "total": 195,
   "routes": [
     {
       "method": "GET",
@@ -740,6 +740,20 @@
     {
       "method": "POST",
       "path": "/api/competitions/:id/update-vod",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/explore-sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/explore-sessions/:id/page",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/competitions/routes.ts"
