@@ -15,6 +15,8 @@ export { CategoryModel, CategoryWithSubcategories } from './CategoryModel';
 export { CommentModel, CommentWithUser } from './CommentModel';
 export { NotificationModel, CreateNotificationData } from './NotificationModel';
 export { SessionModel } from './SessionModel';
+export { RecommendationModel, GuestSuggestedProvider, SUGGESTED_GUEST_SURFACE } from './RecommendationModel';
+export type { GuestSuggestedRow } from './RecommendationModel';
 export { ExploreResultSessionModel } from './ExploreResultSessionModel';
 export type { ExploreResultSession, CreateExploreSessionData, ExploreSurface, ExploreIdentityKind, ExploreSessionStatus } from './ExploreResultSessionModel';
 export { ExploreResultChunkModel } from './ExploreResultChunkModel';

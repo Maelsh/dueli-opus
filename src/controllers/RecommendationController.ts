@@ -9,7 +9,9 @@ import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
 import { CompetitionModel } from '../models/CompetitionModel';
 import { WatchHistoryModel } from '../models/WatchHistoryModel';
+import { RecommendationModel, GuestSuggestedProvider } from '../models/RecommendationModel';
 import { RecommendationEngine } from '../lib/services/RecommendationEngine';
+import { ExploreSessionService } from '../lib/services/ExploreSessionService';
 import { normalizeContentLanguage } from '../i18n';
 
 /**
@@ -67,7 +69,13 @@ export class RecommendationController extends BaseController {
     }
 
     /**
-     * Guest recommendations (no login) - newest + most viewed with graceful degradation
+     * Guest recommendations (no login) — newest + most viewed with graceful degradation.
+     *
+     * R3-GUEST-1: the query lives in RecommendationModel (MVC); the eligible
+     * set is every PUBLIC competition (pending/accepted/live + completed with
+     * a playable recording — 05 §4), scored with the unchanged weights. The
+     * Home guest rail pages this same set to exhaustion through the frozen
+     * suggested-sessions below instead of a single LIMIT batch.
      */
     private async getGuestRecommendations(
         c: Context<{ Bindings: Bindings; Variables: Variables }>,
@@ -75,43 +83,94 @@ export class RecommendationController extends BaseController {
         offset: number,
         lang: string
     ) {
-        const db = c.env.DB;
+        const model = new RecommendationModel(c.env.DB);
 
-        const competitions = await db.prepare(`
-            SELECT c.*,
-                   cat.name_${lang} as category_name,
-                   cat.slug as category_slug,
-                   cat.icon as category_icon,
-                   cat.color as category_color,
-                   u.username as creator_username,
-                   u.display_name as creator_name,
-                   u.avatar_url as creator_avatar,
-                   CASE WHEN c.language = ? THEN ${RecommendationEngine.WEIGHT_LANGUAGE_MATCH} ELSE 0 END
-                   + COALESCE(c.total_views, 0) * ${RecommendationEngine.VIEW_POPULARITY_FACTOR}
-                   + CASE WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_RECENT_DAYS} day') THEN ${RecommendationEngine.WEIGHT_RECENCY_MAX}
-                          WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_MODERATE_DAYS} days') THEN ${RecommendationEngine.WEIGHT_RECENCY_MODERATE}
-                          WHEN c.created_at > datetime('now', '-${RecommendationEngine.RECENCY_WEAK_DAYS} days') THEN ${RecommendationEngine.WEIGHT_RECENCY_WEAK}
-                          ELSE 0 END
-                   as score
-            FROM competitions c
-            JOIN categories cat ON c.category_id = cat.id
-            JOIN users u ON c.creator_id = u.id
-            WHERE c.status = 'completed'
-            AND c.vod_url IS NOT NULL
-            ORDER BY score DESC, c.created_at DESC
-            LIMIT ? OFFSET ?
-        `).bind(lang, limit, offset).all();
-
-        const totalCount = await db.prepare(`
-            SELECT COUNT(*) as total FROM competitions
-            WHERE status = 'completed' AND vod_url IS NOT NULL
-        `).first<{ total: number }>();
+        const competitions = await model.findGuestSuggestedPage(lang, limit, offset);
+        const total = await model.countGuestSuggested();
 
         return this.success(c, {
-            competitions: competitions.results || [],
-            hasMore: (offset + limit) < (totalCount?.total || 0),
-            totalAvailable: totalCount?.total || 0
+            competitions: competitions || [],
+            hasMore: (offset + limit) < total,
+            totalAvailable: total
         });
+    }
+
+    /**
+     * R3-GUEST-1: freeze one guest suggestion session (stable scored order).
+     * POST /api/recommendations/suggested-sessions
+     *
+     * Public (auth-optional): caller is the logged-in user when a valid
+     * session is present, otherwise a first-party guest token — issued here
+     * on first visit, persisted in the caller's own storage, never an IP.
+     * MVC: all persistence lives in the Models + ExploreSessionService.
+     */
+    async createSuggestedSession(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            const lang = normalizeContentLanguage(c.get('lang') || 'ar');
+
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const presentedGuest = c.req.header('X-Guest-Token') ?? null;
+            const { identity, issuedGuestToken } = ExploreSessionService.identityForCreate(userId, presentedGuest);
+
+            const service = new ExploreSessionService(c.env.DB);
+            const { session } = await service.createSessionWithProvider(
+                identity,
+                new GuestSuggestedProvider(),
+                lang
+            );
+
+            return this.success(c, {
+                session: { id: session.id, total: session.total_count, expires_at: session.expires_at },
+                guest_token: issuedGuestToken,
+            }, 201);
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R3-GUEST-1: read one page of a frozen guest suggestion session.
+     * GET /api/recommendations/suggested-sessions/:id/page?cursor&limit
+     */
+    async readSuggestedSessionPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            const sessionId = this.getParam(c, 'id');
+            const lang = normalizeContentLanguage(c.get('lang') || 'ar');
+
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const presentedGuest = c.req.header('X-Guest-Token') ?? null;
+            const identity = ExploreSessionService.identityForRead(userId, presentedGuest);
+
+            const service = new ExploreSessionService(c.env.DB);
+            const outcome = await service.readPageWithProvider(identity, sessionId, {
+                cursor: c.req.query('cursor') ?? null,
+                limit: c.req.query('limit') ?? undefined,
+                provider: new GuestSuggestedProvider(),
+                lang,
+            });
+
+            if ('failure' in outcome) {
+                const code = outcome.failure;
+                if (code === 'session_not_found') return this.notFound(c);
+                if (code === 'session_expired') return this.error(c, this.t('errors.session_expired', c), 410);
+                if (code === 'session_building') return this.error(c, this.t('errors.retry', c), 409);
+                if (code === 'session_context_mismatch') {
+                    return this.error(c, this.t('errors.invalid_request', c), 409);
+                }
+                return this.validationError(c, this.t('errors.invalid_request', c));
+            }
+
+            return this.success(c, {
+                items: outcome.page.items,
+                nextCursor: outcome.page.nextCursor,
+                hasMore: outcome.page.hasMore,
+                session: outcome.page.session,
+            });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
     }
 
     /**

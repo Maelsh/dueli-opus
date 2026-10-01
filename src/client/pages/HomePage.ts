@@ -11,6 +11,20 @@ export class HomePage {
     static currentSubTab: string = 'all';
     static currentOffset: number = 0;
     static searchTimeout: ReturnType<typeof setTimeout>;
+    /**
+     * R3-GUEST-1: frozen guest suggestion session driving the «مقترح لك»
+     * rail to real exhaustion. The end of results comes ONLY from the server
+     * hasMore flag — never from batch length or client dedup.
+     */
+    static suggestedSessionId: string | null = null;
+    static suggestedCursor: string | null = null;
+    static suggestedDone: boolean = false;
+    static suggestedLoading: boolean = false;
+    static suggestedRecreated: boolean = false;
+    static suggestedSeen: Set<string | number> = new Set();
+    static suggestedObserver: IntersectionObserver | null = null;
+    static readonly SUGGESTED_RAIL_ID = 'suggested-rail';
+    static readonly SUGGESTED_BATCH = 15;
 
     static init() {
         // Show upcoming tab if user is logged in
@@ -33,11 +47,15 @@ export class HomePage {
 
         container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i></div>';
 
+        // A re-render orphans any rail observer — tear it down first.
+        this.teardownGuestRail();
+
         try {
             const params: any = { limit: 24 };
             if (this.currentMainTab === 'live') params.status = 'live';
             else if (this.currentMainTab === 'recorded') params.status = 'recorded';
             else if (this.currentMainTab === 'upcoming') params.status = 'upcoming';
+            let guestRailArmed = false;
 
             // Check if upcoming tab should be visible (only for logged in users)
             const isUpcoming = this.currentMainTab === 'upcoming';
@@ -88,7 +106,7 @@ export class HomePage {
                 const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'upcoming';
 
                 const [recommendedRes, dialogueRes, scienceRes, talentsRes] = await Promise.all([
-                    this.fetchRecommended(statusParam),
+                    this.fetchSuggested(statusParam),
                     CompetitionService.list({ status: statusParam, category: 'dialogue', limit: 15 }),
                     CompetitionService.list({ status: statusParam, category: 'science', limit: 15 }),
                     CompetitionService.list({ status: statusParam, category: 'talents', limit: 15 })
@@ -96,7 +114,14 @@ export class HomePage {
 
                 // Always render all 4 sections using fixed colors from constants
                 if (recommendedRes.success && recommendedRes.data?.length > 0) {
-                    html += getCompetitionSection(tr.sections?.suggested || 'Recommended', recommendedRes.data, 'fas fa-fire', lang, '#8B5CF6', false);
+                    if (recommendedRes.session) {
+                        // Guest rail: stable anchor id so the scroll sentinel
+                        // can append cursor batches after the first paint.
+                        html += getCompetitionSection(tr.sections?.suggested || 'Recommended', recommendedRes.data, 'fas fa-fire', lang, '#8B5CF6', false, this.SUGGESTED_RAIL_ID);
+                        guestRailArmed = true;
+                    } else {
+                        html += getCompetitionSection(tr.sections?.suggested || 'Recommended', recommendedRes.data, 'fas fa-fire', lang, '#8B5CF6', false);
+                    }
                 }
 
                 if (dialogueRes.success && dialogueRes.data?.length > 0) {
@@ -123,6 +148,11 @@ export class HomePage {
             // Setup hover scroll for all sections with scrollable containers
             this.setupAllHoverScroll();
 
+            // Guest rail continuation starts only after the paint exists.
+            if (guestRailArmed) {
+                this.setupGuestRailScroll();
+            }
+
         } catch (err) {
             console.error(err);
             container.innerHTML = `<div class="text-center py-16 text-red-500">${tr.error_loading || 'Error loading content'}</div>`;
@@ -133,6 +163,10 @@ export class HomePage {
      * T2.3: Suggested section powered by the Recommendation Engine
      * (language > country > followed > newest > most viewed > top rated),
      * with graceful fallback to the plain list on any failure.
+     *
+     * R3-GUEST-1: logged-in callers keep this single-batch contract
+     * untouched; guests go through fetchGuestSuggestedRail (frozen session +
+     * scroll continuation to real exhaustion).
      */
     private static async fetchRecommended(statusParam: string): Promise<any> {
         try {
@@ -148,6 +182,264 @@ export class HomePage {
         }
         // Graceful degradation: plain list keeps the section non-empty
         return CompetitionService.list({ status: statusParam, limit: 15 });
+    }
+
+    /**
+     * R3-GUEST-1: suggested-section dispatcher. Logged-in users keep the
+     * single-batch contract above byte-for-byte; guests freeze a suggestion
+     * session (first page returned here with its cursor envelope, the rail
+     * continues it after the paint).
+     */
+    private static async fetchSuggested(statusParam: string): Promise<any> {
+        if (State.sessionId) {
+            return this.fetchRecommended(statusParam);
+        }
+        return this.fetchGuestSuggestedRail(statusParam);
+    }
+
+    private static guestHeaders(extra: Record<string, string>): Record<string, string> {
+        const headers: Record<string, string> = { ...(extra || {}) };
+        try {
+            const guest = typeof localStorage !== 'undefined' ? localStorage.getItem('dueli_guest_token') : null;
+            if (guest) headers['X-Guest-Token'] = guest;
+        } catch {
+            // Private mode: the server issues a token per call instead.
+        }
+        return headers;
+    }
+
+    private static storeGuestToken(token: unknown): void {
+        if (typeof token !== 'string' || !token) return;
+        try {
+            if (typeof localStorage !== 'undefined') localStorage.setItem('dueli_guest_token', token);
+        } catch {
+            // Best-effort first-party persistence only.
+        }
+    }
+
+    /**
+     * R3-GUEST-1: freeze the guest suggestion session and read its first
+     * page. Any failure degrades to the plain list (section stays non-empty,
+     * no session state is armed).
+     */
+    private static async fetchGuestSuggestedRail(statusParam: string): Promise<any> {
+        try {
+            this.resetGuestRailState();
+            const createRes = await fetch(`/api/recommendations/suggested-sessions?lang=${State.lang}`, {
+                method: 'POST',
+                headers: this.guestHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({}),
+            });
+            if (!createRes.ok) throw new Error('suggested session status ' + createRes.status);
+            const created = (await createRes.json()) as {
+                success?: unknown;
+                data?: { session?: { id?: unknown }; guest_token?: unknown };
+            };
+            const sid = created?.success && created.data?.session?.id ? String(created.data.session.id) : '';
+            if (!sid) throw new Error('no suggested session id');
+            this.storeGuestToken(created.data?.guest_token);
+            const page = await this.readSuggestedPage(sid, null);
+            if (!page || page.items.length === 0) throw new Error('empty suggested first page');
+            this.suggestedSessionId = sid;
+            this.suggestedCursor = page.nextCursor;
+            this.suggestedDone = !page.hasMore;
+            for (const item of page.items) this.suggestedSeen.add(this.railKey(item));
+            return { success: true, data: page.items, session: { id: sid } };
+        } catch (err) {
+            console.error('[HomePage] guest suggested session failed, falling back:', err);
+            this.resetGuestRailState();
+            return CompetitionService.list({ status: statusParam, limit: 15 });
+        }
+    }
+
+    private static railKey(item: { id?: string | number }): string | number {
+        return item && item.id !== undefined && item.id !== null ? item.id : Math.random();
+    }
+
+    private static async readSuggestedPage(
+        sid: string,
+        cursor: string | null
+    ): Promise<{ items: Array<{ id?: string | number }>; nextCursor: string | null; hasMore: boolean } | null> {
+        let url = `/api/recommendations/suggested-sessions/${encodeURIComponent(sid)}/page?limit=${this.SUGGESTED_BATCH}&lang=${State.lang}`;
+        if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
+        const res = await fetch(url, { headers: this.guestHeaders({}) });
+        if (res.status === 410 || res.status === 404 || res.status === 409) {
+            return null;
+        }
+        if (!res.ok) throw new Error('suggested page status ' + res.status);
+        const data = (await res.json()) as {
+            success?: unknown;
+            data?: { items?: unknown; nextCursor?: unknown; hasMore?: unknown } | null;
+        };
+        const payload = data && data.success && data.data ? data.data : null;
+        if (!payload || !Array.isArray(payload.items)) throw new Error('bad suggested payload');
+        return {
+            items: payload.items as Array<{ id?: string | number }>,
+            nextCursor: typeof payload.nextCursor === 'string' ? payload.nextCursor : null,
+            hasMore: payload.hasMore === true,
+        };
+    }
+
+    private static resetGuestRailState(): void {
+        this.suggestedSessionId = null;
+        this.suggestedCursor = null;
+        this.suggestedDone = false;
+        this.suggestedLoading = false;
+        this.suggestedRecreated = false;
+        this.suggestedSeen = new Set();
+    }
+
+    private static teardownGuestRail(): void {
+        if (this.suggestedObserver) {
+            try {
+                this.suggestedObserver.disconnect();
+            } catch {
+                // Harness/shim without full observer support.
+            }
+            this.suggestedObserver = null;
+        }
+        const sentinel = document.getElementById('suggested-rail-sentinel');
+        if (sentinel && sentinel.parentElement) sentinel.parentElement.removeChild(sentinel);
+        this.resetGuestRailState();
+    }
+
+    /**
+     * R3-GUEST-1: continue the frozen guest rail as the visitor scrolls it.
+     * Each batch appends at the frozen cursor; a retry re-reads the SAME
+     * cursor; the end comes ONLY from the server hasMore flag. A lapsed
+     * session (410/404/409) freezes ONE fresh session and restarts the rail
+     * from its head — never a silent stop, never a duplicate loop.
+     */
+    private static setupGuestRailScroll(): void {
+        const scroller = document.getElementById(`${this.SUGGESTED_RAIL_ID}-scroll`);
+        if (!scroller || typeof IntersectionObserver === 'undefined') return;
+        if (this.suggestedDone) return;
+        const sentinel = document.createElement('div');
+        sentinel.id = 'suggested-rail-sentinel';
+        sentinel.setAttribute('aria-hidden', 'true');
+        sentinel.className = 'flex-shrink-0 w-24 flex items-center justify-center';
+        sentinel.innerHTML = '<i class="fas fa-spinner fa-spin text-purple-400 text-xl"></i>';
+        scroller.appendChild(sentinel);
+        const observer = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) void this.appendSuggestedBatch();
+            }
+        }, { root: scroller, threshold: 0.1 });
+        this.suggestedObserver = observer;
+        observer.observe(sentinel);
+    }
+
+    private static async appendSuggestedBatch(): Promise<void> {
+        if (this.suggestedLoading || this.suggestedDone) return;
+        const sid = this.suggestedSessionId;
+        if (!sid) return;
+        const scroller = document.getElementById(`${this.SUGGESTED_RAIL_ID}-scroll`);
+        const sentinel = document.getElementById('suggested-rail-sentinel');
+        if (!scroller || !sentinel) return;
+        const tr = translations[getUILanguage(State.lang)];
+        this.suggestedLoading = true;
+        try {
+            const page = await this.readSuggestedPage(sid, this.suggestedCursor);
+            if (page === null) {
+                // Lapsed session: exactly one fresh freeze, rail restarts.
+                if (!this.suggestedRecreated) {
+                    this.suggestedRecreated = true;
+                    await this.restartGuestRail(scroller);
+                } else {
+                    this.failGuestRail(tr);
+                }
+                return;
+            }
+            const fresh: Array<{ id?: string | number }> = [];
+            for (const item of page.items) {
+                const key = this.railKey(item);
+                if (this.suggestedSeen.has(key)) continue;
+                this.suggestedSeen.add(key);
+                fresh.push(item);
+            }
+            if (fresh.length > 0) {
+                const html = fresh.map((item) => getCompetitionCard(item as never, State.lang)).join('');
+                sentinel.insertAdjacentHTML('beforebegin', html);
+            }
+            this.suggestedCursor = page.nextCursor;
+            this.suggestedDone = !page.hasMore;
+            if (this.suggestedDone) {
+                if (this.suggestedObserver) this.suggestedObserver.disconnect();
+                this.suggestedObserver = null;
+                if (sentinel.parentElement) sentinel.parentElement.removeChild(sentinel);
+            }
+        } catch (err) {
+            console.error('[HomePage] suggested continuation failed:', err);
+            this.failGuestRail(tr);
+        } finally {
+            this.suggestedLoading = false;
+        }
+    }
+
+    private static failGuestRail(tr: { discovery?: { retry?: string } }): void {
+        const sentinel = document.getElementById('suggested-rail-sentinel');
+        if (!sentinel) return;
+        sentinel.innerHTML = `<button type="button" data-suggested-retry="1" class="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-semibold">${
+            (tr.discovery && tr.discovery.retry) || 'Retry'
+        }</button>`;
+        const btn = sentinel.querySelector('[data-suggested-retry]');
+        if (btn) {
+            btn.addEventListener('click', () => {
+                sentinel.innerHTML = '<i class="fas fa-spinner fa-spin text-purple-400 text-xl"></i>';
+                void this.appendSuggestedBatch();
+            });
+        }
+    }
+
+    private static async restartGuestRail(scroller: HTMLElement): Promise<void> {
+        try {
+            this.resetGuestRailState();
+            const createRes = await fetch(`/api/recommendations/suggested-sessions?lang=${State.lang}`, {
+                method: 'POST',
+                headers: this.guestHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({}),
+            });
+            if (!createRes.ok) throw new Error('recreate status ' + createRes.status);
+            const created = (await createRes.json()) as {
+                success?: unknown;
+                data?: { session?: { id?: unknown }; guest_token?: unknown };
+            };
+            const sid = created?.success && created.data?.session?.id ? String(created.data.session.id) : '';
+            if (!sid) throw new Error('no recreated session id');
+            this.storeGuestToken(created.data?.guest_token);
+            const page = await this.readSuggestedPage(sid, null);
+            if (!page) throw new Error('no recreated first page');
+            this.suggestedSessionId = sid;
+            this.suggestedCursor = page.nextCursor;
+            this.suggestedDone = !page.hasMore;
+            this.suggestedSeen = new Set();
+            const cards: string[] = [];
+            for (const item of page.items) {
+                this.suggestedSeen.add(this.railKey(item));
+                cards.push(getCompetitionCard(item as never, State.lang));
+            }
+            scroller.innerHTML = cards.join('');
+            const sentinel = document.createElement('div');
+            sentinel.id = 'suggested-rail-sentinel';
+            sentinel.setAttribute('aria-hidden', 'true');
+            sentinel.className = 'flex-shrink-0 w-24 flex items-center justify-center';
+            sentinel.innerHTML = '<i class="fas fa-spinner fa-spin text-purple-400 text-xl"></i>';
+            scroller.appendChild(sentinel);
+            if (this.suggestedObserver) {
+                try {
+                    this.suggestedObserver.observe(sentinel);
+                } catch {
+                    // Fall through to button retry on next error.
+                }
+            }
+            if (this.suggestedDone && sentinel.parentElement) {
+                sentinel.parentElement.removeChild(sentinel);
+            }
+        } catch (err) {
+            console.error('[HomePage] suggested rail restart failed:', err);
+            const tr = translations[getUILanguage(State.lang)];
+            this.failGuestRail(tr);
+        }
     }
 
     static setMainTab(tab: 'live' | 'upcoming' | 'recorded') {        // Prevent accessing upcoming tab if not logged in

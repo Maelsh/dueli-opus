@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-01T07:42:29.938Z",
-  "total": 195,
+  "generatedAt": "2026-10-01T15:33:44.862Z",
+  "total": 197,
   "routes": [
     {
       "method": "GET",
@@ -1006,6 +1006,20 @@
     {
       "method": "GET",
       "path": "/api/recommendations/competitor-stats/:userId",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/recommendations/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/recommendations/suggested-sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/recommendations/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/recommendations/suggested-sessions/:id/page",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/recommendations/routes.ts"

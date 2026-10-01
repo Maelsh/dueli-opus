@@ -9,8 +9,8 @@
  *   chunks. B7 freezes the CURRENT Explore shuffle exactly once: the same
  *   eligible set + one Fisher–Yates pass with WebCrypto randomness (never
  *   Math.random in this security-adjacent context, never ORDER BY RANDOM()
- *   per batch). D1/D2 later swap ONLY the ordering/eligibility provider and
- *   reuse this same store + cursor — no second browsing engine.
+ *   per batch). D1/D2 — and R3-GUEST-1 — swap ONLY the ordering/eligibility
+ *   provider and reuse this same store + cursor — no second browsing engine.
  * - Page reads walk the frozen snapshot with an opaque cursor
  *   ({sid, v, pos} base64url — Base64 is encoding, NOT the guard; the guard
  *   is the server-side session + identity + context binding), hydrate cards,
@@ -88,6 +88,54 @@ export interface ExplorePage {
     nextCursor: string | null;
     hasMore: boolean;
     session: { id: string; total: number; expires_at: string };
+}
+
+/**
+ * R3-GUEST-1: the ONLY swappable seam of the session engine (05 §4: D1/D2
+ * replace the ordering/eligibility provider and reuse the same store +
+ * cursor). A provider owns: which surface the session belongs to, the
+ * canonical session identity, the full ordered id set at T0, and the live
+ * per-row eligibility re-check. Everything else — chunks, cursor, TTL,
+ * identity binding, hasMore semantics — stays in this service, once.
+ */
+export interface ResultSessionProvider {
+    readonly surface: string;
+    contextKey(): string;
+    buildOrderedIds(db: D1Database, lang: string): Promise<number[]>;
+    isEligible(row: CompetitionWithDetails): boolean;
+}
+
+/**
+ * The B7 Explore provider: same eligible set as the listing, one frozen
+ * Fisher–Yates pass standing in for the current ORDER BY RANDOM() semantics.
+ */
+export class ExploreResultProvider implements ResultSessionProvider {
+    readonly surface = EXPLORE_SURFACE;
+    private readonly canonical: ExploreCanonicalFilters;
+
+    constructor(rawFilters: { search?: unknown; category?: unknown; status?: unknown }) {
+        this.canonical = ExploreSessionService.canonicalizeFilters(rawFilters);
+    }
+
+    contextKey(): string {
+        return ExploreSessionService.canonicalKey(this.canonical);
+    }
+
+    async buildOrderedIds(db: D1Database): Promise<number[]> {
+        const modelFilters: CompetitionFilters = {};
+        if (this.canonical.status !== '') {
+            modelFilters.status = this.canonical.status as CompetitionFilters['status'];
+        }
+        if (this.canonical.category !== '') modelFilters.category = this.canonical.category;
+        if (this.canonical.search !== '') modelFilters.search = this.canonical.search;
+        // The FULL eligible set — no LIMIT, no total cap, one correlated read.
+        const eligible = await new CompetitionModel(db).findEligibleIds(modelFilters);
+        return ExploreSessionService.freezeShuffle(eligible);
+    }
+
+    isEligible(row: CompetitionWithDetails): boolean {
+        return ExploreSessionService.matchesFilters(row, this.canonical);
+    }
 }
 
 interface ExploreCursorPayload {
@@ -255,19 +303,23 @@ export class ExploreSessionService {
     }
 
     // ------------------------------------------------------------------
-    // Session lifecycle
+    // Session lifecycle (provider-driven core + B7-compatible wrappers)
     // ------------------------------------------------------------------
 
-    async createSession(
+    /**
+     * Generic build: the provider supplies the full ordered id set; this
+     * method persists it as bounded chunks and flips building → ready only
+     * afterwards, so a partial snapshot is never exposed as complete.
+     */
+    async createSessionWithProvider(
         identity: ExploreIdentity,
-        rawFilters: { search?: unknown; category?: unknown; status?: unknown },
-        uiLang: string,
+        provider: ResultSessionProvider,
+        lang: string,
         stats: ExploreSessionStats = {}
     ): Promise<{ session: ExploreResultSession }> {
         const started = Date.now();
         const sessionModel = new ExploreResultSessionModel(this.db);
         const chunkModel = new ExploreResultChunkModel(this.db);
-        const competitionModel = new CompetitionModel(this.db);
 
         try {
             await sessionModel.deleteExpired();
@@ -275,29 +327,21 @@ export class ExploreSessionService {
             // Lazy hygiene is best-effort; the build below stays authoritative.
         }
 
-        const canonical = ExploreSessionService.canonicalizeFilters(rawFilters);
-        const modelFilters: CompetitionFilters = {};
-        if (canonical.status !== '') modelFilters.status = canonical.status as CompetitionFilters['status'];
-        if (canonical.category !== '') modelFilters.category = canonical.category;
-        if (canonical.search !== '') modelFilters.search = canonical.search;
-
-        // The FULL eligible set — no LIMIT, no total cap, one correlated read.
-        const eligible = await competitionModel.findEligibleIds(modelFilters);
-        const frozen = ExploreSessionService.freezeShuffle(eligible);
+        const frozen = await provider.buildOrderedIds(this.db, lang);
 
         const session = await sessionModel.create({
-            surface: EXPLORE_SURFACE,
+            surface: provider.surface,
             identityKind: identity.kind,
             identityKey: identity.key,
-            filtersCanonical: ExploreSessionService.canonicalKey(canonical),
-            lang: uiLang,
+            filtersCanonical: provider.contextKey(),
+            lang,
             chunkSize: EXPLORE_CHUNK_SIZE,
             ttlSeconds: EXPLORE_SESSION_TTL_SECONDS,
         });
         const chunks = await chunkModel.saveAll(session.id, frozen, EXPLORE_CHUNK_SIZE);
         await sessionModel.markReady(session.id, frozen.length);
         const ready = await sessionModel.findById(session.id);
-        if (!ready) throw new Error('explore session vanished during build');
+        if (!ready) throw new Error('result session vanished during build');
 
         stats.buildMs = Date.now() - started;
         stats.candidates = frozen.length;
@@ -305,14 +349,34 @@ export class ExploreSessionService {
         return { session: ready };
     }
 
-    async readPage(
+    async createSession(
+        identity: ExploreIdentity,
+        rawFilters: { search?: unknown; category?: unknown; status?: unknown },
+        uiLang: string,
+        stats: ExploreSessionStats = {}
+    ): Promise<{ session: ExploreResultSession }> {
+        return this.createSessionWithProvider(
+            identity,
+            new ExploreResultProvider(rawFilters),
+            uiLang,
+            stats
+        );
+    }
+
+    /**
+     * Generic page read over any provider's frozen snapshot. The provider is
+     * supplied by the calling endpoint (which owns the surface) and must
+     * match the stored session surface — a cursor can never wander across
+     * surfaces.
+     */
+    async readPageWithProvider(
         identity: ExploreIdentity | null,
         sessionId: string,
         options: {
             cursor?: string | null;
             limit?: unknown;
-            filters?: { search?: unknown; category?: unknown; status?: unknown };
-            uiLang?: string;
+            provider: ResultSessionProvider;
+            lang?: string;
             maxScan?: number;
         },
         stats: ExploreSessionStats = {}
@@ -345,11 +409,11 @@ export class ExploreSessionService {
             return { failure: 'session_not_found' };
         }
         if (session.status !== 'ready') return { failure: 'session_building' };
+        if (session.surface !== options.provider.surface) return { failure: 'session_not_found' };
 
-        const canonical = ExploreSessionService.canonicalizeFilters(options.filters ?? {});
         if (
-            ExploreSessionService.canonicalKey(canonical) !== session.filters_canonical ||
-            (options.uiLang ?? session.lang) !== session.lang
+            options.provider.contextKey() !== session.filters_canonical ||
+            (options.lang ?? session.lang) !== session.lang
         ) {
             return { failure: 'session_context_mismatch' };
         }
@@ -396,7 +460,7 @@ export class ExploreSessionService {
             if (items.length >= take) break;
             examined += 1;
             const row = byId.get(id) ?? null;
-            if (!row || !ExploreSessionService.matchesFilters(row, canonical)) {
+            if (!row || !options.provider.isEligible(row)) {
                 skipped += 1;
                 continue;
             }
@@ -416,6 +480,27 @@ export class ExploreSessionService {
                 session: { id: session.id, total, expires_at: session.expires_at },
             },
         };
+    }
+
+    async readPage(
+        identity: ExploreIdentity | null,
+        sessionId: string,
+        options: {
+            cursor?: string | null;
+            limit?: unknown;
+            filters?: { search?: unknown; category?: unknown; status?: unknown };
+            uiLang?: string;
+            maxScan?: number;
+        },
+        stats: ExploreSessionStats = {}
+    ): Promise<{ page: ExplorePage } | { failure: ExploreSessionFailure }> {
+        return this.readPageWithProvider(identity, sessionId, {
+            cursor: options.cursor,
+            limit: options.limit,
+            maxScan: options.maxScan,
+            provider: new ExploreResultProvider(options.filters ?? {}),
+            lang: options.uiLang,
+        }, stats);
     }
 }
 

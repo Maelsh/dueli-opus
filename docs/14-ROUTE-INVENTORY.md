@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-01T07:42:29.938Z
+> تاريخ التوليد: 2026-10-01T15:33:44.862Z
 
-## الإجمالي: 195 مسار
+## الإجمالي: 197 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 93 |
+| PUBLIC(auth-optional, in-handler check required) | 95 |
 | AUTHENTICATED | 56 |
 | UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -168,6 +168,8 @@
 | POST | `/api/realtime/ticket` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/realtime/routes.ts` |
 | GET | `/api/recommendations` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
 | GET | `/api/recommendations/competitor-stats/:userId` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
+| POST | `/api/recommendations/suggested-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
+| GET | `/api/recommendations/suggested-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/recommendations/routes.ts` |
 | GET | `/api/reminders` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |
 | POST | `/api/reports` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/reports/routes.ts` |
 | GET | `/api/reports/reasons` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/reports/routes.ts` |
