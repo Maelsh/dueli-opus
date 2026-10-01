@@ -1,6 +1,12 @@
 
 
 
+## EMAIL DELIVERABILITY CLEANUP · فرع `fix/email-deliverability-cleanup` (من `1376c04` = origin/main)
+
+- 🔧 تنظيف هوية الدومين في البريد فقط (لا DNS/DKIM/SPF/DMARC — مثبتة PASS من المالك خارج المستودع ولم تُمس؛ ولا provider ولا `send-email.php` ولا معنى مُفترض لـX-MC-Relay: Bad الخارجي): ‏3 مواضع hardcoded ‏`project-8e7c178d.pages.dev` في `EmailService` (الشعار، زر Visit Platform، fallback رابط التفعيل) → ‏SSOT القائم `DEFAULT_PLATFORM_URL` ‏(`https://dueli.maelshpro.com`) بلا literals جديدة؛ ‏origin الصريح يغلب عند توفره.
+- **الأدلة**: ‏T جديد `email-domain-identity` ‏6/6 (بلا pages.dev في subject+html ar/en للقالبين، الشعار والزر على الدومين الرسمي، fallback التفعيل رسمي، origin الصريح محترم)؛ الجيران ‏19/19؛ ‏`tsc` ✅؛ ‏`build` ✅؛ صفر `any` جديد. بلا migration/routes.
+- **الصادق**: ‏SPF/DKIM/DMARC أثبتها المالك PASS خارج repo؛ ‏**Inbox placement NOT PROVEN — لا ادعاء أن Spam أُصلح**؛ ‏List-Unsubscribe يضاف في PHP خارج repo (قد يحتاج إزالة من رسائل auth لاحقاً، وليس سبباً مُدَّعى للـSpam)؛ ‏X-MC-Relay: Bad ما زال external finding خارج النطاق. بلا دمج/نشر. لا ادعاء R2 — بانتظار REMOTE وتجربة المالك.
+
 ## R2-AUTH-1 password-reset email · فرع `fix/r2-auth1-password-reset` (من `79edbf2` = origin/main)
 
 - 🔧 عيبان مثبتان بـRED (لا افتراض تطابق مع التفعيل رغم خدمة البريد الواحدة): ‏(1) بلا تطبيع بريد — `  RESET@test.com  ` لا يطابق شيئاً ومع ذلك 200، فينتظر المستخدم بريداً لم تُحاوَل كتابته أصلاً (0 sends)؛ ‏(2) `forgotPassword` بلا try/catch حول الإرسال — 500 عند غياب EMAIL vars أو أي فشل مزوّد (مقابل تحمّل register/resend)، و200-مقابل-500 صار oracle لوجود الحساب. الإصلاح: تطبيع واحد للبحث والمستلم، وكل مسارات الفشل تُرجع نفس `auth_reset_code_sent` العامة مع تسجيل خادمي للمستلم/المضيف بلا الكود؛ verify/reset بنفس التطبيع. لا عقد تغيير-داخل-الحساب موجود أصلاً (finding موثق، لم يُبنَ).

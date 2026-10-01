@@ -6,6 +6,7 @@
  */
 
 import { translations, getUILanguage, isRTL, Language } from '../../i18n';
+import { DEFAULT_PLATFORM_URL } from '../../config/defaults';
 
 /**
  * Email template options
@@ -70,7 +71,7 @@ export class EmailService {
         const rtl = isRTL(lang);
         const dir = rtl ? 'rtl' : 'ltr';
         const align = rtl ? 'right' : 'left';
-        const logoUrl = 'https://project-8e7c178d.pages.dev/static/dueli-icon.png';
+        const logoUrl = `${DEFAULT_PLATFORM_URL}/static/dueli-icon.png`;
 
         return `
 <!DOCTYPE html>
@@ -140,7 +141,7 @@ export class EmailService {
                                 © ${new Date().getFullYear()} Dueli. ${rtl ? 'جميع الحقوق محفوظة' : 'All rights reserved'}.
                             </p>
                             <div style="margin-top: 20px;">
-                                <a href="https://project-8e7c178d.pages.dev" style="display: inline-block; padding: 10px 25px; background: linear-gradient(135deg, #7c3aed 0%, #f59e0b 100%); color: #ffffff; text-decoration: none; border-radius: 25px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);">
+                                <a href="${DEFAULT_PLATFORM_URL}" style="display: inline-block; padding: 10px 25px; background: linear-gradient(135deg, #7c3aed 0%, #f59e0b 100%); color: #ffffff; text-decoration: none; border-radius: 25px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);">
                                     ${rtl ? 'زيارة المنصة' : 'Visit Platform'}
                                 </a>
                             </div>
@@ -175,7 +176,9 @@ export class EmailService {
         lang: Language,
         origin: string
     ): Promise<any> {
-        const baseUrl = origin || 'https://project-8e7c178d.pages.dev';
+        // Production fallback is the official custom domain (never pages.dev);
+        // an explicit origin (request host) still wins when provided.
+        const baseUrl = origin || DEFAULT_PLATFORM_URL;
         const verifyUrl = `${baseUrl}/verify?token=${token}&lang=${lang}`;
         const tr = translations[getUILanguage(lang)];
         const rtl = isRTL(lang);
