@@ -358,6 +358,7 @@ export const en = {
     auth_verification_resent: 'Verification email sent',
     auth_reset_if_exists: 'If this email is registered, you will receive a reset link',
     auth_reset_code_sent: 'Reset code sent to your email',
+    auth_check_spam_folder: 'If you don’t see the email, check your Spam or Junk folder.',
     auth_email_code_required: 'Email and code are required',
     auth_invalid_code: 'Invalid or expired code',
     auth_code_verified: 'Code verified',

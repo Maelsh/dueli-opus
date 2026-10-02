@@ -242,8 +242,7 @@ export class Modal {
     /**
      * Show auth message
      */
-    static showAuthMessage(message: string, type: 'error' | 'success' | 'info' = 'error'): void {
-        const msg = document.getElementById('authMessage');
+    static showAuthMessage(message: string, type: 'error' | 'success' | 'info' = 'error'): void {        const msg = document.getElementById('authMessage');
         if (msg) {
             msg.textContent = message;
             msg.classList.remove('hidden', 'bg-red-100', 'bg-green-100', 'bg-blue-100', 'text-red-700', 'text-green-700', 'text-blue-700');
@@ -255,6 +254,16 @@ export class Modal {
                 msg.classList.add('bg-red-100', 'text-red-700');
             }
         }
+    }
+
+    /**
+     * Show an email-sent success message with the shared Spam/Junk guidance
+     * beside it (i18n key `auth_check_spam_folder` — never hardcoded).
+     * Use ONLY on paths where an email was actually accepted for sending;
+     * failures keep plain showAuthMessage so no success guidance appears.
+     */
+    static showEmailSentMessage(message: string): void {
+        this.showAuthMessage(`${message}\n${t('auth_check_spam_folder', State.lang)}`, 'success');
     }
 
     /**
