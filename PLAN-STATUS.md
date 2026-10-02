@@ -5,6 +5,7 @@
 
 - 🔧 ‏(A) تنبيه Spam/Junk بجانب كل نجاح إرسال بريد فعلي (‏3 تدفقات: التسجيل، إعادة الإرسال، نسيان المرور) عبر مفتاح مشترك `auth_check_spam_folder` و`Modal.showEmailSentMessage()` — بلا hardcode، بلا مساس EmailService/contracts/النصوص القائمة؛ يُحجب عند الفشل وعند `email_not_configured`. ‏(B) تحقيق rails بلا كود: ‏Suggested/زائر بجلسة #75/#76 حتى النفاد الحقيقي؛ ‏Suggested/مسجل دفعة 15 واحدة بلا استمرار؛ ‏Dialogue/Science/Talents والفرعية `ORDER BY RANDOM()` دفعة 15 بلا استمرار/عرض-الكل؛ ‏Suggested يتجاهل تبويب live/recorded/upcoming.
 - **الأدلة**: ‏T جديد `email-spam-notice` ‏6/6 (التنبيه في التدفقات الـ3 ar/en، بلا hardcode، غائب عند الفشل)؛ المستهدفة ‏33/33؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏286 = ‏BASE.
+- **REMEDIATION (نفس الفرع) — بلوكير نجاح-مع-فشل-إرسال**: ‏register كان يعرض التنبيه مع `warning` نص حر رغم عدم الإرسال → أصبح `email_send_failed` machine-readable، والعميل يعرض التنبيه فقط بلا warning؛ زر resend لكلا التحذيرين؛ ‏resend يبقى رسالة عامة بلا تنبيه (العام لا يؤكد إرسالاً بتصميم anti-enumeration). إعادة التحقق: ‏35/35، ‏`tsc` ✅، ‏`build` ✅، ‏G2 ‏286.
 - **الصادق**: ‏التنبيه UX guidance فقط — لا ادعاء إصلاح deliverability؛ ‏gaps الـrails مسجلة فقط (تجاهل التبويب، سقف 15، RANDOM لكل تحميل، بلا dedup عابر، recorded غير متكافئ) بلا إصلاح خارج النطاق؛ بلا H7/D1/D2. بلا دمج/نشر.
 
 ## CI/CD DEPLOYMENT RECOVERY · فرع `fix/ci-cd-deployment-recovery` (من `f3942c3` = origin/main)

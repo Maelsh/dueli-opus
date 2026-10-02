@@ -445,20 +445,21 @@ export class AuthService {
             const data = await res.json() as ApiResponse;
 
             if (data.success) {
-                // Email accepted for sending → success + Spam/Junk guidance.
-                // The email_not_configured warning means no send was attempted,
-                // so it keeps the plain message (plus the resend button below).
-                const emailNotConfigured = (data.data as any)?.warning === 'email_not_configured';
-                if (emailNotConfigured) {
-                    Modal.showAuthMessage(data.data?.message || t('auth_register_success', State.lang), 'success');
-                } else {
+                // showEmailSentMessage ONLY when the server confirms a send:
+                // any machine-readable warning means nothing was delivered
+                // (email_not_configured = not attempted, email_send_failed =
+                // attempted but the provider failed). Never match warning text.
+                const emailWarning = (data.data as any)?.warning;
+                if (!emailWarning) {
                     Modal.showEmailSentMessage(data.data?.message || t('auth_register_success', State.lang));
+                } else {
+                    Modal.showAuthMessage(data.data?.message || t('auth_register_success', State.lang), 'success');
                 }
                 const form = document.getElementById('registerForm')?.querySelector('form');
                 if (form) form.reset();
-                // Email not configured (Preview without EMAIL vars): show a
-                // "resend" button that calls POST /api/auth/resend-verification
-                if (emailNotConfigured) {
+                // Email not delivered (either warning): offer the resend path,
+                // which is the retry for both cases.
+                if (emailWarning === 'email_not_configured' || emailWarning === 'email_send_failed') {
                     const msg = document.getElementById('authMessage');
                     if (msg && !document.getElementById('resendVerificationBtn')) {
                         const btn = document.createElement('button');
@@ -475,11 +476,12 @@ export class AuthService {
                                     body: JSON.stringify({ email })
                                 });
                                 const d = (await r.json()) as any;
-                                if (d.success) {
-                                    Modal.showEmailSentMessage(d.data?.message || '');
-                                } else {
-                                    Modal.showAuthMessage(d.error || '', 'error');
-                                }
+                                // Resend answers generic success on EVERY path
+                                // (unknown address, already verified, misconfigured,
+                                // provider failure) by anti-enumeration design, so
+                                // success:true never confirms a send — keep the
+                                // plain server message, never the sent-guidance.
+                                Modal.showAuthMessage(d.data?.message || d.error || '', d.success ? 'success' : 'error');
                             } catch {
                                 Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
                             } finally {

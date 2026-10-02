@@ -131,10 +131,13 @@ export class AuthController extends BaseController {
 
             } catch (emailError) {
                 console.error('[Register] Email sending failed:', emailError);
-                // User was created but email failed - still return success but log error
+                // User was created but email failed - still return success but log error.
+                // Machine-readable warning code (stable contract for the client;
+                // never match on message text): 'email_not_configured' (no send
+                // attempted) vs 'email_send_failed' (attempted, provider failed).
                 return this.success(c, {
                     message: this.t('auth_register_success', c),
-                    warning: 'Email sending failed, please use resend verification'
+                    warning: 'email_send_failed'
                 }, 201);
             }
 

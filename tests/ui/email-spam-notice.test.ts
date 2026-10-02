@@ -104,8 +104,9 @@ describe('email-sent spam/junk notice', () => {
         const svc = readFileSync(resolve('src/client/services/AuthService.ts'), 'utf8');
         expect(svc).not.toContain('البريد غير المرغوب');
         expect(svc).not.toContain('Spam or Junk');
-        // wired on the three email-sent success paths, nowhere else as success
-        expect(svc.match(/showEmailSentMessage/g)?.length).toBe(3);
+        // wired on the email-confirmed success paths only
+        // (register-ok, forgot-ok — resend is generic by design, see below)
+        expect(svc.match(/Modal\.showEmailSentMessage\(/g)?.length).toBe(2);
     });
 
     it('Modal.showEmailSentMessage appends the notice ar/en; plain success does not', () => {
@@ -135,7 +136,7 @@ describe('email-sent spam/junk notice', () => {
         expect(registry['authMessage'].textContent).not.toContain(EN_NOTICE);
     });
 
-    it('register success shows the notice, but email_not_configured (no send) does not', async () => {
+    it('register success shows the notice; warning codes (no send) do not', async () => {
         State.lang = 'ar';
         registry['registerName'].value = 'n';
         registry['registerEmail'].value = 'e@test.com';
@@ -146,33 +147,43 @@ describe('email-sent spam/junk notice', () => {
         expect(registry['authMessage'].textContent).toContain('ok-register');
         expect(registry['authMessage'].textContent).toContain(AR_NOTICE);
 
-        vi.stubGlobal(
-            'fetch',
-            vi.fn(async () => okJson({ success: true, data: { message: 'ok-nowarn', warning: 'email_not_configured' } }))
-        );
-        await AuthService.handleRegister(evt);
-        expect(registry['authMessage'].textContent).toBe('ok-nowarn');
-        expect(registry['authMessage'].textContent).not.toContain(AR_NOTICE);
-        expect(registry['resendVerificationBtn']).toBeTruthy();
+        for (const warning of ['email_not_configured', 'email_send_failed']) {
+            vi.stubGlobal('document', makeDoc());
+            State.lang = 'ar';
+            registry['registerName'].value = 'n';
+            registry['registerEmail'].value = 'e@test.com';
+            registry['registerPassword'].value = 'password123';
+            vi.stubGlobal(
+                'fetch',
+                vi.fn(async () => okJson({ success: true, data: { message: 'ok-warn', warning } }))
+            );
+            await AuthService.handleRegister(evt);
+            expect(registry['authMessage'].textContent).toBe('ok-warn');
+            expect(registry['authMessage'].textContent).not.toContain(AR_NOTICE);
+            // resend retry path preserved for both warnings
+            expect(registry['resendVerificationBtn']).toBeTruthy();
+        }
     });
 
-    it('resend-verification success shows the notice; failure does not', async () => {
+    it('resend-verification generic success never carries the sent-guidance (success:true != sent)', async () => {
         State.lang = 'en';
         registry['registerName'].value = 'n';
         registry['registerEmail'].value = 'e@test.com';
         registry['registerPassword'].value = 'password123';
         vi.stubGlobal(
             'fetch',
-            vi.fn(async () => okJson({ success: true, data: { message: 'warn', warning: 'email_not_configured' } }))
+            vi.fn(async () => okJson({ success: true, data: { message: 'warn', warning: 'email_send_failed' } }))
         );
         await AuthService.handleRegister(evt);
         const btn = registry['resendVerificationBtn'];
         expect(btn).toBeTruthy();
 
+        // provider failure and generic success are indistinguishable by design
+        // (anti-enumeration) — neither may show the sent-guidance
         vi.stubGlobal('fetch', vi.fn(async () => okJson({ success: true, data: { message: 'resent-ok' } })));
         await btn.onclick!();
-        expect(registry['authMessage'].textContent).toContain('resent-ok');
-        expect(registry['authMessage'].textContent).toContain(EN_NOTICE);
+        expect(registry['authMessage'].textContent).toBe('resent-ok');
+        expect(registry['authMessage'].textContent).not.toContain(EN_NOTICE);
 
         vi.stubGlobal('fetch', vi.fn(async () => okJson({ success: false, error: 'resend-bad' })));
         await btn.onclick!();
