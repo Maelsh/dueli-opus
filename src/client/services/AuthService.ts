@@ -445,12 +445,20 @@ export class AuthService {
             const data = await res.json() as ApiResponse;
 
             if (data.success) {
-                Modal.showAuthMessage(data.data?.message || t('auth_register_success', State.lang), 'success');
+                // Email accepted for sending → success + Spam/Junk guidance.
+                // The email_not_configured warning means no send was attempted,
+                // so it keeps the plain message (plus the resend button below).
+                const emailNotConfigured = (data.data as any)?.warning === 'email_not_configured';
+                if (emailNotConfigured) {
+                    Modal.showAuthMessage(data.data?.message || t('auth_register_success', State.lang), 'success');
+                } else {
+                    Modal.showEmailSentMessage(data.data?.message || t('auth_register_success', State.lang));
+                }
                 const form = document.getElementById('registerForm')?.querySelector('form');
                 if (form) form.reset();
                 // Email not configured (Preview without EMAIL vars): show a
                 // "resend" button that calls POST /api/auth/resend-verification
-                if ((data.data as any)?.warning === 'email_not_configured') {
+                if (emailNotConfigured) {
                     const msg = document.getElementById('authMessage');
                     if (msg && !document.getElementById('resendVerificationBtn')) {
                         const btn = document.createElement('button');
@@ -467,7 +475,11 @@ export class AuthService {
                                     body: JSON.stringify({ email })
                                 });
                                 const d = (await r.json()) as any;
-                                Modal.showAuthMessage(d.data?.message || d.error || '', d.success ? 'success' : 'error');
+                                if (d.success) {
+                                    Modal.showEmailSentMessage(d.data?.message || '');
+                                } else {
+                                    Modal.showAuthMessage(d.error || '', 'error');
+                                }
                             } catch {
                                 Modal.showAuthMessage(t('auth.connection_failed', State.lang), 'error');
                             } finally {
@@ -508,7 +520,7 @@ export class AuthService {
             const data = await res.json() as ApiResponse;
 
             if (data.success) {
-                Modal.showAuthMessage(data.data?.message || t('auth_reset_code_sent', State.lang), 'success');
+                Modal.showEmailSentMessage(data.data?.message || t('auth_reset_code_sent', State.lang));
                 document.getElementById('resetStep1')?.classList.add('hidden');
                 document.getElementById('resetStep2')?.classList.remove('hidden');
             } else {

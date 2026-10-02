@@ -334,6 +334,7 @@ export const ar = {
     auth_verification_resent: 'تم إرسال رابط التفعيل مجدداً',
     auth_reset_if_exists: 'إذا كان هذا البريد مسجلاً، ستصلك رسالة إعادة تعيين',
     auth_reset_code_sent: 'تم إرسال رمز إعادة التعيين إلى بريدك',
+    auth_check_spam_folder: 'إذا لم تجد الرسالة، تحقق من مجلد البريد غير المرغوب فيه (Spam).',
     auth_email_code_required: 'البريد والرمز مطلوبان',
     auth_invalid_code: 'الرمز غير صحيح أو منتهي',
     auth_code_verified: 'تم التحقق من الرمز',

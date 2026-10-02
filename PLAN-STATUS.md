@@ -1,6 +1,12 @@
 
 
 
+## RESET EMAIL NOTICE + HOME RAIL FORENSIC · فرع `fix/reset-email-notice-home-rail-forensic` (من `af96b8f` = origin/main)
+
+- 🔧 ‏(A) تنبيه Spam/Junk بجانب كل نجاح إرسال بريد فعلي (‏3 تدفقات: التسجيل، إعادة الإرسال، نسيان المرور) عبر مفتاح مشترك `auth_check_spam_folder` و`Modal.showEmailSentMessage()` — بلا hardcode، بلا مساس EmailService/contracts/النصوص القائمة؛ يُحجب عند الفشل وعند `email_not_configured`. ‏(B) تحقيق rails بلا كود: ‏Suggested/زائر بجلسة #75/#76 حتى النفاد الحقيقي؛ ‏Suggested/مسجل دفعة 15 واحدة بلا استمرار؛ ‏Dialogue/Science/Talents والفرعية `ORDER BY RANDOM()` دفعة 15 بلا استمرار/عرض-الكل؛ ‏Suggested يتجاهل تبويب live/recorded/upcoming.
+- **الأدلة**: ‏T جديد `email-spam-notice` ‏6/6 (التنبيه في التدفقات الـ3 ar/en، بلا hardcode، غائب عند الفشل)؛ المستهدفة ‏33/33؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏286 = ‏BASE.
+- **الصادق**: ‏التنبيه UX guidance فقط — لا ادعاء إصلاح deliverability؛ ‏gaps الـrails مسجلة فقط (تجاهل التبويب، سقف 15، RANDOM لكل تحميل، بلا dedup عابر، recorded غير متكافئ) بلا إصلاح خارج النطاق؛ بلا H7/D1/D2. بلا دمج/نشر.
+
 ## CI/CD DEPLOYMENT RECOVERY · فرع `fix/ci-cd-deployment-recovery` (من `f3942c3` = origin/main)
 
 - 🔧 عيبان مثبتان (PRs ‏#75–#78 مدموجة في main وليست مفقودة؛ production متوقف على نسخة قديمة لأن الـdeploy يفشل): ‏(1) ‏`deploy.yml` يستخدم `cloudflare/pages-action@v1` غير القابل للحل ("not found") → النشر الآن عبر Wrangler الرسمي (`npx wrangler pages deploy dist`, مثبّت devDependency — بلا action خارجي)، نفس المشروع والمخرجات والـtriggers، production على push-to-main فقط وpreviews صريحة للـPRs، نفس الـsecrets بلا أسماء جديدة؛ ‏(2) ‏SEC-06 كان grep خام يسقط على تعليق توثيقي في `ExploreSessionService.ts:11` رغم WebCrypto الفعلي → فاحص `dev-tools/check-sec06-math-random.mjs` يجرّد التعليقات ويرصد الاستخدام التنفيذي فقط (مثبت: الحقيقي يفشل بسطر/ملف، التعليق يمر — الحماية لم تُخفَّف).
