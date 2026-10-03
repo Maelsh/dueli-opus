@@ -10,6 +10,10 @@
  * - the Upcoming tab is visible to guests and repaints every rail from fresh
  *   status-qualified sessions (context change starts a new snapshot);
  * - retry/end states are translated; no failed home-rails API calls.
+ * - REGRESSION (observer stall): gradual user-like scrolling used to freeze
+ *   dialogue-live at 30/34 with the sentinel stuck intersecting (scroll
+ *   anchoring delivers no new IntersectionObserver event). A still-visible
+ *   sentinel after an append must finish the rail on its own to 34/34.
  * ar + en run the same file.
  */
 import { test, expect } from '@playwright/test';
@@ -86,6 +90,55 @@ test.describe('R3-RAILS-1B home rails (browser)', () => {
         await expect(page.locator('#home-rail-cat-dialogue-live-sentinel')).toContainText(END_TEXT(lang), {
             timeout: 20000,
         });
+
+        expect(badResponses).toEqual([]);
+        expect(errors).toEqual([]);
+    });
+
+    test('gradual scrolling reaches all 34 dialogue-live cards then the end marker (observer stall regression)', async ({
+        page,
+    }, testInfo) => {
+        const lang = langOf(testInfo.project.name);
+        const rail = 'home-rail-cat-dialogue-live';
+        const errors: string[] = [];
+        page.on('pageerror', (e) => errors.push(String(e)));
+        const badResponses: string[] = [];
+        page.on('response', (r) => {
+            if (r.url().includes('/home-rails/sessions') && !r.ok()) badResponses.push(`${r.status()} ${r.url()}`);
+        });
+
+        await page.goto(`/?lang=${lang}`, { waitUntil: 'load' });
+        await expect(page.locator(`#${rail}`)).toBeVisible({ timeout: 25000 });
+        await expect
+            .poll(async () => (await railIds(page, rail)).length, { timeout: 25000 })
+            .toBeGreaterThanOrEqual(15);
+
+        // User-like gradual horizontal scrolling (small steps with pauses).
+        let mid = 0;
+        for (let i = 0; i < 24; i++) {
+            await page.evaluate((id: string) => {
+                const el = document.getElementById(`${id}-scroll`);
+                if (!el) return;
+                const rtl = getComputedStyle(el).direction === 'rtl';
+                el.scrollBy({ left: (rtl ? -1 : 1) * 300 });
+            }, rail);
+            await page.waitForTimeout(350);
+            mid = (await railIds(page, rail)).length;
+            if (mid > 15) break;
+        }
+        expect(mid).toBeGreaterThan(15);
+
+        // Park the sentinel in view and stop driving: with the stall this
+        // froze at 30/34. The rail must now finish on its own to the full
+        // 34, then show the translated end marker — hasMore=false alone ends
+        // it, never a stuck-visible sentinel.
+        await page.locator(`#${rail}-sentinel`).scrollIntoViewIfNeeded();
+        await expect
+            .poll(async () => (await railIds(page, rail)).length, { timeout: 60000 })
+            .toBe(34);
+        const ids = await railIds(page, rail);
+        expect(new Set(ids).size).toBe(34);
+        await expect(page.locator(`#${rail}-sentinel`)).toContainText(END_TEXT(lang), { timeout: 20000 });
 
         expect(badResponses).toEqual([]);
         expect(errors).toEqual([]);

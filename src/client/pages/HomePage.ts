@@ -430,6 +430,22 @@ export class HomePage {
         });
     }
 
+    /**
+     * Rect-based visibility of a rail sentinel inside its own scroller
+     * (direction-agnostic: works for RTL negative offsets and LTR alike).
+     */
+    static isRailSentinelVisible(key: string): boolean {
+        const scroller = document.getElementById(homeRailScrollerId(key));
+        const sentinel = document.getElementById(homeRailSentinelId(key));
+        if (!scroller || !sentinel) return false;
+        const view = scroller.getBoundingClientRect();
+        const box = sentinel.getBoundingClientRect();
+        if (box.width <= 0 || box.height <= 0) return false;
+        const horizontal = box.left < view.right && box.right > view.left;
+        const vertical = box.top < view.bottom && box.bottom > view.top;
+        return horizontal && vertical;
+    }
+
     static async appendRailBatch(key: string): Promise<void> {
         const state = this.rails.get(key);
         if (!state || state.loading || state.done) return;
@@ -441,7 +457,11 @@ export class HomePage {
         if (!scroller || !sentinel) return;
         state.loading = true;
         this.paintSentinel(key, 'loading');
+        // Follow-up chaining flag: set ONLY on a successful batch that
+        // advanced the cursor with more rows behind it (see below).
+        let chainVisible = false;
         try {
+            const prevCursor = state.cursor;
             const page = await this.readRailPage(sid, state, state.cursor);
             // Discard late responses from a superseded context.
             if (state.generation !== this.railGeneration || this.rails.get(key) !== state) return;
@@ -482,11 +502,33 @@ export class HomePage {
                 }
                 state.observer = null;
             }
+            if (!state.done && state.cursor !== prevCursor) {
+                // After an append the sentinel can stay intersecting (scroll
+                // anchoring keeps it in view), in which case
+                // IntersectionObserver delivers NO new event and the rail
+                // would stall silently short of exhaustion. Re-arm for a
+                // fresh notification AND continue at once while it is still
+                // visible. Progress-gated (cursor advanced) so a stuck
+                // cursor can never spin; the loading flag (reset in
+                // `finally` below, before the chained call runs) forbids
+                // concurrent duplicate fetches.
+                this.armRailObserver(key);
+                chainVisible = this.isRailSentinelVisible(key);
+            }
         } catch (err) {
             console.error('[HomePage] rail continuation failed:', key, err);
             if (state.generation === this.railGeneration) this.paintSentinel(key, 'retry');
         } finally {
             state.loading = false;
+        }
+        if (
+            chainVisible &&
+            !state.done &&
+            !state.loading &&
+            state.generation === this.railGeneration &&
+            this.rails.get(key) === state
+        ) {
+            void this.appendRailBatch(key);
         }
     }
 
