@@ -25,7 +25,7 @@ jobs:
   # (or "no run yet") must WAIT, not fail. PRs resolve their head SHA (runs
   # are keyed by head); pushes use github.sha.
   quality-gate-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Quality Gate passed for this SHA
     permissions:
       contents: read
@@ -84,7 +84,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Deploy to Cloudflare Pages
     needs: [quality-gate-check]
     permissions:
@@ -99,10 +99,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: 'npm'
