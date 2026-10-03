@@ -1,21 +1,25 @@
 /**
- * R3-GUEST-1 — Home «مقترح لك» guest rail reaches real exhaustion (B evidence).
+ * R3-RAILS-1B — Home «مقترح لك» guest rail reaches real exhaustion (B evidence).
  *
- * Guest journey in a real browser against seeded local D1 (~190 public
- * competitions: pending + live; completed-without-recording stays out of the
- * rail by design):
- * - the suggested rail paints its first frozen batch (15 cards);
+ * Updated for the per-rail session engine: the suggested rail is now
+ * `#home-rail-suggested-live` (status-qualified sessions under
+ * /api/home-rails/sessions), and the terminal state is an explicit
+ * translated end marker — not a removed sentinel.
+ *
+ * Guest journey in a real browser against seeded local D1:
+ * - the suggested rail paints its first frozen batch;
  * - scrolling the rail appends cursor batches until the server reports the
- *   true end (sentinel removed) — more than one batch, every card unique;
- * - no page errors and no failed suggested-session API calls.
+ *   true end (translated end marker) — more than one batch, every card unique;
+ * - no page errors and no failed home-rails API calls.
  * ar + en run the same file (title and rail headers asserted per locale).
  */
 import { test, expect } from '@playwright/test';
 
 const langOf = (projectName: string): string => (projectName === 'ar' ? 'ar' : 'en');
+const RAIL = 'home-rail-suggested-live';
 
 async function railIds(page: import('@playwright/test').Page): Promise<number[]> {
-    const hrefs = await page.locator('#suggested-rail a[href*="/competition/"]').evaluateAll(
+    const hrefs = await page.locator(`#${RAIL} a[href*="/competition/"]`).evaluateAll(
         (nodes: HTMLAnchorElement[]) =>
             nodes
                 .map((a) => a.getAttribute('href') || '')
@@ -30,26 +34,26 @@ async function railIds(page: import('@playwright/test').Page): Promise<number[]>
 async function scrollRailToEnd(page: import('@playwright/test').Page): Promise<void> {
     // RTL scrollers run negative (Chrome: 0 at the right edge), so the far
     // end is direction-aware — a real visitor's hover-scroll has no such issue.
-    await page.evaluate(() => {
-        const el = document.getElementById('suggested-rail-scroll');
+    await page.evaluate((rail: string) => {
+        const el = document.getElementById(`${rail}-scroll`);
         if (!el) return;
         const rtl = getComputedStyle(el).direction === 'rtl';
         el.scrollTo({ left: rtl ? -el.scrollWidth : el.scrollWidth });
-    });
+    }, RAIL);
 }
 
-test.describe('R3-GUEST-1 guest suggested rail (browser)', () => {
+test.describe('R3-RAILS-1B guest suggested rail (browser)', () => {
     test('guest scrolls the frozen rail past the first batch to a unique end', async ({ page }, testInfo) => {
         const lang = langOf(testInfo.project.name);
         const errors: string[] = [];
         page.on('pageerror', (e) => errors.push(String(e)));
         const badResponses: string[] = [];
         page.on('response', (r) => {
-            if (r.url().includes('/suggested-sessions') && !r.ok()) badResponses.push(`${r.status()} ${r.url()}`);
+            if (r.url().includes('/home-rails/sessions') && !r.ok()) badResponses.push(`${r.status()} ${r.url()}`);
         });
 
         await page.goto(`/?lang=${lang}`, { waitUntil: 'load' });
-        const rail = page.locator('#suggested-rail');
+        const rail = page.locator(`#${RAIL}`);
         await expect(rail).toBeVisible({ timeout: 25000 });
         await expect
             .poll(async () => (await railIds(page)).length, { timeout: 25000 })
@@ -61,8 +65,6 @@ test.describe('R3-GUEST-1 guest suggested rail (browser)', () => {
         }
         // Drive the rail to its true end: scroll, wait for growth, repeat.
         for (let i = 0; i < 20; i++) {
-            const sentinel = page.locator('#suggested-rail-sentinel');
-            if ((await sentinel.count()) === 0) break;
             const before = (await railIds(page)).length;
             await scrollRailToEnd(page);
             try {
@@ -71,7 +73,7 @@ test.describe('R3-GUEST-1 guest suggested rail (browser)', () => {
                     .toBeGreaterThan(before);
             } catch {
                 // No growth: either the tail batch is still in flight or the
-                // session truly ended — re-check the sentinel below.
+                // session truly ended — re-check the end marker below.
             }
             for (const id of await railIds(page)) {
                 if (!seen.includes(id)) seen.push(id);
@@ -81,8 +83,12 @@ test.describe('R3-GUEST-1 guest suggested rail (browser)', () => {
         // Multi-batch proof on seed scale, every card reached exactly once.
         expect(seen.length).toBeGreaterThan(15);
         expect(new Set(seen).size).toBe(seen.length);
-        // True exhaustion: the sentinel is gone only on server hasMore=false.
-        await expect(page.locator('#suggested-rail-sentinel')).toHaveCount(0, { timeout: 20000 });
+        // True exhaustion: the sentinel carries the translated end marker —
+        // the end comes ONLY from the server hasMore flag.
+        const sentinel = page.locator(`#${RAIL}-sentinel`);
+        await expect(sentinel).toContainText(lang === 'ar' ? 'لا توجد نتائج أخرى' : 'No more results', {
+            timeout: 20000,
+        });
 
         expect(badResponses).toEqual([]);
         expect(errors).toEqual([]);
@@ -91,7 +97,7 @@ test.describe('R3-GUEST-1 guest suggested rail (browser)', () => {
     test('rail header is localized (ar/en surface check)', async ({ page }, testInfo) => {
         const lang = langOf(testInfo.project.name);
         await page.goto(`/?lang=${lang}`, { waitUntil: 'load' });
-        const rail = page.locator('#suggested-rail');
+        const rail = page.locator(`#${RAIL}`);
         await expect(rail).toBeVisible({ timeout: 25000 });
         await expect(rail.locator('h2').first()).toContainText(lang === 'ar' ? 'مقترح لك' : 'Suggested', {
             timeout: 25000,

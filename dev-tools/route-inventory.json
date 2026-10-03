@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-01T15:33:44.862Z",
-  "total": 197,
+  "generatedAt": "2026-10-03T01:34:43.107Z",
+  "total": 199,
   "routes": [
     {
       "method": "GET",
@@ -876,6 +876,20 @@
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/earnings/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/home-rails/sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/home-rails/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/home-rails/sessions/:id/page",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/home-rails/routes.ts"
     },
     {
       "method": "GET",

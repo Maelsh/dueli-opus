@@ -238,6 +238,60 @@ export class CompetitionModel extends BaseModel<Competition> {
     }
 
     /**
+     * R3-RAILS-1B: extract EVERY eligible competition id for ONE Home rail.
+     *
+     * Same joins + same predicate as findByFilters (one definition of
+     * “eligible”), with two rail-mandated narrowings, and NO ORDER BY
+     * RANDOM(), NO LIMIT/OFFSET, NO total cap — the rail provider freezes the
+     * order once at T0 via the shared result-session service:
+     * - recorded slices additionally require a playable recording per the
+     *   current media contract (trimmed vod_url OR youtube_video_url);
+     *   completed rows without one are result-page rows, never rail cards.
+     * - blocked creators (either direction, caller-loaded) never enter a
+     *   logged-in rail snapshot.
+     * Card hydration + live per-row re-check happen per page in the service.
+     */
+    async findHomeRailIds(options: {
+        status: string;
+        category?: string;
+        subcategory?: string;
+        excludeCreatorIds?: number[];
+    }): Promise<number[]> {
+        const filters: CompetitionFilters = {};
+        if (options.status !== '') {
+            filters.status = options.status as CompetitionFilters['status'];
+        }
+        if (options.category !== undefined && options.category !== '') {
+            filters.category = options.category;
+        }
+        if (options.subcategory !== undefined && options.subcategory !== '') {
+            filters.subcategory = options.subcategory;
+        }
+        const { clause, params } = this.buildFilterWhere(filters);
+        const extraParams: Array<string | number> = [];
+        let extra = '';
+        if (options.status === 'recorded') {
+            extra += ` AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL)`;
+        }
+        const excluded = [...new Set((options.excludeCreatorIds ?? []).filter((id) => Number.isInteger(id) && id > 0))];
+        if (excluded.length > 0) {
+            extra += ` AND c.creator_id NOT IN (${excluded.map(() => '?').join(',')})`;
+            extraParams.push(...excluded);
+        }
+        const query = `
+            SELECT c.id as id
+            FROM competitions c
+            JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
+            JOIN users creator ON c.creator_id = creator.id
+            LEFT JOIN users opponent ON c.opponent_id = opponent.id
+            WHERE 1=1
+        ` + clause + extra;
+        const rows = await this.query<{ id: number }>(query, ...params, ...extraParams);
+        return rows.map((row) => row.id);
+    }
+
+    /**
      * R3-B7: hydrate full card rows for an explicit id set.
      *
      * Batched (90 ids per statement) so the bound-parameter count stays
