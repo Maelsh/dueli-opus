@@ -43,31 +43,40 @@ jobs:
           TIMEOUT_SECONDS=1800
           INTERVAL_SECONDS=30
           DEADLINE=$(( $(date +%s) + TIMEOUT_SECONDS ))
+          GH_ERR_FILE="$(mktemp)"
+          LAST_STATE="NO_RUN"
           echo "Waiting up to ${TIMEOUT_SECONDS}s for Quality Gate (event=$EXPECTED_EVENT) on SHA $SHA ..."
           while true; do
-            STATE=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow quality-gate.yml \
+            # Transient gh/API failures are retryable, never success: the `if`
+            # guard keeps `bash -e` from killing the step on a nonzero gh exit.
+            # Errors WAIT until the timeout below (fail-closed).
+            if STATE=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow quality-gate.yml \
               --commit "$SHA" --event "$EXPECTED_EVENT" --limit 1 \
               --json status,conclusion,url \
-              --jq 'if length == 0 then "NO_RUN" else "\(.[0].status) \(.[0].conclusion // "-") \(.[0].url)" fi')
-            STATUS="${STATE%% *}"
-            REST="${STATE#* }"
-            CONCLUSION="${REST%% *}"
-            URL="${REST#* }"
-            NOW=$(date +%s)
-            if [ "$STATUS" = "completed" ]; then
-              echo "Quality Gate run: $URL -> conclusion=$CONCLUSION"
-              if [ "$CONCLUSION" = "success" ]; then
-                echo "Quality Gate succeeded for $SHA — deploy unblocked (R-RELEASE-1-REM1)"
-                exit 0
+              --jq 'if length == 0 then "NO_RUN" else "\(.[0].status) \(.[0].conclusion // "-") \(.[0].url)" end' 2>"$GH_ERR_FILE"); then
+              STATUS="${STATE%% *}"
+              REST="${STATE#* }"
+              CONCLUSION="${REST%% *}"
+              URL="${REST#* }"
+              if [ "$STATUS" = "completed" ]; then
+                echo "Quality Gate run: $URL -> conclusion=$CONCLUSION"
+                if [ "$CONCLUSION" = "success" ]; then
+                  echo "Quality Gate succeeded for $SHA — deploy unblocked (R-RELEASE-1-REM1)"
+                  exit 0
+                fi
+                echo "::error::Quality Gate concluded '$CONCLUSION' for SHA $SHA ($URL) — deploy blocked (R-RELEASE-1-REM1)"
+                exit 1
               fi
-              echo "::error::Quality Gate concluded '$CONCLUSION' for SHA $SHA ($URL) — deploy blocked (R-RELEASE-1-REM1)"
-              exit 1
+              LAST_STATE="$STATE"
+            else
+              LAST_STATE="GH_ERROR: $(tail -c 300 "$GH_ERR_FILE" | tr '\n' ' ')"
             fi
+            NOW=$(date +%s)
             if [ "$NOW" -ge "$DEADLINE" ]; then
-              echo "::error::Timed out after ${TIMEOUT_SECONDS}s waiting for Quality Gate (event=$EXPECTED_EVENT) on SHA $SHA (last state: $STATE) — deploy blocked (R-RELEASE-1-REM1)"
+              echo "::error::Timed out after ${TIMEOUT_SECONDS}s waiting for Quality Gate (event=$EXPECTED_EVENT) on SHA $SHA (last state: $LAST_STATE) — deploy blocked (R-RELEASE-1-REM1)"
               exit 1
             fi
-            echo "Quality Gate not completed yet (state: $STATE) — rechecking in ${INTERVAL_SECONDS}s ..."
+            echo "Quality Gate not completed yet (state: $LAST_STATE) — rechecking in ${INTERVAL_SECONDS}s ..."
             sleep "$INTERVAL_SECONDS"
           done
         env:
