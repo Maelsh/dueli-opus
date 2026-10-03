@@ -8,7 +8,7 @@
 
 | البوابة | أين | ماذا تفعل |
 |---|---|---|
-| Quality Gate لنفس SHA | `deploy.yml` job `quality-gate-check` | فحص API فقط (`gh run list --commit`) أن Quality Gate نجح لنفس الـcommit؛ بلا إعادة suite |
+| Quality Gate لنفس SHA+event | `deploy.yml` job `quality-gate-check` | انتظار API فقط (`gh run list --commit --event --repo`) حتى `completed` ثم اشتراط `conclusion == success` بمهلة صريحة (1800s)؛ «لا run بعد/غير مكتمل» = انتظار لا فشل؛ غير النجاح أو المهلة = منع النشر؛ بلا إعادة suite |
 | عزل bindings | `deploy.yml` + `dev-tools/check-pages-bindings.mjs` | production = D1 المثبتة حصراً؛ preview = صفر D1 (لا D1 معاينة مأذونة) |
 | جاهزية المخطط (قراءة فقط) | `deploy.yml` + `dev-tools/check-release-readiness.mjs` + `dev-tools/release-schema-manifest.json` | تقارن الهوية + المطبَّق + الـpending + لقطة المخطط مع الـmanifest؛ أي FAIL يمنع النشر |
 
@@ -53,4 +53,37 @@ npx wrangler d1 migrations apply dueli-db --remote
 - لا إنشاء Cloudflare resource ولا نسخ production data دون تفويض.
 - لا نشر مع تحذير: FAIL البوابة = بقاء الإصدار السابق العامل.
 - بعد additive ناجح وفشل deploy: احتفظ بالمخطط المتوافق وأصلح للأمام؛ rollback للكود المتوافق فقط.
-- لا فحص حساب Cloudflare كله؛ لا Git auto-deploy كمسار التفاف إن كان مفعلاً (تحقق لوحة التحكم — إجراء مالك).
+- لا فحص حساب Cloudflare كله؛ لا Git auto-deploy كمسار التفاف إن كان مفعلاً (التفصيل والإجراء في §6 — تحقق لوحة التحكم، إجراء مالك).
+
+## 6. مسار Cloudflare Git الموازي — مثبت، والمنع إجراء مالك (R-RELEASE-1-REM1)
+
+**الدليل (قراءة فقط، بلا استعلامات جديدة):** لدمج `cb80789` سجّل فحص Cloudflare
+Pages ذو المعرّف `111209903606` نشراً ناجحاً عند `13:14:40Z`، بينما انتهت Quality
+الخاصة بنفس الـcommit (`run37125477474`) بالفشل عند `13:15:12Z`. أي أن بناءً من
+طرف Cloudflare نُشر **قبل** اكتمال Quality — وهذا يثبت وجود مسار نشر عبر
+Cloudflare Git integration لا ينتظر بوابة Quality الخاصة بنا. لا يثبت وحده نوع
+البيئة (production/preview) — يُحسم من لوحة التحكم أدناه.
+
+**لماذا لا يغلقه كود المستودع:** ترتيب `needs: [quality-gate-check]` في
+`deploy.yml` يقيّد jobs داخل GitHub Actions فقط. تطبيق Cloudflare GitHub App
+يبني عند كل push بمعزل عن Actions؛ لا يوجد في المستودع مفتاح يمنعه — المنع من
+لوحة تحكم Cloudflare حصراً، ولا ينفّذه LOCAL/REMOTE (ممنوع dashboard changes).
+
+**إجراء المالك الدقيق (لوحة التحكم فقط، بلا أوامر نشر):**
+
+1. Cloudflare dashboard ← Workers & Pages ← المشروع `project-8e7c178d`
+   (نفس `name` في `wrangler.jsonc`) ← Settings ← Builds & deployments
+   (أو Build ← Branch control حسب التسمية الحالية).
+2. الإنتاج: ألغِ تفعيل `Enable automatic production branch deployments`
+   (إيقاف البناء التلقائي لفرع الإنتاج) واحفظ الإعدادات.
+3. المعاينة: اضبط Preview branch على `None` (إيقاف البناء التلقائي لفروع
+   المعاينة) — أو قائمة فروع مخصصة عند الحاجة، ولا بناء تلقائي للـforks.
+4. التحقق: أي push لاحق إلى main يجب **ألا** يظهر له فحص/نشر Cloudflare
+   تلقائي؛ النشر الوحيد المسموح بعده هو workflow الـActions المربوط بالبوابة
+   (`Deploy to Cloudflare Pages`) الذي ينشر عبر Wrangler حصراً.
+5. حتى إتمام ما سبق: اعتبر كل push إلى main **منشوراً تلقائياً عبر المسار
+   الموازي** — غياب run ناجح في Actions لا يعني غياب النشر.
+
+المرجع الرسمي: `Branch deployment controls` و`Git integration`
+(developers.cloudflare.com/pages/configuration) — إيقاف البناء التلقائي ثم
+النشر عبر Wrangler هو المسار الموثق للمشاريع المرتبطة بـGit.
