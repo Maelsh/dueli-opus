@@ -17,10 +17,13 @@ on:
     branches: [main]
 
 jobs:
-  # R-RELEASE-1 release gate: deploy runs ONLY after the Quality Gate
-  # workflow concludes `success` for the SAME commit. Read-only API check
-  # (no test suite rerun here — the suite already ran in Quality Gate).
-  # PRs resolve their head SHA (runs are keyed by head); pushes use github.sha.
+  # R-RELEASE-1-REM1 release gate: deploy runs ONLY after the Quality Gate
+  # workflow concludes `success` for the SAME commit AND SAME event.
+  # Read-only API polling (no test suite rerun here — the suite already ran
+  # in Quality Gate). A single immediate poll is NOT enough: on push, this
+  # workflow starts at the same time as Quality Gate, so "not completed yet"
+  # (or "no run yet") must WAIT, not fail. PRs resolve their head SHA (runs
+  # are keyed by head); pushes use github.sha.
   quality-gate-check:
     runs-on: ubuntu-latest
     name: Quality Gate passed for this SHA
@@ -28,19 +31,48 @@ jobs:
       contents: read
       actions: read
     steps:
-      - name: Require successful Quality Gate on this SHA
+      - name: Wait for Quality Gate success on this SHA+event
         run: |
-          SHA="${PR_HEAD_SHA:-$PUSH_SHA}"
-          CONCLUSION=$(gh run list --workflow=quality-gate.yml --commit="$SHA" --json conclusion --jq '.[0].conclusion // "none"')
-          echo "Quality Gate conclusion for $SHA: $CONCLUSION"
-          if [ "$CONCLUSION" != "success" ]; then
-            echo "::error::Quality Gate has not succeeded for SHA $SHA (got: $CONCLUSION) — deploy blocked (R-RELEASE-1)"
-            exit 1
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            SHA="$PR_HEAD_SHA"
+            EXPECTED_EVENT="pull_request"
+          else
+            SHA="$GITHUB_SHA"
+            EXPECTED_EVENT="push"
           fi
+          TIMEOUT_SECONDS=1800
+          INTERVAL_SECONDS=30
+          DEADLINE=$(( $(date +%s) + TIMEOUT_SECONDS ))
+          echo "Waiting up to ${TIMEOUT_SECONDS}s for Quality Gate (event=$EXPECTED_EVENT) on SHA $SHA ..."
+          while true; do
+            STATE=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow quality-gate.yml \
+              --commit "$SHA" --event "$EXPECTED_EVENT" --limit 1 \
+              --json status,conclusion,url \
+              --jq 'if length == 0 then "NO_RUN" else "\(.[0].status) \(.[0].conclusion // "-") \(.[0].url)" fi')
+            STATUS="${STATE%% *}"
+            REST="${STATE#* }"
+            CONCLUSION="${REST%% *}"
+            URL="${REST#* }"
+            NOW=$(date +%s)
+            if [ "$STATUS" = "completed" ]; then
+              echo "Quality Gate run: $URL -> conclusion=$CONCLUSION"
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "Quality Gate succeeded for $SHA — deploy unblocked (R-RELEASE-1-REM1)"
+                exit 0
+              fi
+              echo "::error::Quality Gate concluded '$CONCLUSION' for SHA $SHA ($URL) — deploy blocked (R-RELEASE-1-REM1)"
+              exit 1
+            fi
+            if [ "$NOW" -ge "$DEADLINE" ]; then
+              echo "::error::Timed out after ${TIMEOUT_SECONDS}s waiting for Quality Gate (event=$EXPECTED_EVENT) on SHA $SHA (last state: $STATE) — deploy blocked (R-RELEASE-1-REM1)"
+              exit 1
+            fi
+            echo "Quality Gate not completed yet (state: $STATE) — rechecking in ${INTERVAL_SECONDS}s ..."
+            sleep "$INTERVAL_SECONDS"
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PUSH_SHA: ${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -48,6 +80,13 @@ jobs:
     needs: [quality-gate-check]
     permissions:
       contents: read
+    env:
+      # R-RELEASE-1-REM1: `secrets` is not an allowed context in `if:`
+      # (actionlint: context "secrets" is not allowed here — allowed: env,
+      # github, inputs, job, matrix, needs, runner, steps, strategy, vars).
+      # Project the presence bit to job env once; steps test `env.` instead.
+      # The secret value itself is never printed nor interpolated into run:.
+      HAS_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
 
     steps:
       - name: Checkout
@@ -130,7 +169,7 @@ jobs:
       # Fork PRs have no production secrets: stop safely before any
       # secret-consuming step (build above runs secret-free).
       - name: Deploy preview to Cloudflare Pages
-        if: (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main')) && secrets.CLOUDFLARE_API_TOKEN != ''
+        if: (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main')) && env.HAS_CLOUDFLARE_TOKEN == 'true'
         run: npx wrangler pages deploy dist --project-name=project-8e7c178d --branch="$BRANCH"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -5,7 +5,7 @@
  * response beyond the ephemeral username/credential pair, (4) a failing TURN
  * backend yields a translated, actionable message.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import app from '../../src/main';
 import { UserModel } from '../../src/models/UserModel';
@@ -48,33 +48,44 @@ describe('7.D TURN credentials (ephemeral, auth-gated, secret-free, graceful)', 
     });
 
     it('1. coturn path: ephemeral credential with expiry, bound to the session user', async () => {
-        const beforeSec = Math.floor(Date.now() / 1000);
-        const res = await get('/api/signaling/ice-servers', sid, {
-            TURN_URL: 'turn:turn.example.com:3478',
-            TURN_SECRET: SECRET,
-        });
-        expect(res.status).toBe(200);
-        const body = await res.json();
-        expect(body.success).toBe(true);
-        expect(body.data.turn_available).toBe(true);
-        // Short-lived: TTL is hours, not the old shared 24h/6h-cache credential.
-        expect(body.data.ttl_seconds).toBeGreaterThan(0);
-        expect(body.data.ttl_seconds).toBeLessThanOrEqual(3600);
-        const expiryMs = Date.parse(body.data.expires_at);
-        expect(Number.isNaN(expiryMs)).toBe(false);
-        expect(expiryMs).toBeGreaterThan(Date.now() - 5000);
-        expect((expiryMs - Date.now()) / 1000).toBeLessThanOrEqual(3600);
+        // R-RELEASE-1-REM1: deterministic clock. The service floors
+        // Date.now()/1000 server-side (TurnCredentialService:74), so a real-clock
+        // second boundary ticking between the `beforeSec` snapshot below and the
+        // request yields expiry = beforeSec+3600+1 — exactly the 1s overshoot
+        // seen on main. Freeze time; same assertions, same bounds, no runtime change.
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
+        try {
+            const beforeSec = Math.floor(Date.now() / 1000);
+            const res = await get('/api/signaling/ice-servers', sid, {
+                TURN_URL: 'turn:turn.example.com:3478',
+                TURN_SECRET: SECRET,
+            });
+            expect(res.status).toBe(200);
+            const body = await res.json();
+            expect(body.success).toBe(true);
+            expect(body.data.turn_available).toBe(true);
+            // Short-lived: TTL is hours, not the old shared 24h/6h-cache credential.
+            expect(body.data.ttl_seconds).toBeGreaterThan(0);
+            expect(body.data.ttl_seconds).toBeLessThanOrEqual(3600);
+            const expiryMs = Date.parse(body.data.expires_at);
+            expect(Number.isNaN(expiryMs)).toBe(false);
+            expect(expiryMs).toBeGreaterThan(Date.now() - 5000);
+            expect((expiryMs - Date.now()) / 1000).toBeLessThanOrEqual(3600);
 
-        const turnEntries = body.data.iceServers.filter((s: any) => String(s.urls).startsWith('turn:'));
-        expect(turnEntries.length).toBeGreaterThan(0);
-        for (const entry of turnEntries) {
-            const expiry = Number(String(entry.username).split(':')[0]);
-            expect(expiry).toBeGreaterThanOrEqual(beforeSec);
-            expect(expiry).toBeLessThanOrEqual(beforeSec + 3600);
-            expect(String(entry.username).endsWith(`:${uid}`)).toBe(true);
-            // Server-side HMAC generation matches the coturn REST algorithm.
-            const expected = createHmac('sha1', SECRET).update(entry.username).digest('base64');
-            expect(entry.credential).toBe(expected);
+            const turnEntries = body.data.iceServers.filter((s: any) => String(s.urls).startsWith('turn:'));
+            expect(turnEntries.length).toBeGreaterThan(0);
+            for (const entry of turnEntries) {
+                const expiry = Number(String(entry.username).split(':')[0]);
+                expect(expiry).toBeGreaterThanOrEqual(beforeSec);
+                expect(expiry).toBeLessThanOrEqual(beforeSec + 3600);
+                expect(String(entry.username).endsWith(`:${uid}`)).toBe(true);
+                // Server-side HMAC generation matches the coturn REST algorithm.
+                const expected = createHmac('sha1', SECRET).update(entry.username).digest('base64');
+                expect(entry.credential).toBe(expected);
+            }
+        } finally {
+            vi.useRealTimers();
         }
     });
 
