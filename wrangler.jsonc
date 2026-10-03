@@ -12,5 +12,17 @@
       "database_name": "dueli-db",
       "database_id": "f877f573-e31f-452a-8991-8e5035539d56"
     }
-  ]
+  ],
+  // R-RELEASE-1: preview/production binding isolation (fail-closed).
+  // Top-level D1 above is PRODUCTION ONLY. The preview env explicitly
+  // declares ZERO D1 bindings so a preview deploy can never inherit the
+  // production database: there is no authorized preview D1, and creating
+  // Cloudflare resources or copying production data is out of scope.
+  // dev-tools/check-pages-bindings.mjs enforces this in CI (any resolved
+  // preview D1, or any preview database_id equal to production's, FAILS).
+  "env": {
+    "preview": {
+      "d1_databases": []
+    }
+  }
 }

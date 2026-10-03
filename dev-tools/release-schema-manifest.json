@@ -1,0 +1,73 @@
+{
+  "manifest_version": "R-RELEASE-1.baseline-0033",
+  "target": {
+    "pages_project": "project-8e7c178d",
+    "database_name": "dueli-db"
+  },
+  "required_migrations": [
+    {
+      "file": "0033_explore_result_sessions.sql",
+      "sha256": "79b327daaf3d2f517cbd171dba93e5566bbf345ab70a990fddaeee7eae7309b9"
+    }
+  ],
+  "known_history": [
+    "0001_initial_schema.sql",
+    "0002_transparency_ledger.sql",
+    "0003_admin_ads_arbitration_livefinance.sql",
+    "0004_matchmaking_fixes.sql",
+    "0005_withdrawals_sse_suspend.sql",
+    "0006_recommendations_lifecycle.sql",
+    "0007_schema_alignment.sql",
+    "0008_allow_requests.sql",
+    "0009_account_deletion.sql",
+    "0010_missing_columns.sql",
+    "0011_fix.sql",
+    "0012_rate_limits.sql",
+    "0012_reports_ad_target.sql",
+    "0013_chunk_key_binding.sql",
+    "0014_messages_conversation_alignment.sql",
+    "0015_content_length_bounds.sql",
+    "0016_comments_soft_delete.sql",
+    "0017_ratings_competition_competitor_idx.sql",
+    "0018_competitions_elo_applied_at.sql",
+    "0019_ledger_entries.sql",
+    "0020_donations_stripe_cents.sql",
+    "0021_withdrawals_lifecycle.sql",
+    "0022_donation_recipients.sql",
+    "0023_donation_refund_tracking.sql",
+    "0024_donation_refund_intents.sql",
+    "0025_ads_campaign_lifecycle.sql",
+    "0026_ads_target_category.sql",
+    "0027_ad_metrics_antifraud.sql",
+    "0028_ad_dedup_identity.sql",
+    "0029_drop_unused_posts.sql",
+    "0030_chunk_upload_nonces.sql",
+    "0031_realtime_tickets.sql",
+    "0032_cron_run_guard.sql",
+    "0033_explore_result_sessions.sql"
+  ],
+  "required_schema": {
+    "tables": {
+      "explore_result_sessions": [
+        "id",
+        "surface",
+        "identity_kind",
+        "identity_key",
+        "filters_canonical",
+        "lang",
+        "status",
+        "total_count",
+        "chunk_size",
+        "created_at",
+        "expires_at"
+      ],
+      "explore_result_chunks": ["session_id", "chunk_index", "ids_json"]
+    },
+    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry"]
+  },
+  "notes": [
+    "Baseline R-RELEASE-1 requires migration 0033 applied with the pinned sha256 (no post-apply rewrite).",
+    "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
+    "The gate never applies migrations. Unexpected pending is recorded and FAILS the gate; it is never auto-applied."
+  ]
+}

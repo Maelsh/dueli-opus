@@ -45,9 +45,10 @@ jobs:
         run: npm run build
 
       # ---- فحوص أمنية نمطية (docs/12-SECURITY-REMEDIATION.md §4) ----
-      # SEC-06 strips // and /* */ comments before matching, so documentation
-      # that names Math.random() (e.g. "never Math.random(), WebCrypto instead")
-      # no longer false-positives — while a real executable call still fails.
+      # SEC-06 is AST-based: flags executable Math.random() only — direct,
+      # multi-line, parenthesized, static element access, alias + later call,
+      # deferred references — while comments/strings/types never match.
+      # Missing inputs fail closed, never PASS.
       - name: SEC-06 — no Math.random() in security-sensitive code
         run: node dev-tools/check-sec06-math-random.mjs
 
