@@ -7,8 +7,11 @@ export interface CompetitionRequest {
     competition_id: number;
     requester_id: number;
     message?: string;
-    status: 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'expired';
-    expires_at: string;
+    // R2-J: competition_requests carries no status CHECK in the migrations, so
+    // the values below are the persisted vocabulary used across the flows
+    // (accepted/declined/rejected/auto_declined/expired all occur in rows).
+    status: 'pending' | 'accepted' | 'declined' | 'rejected' | 'auto_declined' | 'expired';
+    expires_at?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -287,6 +290,9 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
 
     /**
      * Insert a pending request row (lightweight insert used by CompetitionController).
+     * R2-J: the invoked insert path writes expires_at (+24h, same window as
+     * createRequest) so rows stay expirable; NULL-expires legacy rows are
+     * treated as unexpired by the accept guard, never silently dropped.
      * إدراج طلب معلق
      */
     async insertPendingRequest(
@@ -295,8 +301,8 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
         message?: string
     ): Promise<{ id: number }> {
         const result = await this.db.prepare(`
-            INSERT INTO competition_requests (competition_id, requester_id, message, status, created_at)
-            VALUES (?, ?, ?, 'pending', datetime('now'))
+            INSERT INTO competition_requests (competition_id, requester_id, message, status, expires_at, created_at, updated_at)
+            VALUES (?, ?, ?, 'pending', datetime('now', '+24 hours'), datetime('now'), datetime('now'))
         `).bind(competitionId, requesterId, message || null).run();
         return { id: result.meta.last_row_id as number };
     }
@@ -307,8 +313,20 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
      */
     async updateStatus(id: number, status: string): Promise<boolean> {
         const result = await this.db.prepare(
-            'UPDATE competition_requests SET status = ? WHERE id = ?'
+            'UPDATE competition_requests SET status = ?, updated_at = datetime(\'now\') WHERE id = ? AND status = \'pending\''
         ).bind(status, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * Mark a request as expired (lazy expiry on access). Returns false when
+     * nothing was updated.
+     * تعليم الطلب كمنتهٍ
+     */
+    async markExpired(id: number): Promise<boolean> {
+        const result = await this.db.prepare(
+            'UPDATE competition_requests SET status = \'expired\', updated_at = datetime(\'now\') WHERE id = ? AND status = \'pending\''
+        ).bind(id).run();
         return result.meta.changes > 0;
     }
 
@@ -359,6 +377,55 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
             "SELECT 1 FROM competition_requests WHERE competition_id = ? AND requester_id = ? AND status = 'pending'"
         ).bind(competitionId, requesterId).first<{ '1': number }>();
         return row !== null;
+    }
+
+    /**
+     * R2-J: join requests received on a creator's competitions, every status
+     * (pending + resolved) — the persisted SSOT behind the received tab.
+     * Same shape as the legacy controller query so the page contract is unchanged.
+     * طلبات مستلمة بكل الحالات
+     */
+    async findReceivedByCreator(creatorId: number): Promise<any[]> {
+        const result = await this.db.prepare(`
+            SELECT cr.*,
+                   c.title as competition_title,
+                   c.status as competition_status,
+                   c.scheduled_at,
+                   u.display_name as requester_name,
+                   u.avatar_url as requester_avatar,
+                   u.username as requester_username
+            FROM competition_requests cr
+            JOIN competitions c ON cr.competition_id = c.id
+            JOIN users u ON cr.requester_id = u.id
+            WHERE c.creator_id = ?
+            ORDER BY cr.created_at DESC
+        `).bind(creatorId).all();
+
+        return result.results || [];
+    }
+
+    /**
+     * R2-J: join requests sent by a user, every status — the persisted SSOT
+     * behind the sent tab. Same shape as the legacy controller query.
+     * طلبات مرسلة بكل الحالات
+     */
+    async findSentByRequesterFull(requesterId: number): Promise<any[]> {
+        const result = await this.db.prepare(`
+            SELECT cr.*,
+                   c.title as competition_title,
+                   c.status as competition_status,
+                   c.scheduled_at,
+                   u.display_name as creator_name,
+                   u.avatar_url as creator_avatar,
+                   u.username as creator_username
+            FROM competition_requests cr
+            JOIN competitions c ON cr.competition_id = c.id
+            JOIN users u ON c.creator_id = u.id
+            WHERE cr.requester_id = ?
+            ORDER BY cr.created_at DESC
+        `).bind(requesterId).all();
+
+        return result.results || [];
     }
 
     /**
@@ -435,6 +502,10 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
      * The caller inspects results[0].meta.changes to detect a lost race; the
      * dependent steps re-check competitions.opponent_id because db.batch()
      * never short-circuits on changes = 0.
+     *
+     * R2-J: accepted_at is written in this same atomic path (competitions
+     * row), and step 2 only flips a still-pending request so a
+     * repeated/declined accept can never resurrect it.
      */
     async acceptRequestAtomic(
         competitionId: number,
@@ -444,14 +515,14 @@ export class CompetitionRequestModel extends BaseModel<CompetitionRequest> {
         return this.db.batch([
             // 1. Atomically set opponent (only if opponent_id IS NULL)
             this.db.prepare(
-                'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
+                'UPDATE competitions SET opponent_id = ?, status = \'accepted\', accepted_at = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ? AND opponent_id IS NULL'
             ).bind(requesterId, competitionId),
-            // 2. Accept this request — ONLY if step 1 actually won the opponent slot
+            // 2. Accept this request — ONLY if still pending AND step 1 actually won the opponent slot
             this.db.prepare(
                 `UPDATE competition_requests SET status = 'accepted', updated_at = datetime('now')
-                 WHERE id = ? AND EXISTS (
-                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                 )`
+                 WHERE id = ? AND status = 'pending' AND EXISTS (
+                      SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                  )`
             ).bind(requestId, competitionId, requesterId),
             // 3. Decline all other pending requests for this competition — same guard
             this.db.prepare(

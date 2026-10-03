@@ -45,6 +45,8 @@ export const NOTIFICATION_TYPE_PRESENTATION: Record<NotificationType, Notificati
     comment: { titleKey: 'notification.new_comment', bodyKey: 'notification.new_comment_body' },
     request: { titleKey: 'notification.new_join_request', bodyKey: 'notification.new_join_request_body' },
     invitation: { titleKey: 'notification.competition_invite', bodyKey: 'notification.competition_invite_body' },
+    // R2-J: invite acceptance — distinct type (and label) from new_join_request.
+    invitation_accepted: { titleKey: 'notification.invitation_accepted', bodyKey: 'notification.competition_invite_body' },
     follow: { titleKey: 'new_follower' },
     rating: { titleKey: 'notification.new_rating', bodyKey: 'notification.new_rating_body' },
     system: { titleKey: 'notification.system_notice' },

@@ -139,7 +139,10 @@ export class NotificationsUI {
     private static getNotificationIcon(type: string): string {
         const icons: Record<string, string> = {
             'join_request': 'fa-user-plus',
+            'request': 'fa-user-plus',
             'request_accepted': 'fa-check-circle',
+            'invitation': 'fa-ticket-alt',
+            'invitation_accepted': 'fa-check-circle',
             'request_declined': 'fa-times-circle',
             'new_follower': 'fa-heart',
             'new_message': 'fa-envelope',
@@ -161,7 +164,10 @@ export class NotificationsUI {
     private static getNotificationColor(type: string): string {
         const colors: Record<string, string> = {
             'join_request': 'bg-blue-100 dark:bg-blue-900/40 text-blue-600',
+            'request': 'bg-blue-100 dark:bg-blue-900/40 text-blue-600',
             'request_accepted': 'bg-green-100 dark:bg-green-900/40 text-green-600',
+            'invitation': 'bg-purple-100 dark:bg-purple-900/40 text-purple-600',
+            'invitation_accepted': 'bg-green-100 dark:bg-green-900/40 text-green-600',
             'request_declined': 'bg-red-100 dark:bg-red-900/40 text-red-600',
             'new_follower': 'bg-pink-100 dark:bg-pink-900/40 text-pink-600',
             'warning': 'bg-amber-100 dark:bg-amber-900/40 text-amber-600',

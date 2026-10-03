@@ -193,6 +193,8 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     pending: 'text-amber-600 bg-amber-100',
                     accepted: 'text-green-600 bg-green-100',
                     declined: 'text-red-600 bg-red-100',
+                    rejected: 'text-red-600 bg-red-100',
+                    auto_declined: 'text-red-600 bg-red-100',
                     expired: 'text-gray-600 bg-gray-100'
                 };
                 
@@ -273,9 +275,14 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     
                     if (res.ok) {
                         loadRequests();
+                    } else {
+                        // R2-J: surface the translated server error (401/403/409) instead of failing silently.
+                        const data = await res.json().catch(() => null);
+                        alert((data && data.error) || tr.error_occurred || 'Action failed');
                     }
                 } catch (err) {
                     console.error('Failed to ' + action + ' request:', err);
+                    alert(tr.error_occurred || 'Action failed');
                 }
             }
             
@@ -290,16 +297,23 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     });
                     
                     if (res.ok) {
-                        const data = await res.json();
-                        if (data.success && action === 'accept') {
+                        const data = await res.json().catch(() => null);
+                        if (data && data.success && action === 'accept') {
                             // Redirect to competition page after accepting
                             window.location.href = '/competition/' + compId + '?lang=' + lang;
-                        } else {
+                        } else if (data && data.success) {
                             loadRequests();
+                        } else {
+                            // R2-J: surface the translated server error (401/403/409) instead of failing silently.
+                            alert((data && data.error) || tr.error_occurred || 'Action failed');
                         }
+                    } else {
+                        const data = await res.json().catch(() => null);
+                        alert((data && data.error) || tr.error_occurred || 'Action failed');
                     }
                 } catch (err) {
                     console.error('Failed to ' + action + ' invitation:', err);
+                    alert(tr.error_occurred || 'Action failed');
                 }
             }
             
@@ -314,9 +328,14 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     
                     if (res.ok) {
                         loadRequests();
+                    } else {
+                        // R2-J: surface the translated server error instead of failing silently.
+                        const data = await res.json().catch(() => null);
+                        alert((data && data.error) || tr.error_occurred || 'Action failed');
                     }
                 } catch (err) {
                     console.error('Failed to cancel request:', err);
+                    alert(tr.error_occurred || 'Action failed');
                 }
             }
         </script>

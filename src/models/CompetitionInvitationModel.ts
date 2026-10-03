@@ -8,8 +8,13 @@ export interface CompetitionInvitation {
     competition_id: number;
     inviter_id: number;
     invitee_id: number;
-    status: 'pending' | 'accepted' | 'rejected' | 'expired';
-    expires_at: string;
+    message?: string | null;
+    // R2-J: matches the CHECK in 0001 (pending/accepted/declined/expired).
+    status: 'pending' | 'accepted' | 'declined' | 'expired';
+    expires_at?: string | null;
+    responded_at?: string | null;
+    // R2-J: written in the invoked atomic accept path (column added in 0011).
+    accepted_at?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -244,6 +249,9 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
 
     /**
      * Insert a pending invitation (lightweight insert used by CompetitionController).
+     * R2-J: the invoked insert path writes expires_at (+24h, same window as
+     * createInvitation) so rows stay expirable; NULL-expires legacy rows are
+     * treated as unexpired by the accept guard, never silently dropped.
      * إدراج دعوة معلقة
      */
     async insertPendingInvitation(
@@ -253,8 +261,8 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
         message?: string
     ): Promise<{ id: number }> {
         const result = await this.db.prepare(`
-            INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, message, status, created_at)
-            VALUES (?, ?, ?, ?, 'pending', datetime('now'))
+            INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, message, status, expires_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'pending', datetime('now', '+24 hours'), datetime('now'), datetime('now'))
         `).bind(competitionId, inviterId, inviteeId, message || null).run();
         return { id: result.meta.last_row_id as number };
     }
@@ -294,9 +302,48 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
         const result = await this.db.prepare(`
             UPDATE competition_invitations 
             SET status = 'declined', responded_at = datetime('now') 
-            WHERE id = ?
+            WHERE id = ? AND status = 'pending'
         `).bind(invitationId).run();
         return result.meta.changes > 0;
+    }
+
+    /**
+     * Mark an invitation as expired (lazy expiry on access — 'expired' is
+     * inside the schema CHECK). Returns false when nothing was updated.
+     * تعليم الدعوة كمنتهية
+     */
+    async markExpired(invitationId: number): Promise<boolean> {
+        const result = await this.db.prepare(`
+            UPDATE competition_invitations
+            SET status = 'expired', updated_at = datetime('now')
+            WHERE id = ? AND status = 'pending'
+        `).bind(invitationId).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * R2-J: invitee's full invitation history (every status) — the persisted
+     * SSOT behind the invitations tab. Pending-only reads stay on
+     * findPendingByInvitee; this is the history read.
+     * سجل الدعوات المستلمة بكل الحالات
+     */
+    async findReceivedHistory(inviteeId: number): Promise<any[]> {
+        const result = await this.db.prepare(`
+            SELECT ci.*,
+                   c.title as competition_title,
+                   c.status as competition_status,
+                   c.scheduled_at,
+                   u.display_name as inviter_name,
+                   u.avatar_url as inviter_avatar,
+                   u.username as inviter_username
+            FROM competition_invitations ci
+            JOIN competitions c ON ci.competition_id = c.id
+            JOIN users u ON ci.inviter_id = u.id
+            WHERE ci.invitee_id = ?
+            ORDER BY ci.created_at DESC
+        `).bind(inviteeId).all();
+
+        return result.results || [];
     }
 
     /**
@@ -318,6 +365,11 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
      * db.batch(). The caller inspects results[0].meta.changes to detect a lost
      * race; the dependent steps re-check competitions.opponent_id because
      * db.batch() never short-circuits on changes = 0.
+     *
+     * R2-J: accepted_at is written in this same atomic path (competitions +
+     * invitation rows), and step 2 only flips a still-pending invitation so a
+     * repeated/declined accept can never resurrect it. All invitation statuses
+     * written here are inside the schema CHECK (pending/accepted/declined/expired).
      */
     async acceptInvitationAtomic(
         competitionId: number,
@@ -327,14 +379,14 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
         return this.db.batch([
             // 1. Atomically set opponent (only if opponent_id IS NULL)
             this.db.prepare(
-                'UPDATE competitions SET opponent_id = ?, status = \'accepted\' WHERE id = ? AND opponent_id IS NULL'
+                'UPDATE competitions SET opponent_id = ?, status = \'accepted\', accepted_at = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ? AND opponent_id IS NULL'
             ).bind(inviteeId, competitionId),
-            // 2. Accept this invitation — ONLY if step 1 actually won the opponent slot
+            // 2. Accept this invitation — ONLY if still pending AND step 1 actually won the opponent slot
             this.db.prepare(
-                `UPDATE competition_invitations SET status = 'accepted', responded_at = datetime('now')
-                 WHERE id = ? AND EXISTS (
-                     SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
-                 )`
+                `UPDATE competition_invitations SET status = 'accepted', responded_at = datetime('now'), accepted_at = datetime('now')
+                 WHERE id = ? AND status = 'pending' AND EXISTS (
+                      SELECT 1 FROM competitions WHERE id = ? AND opponent_id = ?
+                  )`
             ).bind(invitationId, competitionId, inviteeId),
             // 3. Decline all other pending invitations for this competition — same guard
             this.db.prepare(

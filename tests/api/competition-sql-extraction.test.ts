@@ -170,7 +170,7 @@ describe('F-5A join-request flow (requests SQL moved to model)', () => {
         expect(await scalar(`SELECT requester_id FROM competition_requests WHERE id = ${createdBody.id}`)).toBe(OPPONENT);
 
         const duplicate = await call('POST', '/api/competitions/2001/request', OPPONENT_SESSION, {});
-        expect(duplicate.status).toBe(400);
+        expect(duplicate.status).toBe(409);
 
         const pending = await rows('SELECT * FROM competition_requests WHERE competition_id = 2001');
         expect(pending.length).toBe(1);
@@ -242,7 +242,7 @@ describe('F-5A invitation flow (invitations SQL moved to model)', () => {
         expect(await scalar(`SELECT status FROM competition_invitations WHERE competition_id = 3003 AND invitee_id = ${THIRD}`)).toBe('declined');
 
         const missing = await call('POST', '/api/competitions/3003/decline-invite', THIRD_SESSION, {});
-        expect(missing.status).toBe(400);
+        expect(missing.status).toBe(409);
     });
 });
 

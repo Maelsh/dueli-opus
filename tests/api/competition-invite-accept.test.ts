@@ -195,9 +195,14 @@ describe('B5-4 invite/accept loop', () => {
         ).bind(bId, 'invitation').first();
         expect(invNotif.count).toBe(1);
         await authedPost('/api/competitions/1001/accept-invite', bSession, 'en');
+        // R2-J: invite acceptance is its own type, distinct from new_join_request ('request').
         const accNotif: any = await sharedDb.prepare(
             'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND type = ?'
-        ).bind(aId, 'request').first();
+        ).bind(aId, 'invitation_accepted').first();
         expect(accNotif.count).toBe(1);
+        const legacyNotif: any = await sharedDb.prepare(
+            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND type = ?'
+        ).bind(aId, 'request').first();
+        expect(legacyNotif.count).toBe(0);
     });
 });

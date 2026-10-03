@@ -122,6 +122,10 @@ export const ar = {
     // الحالات
     status_pending: 'في انتظار منافس',
     status_accepted: 'تم القبول',
+    status_declined: 'مرفوضة',
+    status_rejected: 'مرفوضة',
+    status_auto_declined: 'رُفضت تلقائياً',
+    status_expired: 'منتهية الصلاحية',
     status_live: 'مباشر',
     status_completed: 'منتهية',
     status_cancelled: 'ملغاة',
@@ -278,6 +282,10 @@ export const ar = {
         invitation_not_found: 'الدعوة غير موجودة أو منتهية',
         blocked_user: 'لا يمكن التفاعل مع هذا المستخدم',
         not_authorized: 'غير مصرح لك بهذا الإجراء',
+        // R2-J (H3): المسارات المتعارضة لنفس المنافسة
+        invite_pending_exists: 'لديك دعوة معلقة لهذه المنافسة — اقبلها أو ارفضها أولاً',
+        request_pending_exists: 'لدى المستخدم طلب انضمام معلق لهذه المنافسة',
+        competition_closed: 'هذه المنافسة لم تعد تقبل مشاركين',
         rating_self_forbidden: 'لا يمكنك تقييم نفسك أو منافستك',
         rating_watch_required: 'يجب مشاهدة المنافسة قبل تقييمها',
         rating_window_closed: 'انتهت نافذة التقييم (24 ساعة من انتهاء المنافسة)',
@@ -395,6 +403,8 @@ export const ar = {
         new_join_request_body: '{actor}: {preview}',
         competition_invite: 'دعوة لمنافسة',
         competition_invite_body: '{actor}: {preview}',
+        // R2-J: عنوان قبول الدعوة — مستقل عن طلب الانضمام الجديد
+        invitation_accepted: 'تم قبول دعوتك',
         new_rating: 'تقييم جديد',
         new_rating_body: '{actor} قيّم المنافسة',
         system_notice: 'إشعار من النظام',
