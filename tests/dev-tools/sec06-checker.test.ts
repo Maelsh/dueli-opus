@@ -17,6 +17,47 @@ describe('SEC-06 checker controls', () => {
         expect(hits[0].line).toBe(1);
     });
 
+    it('flags a parenthesized callee ((Math.random)())', () => {
+        expect(findMathRandomCalls('export const x = (Math.random)();\n')).toHaveLength(1);
+        expect(findMathRandomCalls('export const x = ((Math.random))();\n')).toHaveLength(1);
+    });
+
+    it('flags static element access (Math[static]())', () => {
+        expect(findMathRandomCalls("export const x = Math['random']();\n")).toHaveLength(1);
+        expect(findMathRandomCalls('export const x = Math["random"]();\n')).toHaveLength(1);
+        // dynamic keys are out of scope (documented): must NOT flag
+        expect(findMathRandomCalls('export const x = Math[k]();\n')).toHaveLength(0);
+    });
+
+    it('flags an executable alias reference and its later call', () => {
+        const hits = findMathRandomCalls('const r = Math.random;\nexport const x = r();\n');
+        expect(hits.map((h) => h.kind)).toEqual(['alias-ref', 'alias-call']);
+        const assign = findMathRandomCalls('let q;\nq = Math.random;\nexport const y = q();\n');
+        expect(assign.map((h) => h.kind)).toEqual(['alias-ref', 'alias-call']);
+    });
+
+    it('flags a destructured alias and its later call', () => {
+        const hits = findMathRandomCalls('const { random } = Math;\nexport const x = random();\n');
+        expect(hits).toHaveLength(2);
+    });
+
+    it('flags a deferred executable reference (call argument)', () => {
+        const hits = findMathRandomCalls('setTimeout(Math.random, 10);\n');
+        expect(hits).toHaveLength(1);
+        expect(hits[0].kind).toBe('deferred-ref');
+    });
+
+    it('does not flag shadowed or unrelated identifiers', () => {
+        expect(findMathRandomCalls('function f(random: () => number) {\n  return random();\n}\n')).toHaveLength(0);
+        expect(findMathRandomCalls('export const x = Math.floor(1.5);\n')).toHaveLength(0);
+        expect(findMathRandomCalls('declare const n: number;\nexport const x = foo.random();\n')).toHaveLength(0);
+    });
+
+    it('does not flag type positions', () => {
+        expect(findMathRandomCalls('export type F = typeof Math.random;\n')).toHaveLength(0);
+        expect(findMathRandomCalls('export interface I {\n  random(): number;\n}\n')).toHaveLength(0);
+    });
+
     it('ignores Math.random() inside a string literal', () => {
         const hits = findMathRandomCalls('export const s = "never use Math.random()";\n');
         expect(hits).toHaveLength(0);
