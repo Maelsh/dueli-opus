@@ -729,7 +729,7 @@ class FakeStmt {
         }
 
         // UPDATE competitions SET opponent_id = ?, status = 'accepted' WHERE id = ? AND opponent_id IS NULL
-        // (setOpponent — atomic guard)
+        // (setOpponent — atomic guard; R2-J also writes accepted_at in the same step)
         if (q.startsWith('update competitions set opponent_id') && q.includes('opponent_id is null')) {
             const competition = this.db.competitions.find((c) => c.id === p[1]);
             if (!competition || competition.opponent_id !== null) {
@@ -737,6 +737,7 @@ class FakeStmt {
             }
             competition.opponent_id = p[0];
             competition.status = 'accepted';
+            competition.accepted_at = new Date().toISOString();
             return ok({ last_row_id: null, changes: 1 });
         }
 
@@ -750,6 +751,7 @@ class FakeStmt {
                 invitee_id: p[2],
                 message: p[3] ?? null,
                 status: 'pending',
+                expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
                 created_at: new Date().toISOString(),
             });
             return ok({ last_row_id: newId, changes: 1 });
@@ -764,6 +766,10 @@ class FakeStmt {
         if (q.startsWith('update competition_invitations set status = \'accepted\'')) {
             const inv = this.db.invitations.find((i) => i.id === p[0]);
             if (!inv) return ok({ last_row_id: null, changes: 0 });
+            // R2-J: step 2 only flips a still-pending invitation (mirrors the real guard).
+            if (q.includes('and status = \'pending\'') && inv.status !== 'pending') {
+                return ok({ last_row_id: null, changes: 0 });
+            }
             if (q.includes('exists')) {
                 const competition = this.db.competitions.find((c) => c.id === p[1]);
                 if (!competition || competition.opponent_id !== p[2]) {
@@ -772,6 +778,7 @@ class FakeStmt {
             }
             inv.status = 'accepted';
             inv.responded_at = new Date().toISOString();
+            inv.accepted_at = new Date().toISOString();
             return ok({ last_row_id: null, changes: 1 });
         }
 

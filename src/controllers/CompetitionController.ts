@@ -164,6 +164,7 @@ export class CompetitionController extends BaseController {
             const model = new CompetitionModel(c.env.DB);
             const commentModel = new CommentModel(c.env.DB);
             const requestModel = new CompetitionRequestModel(c.env.DB);
+            const invitationModel = new CompetitionInvitationModel(c.env.DB);
             const ratingModel = new RatingModel(c.env.DB);
 
             const id = this.getParamInt(c, 'id');
@@ -181,10 +182,14 @@ export class CompetitionController extends BaseController {
             const ratings_count = await ratingModel.countByCompetition(id);
 
             // B2+B3: lightweight per-user request indicator (no full array)
+            // R2-J: plus the current user's own pending-invitation indicator.
+            // Both are scoped to the caller — never another user's invites.
             const currentUser = this.getCurrentUser(c);
             let user_has_pending_request = false;
+            let user_has_pending_invitation = false;
             if (currentUser) {
                 user_has_pending_request = await requestModel.hasPendingForRequester(id, currentUser.id);
+                user_has_pending_invitation = await invitationModel.hasPendingInvitation(id, currentUser.id);
             }
 
             const timer = ScheduledTaskService.getTimerDeadline(competition as any);
@@ -195,6 +200,7 @@ export class CompetitionController extends BaseController {
                 requests_count,
                 ratings_count,
                 user_has_pending_request,
+                user_has_pending_invitation,
                 timer
             });
         } catch (error) {
@@ -321,6 +327,9 @@ export class CompetitionController extends BaseController {
     /**
      * Request to join competition
      * POST /api/competitions/:id/request
+     *
+     * R2-J (H3): a pending invitation for the same user+competition forbids a
+     * parallel join request — the invitee's path is Accept/Decline instead.
      */
     async requestJoin(c: AppContext) {
         try {
@@ -330,6 +339,7 @@ export class CompetitionController extends BaseController {
 
             const model = new CompetitionModel(c.env.DB);
             const requestModel = new CompetitionRequestModel(c.env.DB);
+            const invitationModel = new CompetitionInvitationModel(c.env.DB);
             const notificationModel = new NotificationModel(c.env.DB);
 
             const competition = await model.findById(competitionId);
@@ -338,12 +348,32 @@ export class CompetitionController extends BaseController {
             }
 
             if (competition.creator_id === user.id) {
-                return this.error(c, this.t('competition_errors.cannot_join_own', c));
+                return this.error(c, this.t('competition_errors.cannot_join_own', c), 403);
+            }
+
+            // Closed competitions (non-pending status or opponent already set) take no new requests.
+            if (competition.status !== 'pending' || competition.opponent_id) {
+                if (competition.opponent_id) {
+                    return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
+                }
+                return this.error(c, this.t('competition_errors.competition_closed', c), 409);
+            }
+
+            // H3: a pending invitation for this user+competition blocks a parallel request.
+            const invited = await invitationModel.hasPendingInvitation(competitionId, user.id);
+            if (invited) {
+                return this.error(c, this.t('competition_errors.invite_pending_exists', c), 409);
+            }
+
+            // Blocked in either direction => no join request.
+            const blocked = await new UserBlockModel(c.env.DB).isBlockedBetween(user.id, competition.creator_id);
+            if (blocked) {
+                return this.forbidden(c, this.t('competition_errors.blocked_user', c));
             }
 
             const existing = await requestModel.findPending(competitionId, user.id);
             if (existing) {
-                return this.error(c, this.t('competition_errors.already_requested', c));
+                return this.error(c, this.t('competition_errors.already_requested', c), 409);
             }
 
             const body = await this.getBody<{ message?: string }>(c);
@@ -420,6 +450,25 @@ export class CompetitionController extends BaseController {
                 return this.notFound(c);
             }
 
+            // Only a pending, unexpired request can be accepted.
+            // (Checked before the competition gate so a repeated/declined
+            // accept reports the request's own state, not the closed comp.)
+            if (request.status !== 'pending') {
+                return this.error(c, this.t('competition_errors.no_pending_request', c), 409);
+            }
+            if (request.expires_at && request.expires_at <= CompetitionController.sqliteNow()) {
+                await requestModel.markExpired(request.id);
+                return this.error(c, this.t('competition_errors.no_pending_request', c), 409);
+            }
+
+            // Only a pending, still-open competition can take an opponent.
+            if (competition.status !== 'pending' || competition.opponent_id) {
+                if (competition.opponent_id) {
+                    return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
+                }
+                return this.error(c, this.t('competition_errors.competition_closed', c), 409);
+            }
+
             const results = await requestModel.acceptRequestAtomic(
                 competitionId,
                 body.request_id,
@@ -481,7 +530,19 @@ export class CompetitionController extends BaseController {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
 
-            await requestModel.updateStatus(body.request_id, 'declined');
+            // Only the addressed, still-pending request can be declined.
+            const request = await requestModel.findById(body.request_id);
+            if (!request || request.competition_id !== competitionId) {
+                return this.notFound(c);
+            }
+            if (request.status !== 'pending') {
+                return this.error(c, this.t('competition_errors.no_pending_request', c), 409);
+            }
+
+            const declined = await requestModel.updateStatus(body.request_id, 'declined');
+            if (!declined) {
+                return this.error(c, this.t('competition_errors.no_pending_request', c), 409);
+            }
             return this.success(c, { declined: true });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -986,6 +1047,10 @@ export class CompetitionController extends BaseController {
 if (competition.opponent_id) {
                 return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
             }
+            // Closed competitions (non-pending status) take no new invitations.
+            if (competition.status !== 'pending') {
+                return this.error(c, this.t('competition_errors.competition_closed', c), 409);
+            }
 
             const body = await this.getBody<{ invitee_id: number; message?: string }>(c);
             if (!body?.invitee_id) {
@@ -993,6 +1058,14 @@ if (competition.opponent_id) {
             }
             if (body.invitee_id === user.id) {
                 return this.error(c, this.t('competition_errors.cannot_invite_self', c), 409);
+            }
+
+            // H3: a pending join request from the same user+competition forbids
+            // a parallel invitation — one path at a time.
+            const requestModel = new CompetitionRequestModel(c.env.DB);
+            const conflictingRequest = await requestModel.hasPendingForRequester(competitionId, body.invitee_id);
+            if (conflictingRequest) {
+                return this.error(c, this.t('competition_errors.request_pending_exists', c), 409);
             }
 
             // Block check: cannot invite a user who blocked you or whom you blocked
@@ -1050,6 +1123,12 @@ if (existing) return this.error(c, this.t('competition_errors.already_invited', 
      *
      * Atomic: setOpponent + accept invitation + reject others in one batch.
      * Race-safe: setOpponent returns false if opponent already set → 409.
+     *
+     * R2-J: accepts only a pending, unexpired invitation on a pending,
+     * still-open competition, from an eligible identity. The acceptance
+     * notification uses the dedicated `invitation_accepted` type (never the
+     * `request`/new_join_request type) with a localized label and a
+     * language-correct competition link at render time.
      */
     async acceptInvite(c: AppContext) {
         try {
@@ -1063,11 +1142,33 @@ if (existing) return this.error(c, this.t('competition_errors.already_invited', 
 
             if (!competition) return this.notFound(c);
 
-            // Verify invitation exists
+            // Verify invitation first: pending, addressed to the caller.
+            // (Checked before the competition gate so a repeated/declined
+            // accept reports the invitation's own state, not the closed comp.)
             const invitation = await invitationModel.findPendingByInvitee(competitionId, user.id);
 
 if (!invitation) {
                 return this.error(c, this.t('competition_errors.invitation_not_found', c), 409);
+            }
+
+            // Expired invitations are closed, never accepted (lazy expiry on access).
+            if (invitation.expires_at && invitation.expires_at <= CompetitionController.sqliteNow()) {
+                await invitationModel.markExpired(invitation.id);
+                return this.error(c, this.t('competition_errors.invitation_not_found', c), 409);
+            }
+
+            // Only a pending, still-open competition can take an opponent.
+            if (competition.status !== 'pending' || competition.opponent_id) {
+                if (competition.opponent_id) {
+                    return this.error(c, this.t('competition_errors.opponent_already_set', c), 409);
+                }
+                return this.error(c, this.t('competition_errors.competition_closed', c), 409);
+            }
+
+            // Eligibility: a block in either direction forbids acceptance.
+            const blocked = await new UserBlockModel(c.env.DB).isBlockedBetween(user.id, invitation.inviter_id);
+            if (blocked) {
+                return this.forbidden(c, this.t('competition_errors.blocked_user', c));
             }
 
             const results = await invitationModel.acceptInvitationAtomic(
@@ -1085,13 +1186,15 @@ if (!invitation) {
             // AUTO-DELETE LOGIC: Delete user's conflicting competitions and requests
             const deletedCount = await this.handleAutoDeleteOnJoin(c, user.id, competition);
 
-            // Notify competition creator
+            // Notify competition creator — dedicated type, localized at render.
             const notificationModel = new NotificationModel(c.env.DB);
-            await notificationModel.create({
+            await notificationModel.createForType({
                 user_id: competition.creator_id,
-                type: 'request',
-                title: this.t('notification.invitation_accepted', c),
-                message: `${user.display_name || user.username}: ${competition.title}`,
+                type: 'invitation_accepted',
+                payload: {
+                    actor: user.display_name || user.username,
+                    preview: competition.title,
+                },
                 reference_type: 'competition',
                 reference_id: competitionId
             });
@@ -1129,12 +1232,12 @@ if (!invitation) {
             // Fetch invitation + inviter info BEFORE updating (needed for real-time push)
             const invitation = await invitationModel.findPendingWithCompetitionTitle(competitionId, user.id);
 
-            if (!invitation) return this.error(c, this.t('competition_errors.no_pending_invitation', c));
+            if (!invitation) return this.error(c, this.t('competition_errors.no_pending_invitation', c), 409);
 
             const declined = await invitationModel.markDeclined(invitation.id);
 
             if (!declined) {
-                return this.error(c, this.t('competition_errors.no_pending_invitation', c));
+                return this.error(c, this.t('competition_errors.no_pending_invitation', c), 409);
             }
 
             // T2.2: Real-time push to creator (declined)
@@ -1153,6 +1256,14 @@ if (!invitation) {
         } catch (error) {
             return this.serverError(c, error as Error);
         }
+    }
+
+    /**
+     * Current UTC time in the SQLite datetime('now') text format
+     * ('YYYY-MM-DD HH:MM:SS') so expiry comparisons stay lexicographic.
+     */
+    private static sqliteNow(): string {
+        return new Date().toISOString().slice(0, 19).replace('T', ' ');
     }
 
     /**

@@ -148,6 +148,10 @@ export const en = {
     // Statuses
     status_pending: 'Waiting for opponent',
     status_accepted: 'Accepted',
+    status_declined: 'Declined',
+    status_rejected: 'Rejected',
+    status_auto_declined: 'Auto-declined',
+    status_expired: 'Expired',
     status_live: 'Live',
     status_completed: 'Completed',
     status_cancelled: 'Cancelled',
@@ -304,6 +308,10 @@ export const en = {
         invitation_not_found: 'Invitation not found or expired',
         blocked_user: 'You cannot interact with this user',
         not_authorized: 'You are not authorized for this action',
+        // R2-J (H3): mutual/conflicting same-competition paths
+        invite_pending_exists: 'You have a pending invitation for this competition — accept or decline it first',
+        request_pending_exists: 'This user already has a pending join request for this competition',
+        competition_closed: 'This competition is no longer accepting participants',
         rating_self_forbidden: 'You cannot rate yourself or your own competition',
         rating_watch_required: 'You must watch the competition before rating it',
         rating_window_closed: 'Rating window has closed (24 hours after the competition ended)',
@@ -419,6 +427,8 @@ export const en = {
         new_join_request_body: '{actor}: {preview}',
         competition_invite: 'Competition Invitation',
         competition_invite_body: '{actor}: {preview}',
+        // R2-J: invite-acceptance label — distinct from new_join_request
+        invitation_accepted: 'Invitation Accepted',
         new_rating: 'New Rating',
         new_rating_body: '{actor} rated the competition',
         system_notice: 'System notice',

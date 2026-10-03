@@ -8,6 +8,8 @@
 
 import { BaseController, AppContext } from './base/BaseController';
 import { UserModel, CompetitionModel, NotificationModel } from '../models';
+import { CompetitionRequestModel } from '../models/CompetitionRequestModel';
+import { CompetitionInvitationModel } from '../models/CompetitionInvitationModel';
 import { FollowModel } from '../models/FollowModel';
 import { NotificationPresenter } from '../lib/services/NotificationPresenter';
 import { BlockedInteractionError } from '../lib/errors/AppError';
@@ -139,71 +141,41 @@ export class UserController extends BaseController {
     /**
      * Get user's requests (3 types)
      * GET /api/users/:id/requests?type=sent|received|invitations
+     *
+     * R2-J: persistence lives in the models (no SQL here); received and
+     * invitations return full history (every status), not pending-only rows.
+     * Rows are the caller's own — reading another user's inbox is 403.
      */
     async getRequests(c: AppContext) {
         try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const currentUser = this.getCurrentUser(c);
             const { DB } = c.env;
             const userId = this.getParamInt(c, 'id');
+            if (currentUser.id !== userId) {
+                return this.forbidden(c);
+            }
             const type = this.getQuery(c, 'type') || 'received';
 
-            let result;
+            let result: unknown[];
 
             if (type === 'sent') {
-                // طلبات أرسلتها للانضمام لمنافسات الآخرين
-                result = await DB.prepare(`
-                    SELECT cr.*, 
-                           c.title as competition_title, 
-                           c.status as competition_status,
-                           c.scheduled_at,
-                           u.display_name as creator_name,
-                           u.avatar_url as creator_avatar,
-                           u.username as creator_username
-                    FROM competition_requests cr
-                    JOIN competitions c ON cr.competition_id = c.id
-                    JOIN users u ON c.creator_id = u.id
-                    WHERE cr.requester_id = ?
-                    ORDER BY cr.created_at DESC
-                `).bind(userId).all();
+                // طلبات أرسلتها للانضمام لمنافسات الآخرين — كل الحالات
+                result = await new CompetitionRequestModel(DB).findSentByRequesterFull(userId);
 
             } else if (type === 'received') {
-                // طلبات استلمتها على منافساتي
-                result = await DB.prepare(`
-                    SELECT cr.*, 
-                           c.title as competition_title, 
-                           c.status as competition_status,
-                           c.scheduled_at,
-                           u.display_name as requester_name,
-                           u.avatar_url as requester_avatar,
-                           u.username as requester_username
-                    FROM competition_requests cr
-                    JOIN competitions c ON cr.competition_id = c.id
-                    JOIN users u ON cr.requester_id = u.id
-                    WHERE c.creator_id = ? AND cr.status = 'pending'
-                    ORDER BY cr.created_at DESC
-                `).bind(userId).all();
+                // طلبات استلمتها على منافساتي — كل الحالات
+                result = await new CompetitionRequestModel(DB).findReceivedByCreator(userId);
 
             } else if (type === 'invitations') {
-                // دعوات استلمتها من منشئين آخرين
-                result = await DB.prepare(`
-                    SELECT ci.*, 
-                           c.title as competition_title, 
-                           c.status as competition_status,
-                           c.scheduled_at,
-                           u.display_name as inviter_name,
-                           u.avatar_url as inviter_avatar,
-                           u.username as inviter_username
-                    FROM competition_invitations ci
-                    JOIN competitions c ON ci.competition_id = c.id
-                    JOIN users u ON ci.inviter_id = u.id
-                    WHERE ci.invitee_id = ? AND ci.status = 'pending'
-                    ORDER BY ci.created_at DESC
-                `).bind(userId).all();
+                // دعوات استلمتها من منشئين آخرين — كل الحالات
+                result = await new CompetitionInvitationModel(DB).findReceivedHistory(userId);
 
             } else {
                 return this.validationError(c, 'Invalid type. Use: sent, received, or invitations');
             }
 
-            return this.success(c, result.results);
+            return this.success(c, result);
         } catch (error) {
             return this.serverError(c, error as Error);
         }

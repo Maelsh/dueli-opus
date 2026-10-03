@@ -136,8 +136,18 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const isCompleted = comp.status === 'completed';
         const isCreator = window.currentUser && window.currentUser.id === comp.creator_id;
         const isOpponent = window.currentUser && window.currentUser.id === comp.opponent_id;
+        // R2-J (H3): invite/request/show-page contract. A pending invitation for
+        // the current user replaces the join-request path with Accept/Decline;
+        // closed competitions (non-pending or opponent set) expose a translated
+        // reason and no action buttons for non-parties.
         const hasRequested = comp.user_has_pending_request === true;
+        const hasInvite = comp.user_has_pending_invitation === true;
         const needsOpponent = isPending && !comp.opponent_id;
+        const closedReason = !needsOpponent && !isCreator && !isOpponent
+          ? (comp.opponent_id
+            ? (tr.competition_errors?.opponent_already_set || tr.status_accepted || 'Accepted')
+            : (tr.competition_errors?.competition_closed || tr['status_' + comp.status] || comp.status))
+          : '';
         
         const bgColors = {
           1: 'from-purple-600 to-purple-800',
@@ -328,17 +338,35 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                             \${tr.matchmaking?.invite_opponent_btn || tr.invite || 'Invite Opponent'}
                           </button>
                         \` : ''}
-                        \${window.currentUser && !isCreator && !hasRequested ? \`
+                        \${window.currentUser && !isCreator && hasInvite && isPending ? \`
+                          <p class="mt-3 text-sm font-semibold text-purple-700 dark:text-purple-300">\${tr.invites_you || 'Invites you to compete'}</p>
+                          <div class="mt-2 flex items-center justify-center gap-2">
+                            <button data-csp-on="click" data-csp-fn="acceptInvite" data-csp-args='[]' class="px-5 py-2.5 bg-green-600 text-white rounded-full text-sm font-bold hover:bg-green-700 transition-all">
+                              <i class="fas fa-check me-1"></i>
+                              \${tr.accept || 'Accept'}
+                            </button>
+                            <button data-csp-on="click" data-csp-fn="declineInvite" data-csp-args='[]' class="px-5 py-2.5 bg-red-600 text-white rounded-full text-sm font-bold hover:bg-red-700 transition-all">
+                              <i class="fas fa-times me-1"></i>
+                              \${tr.decline || 'Decline'}
+                            </button>
+                          </div>
+                        \` : ''}
+                        \${window.currentUser && !isCreator && !hasInvite && !hasRequested && needsOpponent ? \`
                           <button data-csp-on="click" data-csp-fn="requestJoin" data-csp-args='[]' class="join-btn mt-3">
                             <i class="fas fa-hand-paper"></i>
                             \${tr.request_join}
                           </button>
-                        \` : hasRequested ? \`
+                        \` : ''}
+                        \${window.currentUser && !isCreator && !hasInvite && hasRequested ? \`
                           <button data-csp-on="click" data-csp-fn="cancelRequest" data-csp-args='[]' class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-300 transition-all">
                             <i class="fas fa-times me-1"></i>
                             \${tr.cancel_request}
                           </button>
-                        \` : !window.currentUser ? \`
+                        \` : ''}
+                        \${window.currentUser && !isCreator && !isOpponent && !hasInvite && !hasRequested && closedReason ? \`
+                          <p class="mt-3 text-sm font-semibold text-gray-500 dark:text-gray-400">\${closedReason}</p>
+                        \` : ''}
+                        \${!window.currentUser ? \`
                           <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="join-btn mt-3">
                             <i class="fas fa-sign-in-alt"></i>
                             \${tr.login_to_compete}
@@ -931,6 +959,63 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         } catch (err) { console.error(err); }
       }
+
+      // R2-J: Accept the current user's pending invitation (H3 accept path)
+      async function acceptInvite() {
+        if (!window.currentUser) { showLoginModal(); return; }
+
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/accept-invite', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            alert(tr.status_accepted || 'Accepted');
+            loadCompetition(); // Reload to show updated state
+          } else {
+            alert(data.error || tr.error_occurred || 'Failed to accept invitation');
+          }
+        } catch (err) {
+          console.error(err);
+          alert(tr.error_occurred || 'An error occurred');
+        }
+      }
+
+      // R2-J: Decline the current user's pending invitation (H3 decline path)
+      async function declineInvite() {
+        if (!window.currentUser) { showLoginModal(); return; }
+
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/decline-invite', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const data = await res.json();
+          if (data.success) {
+            alert(tr.status_declined || 'Declined');
+            loadCompetition(); // Reload to show updated state
+          } else {
+            alert(data.error || tr.error_occurred || 'Failed to decline invitation');
+          }
+        } catch (err) {
+          console.error(err);
+          alert(tr.error_occurred || 'An error occurred');
+        }
+      }
+
+      // CSP-delegated handlers must be reachable from window (same convention
+      // as my-requests-page's window.setTab binding).
+      window.acceptInvite = acceptInvite;
+      window.declineInvite = declineInvite;
       
       // ============== EMBEDDED LIVE STREAMING ==============
       // These functions are only active when isLive && comp.live_url

@@ -117,6 +117,8 @@ export type RequestStatus = 'pending' | 'accepted' | 'declined';
  *  single source of truth for how a notification is labeled and where it links.
  *  The `notifications.type` column is plain TEXT (migration 0001) with no CHECK
  *  constraint, so widening this union needs no migration.
+ *  R2-J: `invitation_accepted` is the invite-acceptance type, deliberately
+ *  distinct from `request` (new_join_request).
  */
 export type NotificationType =
   | 'request'
@@ -125,6 +127,7 @@ export type NotificationType =
   | 'rating'
   | 'system'
   | 'invitation'
+  | 'invitation_accepted'
   | 'message'
   | 'post_like'
   | 'post_comment';
