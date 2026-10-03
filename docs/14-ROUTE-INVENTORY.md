@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-01T15:33:44.862Z
+> تاريخ التوليد: 2026-10-03T01:34:43.107Z
 
-## الإجمالي: 197 مسار
+## الإجمالي: 199 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 95 |
+| PUBLIC(auth-optional, in-handler check required) | 97 |
 | AUTHENTICATED | 56 |
 | UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -149,6 +149,8 @@
 | GET | `/api/earnings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/earnings/routes.ts` |
 | GET | `/api/earnings/competition/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/earnings/routes.ts` |
 | GET | `/api/earnings/history` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/earnings/routes.ts` |
+| POST | `/api/home-rails/sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/home-rails/routes.ts` |
+| GET | `/api/home-rails/sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/home-rails/routes.ts` |
 | GET | `/api/jitsi/config` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/jitsi/routes.ts` |
 | GET | `/api/jitsi/status` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/jitsi/routes.ts` |
 | GET | `/api/leaderboard` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/leaderboard/routes.ts` |

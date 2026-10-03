@@ -45,6 +45,7 @@ import matchmakingRoutes from './modules/api/matchmaking/routes';
 import sseRoutes from './modules/api/sse/routes';
 import realtimeRoutes from './modules/api/realtime/routes';
 import recommendationsRoutes from './modules/api/recommendations/routes';
+import homeRailsRoutes from './modules/api/home-rails/routes';
 import leaderboardRoutes from './modules/api/leaderboard/routes';
 import analyticsRoutes from './modules/api/analytics/routes';
 import cronRoutes from './modules/api/cron/routes';
@@ -170,6 +171,7 @@ app.route('/api/matchmaking', matchmakingRoutes);
 app.route('/api/sse', sseRoutes);          // Task 9: Central SSE event stream
 app.route('/api/realtime', realtimeRoutes); // C4 (SEC-11): SSE connection tickets
 app.route('/api/recommendations', recommendationsRoutes);   // T1.2: was orphaned (404)
+app.route('/api/home-rails', homeRailsRoutes);           // R3-RAILS-1A: frozen per-rail sessions
 app.route('/api/leaderboard', leaderboardRoutes);           // T1.2: was orphaned (404)
 app.route('/api/analytics', analyticsRoutes);               // T1.2: was orphaned (404)
 app.route('/api/cron', cronRoutes);                         // T1.5: HTTP cron trigger (secured by CRON_SECRET)
@@ -243,7 +245,7 @@ app.get('/', (c) => {
               <i class="fas fa-play-circle"></i>
               ${tr.recorded}
             </button>
-            <button data-csp-on="click" data-csp-fn="setMainTab" data-csp-args='["upcoming"]' id="tab-upcoming" data-auth-required="true" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer hidden" title="${tr.upcoming}">
+            <button data-csp-on="click" data-csp-fn="setMainTab" data-csp-args='["upcoming"]' id="tab-upcoming" class="px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer" title="${tr.upcoming}">
               <i class="fas fa-clock"></i>
               ${tr.upcoming}
             </button>

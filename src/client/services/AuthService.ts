@@ -307,8 +307,9 @@ export class AuthService {
             if (userSection) userSection.classList.add('hidden');
             if (createCompBtn) createCompBtn.classList.add('hidden');
 
-            // Hide upcoming tab for non-logged-in users
-            if (upcomingTab) upcomingTab.classList.add('hidden');
+            // R3-RAILS-1A: guests SEE the Upcoming rail (visibility only —
+            // invite/join actions keep their own auth guards, untouched).
+            if (upcomingTab) upcomingTab.classList.remove('hidden');
 
             // Show help icon for non-logged-in users
             if (helpIcon) helpIcon.classList.remove('auth-hidden');

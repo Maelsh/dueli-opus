@@ -53,22 +53,67 @@ export class RecommendationModel {
      * Public suggested set, shared by the offset listing and the frozen
      * session build alike — one predicate, never two definitions of
      * “eligible”.
+     *
+     * R3-RAILS-1A: the completed branch requires a PLAYABLE recording per the
+     * current media contract (competition-page renders `youtube_video_url`
+     * first, then the chunk/VOD player): a trimmed non-empty `vod_url` OR a
+     * trimmed non-empty `youtube_video_url`. NULL/empty/whitespace-only is
+     * unready and stays out of every Suggested/Recorded rail — scarcity is
+     * never patched by repeating rows or by showing an unplayable card.
      */
     static readonly PUBLIC_SUGGESTED_WHERE = `(
         c.status IN ('pending', 'accepted', 'live')
-        OR (c.status = 'completed' AND c.vod_url IS NOT NULL)
+        OR (c.status = 'completed' AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL))
     )`;
+
+    /**
+     * Status slice inside the public set (Home main tabs). The empty slice
+     * keeps the legacy whole-public-set contract used by the offset listing
+     * and the #76 status-less session.
+     */
+    static statusSliceWhere(status: string): string {
+        if (status === 'live') return `AND c.status = 'live'`;
+        if (status === 'upcoming') return `AND c.status IN ('pending', 'accepted')`;
+        if (status === 'recorded') return `AND c.status = 'completed'`;
+        return '';
+    }
 
     /**
      * Live per-row re-check mirroring PUBLIC_SUGGESTED_WHERE (rows deleted
      * after T0 never reach here — they are absent from hydration).
+     *
+     * R3-RAILS-1A: `status` narrows the check to one Home tab slice;
+     * playable-recording mirrors the SQL above (either media column).
      */
-    static isPublicSuggested(row: { status: string; vod_url?: string | null }): boolean {
-        if (row.status === 'pending' || row.status === 'accepted' || row.status === 'live') return true;
-        if (row.status === 'completed') {
-            return row.vod_url !== null && row.vod_url !== undefined && row.vod_url !== '';
+    static isPublicSuggested(
+        row: { status: string; vod_url?: string | null; youtube_video_url?: string | null },
+        status = ''
+    ): boolean {
+        const s = row.status;
+        let inSlice: boolean;
+        if (status === 'live') {
+            inSlice = s === 'live';
+        } else if (status === 'upcoming') {
+            inSlice = s === 'pending' || s === 'accepted';
+        } else if (status === 'recorded') {
+            inSlice = s === 'completed' && RecommendationModel.hasPlayableRecording(row);
+        } else {
+            inSlice =
+                s === 'pending' || s === 'accepted' || s === 'live' ||
+                (s === 'completed' && RecommendationModel.hasPlayableRecording(row));
         }
-        return false;
+        return inSlice;
+    }
+
+    /**
+     * R3-RAILS-1A: playable-recording predicate shared by every rail
+     * (SQL above is the store-side mirror; this is the row-side mirror).
+     */
+    static hasPlayableRecording(row: { vod_url?: string | null; youtube_video_url?: string | null }): boolean {
+        const vod = typeof row.vod_url === 'string' ? row.vod_url.trim() : '';
+        if (vod !== '') return true;
+        const yt = typeof row.youtube_video_url === 'string' ? row.youtube_video_url.trim() : '';
+        return yt !== '';
     }
 
     /** Score expression — identical arithmetic to the legacy guest branch. */
@@ -115,14 +160,75 @@ export class RecommendationModel {
 
     /** Full ordered id set for a frozen session — no LIMIT, no total cap. */
     async findGuestSuggestedIds(lang: string): Promise<number[]> {
+        return this.findGuestSuggestedIdsForStatus(lang, '');
+    }
+
+    /**
+     * R3-RAILS-1A: full ordered id set for ONE Home tab slice.
+     * Same scoring weights, same public predicate — the status slice is the
+     * only narrowing (live=live, upcoming=pending+accepted,
+     * recorded=completed+playable via the shared WHERE). No LIMIT, no cap:
+     * the session service freezes the whole qualified set at T0.
+     */
+    async findGuestSuggestedIdsForStatus(lang: string, status: string): Promise<number[]> {
+        const slice = RecommendationModel.statusSliceWhere(status);
         const result = await this.db.prepare(`
             SELECT c.id as id
             FROM competitions c
             JOIN categories cat ON c.category_id = cat.id
             JOIN users u ON c.creator_id = u.id
             WHERE ${RecommendationModel.PUBLIC_SUGGESTED_WHERE}
+            ${slice}
             ORDER BY ${this.scoreExpression()} DESC, c.created_at DESC, c.id ASC
         `).bind(lang).all<{ id: number }>();
+        return (result.results || []).map((row) => row.id);
+    }
+
+    /**
+     * R3-RAILS-1A: full ordered id set for the logged-in Suggested rail.
+     * Same pinned scoring arithmetic as the guest rail (H7 coefficients stay
+     * OPEN — no new ranking is invented here); the user identity only
+     * NARROWS the set: own competitions, both directions of blocks, and
+     * explicitly hidden competitions never enter the snapshot. Exclusion
+     * lists are loaded by the caller (the rail provider) so build-time and
+     * read-time re-checks share one source.
+     */
+    async findUserSuggestedIdsForStatus(
+        lang: string,
+        status: string,
+        exclusions: { excludeCreatorIds: number[]; excludeCompetitionIds: number[]; excludeOwnId: number | null }
+    ): Promise<number[]> {
+        const slice = RecommendationModel.statusSliceWhere(status);
+        const params: number[] = [];
+        let extra = '';
+        const own = exclusions.excludeOwnId;
+        const creators = [...new Set(exclusions.excludeCreatorIds.filter((id) => Number.isInteger(id) && id > 0))];
+        const competitions = [...new Set(exclusions.excludeCompetitionIds.filter((id) => Number.isInteger(id) && id > 0))];
+        if (typeof own === 'number' && Number.isInteger(own) && own > 0) {
+            extra += ` AND c.creator_id != ?`;
+            params.push(own);
+        }
+        if (creators.length > 0) {
+            extra += ` AND c.creator_id NOT IN (${creators.map(() => '?').join(',')})`;
+            params.push(...creators);
+        }
+        if (competitions.length > 0) {
+            extra += ` AND c.id NOT IN (${competitions.map(() => '?').join(',')})`;
+            params.push(...competitions);
+        }
+        // Positional binding follows TEXTUAL placeholder order: the WHERE
+        // exclusions precede the scoring expression's lang placeholder in
+        // ORDER BY — binding lang first would shift every exclusion.
+        const result = await this.db.prepare(`
+            SELECT c.id as id
+            FROM competitions c
+            JOIN categories cat ON c.category_id = cat.id
+            JOIN users u ON c.creator_id = u.id
+            WHERE ${RecommendationModel.PUBLIC_SUGGESTED_WHERE}
+            ${slice}
+            ${extra}
+            ORDER BY ${this.scoreExpression()} DESC, c.created_at DESC, c.id ASC
+        `).bind(...params, lang).all<{ id: number }>();
         return (result.results || []).map((row) => row.id);
     }
 
@@ -155,8 +261,10 @@ export class GuestSuggestedProvider implements ResultSessionProvider {
 
     isEligible(row: CompetitionWithDetails): boolean {
         const status = String(row.status);
-        const record = row as CompetitionWithDetails & { vod_url?: string | null };
-        return RecommendationModel.isPublicSuggested({ status, vod_url: record.vod_url ?? null });
+        const record = row as CompetitionWithDetails & { vod_url?: string | null; youtube_video_url?: string | null };
+        return RecommendationModel.isPublicSuggested(
+            { status, vod_url: record.vod_url ?? null, youtube_video_url: record.youtube_video_url ?? null }
+        );
     }
 }
 

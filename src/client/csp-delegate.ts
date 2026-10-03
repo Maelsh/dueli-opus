@@ -159,7 +159,6 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'handleVerifyResetCode',
     'hideLoginModal',
     'loadMoreComments',
-    'loadMoreCompetitions',
     'loadMoreFinancial',
     'loadNotifications',
     'loadWithdrawals',

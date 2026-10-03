@@ -214,7 +214,6 @@ declare global {
         // Home Page Methods
         setMainTab: typeof HomePage.setMainTab;
         setSubTab: typeof HomePage.setSubTab;
-        loadMoreCompetitions: typeof HomePage.loadMoreCompetitions;
 
         // Competition Card Renderer (View from shared components)
         renderCompetitionCard: (item: CompetitionCardProps, lang?: string) => string;
@@ -327,7 +326,6 @@ if (typeof window !== 'undefined') {
     // Bind Home Page Methods
     window.setMainTab = (tab: any) => HomePage.setMainTab(tab);
     window.setSubTab = (tab: string) => HomePage.setSubTab(tab);
-    window.loadMoreCompetitions = () => HomePage.loadMoreCompetitions();
 
     // Bind Competition Card Renderer (uses shared View component)
     window.renderCompetitionCard = (item: CompetitionCardProps, lang: string = State.lang) => getCompetitionCard(item, lang);

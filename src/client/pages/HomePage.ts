@@ -1,41 +1,92 @@
 
-import { CompetitionService } from '../services/CompetitionService';
 import { State } from '../core/State';
-import { getCompetitionCard } from '../../shared/components/competition-card';
-import { getCompetitionSection } from '../../shared/components/competition-section';
-import { SUBCATEGORY_COLORS, SUBCATEGORY_ORDER, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_SUBCATEGORIES, SUBCATEGORY_ICONS } from '../../shared/constants';
+import { getCompetitionCard, type CompetitionCardProps } from '../../shared/components/competition-card';
+import {
+    getHomeRailSection,
+    getHomeRailErrorSection,
+    getRailSentinelHTML,
+    homeRailScrollerId,
+    homeRailSentinelId,
+    homeRailSectionId,
+} from '../../shared/components/home-rail';
+import { SUBCATEGORY_COLORS, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_SUBCATEGORIES, SUBCATEGORY_ICONS } from '../../shared/constants';
 import { translations, getUILanguage } from '../../i18n';
+
+type RailKind = 'suggested' | 'category';
+type RailStatus = 'live' | 'recorded' | 'upcoming';
+
+interface RailDef {
+    key: string;
+    kind: RailKind;
+    title: string;
+    icon: string;
+    color: string;
+    category: string;
+    subcategory: string;
+    status: RailStatus;
+}
+
+interface RailCard {
+    id?: string | number;
+    [key: string]: unknown;
+}
+
+interface RailOpen {
+    items: RailCard[];
+    sessionId: string;
+    cursor: string | null;
+    done: boolean;
+}
+
+interface RailState extends RailDef {
+    sessionId: string | null;
+    cursor: string | null;
+    done: boolean;
+    loading: boolean;
+    seen: Set<string | number>;
+    recreated: boolean;
+    generation: number;
+    observer: IntersectionObserver | null;
+}
 
 export class HomePage {
     static currentMainTab: 'live' | 'upcoming' | 'recorded' = 'live';
     static currentSubTab: string = 'all';
-    static currentOffset: number = 0;
     static searchTimeout: ReturnType<typeof setTimeout>;
     /**
-     * R3-GUEST-1: frozen guest suggestion session driving the «مقترح لك»
-     * rail to real exhaustion. The end of results comes ONLY from the server
-     * hasMore flag — never from batch length or client dedup.
+     * R3-RAILS-1B: every Home rail owns an independent frozen session
+     * (Suggested Guest/User, Dialogue/Science/Talents and each subcategory,
+     * crossed with Live/Recorded/Upcoming). The end of a rail comes ONLY
+     * from the server hasMore flag — never from batch length, never from a
+     * silent 15-row list, and never from cross-rail dedup (a competition may
+     * deservedly appear in Suggested and in its own section).
      */
-    static suggestedSessionId: string | null = null;
-    static suggestedCursor: string | null = null;
-    static suggestedDone: boolean = false;
-    static suggestedLoading: boolean = false;
-    static suggestedRecreated: boolean = false;
-    static suggestedSeen: Set<string | number> = new Set();
-    static suggestedObserver: IntersectionObserver | null = null;
-    static readonly SUGGESTED_RAIL_ID = 'suggested-rail';
-    static readonly SUGGESTED_BATCH = 15;
+    static rails: Map<string, RailState> = new Map();
+    static railGeneration: number = 0;
+    static authHooked: boolean = false;
+    static tokenSeq: number = 0;
+    static readonly RAIL_BATCH = 15;
 
     static init() {
-        // Show upcoming tab if user is logged in
-        if (State.currentUser) {
-            const upcomingTab = document.getElementById('tab-upcoming');
-            if (upcomingTab) upcomingTab.classList.remove('hidden');
+        // A login changes the rail identity (guest -> user): drop the stale
+        // snapshot and start a new context. Logout reloads the page, which
+        // re-runs init on a fresh context.
+        if (!this.authHooked && typeof window !== 'undefined') {
+            this.authHooked = true;
+            window.addEventListener('dueli:auth-success', () => {
+                void this.loadCompetitions();
+            });
         }
 
         // Initial load
         this.loadCompetitions();
         this.bindSearchEvents();
+    }
+
+    static tabStatus(): RailStatus {
+        if (this.currentMainTab === 'recorded') return 'recorded';
+        if (this.currentMainTab === 'upcoming') return 'upcoming';
+        return 'live';
     }
 
     static async loadCompetitions() {
@@ -45,160 +96,251 @@ export class HomePage {
         const lang = State.lang;
         const tr = translations[getUILanguage(lang)];
 
+        // A new context invalidates every in-flight rail response: each
+        // continuation carries its generation and is discarded when stale.
+        this.railGeneration += 1;
+        const generation = this.railGeneration;
+        this.teardownRails();
+
         container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i></div>';
 
-        // A re-render orphans any rail observer — tear it down first.
-        this.teardownGuestRail();
+        // One first-party guest identity for every rail opened below: the
+        // creates run in parallel, so a lazily-issued per-call token would
+        // bind each rail to a DIFFERENT identity (last-write-wins in
+        // storage) and every continuation would 404. Pre-issue synchronously
+        // instead — the server adopts a well-formed presented token as-is.
+        // No Math.random here (SEC-06): WebCrypto, else a time+counter stamp.
+        this.ensureGuestToken();
 
         try {
-            const params: any = { limit: 24 };
-            if (this.currentMainTab === 'live') params.status = 'live';
-            else if (this.currentMainTab === 'recorded') params.status = 'recorded';
-            else if (this.currentMainTab === 'upcoming') params.status = 'upcoming';
-            let guestRailArmed = false;
+            const status = this.tabStatus();
+            const defs = this.buildRailDefs(status, lang);
+            this.lastDefs = defs;
+            const opened = await Promise.all(defs.map((def) => this.openRail(def)));
+            // A tab/category/language/login switch while opening discards the
+            // whole paint — the newer generation owns the container now.
+            if (generation !== this.railGeneration) return;
 
-            // Check if upcoming tab should be visible (only for logged in users)
-            const isUpcoming = this.currentMainTab === 'upcoming';
-            if (isUpcoming && !State.currentUser) {
-                this.setMainTab('live');
-                return;
-            }
+            let html = '';
+            const armed: Array<{ def: RailDef; open: RailOpen }> = [];
+            defs.forEach((def, index) => {
+                const result = opened[index];
+                if (result === null) {
+                    html += getHomeRailErrorSection(def.key, def.title, def.icon, lang, def.color);
+                    return;
+                }
+                if (result.items.length === 0) return;
+                const cardsHtml = result.items
+                    .map((item) => getCompetitionCard(item as unknown as CompetitionCardProps, lang))
+                    .join('');
+                html += getHomeRailSection({
+                    railKey: def.key,
+                    title: def.title,
+                    icon: def.icon,
+                    lang,
+                    color: def.color,
+                    cardsHtml,
+                    sentinelMode: result.done ? 'end' : 'idle',
+                });
+                if (!result.done) armed.push({ def, open: result });
+            });
 
-            if (this.currentSubTab !== 'all') {
-                params.category = this.currentSubTab;
-            }
-
-            const data = await CompetitionService.list(params);
-
-            if (!data.success || !data.data?.length) {
+            if (!html) {
                 container.innerHTML = this.renderEmptyState(tr);
                 return;
             }
-
-            let html = '';
-
-            if (this.currentSubTab !== 'all') {
-                // Category tab (dialogue/science/talents): Fetch each subcategory separately
-                const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'upcoming';
-                const subcategories = CATEGORY_SUBCATEGORIES[this.currentSubTab] || [];
-
-                // Fetch all subcategories in parallel
-                const subcategoryPromises = subcategories.map(subcat =>
-                    CompetitionService.list({ status: statusParam, subcategory: subcat, limit: 15 })
-                );
-
-                const results = await Promise.all(subcategoryPromises);
-
-                // Render each subcategory that has data
-                subcategories.forEach((subcat, index) => {
-                    const res = results[index];
-                    if (res.success && res.data?.length > 0) {
-                        const lookupSlug = subcat.replace(/-/g, '_');
-                        const subName = (tr.categories as any)[lookupSlug] || (tr.categories as any)[subcat] || subcat;
-                        const icon = SUBCATEGORY_ICONS[subcat] || 'fas fa-tag';
-                        const color = SUBCATEGORY_COLORS[subcat] || '#8B5CF6';
-
-                        html += getCompetitionSection(subName, res.data, icon, lang, color, false);
-                    }
-                });
-            } else {
-                // 'All' tab: Fetch 4 separate datasets for distinct sections
-                const statusParam = this.currentMainTab === 'live' ? 'live' : this.currentMainTab === 'recorded' ? 'recorded' : 'upcoming';
-
-                const [recommendedRes, dialogueRes, scienceRes, talentsRes] = await Promise.all([
-                    this.fetchSuggested(statusParam),
-                    CompetitionService.list({ status: statusParam, category: 'dialogue', limit: 15 }),
-                    CompetitionService.list({ status: statusParam, category: 'science', limit: 15 }),
-                    CompetitionService.list({ status: statusParam, category: 'talents', limit: 15 })
-                ]);
-
-                // Always render all 4 sections using fixed colors from constants
-                if (recommendedRes.success && recommendedRes.data?.length > 0) {
-                    if (recommendedRes.session) {
-                        // Guest rail: stable anchor id so the scroll sentinel
-                        // can append cursor batches after the first paint.
-                        html += getCompetitionSection(tr.sections?.suggested || 'Recommended', recommendedRes.data, 'fas fa-fire', lang, '#8B5CF6', false, this.SUGGESTED_RAIL_ID);
-                        guestRailArmed = true;
-                    } else {
-                        html += getCompetitionSection(tr.sections?.suggested || 'Recommended', recommendedRes.data, 'fas fa-fire', lang, '#8B5CF6', false);
-                    }
-                }
-
-                if (dialogueRes.success && dialogueRes.data?.length > 0) {
-                    html += getCompetitionSection(tr.categories['dialogue'] || 'Dialogue', dialogueRes.data, CATEGORY_ICONS['dialogue'], lang, CATEGORY_COLORS['dialogue'], false);
-                }
-
-                if (scienceRes.success && scienceRes.data?.length > 0) {
-                    html += getCompetitionSection(tr.categories['science'] || 'Science', scienceRes.data, CATEGORY_ICONS['science'], lang, CATEGORY_COLORS['science'], false);
-                }
-
-                if (talentsRes.success && talentsRes.data?.length > 0) {
-                    html += getCompetitionSection(tr.categories['talents'] || 'Talents', talentsRes.data, CATEGORY_ICONS['talents'], lang, CATEGORY_COLORS['talents'], false);
-                }
-            }
-
-            if (!html) {
-                html = this.renderEmptyState(tr);
-            }
-
-            // No Load More button - all subcategories rendered as separate rows
 
             container.innerHTML = html;
 
             // Setup hover scroll for all sections with scrollable containers
             this.setupAllHoverScroll();
 
-            // Guest rail continuation starts only after the paint exists.
-            if (guestRailArmed) {
-                this.setupGuestRailScroll();
+            for (const { def, open } of armed) {
+                if (generation !== this.railGeneration) return;
+                const state: RailState = {
+                    ...def,
+                    sessionId: open.sessionId,
+                    cursor: open.cursor,
+                    done: open.done,
+                    loading: false,
+                    seen: new Set<string | number>(),
+                    recreated: false,
+                    generation,
+                    observer: null,
+                };
+                for (const item of open.items) state.seen.add(this.itemKey(item));
+                this.rails.set(def.key, state);
+                this.wireRetryButton(def.key);
+                this.armRailObserver(def.key);
             }
-
+            // Error sections painted above need their retry wired too.
+            for (const def of defs) {
+                if (!this.rails.has(def.key)) this.wireRetryButton(def.key);
+            }
         } catch (err) {
             console.error(err);
+            if (generation !== this.railGeneration) return;
             container.innerHTML = `<div class="text-center py-16 text-red-500">${tr.error_loading || 'Error loading content'}</div>`;
         }
     }
 
     /**
-     * T2.3: Suggested section powered by the Recommendation Engine
-     * (language > country > followed > newest > most viewed > top rated),
-     * with graceful fallback to the plain list on any failure.
-     *
-     * R3-GUEST-1: logged-in callers keep this single-batch contract
-     * untouched; guests go through fetchGuestSuggestedRail (frozen session +
-     * scroll continuation to real exhaustion).
+     * R3-RAILS-1B: the rail composition of the current tabs. 'all' shows
+     * Suggested + the three main sections; a category tab shows Suggested
+     * for that scope? No — it shows each subcategory rail (same as before,
+     * now session-backed), each carrying the live tab status.
      */
-    private static async fetchRecommended(statusParam: string): Promise<any> {
-        try {
-            const headers: Record<string, string> = {};
-            if (State.sessionId) headers['Authorization'] = 'Bearer ' + State.sessionId;
-            const res = await fetch(`/api/recommendations?limit=15&lang=${State.lang}`, { headers });
-            const data: any = await res.json();
-            if (data.success && data.data?.competitions?.length > 0) {
-                return { success: true, data: data.data.competitions };
+    static buildRailDefs(status: RailStatus, lang: string): RailDef[] {
+        const tr = translations[getUILanguage(lang)];
+        const defs: RailDef[] = [];
+        const suggestedTitle = tr.sections?.suggested || 'Recommended';
+        if (this.currentSubTab !== 'all') {
+            const subcategories = CATEGORY_SUBCATEGORIES[this.currentSubTab] || [];
+            for (const subcat of subcategories) {
+                const lookupSlug = subcat.replace(/-/g, '_');
+                const subName =
+                    (tr.categories as unknown as Record<string, string>)[lookupSlug] ||
+                    (tr.categories as unknown as Record<string, string>)[subcat] ||
+                    subcat;
+                defs.push({
+                    key: `sub-${subcat}-${status}`,
+                    kind: 'category',
+                    title: subName,
+                    icon: SUBCATEGORY_ICONS[subcat] || 'fas fa-tag',
+                    color: SUBCATEGORY_COLORS[subcat] || '#8B5CF6',
+                    category: this.currentSubTab,
+                    subcategory: subcat,
+                    status,
+                });
             }
-        } catch (err) {
-            console.error('[HomePage] recommendations failed, falling back:', err);
+            return defs;
         }
-        // Graceful degradation: plain list keeps the section non-empty
-        return CompetitionService.list({ status: statusParam, limit: 15 });
+        defs.push({
+            key: `suggested-${status}`,
+            kind: 'suggested',
+            title: suggestedTitle,
+            icon: 'fas fa-fire',
+            color: '#8B5CF6',
+            category: '',
+            subcategory: '',
+            status,
+        });
+        const mains: Array<{ slug: string }> = [{ slug: 'dialogue' }, { slug: 'science' }, { slug: 'talents' }];
+        for (const main of mains) {
+            const title =
+                (tr.categories as unknown as Record<string, string>)[main.slug] || main.slug;
+            defs.push({
+                key: `cat-${main.slug}-${status}`,
+                kind: 'category',
+                title,
+                icon: CATEGORY_ICONS[main.slug] || 'fas fa-tag',
+                color: CATEGORY_COLORS[main.slug] || '#8B5CF6',
+                category: main.slug,
+                subcategory: '',
+                status,
+            });
+        }
+        return defs;
     }
 
     /**
-     * R3-GUEST-1: suggested-section dispatcher. Logged-in users keep the
-     * single-batch contract above byte-for-byte; guests freeze a suggestion
-     * session (first page returned here with its cursor envelope, the rail
-     * continues it after the paint).
+     * Freeze one rail session and read its first page. Any failure yields
+     * null — the rail paints an explicit translated retry, never a silent
+     * partial list presented as complete.
      */
-    private static async fetchSuggested(statusParam: string): Promise<any> {
-        if (State.sessionId) {
-            return this.fetchRecommended(statusParam);
+    static async openRail(def: RailDef): Promise<RailOpen | null> {
+        try {
+            const body: Record<string, string> = { kind: def.kind, status: def.status };
+            if (def.category !== '') body['category'] = def.category;
+            if (def.subcategory !== '') body['subcategory'] = def.subcategory;
+            const createRes = await fetch(`/api/home-rails/sessions?lang=${State.lang}`, {
+                method: 'POST',
+                headers: this.guestHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(body),
+            });
+            if (!createRes.ok) return null;
+            const created = (await createRes.json()) as {
+                success?: unknown;
+                data?: { session?: { id?: unknown }; guest_token?: unknown };
+            };
+            const sid = created?.success && created.data?.session?.id ? String(created.data.session.id) : '';
+            if (!sid) return null;
+            this.storeGuestToken(created.data?.guest_token);
+            const page = await this.readRailPage(sid, def, null);
+            if (page === null || 'lapsed' in page) return null;
+            return { items: page.items, sessionId: sid, cursor: page.nextCursor, done: !page.hasMore };
+        } catch (err) {
+            console.error('[HomePage] rail open failed:', def.key, err);
+            return null;
         }
-        return this.fetchGuestSuggestedRail(statusParam);
     }
 
-    private static guestHeaders(extra: Record<string, string>): Record<string, string> {
+    static itemKey(item: RailCard): string | number {
+        return item && item.id !== undefined && item.id !== null ? item.id : `unkeyed:${JSON.stringify(item).length}`;
+    }
+
+    static async readRailPage(
+        sid: string,
+        def: RailDef,
+        cursor: string | null
+    ): Promise<{ items: RailCard[]; nextCursor: string | null; hasMore: boolean } | { lapsed: true } | null> {
+        const q = new URLSearchParams();
+        q.set('kind', def.kind);
+        if (def.category !== '') q.set('category', def.category);
+        if (def.subcategory !== '') q.set('subcategory', def.subcategory);
+        q.set('status', def.status);
+        q.set('limit', String(this.RAIL_BATCH));
+        q.set('lang', State.lang);
+        if (cursor) q.set('cursor', cursor);
+        let res: Response;
+        try {
+            res = await fetch(`/api/home-rails/sessions/${encodeURIComponent(sid)}/page?${q.toString()}`, {
+                headers: this.guestHeaders({}),
+            });
+        } catch {
+            return null;
+        }
+        // Lapsed sessions (expired/missing/context-drifted) restart the rail
+        // from a fresh freeze — once — never by mixing two snapshots.
+        if (res.status === 410 || res.status === 404 || res.status === 409) {
+            return { lapsed: true };
+        }
+        if (!res.ok) return null;
+        const data = (await res.json()) as {
+            success?: unknown;
+            data?: { items?: unknown; nextCursor?: unknown; hasMore?: unknown } | null;
+        };
+        const payload = data && data.success && data.data ? data.data : null;
+        if (!payload || !Array.isArray(payload.items)) return null;
+        return {
+            items: payload.items as RailCard[],
+            nextCursor: typeof payload.nextCursor === 'string' ? payload.nextCursor : null,
+            hasMore: payload.hasMore === true,
+        };
+    }
+
+    static ensureGuestToken(): void {
+        if (State.sessionId) return;
+        try {
+            if (typeof localStorage === 'undefined') return;
+            if (localStorage.getItem('dueli_guest_token')) return;
+            let fresh: string | null = null;
+            if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                fresh = crypto.randomUUID();
+            } else {
+                this.tokenSeq += 1;
+                fresh = `guest-${Date.now().toString(36)}-${this.tokenSeq.toString(36)}`;
+            }
+            localStorage.setItem('dueli_guest_token', fresh);
+        } catch {
+            // Private mode: the server issues a token per call instead
+            // (parallel rails then heal via the single-restart path).
+        }
+    }
+
+    static guestHeaders(extra: Record<string, string>): Record<string, string> {
         const headers: Record<string, string> = { ...(extra || {}) };
+        if (State.sessionId) headers['Authorization'] = 'Bearer ' + State.sessionId;
         try {
             const guest = typeof localStorage !== 'undefined' ? localStorage.getItem('dueli_guest_token') : null;
             if (guest) headers['X-Guest-Token'] = guest;
@@ -208,7 +350,7 @@ export class HomePage {
         return headers;
     }
 
-    private static storeGuestToken(token: unknown): void {
+    static storeGuestToken(token: unknown): void {
         if (typeof token !== 'string' || !token) return;
         try {
             if (typeof localStorage !== 'undefined') localStorage.setItem('dueli_guest_token', token);
@@ -217,236 +359,231 @@ export class HomePage {
         }
     }
 
+    static teardownRails(): void {
+        for (const state of this.rails.values()) {
+            if (state.observer) {
+                try {
+                    state.observer.disconnect();
+                } catch {
+                    // Harness/shim without full observer support.
+                }
+            }
+        }
+        this.rails.clear();
+    }
+
     /**
-     * R3-GUEST-1: freeze the guest suggestion session and read its first
-     * page. Any failure degrades to the plain list (section stays non-empty,
-     * no session state is armed).
+     * R3-RAILS-1B: continue one frozen rail as its own scroller nears its
+     * end. Each batch appends at the frozen cursor; a retry re-reads the SAME
+     * cursor (no double append — items are per-rail deduped); the end comes
+     * ONLY from the server hasMore flag. Partial/empty batches with
+     * hasMore=true keep going; a lapsed session rebuilds once and restarts
+     * this rail from its head.
      */
-    private static async fetchGuestSuggestedRail(statusParam: string): Promise<any> {
-        try {
-            this.resetGuestRailState();
-            const createRes = await fetch(`/api/recommendations/suggested-sessions?lang=${State.lang}`, {
-                method: 'POST',
-                headers: this.guestHeaders({ 'Content-Type': 'application/json' }),
-                body: JSON.stringify({}),
-            });
-            if (!createRes.ok) throw new Error('suggested session status ' + createRes.status);
-            const created = (await createRes.json()) as {
-                success?: unknown;
-                data?: { session?: { id?: unknown }; guest_token?: unknown };
-            };
-            const sid = created?.success && created.data?.session?.id ? String(created.data.session.id) : '';
-            if (!sid) throw new Error('no suggested session id');
-            this.storeGuestToken(created.data?.guest_token);
-            const page = await this.readSuggestedPage(sid, null);
-            if (!page || page.items.length === 0) throw new Error('empty suggested first page');
-            this.suggestedSessionId = sid;
-            this.suggestedCursor = page.nextCursor;
-            this.suggestedDone = !page.hasMore;
-            for (const item of page.items) this.suggestedSeen.add(this.railKey(item));
-            return { success: true, data: page.items, session: { id: sid } };
-        } catch (err) {
-            console.error('[HomePage] guest suggested session failed, falling back:', err);
-            this.resetGuestRailState();
-            return CompetitionService.list({ status: statusParam, limit: 15 });
-        }
-    }
-
-    private static railKey(item: { id?: string | number }): string | number {
-        return item && item.id !== undefined && item.id !== null ? item.id : Math.random();
-    }
-
-    private static async readSuggestedPage(
-        sid: string,
-        cursor: string | null
-    ): Promise<{ items: Array<{ id?: string | number }>; nextCursor: string | null; hasMore: boolean } | null> {
-        let url = `/api/recommendations/suggested-sessions/${encodeURIComponent(sid)}/page?limit=${this.SUGGESTED_BATCH}&lang=${State.lang}`;
-        if (cursor) url += `&cursor=${encodeURIComponent(cursor)}`;
-        const res = await fetch(url, { headers: this.guestHeaders({}) });
-        if (res.status === 410 || res.status === 404 || res.status === 409) {
-            return null;
-        }
-        if (!res.ok) throw new Error('suggested page status ' + res.status);
-        const data = (await res.json()) as {
-            success?: unknown;
-            data?: { items?: unknown; nextCursor?: unknown; hasMore?: unknown } | null;
-        };
-        const payload = data && data.success && data.data ? data.data : null;
-        if (!payload || !Array.isArray(payload.items)) throw new Error('bad suggested payload');
-        return {
-            items: payload.items as Array<{ id?: string | number }>,
-            nextCursor: typeof payload.nextCursor === 'string' ? payload.nextCursor : null,
-            hasMore: payload.hasMore === true,
-        };
-    }
-
-    private static resetGuestRailState(): void {
-        this.suggestedSessionId = null;
-        this.suggestedCursor = null;
-        this.suggestedDone = false;
-        this.suggestedLoading = false;
-        this.suggestedRecreated = false;
-        this.suggestedSeen = new Set();
-    }
-
-    private static teardownGuestRail(): void {
-        if (this.suggestedObserver) {
+    static armRailObserver(key: string): void {
+        const state = this.rails.get(key);
+        if (!state || state.done) return;
+        const scroller = document.getElementById(homeRailScrollerId(key));
+        const sentinel = document.getElementById(homeRailSentinelId(key));
+        if (!scroller || !sentinel || typeof IntersectionObserver === 'undefined') return;
+        if (state.observer) {
             try {
-                this.suggestedObserver.disconnect();
+                state.observer.disconnect();
             } catch {
-                // Harness/shim without full observer support.
+                // Ignore harness shims.
             }
-            this.suggestedObserver = null;
         }
-        const sentinel = document.getElementById('suggested-rail-sentinel');
-        if (sentinel && sentinel.parentElement) sentinel.parentElement.removeChild(sentinel);
-        this.resetGuestRailState();
-    }
-
-    /**
-     * R3-GUEST-1: continue the frozen guest rail as the visitor scrolls it.
-     * Each batch appends at the frozen cursor; a retry re-reads the SAME
-     * cursor; the end comes ONLY from the server hasMore flag. A lapsed
-     * session (410/404/409) freezes ONE fresh session and restarts the rail
-     * from its head — never a silent stop, never a duplicate loop.
-     */
-    private static setupGuestRailScroll(): void {
-        const scroller = document.getElementById(`${this.SUGGESTED_RAIL_ID}-scroll`);
-        if (!scroller || typeof IntersectionObserver === 'undefined') return;
-        if (this.suggestedDone) return;
-        const sentinel = document.createElement('div');
-        sentinel.id = 'suggested-rail-sentinel';
-        sentinel.setAttribute('aria-hidden', 'true');
-        sentinel.className = 'flex-shrink-0 w-24 flex items-center justify-center';
-        sentinel.innerHTML = '<i class="fas fa-spinner fa-spin text-purple-400 text-xl"></i>';
-        scroller.appendChild(sentinel);
-        const observer = new IntersectionObserver((entries) => {
-            for (const entry of entries) {
-                if (entry.isIntersecting) void this.appendSuggestedBatch();
-            }
-        }, { root: scroller, threshold: 0.1 });
-        this.suggestedObserver = observer;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting) void this.appendRailBatch(key);
+                }
+            },
+            { root: scroller, threshold: 0.1 }
+        );
+        state.observer = observer;
         observer.observe(sentinel);
     }
 
-    private static async appendSuggestedBatch(): Promise<void> {
-        if (this.suggestedLoading || this.suggestedDone) return;
-        const sid = this.suggestedSessionId;
+    static paintSentinel(key: string, mode: 'loading' | 'idle' | 'retry' | 'end'): void {
+        const sentinel = document.getElementById(homeRailSentinelId(key));
+        if (!sentinel) return;
+        sentinel.innerHTML = getRailSentinelHTML(key, mode, State.lang);
+        if (mode === 'retry') this.wireRetryButton(key);
+    }
+
+    static wireRetryButton(key: string): void {
+        const section = document.getElementById(homeRailSectionId(key));
+        if (!section) return;
+        const btn = section.querySelector('[data-home-rail-retry]');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+            const state = this.rails.get(key);
+            if (state && state.sessionId) {
+                // A live rail retries the SAME cursor (no double append).
+                this.paintSentinel(key, 'loading');
+                void this.appendRailBatch(key);
+            } else {
+                // A never-opened rail re-freezes from the head.
+                void this.reopenRailSection(key);
+            }
+        });
+    }
+
+    static async appendRailBatch(key: string): Promise<void> {
+        const state = this.rails.get(key);
+        if (!state || state.loading || state.done) return;
+        if (state.generation !== this.railGeneration) return;
+        const sid = state.sessionId;
         if (!sid) return;
-        const scroller = document.getElementById(`${this.SUGGESTED_RAIL_ID}-scroll`);
-        const sentinel = document.getElementById('suggested-rail-sentinel');
+        const scroller = document.getElementById(homeRailScrollerId(key));
+        const sentinel = document.getElementById(homeRailSentinelId(key));
         if (!scroller || !sentinel) return;
-        const tr = translations[getUILanguage(State.lang)];
-        this.suggestedLoading = true;
+        state.loading = true;
+        this.paintSentinel(key, 'loading');
         try {
-            const page = await this.readSuggestedPage(sid, this.suggestedCursor);
+            const page = await this.readRailPage(sid, state, state.cursor);
+            // Discard late responses from a superseded context.
+            if (state.generation !== this.railGeneration || this.rails.get(key) !== state) return;
             if (page === null) {
-                // Lapsed session: exactly one fresh freeze, rail restarts.
-                if (!this.suggestedRecreated) {
-                    this.suggestedRecreated = true;
-                    await this.restartGuestRail(scroller);
+                this.paintSentinel(key, 'retry');
+                return;
+            }
+            if ('lapsed' in page) {
+                if (!state.recreated) {
+                    state.recreated = true;
+                    await this.restartRail(key);
                 } else {
-                    this.failGuestRail(tr);
+                    this.paintSentinel(key, 'retry');
                 }
                 return;
             }
-            const fresh: Array<{ id?: string | number }> = [];
+            const fresh: RailCard[] = [];
             for (const item of page.items) {
-                const key = this.railKey(item);
-                if (this.suggestedSeen.has(key)) continue;
-                this.suggestedSeen.add(key);
+                const itemId = this.itemKey(item);
+                if (state.seen.has(itemId)) continue;
+                state.seen.add(itemId);
                 fresh.push(item);
             }
             if (fresh.length > 0) {
-                const html = fresh.map((item) => getCompetitionCard(item as never, State.lang)).join('');
+                const html = fresh
+                    .map((item) => getCompetitionCard(item as unknown as CompetitionCardProps, State.lang))
+                    .join('');
                 sentinel.insertAdjacentHTML('beforebegin', html);
             }
-            this.suggestedCursor = page.nextCursor;
-            this.suggestedDone = !page.hasMore;
-            if (this.suggestedDone) {
-                if (this.suggestedObserver) this.suggestedObserver.disconnect();
-                this.suggestedObserver = null;
-                if (sentinel.parentElement) sentinel.parentElement.removeChild(sentinel);
-            }
-        } catch (err) {
-            console.error('[HomePage] suggested continuation failed:', err);
-            this.failGuestRail(tr);
-        } finally {
-            this.suggestedLoading = false;
-        }
-    }
-
-    private static failGuestRail(tr: { discovery?: { retry?: string } }): void {
-        const sentinel = document.getElementById('suggested-rail-sentinel');
-        if (!sentinel) return;
-        sentinel.innerHTML = `<button type="button" data-suggested-retry="1" class="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-semibold">${
-            (tr.discovery && tr.discovery.retry) || 'Retry'
-        }</button>`;
-        const btn = sentinel.querySelector('[data-suggested-retry]');
-        if (btn) {
-            btn.addEventListener('click', () => {
-                sentinel.innerHTML = '<i class="fas fa-spinner fa-spin text-purple-400 text-xl"></i>';
-                void this.appendSuggestedBatch();
-            });
-        }
-    }
-
-    private static async restartGuestRail(scroller: HTMLElement): Promise<void> {
-        try {
-            this.resetGuestRailState();
-            const createRes = await fetch(`/api/recommendations/suggested-sessions?lang=${State.lang}`, {
-                method: 'POST',
-                headers: this.guestHeaders({ 'Content-Type': 'application/json' }),
-                body: JSON.stringify({}),
-            });
-            if (!createRes.ok) throw new Error('recreate status ' + createRes.status);
-            const created = (await createRes.json()) as {
-                success?: unknown;
-                data?: { session?: { id?: unknown }; guest_token?: unknown };
-            };
-            const sid = created?.success && created.data?.session?.id ? String(created.data.session.id) : '';
-            if (!sid) throw new Error('no recreated session id');
-            this.storeGuestToken(created.data?.guest_token);
-            const page = await this.readSuggestedPage(sid, null);
-            if (!page) throw new Error('no recreated first page');
-            this.suggestedSessionId = sid;
-            this.suggestedCursor = page.nextCursor;
-            this.suggestedDone = !page.hasMore;
-            this.suggestedSeen = new Set();
-            const cards: string[] = [];
-            for (const item of page.items) {
-                this.suggestedSeen.add(this.railKey(item));
-                cards.push(getCompetitionCard(item as never, State.lang));
-            }
-            scroller.innerHTML = cards.join('');
-            const sentinel = document.createElement('div');
-            sentinel.id = 'suggested-rail-sentinel';
-            sentinel.setAttribute('aria-hidden', 'true');
-            sentinel.className = 'flex-shrink-0 w-24 flex items-center justify-center';
-            sentinel.innerHTML = '<i class="fas fa-spinner fa-spin text-purple-400 text-xl"></i>';
-            scroller.appendChild(sentinel);
-            if (this.suggestedObserver) {
+            state.cursor = page.nextCursor;
+            state.done = !page.hasMore;
+            this.paintSentinel(key, state.done ? 'end' : 'idle');
+            if (state.done && state.observer) {
                 try {
-                    this.suggestedObserver.observe(sentinel);
+                    state.observer.disconnect();
                 } catch {
-                    // Fall through to button retry on next error.
+                    // Ignore harness shims.
                 }
-            }
-            if (this.suggestedDone && sentinel.parentElement) {
-                sentinel.parentElement.removeChild(sentinel);
+                state.observer = null;
             }
         } catch (err) {
-            console.error('[HomePage] suggested rail restart failed:', err);
-            const tr = translations[getUILanguage(State.lang)];
-            this.failGuestRail(tr);
+            console.error('[HomePage] rail continuation failed:', key, err);
+            if (state.generation === this.railGeneration) this.paintSentinel(key, 'retry');
+        } finally {
+            state.loading = false;
         }
     }
 
-    static setMainTab(tab: 'live' | 'upcoming' | 'recorded') {        // Prevent accessing upcoming tab if not logged in
-        if (tab === 'upcoming' && !State.currentUser) {
-            tab = 'live'; // Fallback to live tab
+    /**
+     * Re-freeze a lapsed rail once and restart it from its head: the old
+     * snapshot is discarded (seen set reset), never merged with the new one.
+     */
+    static async restartRail(key: string): Promise<void> {
+        const state = this.rails.get(key);
+        if (!state) return;
+        const generation = state.generation;
+        const opened = await this.openRail(state);
+        if (generation !== this.railGeneration || this.rails.get(key) !== state) return;
+        const scroller = document.getElementById(homeRailScrollerId(key));
+        if (!scroller) return;
+        if (opened === null || opened.items.length === 0) {
+            this.paintSentinel(key, 'retry');
+            return;
         }
+        state.sessionId = opened.sessionId;
+        state.cursor = opened.cursor;
+        state.done = opened.done;
+        state.seen = new Set<string | number>();
+        const cards: string[] = [];
+        for (const item of opened.items) {
+            state.seen.add(this.itemKey(item));
+            cards.push(getCompetitionCard(item as unknown as CompetitionCardProps, State.lang));
+        }
+        const sentinel = document.getElementById(homeRailSentinelId(key));
+        const sentinelHtml = sentinel ? sentinel.outerHTML : '';
+        scroller.innerHTML = cards.join('') + sentinelHtml;
+        this.paintSentinel(key, state.done ? 'end' : 'idle');
+        // innerHTML replaced the observed sentinel node: the old observer
+        // watches a detached node, so drop it and observe the fresh one.
+        if (state.observer) {
+            try {
+                state.observer.disconnect();
+            } catch {
+                // Ignore harness shims.
+            }
+            state.observer = null;
+        }
+        this.armRailObserver(key);
+    }
 
+    /**
+     * Re-open a rail whose section never painted (explicit retry state):
+     * freeze a fresh session and swap the whole section.
+     */
+    static async reopenRailSection(key: string): Promise<void> {
+        const section = document.getElementById(homeRailSectionId(key));
+        if (!section) return;
+        const generation = this.railGeneration;
+        const def = this.lastDefs.find((d) => d.key === key);
+        if (!def) return;
+        const opened = await this.openRail(def);
+        if (generation !== this.railGeneration) return;
+        if (opened === null || opened.items.length === 0) return;
+        const cardsHtml = opened.items
+            .map((item) => getCompetitionCard(item as unknown as CompetitionCardProps, State.lang))
+            .join('');
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = getHomeRailSection({
+            railKey: def.key,
+            title: def.title,
+            icon: def.icon,
+            lang: State.lang,
+            color: def.color,
+            cardsHtml,
+            sentinelMode: opened.done ? 'end' : 'idle',
+        });
+        const fresh = wrapper.firstElementChild;
+        if (!fresh) return;
+        section.replaceWith(fresh);
+        const state: RailState = {
+            ...def,
+            sessionId: opened.sessionId,
+            cursor: opened.cursor,
+            done: opened.done,
+            loading: false,
+            seen: new Set<string | number>(),
+            recreated: true,
+            generation,
+            observer: null,
+        };
+        for (const item of opened.items) state.seen.add(this.itemKey(item));
+        this.rails.set(def.key, state);
+        this.setupAllHoverScroll();
+        this.armRailObserver(def.key);
+    }
+
+    /** Last painted rail definitions (for error-section retries). */
+    static lastDefs: RailDef[] = [];
+
+    static setMainTab(tab: 'live' | 'upcoming' | 'recorded') {
+        // R3-RAILS-1A: guests SEE the Upcoming rail (visibility only — invite
+        // and join actions keep their own auth guards, untouched here).
         this.currentMainTab = tab;
         const liveTab = document.getElementById('tab-live');
         const upcomingTab = document.getElementById('tab-upcoming');
@@ -454,14 +591,11 @@ export class HomePage {
 
         const tr = translations[getUILanguage(State.lang)];
 
-        // Determine if upcoming tab should stay hidden (for non-logged-in users)
-        const upcomingHidden = !State.currentUser ? ' hidden' : '';
-
         if (liveTab) {
             liveTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer';
             liveTab.innerHTML = `<span class="w-2 h-2 rounded-full bg-gray-400"></span> ${tr.live}`;
         }
-        if (upcomingTab) upcomingTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer' + upcomingHidden;
+        if (upcomingTab) upcomingTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer';
         if (recordedTab) recordedTab.className = 'px-6 py-2.5 rounded-full text-sm font-bold transition-all flex items-center gap-2 tab-inactive cursor-pointer';
 
         if (tab === 'live' && liveTab) {
@@ -488,74 +622,7 @@ export class HomePage {
             }
         });
 
-        this.currentOffset = 0;
         this.loadCompetitions();
-    }
-
-    static async loadMoreCompetitions() {
-        const btn = document.getElementById('loadMoreBtn') as HTMLButtonElement;
-        const tr = translations[getUILanguage(State.lang)];
-
-        if (btn) {
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> ${tr.loading || 'Loading...'}`;
-            btn.disabled = true;
-        }
-
-        this.currentOffset += 24;
-
-        try {
-            const params: any = {
-                limit: 24,
-                offset: this.currentOffset
-            };
-
-            if (this.currentMainTab === 'live') params.status = 'live';
-            else if (this.currentMainTab === 'recorded') params.status = 'recorded';
-            else if (this.currentMainTab === 'upcoming') params.status = 'upcoming';
-
-            if (this.currentSubTab !== 'all') {
-                params.category = this.currentSubTab;
-            }
-
-            const data = await CompetitionService.list(params);
-
-            if (data.success && data.data?.length > 0) {
-                if (btn && btn.parentElement) btn.parentElement.remove();
-
-                const container = document.getElementById('mainContent');
-                let newHtml = '';
-                data.data.forEach((item: any) => {
-                    newHtml += getCompetitionCard(item, State.lang);
-                });
-
-                newHtml = `<section class="animate-fade-in"><div class="flex overflow-x-auto pb-4 -mx-4 px-4 gap-4 scrollbar-hide snap-x snap-mandatory">${newHtml}</div></section>`;
-
-                if (data.data.length >= 24) {
-                    newHtml += `
-                        <div class="text-center py-8">
-                          <button data-csp-on="click" data-csp-fn="loadMoreCompetitions" data-csp-args='[]' id="loadMoreBtn" class="px-8 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full font-semibold transition-all">
-                            <i class="fas fa-plus-circle mr-2"></i>
-                            ${tr.load_more || 'Load More'}
-                          </button>
-                        </div>
-                      `;
-                }
-
-                if (container) container.insertAdjacentHTML('beforeend', newHtml);
-            } else {
-                if (btn) {
-                    btn.textContent = tr.no_more || 'No more results';
-                    btn.classList.add('opacity-50', 'cursor-not-allowed');
-                }
-            }
-
-        } catch (err) {
-            console.error(err);
-            if (btn) {
-                btn.innerHTML = `<i class="fas fa-plus-circle mr-2"></i> ${tr.load_more || 'Load More'}`;
-                btn.disabled = false;
-            }
-        }
     }
 
     static bindSearchEvents() {
