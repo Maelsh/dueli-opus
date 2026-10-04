@@ -65,6 +65,46 @@ export interface HomeRailSectionOptions {
     color: string;
     cardsHtml: string;
     sentinelMode: RailSentinelMode;
+    /**
+     * R3-EXPLORE-CONTEXT-1: typed rail context carried to Explore
+     * (category + subcategory when present + status + lang +
+     * view=competitions). Built by the caller via railViewAllHref — the
+     * component never parses railKey or translated titles.
+     */
+    viewAllHref: string;
+}
+
+/**
+ * R3-EXPLORE-CONTEXT-1: View All href from typed rail context.
+ * - suggested rails carry their status bucket only (no invented category);
+ * - main-category rails carry category + status;
+ * - subcategory rails carry category + subcategory + status.
+ * Translated labels never become query keys; URLSearchParams owns encoding.
+ */
+export function railViewAllHref(opts: {
+    kind: 'suggested' | 'category';
+    category: string;
+    subcategory: string;
+    status: 'live' | 'recorded' | 'upcoming';
+    lang: Language;
+}): string {
+    const p = new URLSearchParams();
+    if (opts.kind === 'category') {
+        if (opts.category) p.set('category', opts.category);
+        if (opts.subcategory) p.set('subcategory', opts.subcategory);
+    }
+    if (opts.status) p.set('status', opts.status);
+    p.set('view', 'competitions');
+    p.set('lang', opts.lang);
+    return `/explore?${p.toString()}`;
+}
+
+function escapeHref(value: string): string {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 /**
@@ -73,7 +113,7 @@ export interface HomeRailSectionOptions {
  * last child is the continuation sentinel.
  */
 export function getHomeRailSection(opts: HomeRailSectionOptions): string {
-    const { railKey, title, icon, lang, color, cardsHtml, sentinelMode } = opts;
+    const { railKey, title, icon, lang, color, cardsHtml, sentinelMode, viewAllHref } = opts;
     const tr = translations[getUILanguage(lang)];
     const rtl = isRTL(lang);
     const sectionId = homeRailSectionId(railKey);
@@ -100,7 +140,7 @@ export function getHomeRailSection(opts: HomeRailSectionOptions): string {
             <button class="section-next p-2 rounded-full bg-white dark:bg-gray-800 shadow-md transform scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 hover:bg-purple-50 dark:hover:bg-gray-700 z-10 disabled:opacity-0 disabled:cursor-not-allowed max-sm:opacity-100 max-sm:scale-100" aria-label="${t('next', lang)}" data-csp-on="click" data-csp-fn="__byIdScroll" data-csp-args='["${scrollerId}",${rtl ? -300 : 300},"smooth"]'>
               <i class="fas fa-chevron-${rtl ? 'left' : 'right'} text-gray-600 dark:text-gray-300"></i>
             </button>
-            <a href="/explore?lang=${lang}" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800" data-csp-style="color: ${color}">
+            <a href="${escapeHref(viewAllHref)}" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all hover:bg-gray-100 dark:hover:bg-gray-800" data-csp-style="color: ${color}">
               <span>${tr.view_all || 'View All'}</span>
               <i class="fas fa-arrow-${rtl ? 'left' : 'right'} text-xs transform transition-transform group-hover:translate-x-1"></i>
             </a>

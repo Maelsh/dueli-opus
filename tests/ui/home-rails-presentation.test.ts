@@ -67,6 +67,7 @@ describe('R3-RAILS-1B rail markup', () => {
             color: '#8B5CF6',
             cardsHtml: '<a href="/competition/1">x</a>',
             sentinelMode: 'idle',
+            viewAllHref: `/explore?category=dialogue&status=live&view=competitions&lang=${lang}`,
         });
         expect(html).toContain('id="home-rail-cat-dialogue-live"');
         expect(html).toContain('id="home-rail-cat-dialogue-live-scroll"');

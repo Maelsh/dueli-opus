@@ -21,11 +21,20 @@ import type { Context } from 'hono';
 import type { Bindings, Variables } from '../../config/types';
 import { translations, getUILanguage, isRTL, type Language } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter, getCompetitionCard, getUserCard } from '../../shared/components';
-import { DUELI_PRIMARY_BTN } from '../../shared/constants';
+import { DUELI_PRIMARY_BTN, CATEGORY_SUBCATEGORIES } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
 
 const CATEGORY_SLUGS = ['dialogue', 'science', 'talents'] as const;
 const STATUS_VALUES = ['live', 'recorded', 'upcoming'] as const;
+
+/** Parent of a subcategory slug from the canonical taxonomy ('' = unknown). */
+function parentOfSubcategory(sub: string): string {
+    for (const parent of Object.keys(CATEGORY_SUBCATEGORIES)) {
+        const children = CATEGORY_SUBCATEGORIES[parent];
+        if (children && children.indexOf(sub) !== -1) return parent;
+    }
+    return '';
+}
 
 function escapeAttr(value: string): string {
     return String(value ?? '')
@@ -62,10 +71,27 @@ function normaliseStatus(raw: string): string {
     return (STATUS_VALUES as readonly string[]).includes(v) ? v : '';
 }
 
-function withParams(search: string, category: string, status: string, lang: string, view: string): string {
+/**
+ * Normalise the incoming subcategory: canonical hyphenated slugs from the
+ * taxonomy only (underscore spellings tolerated). Translated display names
+ * are never identifiers. Unknown slugs stay '' — the caller distinguishes
+ * ''-as-All (empty input) from ''-as-invalid (non-empty input) via the raw
+ * value, so an invalid subcategory never silently becomes All.
+ */
+function normaliseSubcategory(raw: string): string {
+    const v = (raw || '').trim().toLowerCase();
+    if (!v) return '';
+    if (parentOfSubcategory(v) !== '') return v;
+    const dashed = v.replace(/_/g, '-');
+    if (dashed !== v && parentOfSubcategory(dashed) !== '') return dashed;
+    return '';
+}
+
+function withParams(search: string, category: string, subcategory: string, status: string, lang: string, view: string): string {
     const p = new URLSearchParams();
     if (search) p.set('search', search);
     if (category) p.set('category', category);
+    if (subcategory) p.set('subcategory', subcategory);
     if (status) p.set('status', status);
     if (view) p.set('view', view);
     p.set('lang', lang);
@@ -85,7 +111,26 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     }
   };
   const rawSearch = queryOf('search');
-  const category = normaliseCategory(queryOf('category'));
+  const rawCategory = queryOf('category');
+  const rawSubcategory = queryOf('subcategory');
+  let category = normaliseCategory(rawCategory);
+  let subcategory = normaliseSubcategory(rawSubcategory);
+  // A valid subcategory without a parent canonicalizes to its known parent
+  // (contract §9.5) — ?subcategory=physics behaves as science+physics.
+  if (subcategory !== '' && category === '') {
+    category = parentOfSubcategory(subcategory);
+  }
+  // Invalid pairs never silently become All: unknown parent/subcategory, or
+  // a subcategory that belongs to a different parent, is an explicit error
+  // state (server banner + no session fetch client-side).
+  let filterError = '';
+  if (rawCategory.trim() !== '' && category === '') {
+    filterError = tr.errors?.invalid_request || 'Invalid request';
+  } else if (rawSubcategory.trim() !== '' && subcategory === '') {
+    filterError = tr.errors?.invalid_request || 'Invalid request';
+  } else if (category !== '' && subcategory !== '' && parentOfSubcategory(subcategory) !== category) {
+    filterError = tr.errors?.invalid_request || 'Invalid request';
+  }
   const status = normaliseStatus(queryOf('status'));
   const viewParam = queryOf('view');
   const view = viewParam === 'competitions' || viewParam === 'users' ? viewParam : '';
@@ -93,6 +138,17 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
 
   const categoryOptions = CATEGORY_SLUGS.map(
     (s) => `<option value="${s}"${category === s ? ' selected' : ''}>${escapeHtml(tr.categories[s] || s)}</option>`,
+  ).join('');
+  const subLabel = (sub: string): string => {
+    const pack = tr.categories as unknown as Record<string, string>;
+    return pack[sub.replace(/-/g, '_')] || pack[sub] || sub;
+  };
+  const subcategoryPool = category !== '' && CATEGORY_SUBCATEGORIES[category]
+    ? CATEGORY_SUBCATEGORIES[category]
+    : Object.keys(CATEGORY_SUBCATEGORIES).reduce<string[]>(
+        (all, parent) => all.concat(CATEGORY_SUBCATEGORIES[parent] || []), []);
+  const subcategoryOptions = subcategoryPool.map(
+    (s) => `<option value="${s}"${subcategory === s ? ' selected' : ''}>${escapeHtml(subLabel(s))}</option>`,
   ).join('');
   const statusLabels: Record<string, string> = {
     live: tr.status_live || 'Live',
@@ -103,9 +159,9 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     (s) => `<option value="${s}"${status === s ? ' selected' : ''}>${escapeHtml(statusLabels[s])}</option>`,
   ).join('');
 
-  const compsViewAll = withParams(rawSearch, category, status, uiLang, 'competitions');
-  const usersViewAll = withParams(rawSearch, '', '', uiLang, 'users');
-  const backHref = withParams(rawSearch, category, status, uiLang, '');
+  const compsViewAll = withParams(rawSearch, category, subcategory, status, uiLang, 'competitions');
+  const usersViewAll = withParams(rawSearch, '', '', '', uiLang, 'users');
+  const backHref = withParams(rawSearch, category, subcategory, status, uiLang, '');
 
   const compsHidden = view === 'users' ? ' hidden' : '';
   const usersHidden = view === 'competitions' ? ' hidden' : '';
@@ -152,6 +208,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             <i class="fas fa-chevron-down absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-4' : 'right-4'} text-gray-400 pointer-events-none" aria-hidden="true"></i>
           </div>
           <div class="relative">
+            <select id="subcategoryFilter" name="subcategory" aria-label="${escapeAttr(tr.select_subcategory || tr.filters || 'Subcategory')}"
+                    class="w-full md:w-auto appearance-none ps-4 pe-10 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
+              <option value="">${escapeHtml(tr.all || 'All')}</option>
+              ${subcategoryOptions}
+            </select>
+            <i class="fas fa-chevron-down absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-4' : 'right-4'} text-gray-400 pointer-events-none" aria-hidden="true"></i>
+          </div>
+          <div class="relative">
             <select id="statusFilter" name="status" aria-label="${escapeAttr(tr.status_live ? (tr.status || 'Status') : 'Status')}"
                     class="w-full md:w-auto appearance-none ps-4 pe-10 py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none transition">
               <option value="">${escapeHtml(tr.all || 'All')}</option>
@@ -160,6 +224,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             <i class="fas fa-chevron-down absolute top-1/2 -translate-y-1/2 ${rtl ? 'left-4' : 'right-4'} text-gray-400 pointer-events-none" aria-hidden="true"></i>
           </div>
           <input type="hidden" name="lang" value="${uiLang}" />
+          ${view ? `<input type="hidden" name="view" value="${escapeAttr(view)}" />` : ''}
           <button type="submit" title="${escapeAttr(tr.search_placeholder || 'Search')}" aria-label="${escapeAttr(tr.search_placeholder || 'Search')}"
                   class="px-6 py-3 ${DUELI_PRIMARY_BTN} flex items-center justify-center gap-2">
             <i class="fas fa-search" aria-hidden="true"></i>
@@ -169,6 +234,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
       
       <!-- Search Query Display -->
       <div id="searchQueryDisplay" class="mb-6"></div>
+
+      ${filterError ? `
+      <div class="mb-6 rounded-xl px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm font-semibold" role="alert" data-explore-state="invalid-filter">${escapeHtml(filterError)}</div>
+      ` : ''}
 
       ${view ? `
       <div class="mb-6">
@@ -241,8 +310,11 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         const tr = ${JSON.stringify(tr)};
         const rtl = ${rtl};
         const initialCategory = ${JSON.stringify(category)};
+        const initialSubcategory = ${JSON.stringify(subcategory)};
         const initialStatus = ${JSON.stringify(status)};
         const initialView = ${JSON.stringify(view)};
+        const initialFilterValid = ${filterError ? 'false' : 'true'};
+        const taxonomyChildren = ${JSON.stringify(CATEGORY_SUBCATEGORIES)};
         const params = new URLSearchParams(window.location.search);
         const search = params.get('search') || '';
         const viewMode = params.get('view') === 'competitions' || params.get('view') === 'users'
@@ -303,6 +375,12 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         
         async function loadSearchResults() {
           applyViewMode();
+          bindSubcategoryReset();
+          if (!initialFilterValid) {
+            showInvalidFilter('competitionsContainer');
+            await loadUsersPreview();
+            return;
+          }
           if (isPreview) {
             await Promise.all([
               loadCompetitionsPreview(),
@@ -350,9 +428,33 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           return v === 'dialogue' || v === 'science' || v === 'talents' ? v : '';
         }
 
+        // Server-normalised subcategory slug ('' = All, explicit user choice).
+        function subcategoryParam() {
+          var v = (initialSubcategory || '').toLowerCase();
+          var pool = taxonomyChildren[categoryParam()];
+          if (v && categoryParam() && pool && pool.indexOf(v) === -1) return '';
+          return v;
+        }
+
         function statusParam() {
           const v = (initialStatus || '').toLowerCase();
           return v === 'live' || v === 'recorded' || v === 'upcoming' ? v : '';
+        }
+
+        // Changing the parent drops a child that no longer belongs to it;
+        // changing the child never drops status/search/lang/view (GET form
+        // keeps them, and a filter change is a fresh page load = new session).
+        function bindSubcategoryReset() {
+          var catSel = document.getElementById('categoryFilter');
+          var subSel = document.getElementById('subcategoryFilter');
+          if (!catSel || !subSel || catSel.getAttribute('data-sub-bound')) return;
+          catSel.setAttribute('data-sub-bound', '1');
+          catSel.addEventListener('change', function() {
+            var parent = catSel.value || '';
+            var children = (parent && taxonomyChildren[parent]) || null;
+            var current = subSel.value || '';
+            if (current && children && children.indexOf(current) === -1) subSel.value = '';
+          });
         }
 
         function competitionsUrl(limit, offset) {
@@ -400,7 +502,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         }
 
         function sessionCreateBody() {
-          return JSON.stringify({ search: search, category: categoryParam(), status: statusParam() });
+          return JSON.stringify({ search: search, category: categoryParam(), subcategory: subcategoryParam(), status: statusParam() });
         }
 
         function sessionPageUrl(sid, limit, cursor) {
@@ -409,10 +511,24 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           if (search) url += '&search=' + encodeURIComponent(search);
           var cat = categoryParam();
           if (cat) url += '&category=' + encodeURIComponent(cat);
+          var sub = subcategoryParam();
+          if (sub) url += '&subcategory=' + encodeURIComponent(sub);
           var st = statusParam();
           if (st) url += '&status=' + encodeURIComponent(st);
           url += '&lang=' + encodeURIComponent(lang);
           return url;
+        }
+
+        // An invalid category/subcategory pair never fetches: the filters
+        // would silently widen to All server-side, so the page stays on the
+        // explicit server-rendered error instead of showing mixed results.
+        function showInvalidFilter(containerId) {
+          var el = document.getElementById(containerId);
+          if (!el) return;
+          el.innerHTML = '<div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700" role="alert" data-explore-state="invalid-filter">' +
+            '<p class="text-red-500 dark:text-red-400 font-semibold">' +
+            ((tr.errors && tr.errors.invalid_request) || tr.error_occurred || 'Invalid request') +
+            '</p></div>';
         }
 
         // Resolve the frozen session for this view: the preview creates it,

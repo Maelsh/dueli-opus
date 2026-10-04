@@ -71,9 +71,9 @@ export class CompetitionController extends BaseController {
      */
     async createExploreSession(c: AppContext) {
         try {
-            const body = await this.getBody<{ search?: unknown; category?: unknown; status?: unknown }>(c);
+            const body = await this.getBody<{ search?: unknown; category?: unknown; subcategory?: unknown; status?: unknown }>(c);
             const raw = body ?? {};
-            for (const key of ['search', 'category', 'status'] as const) {
+            for (const key of ['search', 'category', 'subcategory', 'status'] as const) {
                 const value = raw[key];
                 if (value !== undefined && value !== null && typeof value !== 'string') {
                     return this.validationError(c, this.t('errors.invalid_request', c));
@@ -81,6 +81,19 @@ export class CompetitionController extends BaseController {
                 if (typeof value === 'string' && value.length > 200) {
                     return this.validationError(c, this.t('errors.invalid_request', c));
                 }
+            }
+            // R3-EXPLORE-CONTEXT-1: unknown subcategories and
+            // subcategory/parent mismatches are rejected (422) — never
+            // silently widened to All. A valid subcategory without a parent
+            // canonicalizes to its known parent inside canonicalizeFilters.
+            const canonical = ExploreSessionService.canonicalizeFilters({
+                search: raw.search,
+                category: raw.category,
+                subcategory: raw.subcategory,
+                status: raw.status,
+            });
+            if (ExploreSessionService.validateExplorePair(canonical) !== null) {
+                return this.validationError(c, this.t('errors.invalid_request', c));
             }
 
             const currentUser = this.getCurrentUser(c);
@@ -91,7 +104,7 @@ export class CompetitionController extends BaseController {
             const service = new ExploreSessionService(c.env.DB);
             const { session } = await service.createSession(
                 identity,
-                { search: raw.search, category: raw.category, status: raw.status },
+                { search: canonical.search, category: canonical.category, subcategory: canonical.subcategory, status: canonical.status },
                 getUILanguage(this.getLanguage(c))
             );
 
@@ -106,7 +119,7 @@ export class CompetitionController extends BaseController {
 
     /**
      * R3-B7: read one page of a frozen Explore result session.
-     * GET /api/competitions/explore-sessions/:id/page?cursor&limit&search&category&status
+     * GET /api/competitions/explore-sessions/:id/page?cursor&limit&search&category&subcategory&status
      *
      * The cursor is opaque; progress, expiry and context checks all happen
      * server-side against the stored session. MVC: no persistence calls here
@@ -121,6 +134,19 @@ export class CompetitionController extends BaseController {
             const presentedGuest = c.req.header('X-Guest-Token') ?? null;
             const identity = ExploreSessionService.identityForRead(userId, presentedGuest);
 
+            // R3-EXPLORE-CONTEXT-1: an invalid subcategory pair on read is a
+            // validation error (never a silent widen); a valid-but-different
+            // context against the stored session stays a 409 below.
+            const readCanonical = ExploreSessionService.canonicalizeFilters({
+                search: c.req.query('search'),
+                category: c.req.query('category'),
+                subcategory: c.req.query('subcategory'),
+                status: c.req.query('status'),
+            });
+            if (ExploreSessionService.validateExplorePair(readCanonical) !== null) {
+                return this.validationError(c, this.t('errors.invalid_request', c));
+            }
+
             const service = new ExploreSessionService(c.env.DB);
             const outcome = await service.readPage(identity, sessionId, {
                 cursor: c.req.query('cursor') ?? null,
@@ -128,6 +154,7 @@ export class CompetitionController extends BaseController {
                 filters: {
                     search: c.req.query('search'),
                     category: c.req.query('category'),
+                    subcategory: c.req.query('subcategory'),
                     status: c.req.query('status'),
                 },
                 uiLang: getUILanguage(this.getLanguage(c)),

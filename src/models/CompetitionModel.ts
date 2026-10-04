@@ -16,6 +16,13 @@ export interface CompetitionFilters {
     status?: CompetitionStatus | 'recorded' | 'upcoming';
     category?: string | number;
     subcategory?: string;
+    /**
+     * R3-EXPLORE-CONTEXT-1: when true, only rows with a playable recording
+     * (trimmed vod_url OR youtube_video_url) match — the same media
+     * predicate Home rails use for their recorded slice. Opt-in only, so the
+     * legacy listing (which never sets it) is behaviour-identical.
+     */
+    playableRecording?: boolean;
     country?: string;
     language?: string;
     creatorId?: number;
@@ -141,6 +148,12 @@ export class CompetitionModel extends BaseModel<Competition> {
         if (filters.subcategory) {
             clause += ' AND subcat.slug = ?';
             params.push(filters.subcategory);
+        }
+
+        // Playable-recording gate (recorded slices only — see findHomeRailIds
+        // for the rail twin of this predicate).
+        if (filters.playableRecording) {
+            clause += ` AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL)`;
         }
 
         // Country filter

@@ -33,6 +33,7 @@ import {
     type ExploreResultSession,
 } from '../../models/ExploreResultSessionModel';
 import { ExploreResultChunkModel } from '../../models/ExploreResultChunkModel';
+import { CATEGORY_SUBCATEGORIES } from '../../shared/constants';
 
 /** The only surface B7 ships; D1/D2 add their own surface names later. */
 export const EXPLORE_SURFACE = 'explore_competitions';
@@ -57,7 +58,25 @@ export const EXPLORE_MAX_SCAN_PER_PAGE = 2000;
 export interface ExploreCanonicalFilters {
     search: string;
     category: string;
+    subcategory: string;
     status: string;
+}
+
+/**
+ * R3-EXPLORE-CONTEXT-1: taxonomy helpers over the canonical
+ * CATEGORY_SUBCATEGORIES map (the same source Home rails and seeds use).
+ * Slugs only — translated display names are never identifiers.
+ */
+export function parentOfSubcategory(subcategory: string): string {
+    for (const parent of Object.keys(CATEGORY_SUBCATEGORIES)) {
+        const children = CATEGORY_SUBCATEGORIES[parent];
+        if (children && children.indexOf(subcategory) !== -1) return parent;
+    }
+    return '';
+}
+
+export function isKnownSubcategory(subcategory: string): boolean {
+    return subcategory !== '' && parentOfSubcategory(subcategory) !== '';
 }
 
 export interface ExploreIdentity {
@@ -113,7 +132,7 @@ export class ExploreResultProvider implements ResultSessionProvider {
     readonly surface = EXPLORE_SURFACE;
     private readonly canonical: ExploreCanonicalFilters;
 
-    constructor(rawFilters: { search?: unknown; category?: unknown; status?: unknown }) {
+    constructor(rawFilters: { search?: unknown; category?: unknown; subcategory?: unknown; status?: unknown }) {
         this.canonical = ExploreSessionService.canonicalizeFilters(rawFilters);
     }
 
@@ -127,7 +146,11 @@ export class ExploreResultProvider implements ResultSessionProvider {
             modelFilters.status = this.canonical.status as CompetitionFilters['status'];
         }
         if (this.canonical.category !== '') modelFilters.category = this.canonical.category;
+        if (this.canonical.subcategory !== '') modelFilters.subcategory = this.canonical.subcategory;
         if (this.canonical.search !== '') modelFilters.search = this.canonical.search;
+        // Recorded = completed WITH a playable recording (Home media contract),
+        // enforced server-side before pagination — never client filtering.
+        if (this.canonical.status === 'recorded') modelFilters.playableRecording = true;
         // The FULL eligible set — no LIMIT, no total cap, one correlated read.
         const eligible = await new CompetitionModel(db).findEligibleIds(modelFilters);
         return ExploreSessionService.freezeShuffle(eligible);
@@ -171,19 +194,44 @@ export class ExploreSessionService {
     // Pure helpers (no I/O — unit-testable, reusable for D1/D2 surfaces)
     // ------------------------------------------------------------------
 
-    static canonicalizeFilters(raw: { search?: unknown; category?: unknown; status?: unknown }): ExploreCanonicalFilters {
+    static canonicalizeFilters(raw: { search?: unknown; category?: unknown; subcategory?: unknown; status?: unknown }): ExploreCanonicalFilters {
         const search = String(raw.search ?? '').trim().slice(0, 100);
         const category = String(raw.category ?? '').trim().toLowerCase().slice(0, 64);
+        const subcategory = String(raw.subcategory ?? '').trim().toLowerCase().slice(0, 64);
         const statusRaw = String(raw.status ?? '').trim().toLowerCase();
-        return {
+        const canonical: ExploreCanonicalFilters = {
             search,
             category,
+            subcategory,
             status: KNOWN_STATUSES.has(statusRaw) ? statusRaw : '',
         };
+        // A valid subcategory with no parent canonicalizes to its known
+        // parent (contract §9.5) — so ?subcategory=physics behaves as
+        // science+physics everywhere, server and client alike.
+        if (canonical.category === '' && isKnownSubcategory(canonical.subcategory)) {
+            canonical.category = parentOfSubcategory(canonical.subcategory);
+        }
+        return canonical;
     }
 
     static canonicalKey(filters: ExploreCanonicalFilters): string {
-        return JSON.stringify([filters.search, filters.category, filters.status]);
+        return JSON.stringify([filters.search, filters.category, filters.subcategory, filters.status]);
+    }
+
+    /**
+     * R3-EXPLORE-CONTEXT-1 pair validation (contract §9.5): an unknown
+     * subcategory, or a subcategory that belongs to a different parent, is
+     * REJECTED (422/409 upstream) — never silently widened to All.
+     * Returns an error token, or null when the pair is usable.
+     */
+    static validateExplorePair(filters: ExploreCanonicalFilters): string | null {
+        if (filters.subcategory === '') return null;
+        const parent = parentOfSubcategory(filters.subcategory);
+        if (parent === '') return 'unknown_subcategory';
+        if (filters.category !== '' && filters.category !== parent) {
+            return 'subcategory_parent_mismatch';
+        }
+        return null;
     }
 
     static isValidGuestToken(token: string | null | undefined): token is string {
@@ -279,7 +327,10 @@ export class ExploreSessionService {
     static matchesFilters(row: CompetitionWithDetails, filters: ExploreCanonicalFilters): boolean {
         if (filters.status !== '') {
             const s = row.status;
-            if (filters.status === 'recorded' || filters.status === 'completed') {
+            if (filters.status === 'recorded') {
+                if (s !== 'completed') return false;
+                if (!ExploreSessionService.hasPlayableRecording(row)) return false;
+            } else if (filters.status === 'completed') {
                 if (s !== 'completed') return false;
             } else if (filters.status === 'live') {
                 if (s !== 'live') return false;
@@ -296,10 +347,29 @@ export class ExploreSessionService {
             const byId = String(row.category_id) === cat || String(row.subcategory_id ?? '') === cat;
             if (!byId && row.category_slug !== cat) return false;
         }
+        if (filters.subcategory !== '') {
+            if (row.subcategory_slug !== filters.subcategory) return false;
+        }
         if (filters.search !== '') {
             if (!row.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
         }
         return true;
+    }
+
+    /**
+     * Playable-recording predicate shared with the SQL gate above (and the
+     * Home rail twin in CompetitionModel.findHomeRailIds): a trimmed vod_url
+     * OR youtube_video_url. Null/empty/whitespace-only never counts.
+     */
+    static hasPlayableRecording(row: CompetitionWithDetails): boolean {
+        const media = row as CompetitionWithDetails & {
+            vod_url?: string | null;
+            youtube_video_url?: string | null;
+        };
+        return (
+            String(media.vod_url ?? '').trim() !== '' ||
+            String(media.youtube_video_url ?? '').trim() !== ''
+        );
     }
 
     // ------------------------------------------------------------------
@@ -351,7 +421,7 @@ export class ExploreSessionService {
 
     async createSession(
         identity: ExploreIdentity,
-        rawFilters: { search?: unknown; category?: unknown; status?: unknown },
+        rawFilters: { search?: unknown; category?: unknown; subcategory?: unknown; status?: unknown },
         uiLang: string,
         stats: ExploreSessionStats = {}
     ): Promise<{ session: ExploreResultSession }> {
@@ -488,7 +558,7 @@ export class ExploreSessionService {
         options: {
             cursor?: string | null;
             limit?: unknown;
-            filters?: { search?: unknown; category?: unknown; status?: unknown };
+            filters?: { search?: unknown; category?: unknown; subcategory?: unknown; status?: unknown };
             uiLang?: string;
             maxScan?: number;
         },
