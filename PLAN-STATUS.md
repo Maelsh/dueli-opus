@@ -1,6 +1,13 @@
 
 
 
+## R3-EXPLORE-CONTEXT-1 سياق View All والفرع في Explore · فرع `feat/r3-explore-context-1` (من `020eacc` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية، بلا migrations (إعادة استعمال جداول ‏0033)، بلا engine/store جديد، بلا H7/ranking، بلا R2-J/#75/#76/#82.
+- العقد: ‏View All من typed rail context (‏category + ‏subcategory + ‏status + ‏lang + ‏view=competitions؛ ‏Suggested يحمل حالته بلا قسم مختلق) عبر ‏`railViewAllHref` + ظاهر على mobile (أُزيل ‏`hidden sm:flex`)؛ ‏Explore يعرض فلتر فرع صريحاً من taxonomy القائمة (‏parent يمسح فرعاً يتيماً، الفرع لا يسقط ‏status/search/lang/view، و‏view تُحفظ عند submit)؛ ‏URL/direct-open/refresh/back-forward تحفظ السياق؛ الجلسة canonical تشمل ‏subcategory (‏canonicalKey رباعي — الجلسات القديمة ‏409 تُعاد بوضوح)؛ ‏filtering خادمياً قبل pagination؛ ‏retry/cursor/skip-fill داخل التقاطع حتى ‏hasMore=false؛ الأزواج الباطلة ‏422/409 بلا توسعة صامتة إلى ‏All؛ الفرع بلا parent يُملأ canonical لparentه المعروف؛ ‏recorded = ‏completed + تسجيل صالح (‏vod/youtube مقلَّمة — ‏`playableRecording` opt-in في ‏buildFilterWhere، القائمة القديمة untouched).
+- **الأدلة**: ‏RED أولاً (‏9/11 فشلت على ‏BASE)؛ ‏T جديد ‏`explore-subcategory-context` ‏11/11 (تقاطع فرع+‏live/upcoming/recorded، ‏traversal ‏>دفعتين بلا ‏dup/skip، ‏invalid pairs ‏422، ‏canonicalize للparent، ‏409 ‏stale/mismatch، ‏retry متطابق، ‏410/404، ‏skip-fill حتى النفاد، ‏search×branch، ضيوف)؛ ‏UI جديد ‏`explore-subcategory-filters` ‏11/11 (‏View All لكل نوع ‏ar/en، ‏selects/روابط/‏banner، ‏session transport، صفر مفاتيح جديدة)؛ ‏E2E حقيقي (‏wrangler+D1 محلي) ‏3/3 ‏ar + ‏3/3 ‏en (‏direct/refresh/back-forward/تغيير فرع، ‏invalid بلا ‏fetch، ‏Home ‏mobile/keyboard/Enter، صفر ‏page/console errors، صفر ‏API فاشلة)؛ الجيران (‏B7/home-rails/owner-visual/search ‏T + ‏B7 ‏E2E ‏4/4) خضراء؛ الكاملة ‏1172/1178 (الـ6 الباقية ‏jq مفقود على ‏Windows — مثبتة على ‏BASE)؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏281 = ‏BASE ‏281؛ ‏SEC-06 ‏PASS (تعليق توثيقي فقط).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R2-J الدعوة/الطلب والقبول/الرفض/الانتهاء · فرع `feat/r2-j-invite-join-lifecycle` (من `4c02862` = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية، بلا migrations جديدة (الأعمدة اللازمة موجودة: `accepted_at` في 0010/0011 و`expires_at` في 0010).

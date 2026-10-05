@@ -8,6 +8,7 @@ import {
     homeRailScrollerId,
     homeRailSentinelId,
     homeRailSectionId,
+    railViewAllHref,
 } from '../../shared/components/home-rail';
 import { SUBCATEGORY_COLORS, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_SUBCATEGORIES, SUBCATEGORY_ICONS } from '../../shared/constants';
 import { translations, getUILanguage } from '../../i18n';
@@ -141,6 +142,13 @@ export class HomePage {
                     color: def.color,
                     cardsHtml,
                     sentinelMode: result.done ? 'end' : 'idle',
+                    viewAllHref: railViewAllHref({
+                        kind: def.kind,
+                        category: def.category,
+                        subcategory: def.subcategory,
+                        status: def.status,
+                        lang,
+                    }),
                 });
                 if (!result.done) armed.push({ def, open: result });
             });
@@ -599,6 +607,13 @@ export class HomePage {
             color: def.color,
             cardsHtml,
             sentinelMode: opened.done ? 'end' : 'idle',
+            viewAllHref: railViewAllHref({
+                kind: def.kind,
+                category: def.category,
+                subcategory: def.subcategory,
+                status: def.status,
+                lang: State.lang,
+            }),
         });
         const fresh = wrapper.firstElementChild;
         if (!fresh) return;
