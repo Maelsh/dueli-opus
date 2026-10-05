@@ -296,6 +296,15 @@ export class AuthService {
             // Hide help icon for logged-in users (use auth-hidden to override nav-icon)
             if (helpIcon) helpIcon.classList.add('auth-hidden');
 
+            // R2-A: admin entry — visible only for admins (server + API
+            // guards remain authoritative; this is navigation only).
+            const adminItem = document.getElementById('adminMenuItem');
+            if (adminItem) {
+                const isAdmin = State.currentUser?.is_admin === 1
+                    || State.currentUser?.is_admin === true;
+                adminItem.classList.toggle('hidden', !isAdmin);
+            }
+
             // Initialize notifications and messages
             NotificationsUI.init();
             MessagesUI.init();
@@ -313,6 +322,9 @@ export class AuthService {
 
             // Show help icon for non-logged-in users
             if (helpIcon) helpIcon.classList.remove('auth-hidden');
+
+            // R2-A: never leak the admin entry to guests.
+            document.getElementById('adminMenuItem')?.classList.add('hidden');
         }
     }
 

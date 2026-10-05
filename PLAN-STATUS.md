@@ -1,6 +1,13 @@
 
 
 
+## R2-A admin identity/access + account settings + roles + H9 documents/data · فرع `feat/r2-a-admin` (من `fed9b93` = origin/main بعد دمج R2-L2 #91)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية. ترحيل واحد مضاف (`0036_managed_documents` — لا صفوف seed فيه؛ بيانات الاختبار في `db/seed.sql` موسومة `is_seed=1`). J/L1/V/L2 مغلقة ولم تُمس؛ بلا R2-M/R2-P/bank/H7/D1/D2. حساب `admin/admin` مؤقت للتطوير فقط (سكربت، لا migration/seed، والإنتاج H8/owner-gated).
+- العقد: (1) الهوية — bootstrap جاف-أولاً + local فقط + رفض remote؛ حارس خادمي على `/admin` (غير مشرف 403) + مدخل `#adminMenuItem` للمشرف فقط؛ `role/is_admin` موحّدان (مزامنة عند المنح/السحب، بلا نظام موازٍ). (2) الإعدادات — username/password/email من الحساب نفسه مع تحقق (409/422/401) ودورة جلسات صحيحة (كلمة المرور تدمر الكل + reauth؛ البريد يصفّر التوثيق ويُبقي الجلسات) وaudit بلا أسرار وDTO بلا hash. (3) الأدوار — SuperAdmin فقط للمنح/السحب (غيره 403)؛ دور صالح فقط (422)؛ هدف موجود (404)؛ آخر SuperAdmin محمي (409). (4) وثائق H9 — CRUD إداري + draft/published + معاينة ar/en + private/public (العامة المنشورة تُقرأ مجهولاً، الباقي 404) + version++ وaudit؛ لا بنك/KYC حقيقي ولا CMS عام. (5) ملاحظة: `GET /api/admin/stats` ‏500 قائم على BASE (عمود `amount` مفقود — لم يُمس، خارج النطاق).
+- **الأدلة**: T جديد `r2-a-admin` ‏9/9 (SqliteD1 بالترحيلات الحقيقية: دخول admin ‏200/خاطئ ‏401؛ حارس ‏200/403/403 + صفحة ‏200/403؛ الإعدادات الثلاثة + دورات الجلسات + ‏audit + بلا تسريب؛ منح/سحب + ‏403 تصعيد + ‏422/404/409؛ وثائق ‏CRUD/version/نشر/خصوصية/حذف + ‏audit + ‏seed موسوم؛ ثبات الجلسة) + UI جديد `r2-a-admin-ui` ‏10/10 (حارس/مدخل/حساب/وثائق/‏CSP/i18n ar≠en/‏bootstrap/مسارات/‏dark-RTL)؛ ‏csp-hardening ‏11/11؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏CSS churn رُجع)؛ ‏G2 ‏286 مقابل ‏BASE ‏281 (‏+5، دون 310)؛ routes ‏202←211 (3 حساب + 5 وثائق إدارية + 1 قراءة عامة — مولّدة آلياً)؛ بلا full gates معادة.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. إنتاج المشرف (H8) يبقى owner-gated بعد الدمج. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R2-L2 production live-room + Media/VOD + Like/Dislike + timed comments + single ad slot · فرع `feat/r2-l2-live-room` (من `35ccd4f` = origin/main بعد دمج R2-V #90)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية. ترحيل واحد مضاف (`0035_comments_video_offset`: عمود `video_offset` ‏NULL — ضروري فعلاً: لا بنية قائمة تحمل موضع التشغيل؛ تُختبر مع الترحيلات الحقيقية). J/L1/V مغلقة ولم تُعَد بناؤها (90/90 خضراء)؛ بلا H7/D1/D2 (إشارات Like/Dislike جاهزة شكلاً فقط)؛ بلا ranking؛ بلا تغيير صلاحيات start/end؛ اختبار S/device مؤجل لـR4 (غياب الجهاز ليس blocker للكود).

@@ -36,6 +36,9 @@ export interface UpdateUserData {
     country?: string;
     language?: string;
     is_verified?: boolean;
+    // R2-A: self-service account settings (controller validates + audits).
+    username?: string;
+    email?: string;
 }
 
 /**
@@ -175,6 +178,16 @@ export class UserModel extends BaseModel<User> {
             updates.push('is_verified = ?');
             values.push(data.is_verified ? 1 : 0);
         }
+        // R2-A: username/email change via the account-settings contract only
+        // (uniqueness + normalization enforced by the controller beforehand).
+        if (data.username !== undefined) {
+            updates.push('username = ?');
+            values.push(data.username);
+        }
+        if (data.email !== undefined) {
+            updates.push('email = ?');
+            values.push(data.email);
+        }
 
         if (updates.length === 0) return this.findById(id);
 
@@ -298,6 +311,18 @@ export class UserModel extends BaseModel<User> {
         const result = await this.db.prepare(
             'UPDATE users SET is_active = ? WHERE id = ?'
         ).bind(isActive ? 1 : 0, id).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
+     * R2-A: sync the is_admin flag with admin_roles membership (grant sets,
+     * revoke-all clears). Only called from the SuperAdmin-gated role paths
+     * and the owner-gated bootstrap — never from user input.
+     */
+    async setAdminFlag(id: number, isAdmin: boolean): Promise<boolean> {
+        const result = await this.db.prepare(
+            'UPDATE users SET is_admin = ? WHERE id = ?'
+        ).bind(isAdmin ? 1 : 0, id).run();
         return result.meta.changes > 0;
     }
 }

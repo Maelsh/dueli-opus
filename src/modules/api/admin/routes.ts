@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { AdminController } from '../../../controllers/AdminController';
+import { DocumentController } from '../../../controllers/DocumentController';
 import { authMiddleware } from '../../../middleware/auth';
 const adminRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // T3.4 FIX: isAdmin() reads c.get('user') which only authMiddleware sets —
 // without this the entire admin API returned 403 for everyone.
 adminRoutes.use('*', authMiddleware({ required: false }));
 const controller = new AdminController();
+const documentController = new DocumentController();
 
 // =====================================
 // Dashboard
@@ -91,5 +93,15 @@ adminRoutes.post('/competitions/:id/restore', async (c) => controller.restoreBro
 adminRoutes.get('/withdrawals', async (c) => controller.adminListWithdrawals(c));
 adminRoutes.put('/withdrawals/:id/approve', async (c) => controller.adminApproveWithdrawal(c));
 adminRoutes.put('/withdrawals/:id/reject', async (c) => controller.adminRejectWithdrawal(c));
+
+// =====================================
+// R2-A (H9): Managed Documents/Data
+// =====================================
+
+adminRoutes.get('/documents', async (c) => documentController.listDocuments(c));
+adminRoutes.post('/documents', async (c) => documentController.createDocument(c));
+adminRoutes.get('/documents/:id', async (c) => documentController.getDocument(c));
+adminRoutes.put('/documents/:id', async (c) => documentController.updateDocument(c));
+adminRoutes.delete('/documents/:id', async (c) => documentController.deleteDocument(c));
 
 export default adminRoutes;

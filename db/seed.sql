@@ -643,3 +643,13 @@ INSERT INTO competitions (id, title, description, rules, category_id, subcategor
 INSERT INTO competitions (id, title, description, rules, category_id, subcategory_id, creator_id, opponent_id, status, language, country, total_views, started_at, ended_at, scheduled_at, likes_count, dislikes_count) VALUES (357, 'Other Talents Challenge #8', 'An amazing competition about Other Talents topics.Join us!', 'Be respectful, no spam, standard rules apply.', 3, 29, 3, 18, 'pending', 'en', 'GB', 3485, NULL, NULL, datetime('now', '+2 days'), 348, 17);
 INSERT INTO competitions (id, title, description, rules, category_id, subcategory_id, creator_id, opponent_id, status, language, country, total_views, started_at, ended_at, scheduled_at, likes_count, dislikes_count) VALUES (358, 'Other Talents Challenge #9', 'An amazing competition about Other Talents topics.Join us!', 'Be respectful, no spam, standard rules apply.', 3, 29, 5, 3, 'live', 'en', 'SA', 1457, datetime('now', '-30 minutes'), NULL, NULL, 145, 7);
 INSERT INTO competitions (id, title, description, rules, category_id, subcategory_id, creator_id, opponent_id, status, language, country, total_views, started_at, ended_at, scheduled_at, likes_count, dislikes_count) VALUES (359, 'Other Talents Challenge #10', 'An amazing competition about Other Talents topics.Join us!', 'Be respectful, no spam, standard rules apply.', 3, 29, 1, 6, 'recorded', 'en', 'EG', 357, datetime('now', '-5 days'), datetime('now', '-5 days', '+1 hour'), NULL, 35, 1);
+
+-- ============================================
+-- R2-A (H9): managed documents/data — TEST SEED ONLY.
+-- Clearly tagged (is_seed = 1, [SEED] titles). Never real bank/KYC/legal
+-- content. Production rows are created only via the admin API.
+-- ============================================
+DELETE FROM managed_documents;
+INSERT INTO managed_documents (slug, title_ar, title_en, body_ar, body_en, status, visibility, version, is_seed, created_by, updated_by) VALUES
+('seed-welcome', '[SEED] مرحباً', '[SEED] Welcome', 'نص تجريبي موسوم للمعاينة فقط.', 'Tagged sample text for preview only.', 'published', 'public', 1, 1, NULL, NULL),
+('seed-internal-note', '[SEED] ملاحظة داخلية', '[SEED] Internal note', 'مسودة خاصة موسومة.', 'Tagged private draft.', 'draft', 'private', 1, 1, NULL, NULL);

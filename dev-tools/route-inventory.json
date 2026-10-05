@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-05T16:28:19.814Z",
-  "total": 202,
+  "generatedAt": "2026-10-05T22:41:16.911Z",
+  "total": 211,
   "routes": [
     {
       "method": "GET",
@@ -8,6 +8,27 @@
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/schedule/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/account/email",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/account/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/account/password",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/account/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/account/username",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/account/routes.ts"
     },
     {
       "method": "GET",
@@ -145,6 +166,41 @@
     {
       "method": "POST",
       "path": "/api/admin/competitions/:id/suspend",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/documents",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/documents",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/documents/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/documents/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/documents/:id",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/admin/routes.ts"
@@ -841,6 +897,13 @@
       "classification": "UNGUARDED ⚠",
       "guards": "group:rateLimit, group:csrf",
       "file": "src/modules/api/cron/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/documents/:slug",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/documents/routes.ts"
     },
     {
       "method": "POST",

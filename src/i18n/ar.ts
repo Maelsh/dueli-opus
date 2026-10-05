@@ -936,6 +936,43 @@ export const ar = {
         action_update_setting: 'تحديث إعداد',
         action_arbitration: 'إجراء تحكيم',
         action_finalize_payout: 'إنهاء المدفوعات',
+        role_not_found: 'دور المشرف غير موجود',
+        last_superadmin: 'لا يمكن إلغاء آخر مشرف أعلى',
+        access_denied: 'يلزم صلاحية الإدارة',
+        admin_panel: 'لوحة الإدارة',
+        my_account: 'حسابي',
+        documents_title: 'الوثائق والبيانات',
+        documents_empty: 'لا توجد وثائق بعد',
+    },
+
+    // ── R2-A: إعدادات الحساب الذاتية ──────────────
+    account: {
+        username_updated: 'تم تحديث اسم المستخدم',
+        email_updated: 'تم تحديث البريد — يرجى توثيق العنوان الجديد',
+        password_updated: 'تم تحديث كلمة المرور — يرجى تسجيل الدخول مجدداً',
+        username_taken: 'اسم المستخدم مستخدم بالفعل',
+        username_invalid: 'اسم المستخدم 3-30 حرفاً صغيراً أو أرقاماً أو نقاطاً أو شرطات سفلية',
+        email_taken: 'البريد الإلكتروني مستخدم بالفعل',
+        email_invalid: 'عنوان بريد غير صالح',
+        current_password_incorrect: 'كلمة المرور الحالية غير صحيحة',
+    },
+
+    // ── R2-A (H9): الوثائق والبيانات المدارة ──────────────
+    documents: {
+        slug_invalid: 'المعرف 2-80 حرفاً صغيراً أو أرقاماً أو شرطات',
+        slug_taken: 'توجد وثيقة بهذا المعرف مسبقاً',
+        status_invalid: 'الحالة يجب أن تكون مسودة أو منشورة',
+        visibility_invalid: 'الظهور يجب أن يكون خاصاً أو عاماً',
+        created: 'تم إنشاء الوثيقة',
+        updated: 'تم تحديث الوثيقة',
+        deleted: 'تم حذف الوثيقة',
+        draft: 'مسودة',
+        published: 'منشورة',
+        private: 'خاصة',
+        public: 'عامة',
+        preview: 'معاينة',
+        save: 'حفظ',
+        seed_badge: 'بيانات اختبار موسومة',
     },
 
     // ── المهمة 3: التحكيم والشكاوى ────────────────────────────────
