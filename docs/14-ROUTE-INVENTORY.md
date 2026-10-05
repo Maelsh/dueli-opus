@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-03T01:34:43.107Z
+> تاريخ التوليد: 2026-10-05T06:16:25.111Z
 
-## الإجمالي: 199 مسار
+## الإجمالي: 201 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 97 |
+| PUBLIC(auth-optional, in-handler check required) | 99 |
 | AUTHENTICATED | 56 |
 | UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -130,6 +130,8 @@
 | GET | `/api/competitions/:id/requests` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/start` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/update-vod` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| POST | `/api/competitions/:id/watch` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| POST | `/api/competitions/:id/watch-heartbeat` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/explore-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | GET | `/api/competitions/explore-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/complaints` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/complaints/routes.ts` |

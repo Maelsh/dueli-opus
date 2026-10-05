@@ -76,6 +76,47 @@ export class WatchHistoryModel {
     }
 
     /**
+     * R2-L1 (H1): accumulate one server-derived heartbeat slice.
+     *
+     * A single atomic upsert: the added seconds are `now - watched_at`
+     * measured by the SERVER clock, clamped to [0, maxDeltaSeconds]. The
+     * caller never supplies seconds — replays, duplicates, reconnects and
+     * out-of-order arrivals all collapse to ~0 because the delta derives
+     * from the stored timestamp, and concurrent writers serialize so each
+     * sees the latest committed mark. The first heartbeat opens the row and
+     * adds 0 (nothing proves watching before the first pulse).
+     *
+     * Returns the accumulated total after this pulse.
+     */
+    async addHeartbeatSeconds(
+        userId: number,
+        competitionId: number,
+        maxDeltaSeconds: number
+    ): Promise<number> {
+        const cap = Math.max(1, Math.floor(maxDeltaSeconds));
+        await this.db.prepare(
+            `INSERT INTO watch_history (user_id, competition_id, watch_duration_seconds, completed, watched_at)
+             VALUES (?, ?, 0, 0, datetime('now'))
+             ON CONFLICT(user_id, competition_id) DO UPDATE SET
+                 watch_duration_seconds = watch_duration_seconds
+                     + MAX(0, MIN(CAST((strftime('%s', 'now') - strftime('%s', watched_at)) AS INTEGER), ?)),
+                 watched_at = datetime('now')`
+        ).bind(userId, competitionId, cap).run();
+        return this.getWatchSeconds(userId, competitionId);
+    }
+
+    /**
+     * R2-L1 (H1): cumulative live watch seconds for one (user, competition).
+     * The single source R2-V reads for rating eligibility.
+     */
+    async getWatchSeconds(userId: number, competitionId: number): Promise<number> {
+        const row = await this.db.prepare(
+            `SELECT watch_duration_seconds AS s FROM watch_history WHERE user_id = ? AND competition_id = ?`
+        ).bind(userId, competitionId).first<{ s: number | null }>();
+        return Number(row?.s ?? 0);
+    }
+
+    /**
      * Delete watch history entry
      * حذف من سجل المشاهدة
      */

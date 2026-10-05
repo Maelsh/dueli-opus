@@ -55,7 +55,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                         <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                                         ${tr.status_live || 'LIVE'}
                                     </span>
-                                    <span class="text-gray-400" id="viewerCount">0 ${tr.viewers || 'viewers'}</span>
+                                    <span class="text-gray-400" id="viewerCount">0 ${tr.viewers_now || tr.viewers || 'viewers'}</span>
                                 </div>
                             </div>
                         </div>
@@ -983,28 +983,114 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 window.location.href = '/competition/' + competitionId + '?lang=' + lang;
             };
             
-            // Send comment (R1.6: text sink — raw text must never reach innerHTML)
-            window.sendComment = function() {
+            // R2-L1: room comments use the shared competition comments API/SSE
+            // (same source the competition page reads), never DOM-only rows.
+            // R1.6 text-sink rule stays: raw text only ever reaches textContent.
+            const roomCommentsSeen = new Set();
+            function roomAuthHeaders() {
+                const h = { 'Content-Type': 'application/json' };
+                const sess = (window.sessionId || localStorage.getItem('sessionId'));
+                if (sess) h['Authorization'] = 'Bearer ' + sess;
+                return h;
+            }
+            function appendRoomComment(cm) {
+                // Id-merge: our own POST response and its SSE echo share one id.
+                if (!cm || cm.id === undefined || cm.id === null || roomCommentsSeen.has(cm.id)) return;
+                roomCommentsSeen.add(cm.id);
+                const container = document.getElementById('commentsContainer');
+                if (!container) return;
+                const node = document.createElement('div');
+                node.className = 'flex items-start gap-2 bg-black/50 rounded-lg px-3 py-2 backdrop-blur-sm';
+                node.setAttribute('data-comment-id', String(cm.id));
+                const userSpan = document.createElement('span');
+                userSpan.className = 'text-purple-400 font-semibold text-sm';
+                userSpan.textContent = (cm.display_name || cm.username || '?') + ':';
+                const textSpan = document.createElement('span');
+                textSpan.className = 'text-white text-sm';
+                textSpan.textContent = cm.content || '';
+                node.append(userSpan, textSpan);
+                container.appendChild(node);
+                container.scrollTop = container.scrollHeight;
+            }
+            function removeRoomComment(commentId) {
+                roomCommentsSeen.delete(commentId);
+                const container = document.getElementById('commentsContainer');
+                if (!container) return;
+                const node = container.querySelector('[data-comment-id="' + commentId + '"]');
+                if (node) node.remove();
+            }
+            async function loadRoomCommentsInitial() {
+                try {
+                    const res = await fetch('/api/competitions/' + competitionId + '/comments?limit=20&offset=0');
+                    const data = await res.json().catch(function(){ return null; });
+                    const items = (data && data.success && data.data && data.data.items) || [];
+                    // API lists newest-first; the overlay reads oldest-first.
+                    items.slice().reverse().forEach(appendRoomComment);
+                } catch (e) {}
+            }
+            function subscribeRoomCommentsLive() {
+                try {
+                    const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
+                    es.addEventListener('comment_new', function(ev) {
+                        try {
+                            const payload = JSON.parse(ev.data);
+                            if (payload && payload.comment) appendRoomComment(payload.comment);
+                        } catch (e) {}
+                    });
+                    es.addEventListener('comment_deleted', function(ev) {
+                        try {
+                            const payload = JSON.parse(ev.data);
+                            if (payload && payload.comment_id !== undefined) removeRoomComment(payload.comment_id);
+                        } catch (e) {}
+                    });
+                } catch (e) {}
+            }
+            async function refreshRoomViewerCount() {
+                try {
+                    const sess = (window.sessionId || localStorage.getItem('sessionId'));
+                    if (!sess) return;
+                    const res = await fetch('/api/signaling/session?competition_id=' + competitionId, {
+                        headers: { 'Authorization': 'Bearer ' + sess }
+                    });
+                    const data = await res.json().catch(function(){ return null; });
+                    const count = data && data.success && data.data && data.data.presence
+                        ? data.data.presence.viewer_count : null;
+                    const el = document.getElementById('viewerCount');
+                    if (el && typeof count === 'number') {
+                        el.textContent = count + ' ' + (tr.viewers_now || tr.viewers || 'viewers');
+                    }
+                } catch (e) {}
+            }
+            // Send comment (competitors only — viewer input stays hidden per R1.7)
+            window.sendComment = async function() {
                 const input = document.getElementById('commentInput');
                 const text = input.value.trim();
                 if (!text) return;
-                
-                const container = document.getElementById('commentsContainer');
-                const comment = document.createElement('div');
-                comment.className = 'flex items-start gap-2 bg-black/50 rounded-lg px-3 py-2 backdrop-blur-sm';
-                const userSpan = document.createElement('span');
-                userSpan.className = 'text-purple-400 font-semibold text-sm';
-                userSpan.textContent = (window.currentUser?.username || 'You') + ':';
-                const textSpan = document.createElement('span');
-                textSpan.className = 'text-white text-sm';
-                textSpan.textContent = text;
-                comment.append(userSpan, textSpan);
-                container.appendChild(comment);
-                container.scrollTop = container.scrollHeight;
-                input.value = '';
-                
-                log('Comment sent: ' + text, 'info');
+                if (!window.currentUser) return;
+                try {
+                    const res = await fetch('/api/competitions/' + competitionId + '/comments', {
+                        method: 'POST',
+                        headers: roomAuthHeaders(),
+                        body: JSON.stringify({ content: text, is_live: true, parent_id: null })
+                    });
+                    const data = await res.json().catch(function(){ return null; });
+                    if (!res.ok || !data || !data.success) {
+                        showMessage((data && data.error) || 'Error', 'error');
+                        return;
+                    }
+                    input.value = '';
+                    // The SSE echo carries the same id and dedups — paint now
+                    // so Send never feels dead on a slow stream.
+                    if (data.data && data.data.id !== undefined) appendRoomComment(data.data);
+                    log('Comment sent', 'info');
+                } catch (err) {
+                    showMessage('Error', 'error');
+                }
             };
+            loadRoomCommentsInitial();
+            subscribeRoomCommentsLive();
+            refreshRoomViewerCount();
+            setInterval(refreshRoomViewerCount, 30000);
             
             // Show message (Toast-based; mirrors client/ui/Toast.ts)
             function showMessage(msg, type) {
