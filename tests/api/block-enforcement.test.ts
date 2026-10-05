@@ -53,15 +53,16 @@ describe('B6: Central block enforcement via API', () => {
         bSession = (await sessions.create({ user_id: bId })).id;
         cSession = (await sessions.create({ user_id: cId })).id;
 
+        // R2-V: ratings are live-only with L1 300s eligibility (SSOT).
         sharedDb.competitions.push({
             id: 910001,
             title: 'B6 comp',
             creator_id: aId,
             opponent_id: bId,
-            status: 'completed',
+            status: 'live',
             category_id: 820001,
         });
-        sharedDb.watchHistory.push({ user_id: cId, competition_id: 910001, watch_duration_seconds: 60 });
+        sharedDb.watchHistory.push({ user_id: cId, competition_id: 910001, watch_duration_seconds: 300 });
     });
 
     it('1. A blocked B -> B starts a conversation with A: 403 + no conversation row', async () => {

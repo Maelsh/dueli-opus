@@ -122,10 +122,16 @@ competitionsRoutes.post('/:id/watch', (c) => controller.recordWatch(c));
 competitionsRoutes.post('/:id/watch-heartbeat', (c) => controller.watchHeartbeat(c));
 
 /**
- * Rate competitor
+ * R2-V: rate a competitor (live only, upsert = create-or-replace).
  * POST /api/competitions/:id/rate
  */
 competitionsRoutes.post('/:id/rate', (c) => controller.rate(c));
+
+/**
+ * R2-V: explicit replacement path (requires a pre-existing vote).
+ * PUT /api/competitions/:id/rate
+ */
+competitionsRoutes.put('/:id/rate', (c) => controller.updateRating(c));
 
 /**
  * B11: anonymous ratings summary

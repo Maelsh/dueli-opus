@@ -205,6 +205,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'showReportModal',
     'submitCampaign',
     'submitRating',
+    'withdrawRating',
     'submitReport',
     'submitWithdrawal',
     'suspendBroadcast',

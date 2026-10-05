@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-05T06:16:25.111Z",
-  "total": 201,
+  "generatedAt": "2026-10-05T16:28:19.814Z",
+  "total": 202,
   "routes": [
     {
       "method": "GET",
@@ -676,6 +676,13 @@
     },
     {
       "method": "POST",
+      "path": "/api/competitions/:id/rate",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "PUT",
       "path": "/api/competitions/:id/rate",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",

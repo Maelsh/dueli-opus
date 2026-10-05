@@ -142,7 +142,7 @@ export class BlockedInteractionError extends AppError {
  */
 export class RatingEligibilityError extends AppError {
     constructor(
-        public eligibilityCode: 'SELF' | 'WATCH' | 'WINDOW' | 'DUPLICATE' | 'NOT_COMPLETED',
+        public eligibilityCode: 'SELF' | 'WATCH' | 'NOT_LIVE' | 'CLOSED' | 'WINDOW' | 'DUPLICATE' | 'NOT_COMPLETED',
     ) {
         super('RATING_NOT_ELIGIBLE', eligibilityCode, 403);
         this.name = 'RatingEligibilityError';

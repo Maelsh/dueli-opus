@@ -397,14 +397,17 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   </div>
                 \` : ''}
 
-                \${isCompleted && window.currentUser && !isCreator && !isOpponent ? \`
-                  <!-- T2.4: Viewer rating card -->
-                  <div class="card p-6" id="rateCard">
-                    <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">
+                \${(isLive || isCompleted) ? \`
+                  <!-- R2-V: live provisional tally + read-only final (ar/en, dark, RTL) -->
+                  <div class="card p-6" id="rateCard" aria-live="polite">
+                    <h3 class="font-bold text-lg mb-1 text-gray-900 dark:text-white">
                       <i class="fas fa-star text-amber-400 me-1"></i>
                       \${tr.rate_title || 'Rate the competitors'}
                     </h3>
-                    <div class="space-y-4">
+                    <p id="rateStateLine" class="text-xs font-semibold mb-4 \${isLive ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}">\${isLive ? ((tr.ratings && tr.ratings.live_provisional) || 'Provisional tally') : ((tr.ratings && tr.ratings.final_readonly) || 'Final result')}</p>
+                    <div id="rateTally" class="text-sm text-gray-600 dark:text-gray-300 mb-4">\${(tr.ratings && tr.ratings.summary_title) || ''}</div>
+                    \${isLive && window.currentUser && !isCreator && !isOpponent ? \`
+                    <div class="space-y-4" id="rateStars">
                       <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2 min-w-0">
                           \${window.renderUserAvatar({
@@ -447,7 +450,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                       </div>
                       \` : ''}
+                      <p id="rateEligibleHint" class="hidden text-xs text-amber-600 dark:text-amber-400 font-semibold">\${(tr.ratings && tr.ratings.not_eligible) || ''}</p>
                     </div>
+                    \` : ''}
+                    \${isCompleted ? \`<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">\${(tr.ratings && tr.ratings.final_readonly) || ''}</p>\` : ''}
                     <p id="rateMsg" class="hidden mt-3 text-sm text-green-600 dark:text-green-400 font-semibold"></p>
                   </div>
                 \` : ''}
@@ -591,7 +597,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } catch (err) { console.error(err); }
       }
 
-      // T2.4: Submit a viewer rating for a competitor (1-5 stars)
+      // R2-V: live-only viewer rating (1-5, upsert = create-or-replace).
+      // Stars stay enabled so a second vote REPLACES the first (one
+      // effective vote); the tally below refreshes from the summary +
+      // live rating_updated events on the existing competition channel.
       window.submitRating = async function(competitorId, value, btn) {
         if (!window.currentUser) { showLoginModal(); return; }
         const starRow = btn.parentElement;
@@ -604,7 +613,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           s.classList.toggle('dark:text-gray-600', !on);
         });
         try {
-          btn.disabled = true;
           const res = await fetch('/api/competitions/' + competitionId + '/rate?lang=' + (window.lang || 'ar'), {
             method: 'POST',
             headers: {
@@ -615,19 +623,77 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           });
           const data = await res.json();
           if (data.success) {
-            // Lock this row's stars
-            stars.forEach(s => { s.disabled = true; s.classList.remove('hover:text-amber-400'); });
             const msg = document.getElementById('rateMsg');
-            if (msg) { msg.textContent = tr.rate_thanks || 'Thanks for rating!'; msg.classList.remove('hidden'); }
-            showToast(tr.rate_thanks || 'Thanks for rating!', 'success');
+            const thanks = (data.data && data.data.updated)
+              ? ((tr.competition_errors && tr.competition_errors.rating_replaced) || tr.rate_thanks || 'Thanks for rating!')
+              : (tr.rate_thanks || 'Thanks for rating!');
+            if (msg) { msg.textContent = thanks; msg.classList.remove('hidden'); }
+            showToast(thanks, 'success');
+            await loadRatingSummary();
           } else {
-            showToast(data.error || 'Rating failed', 'error');
+            showToast(data.error || tr.rate_failed || 'Rating failed', 'error');
           }
         } catch (err) {
           console.error(err);
           showToast(tr.rate_failed || 'Rating failed', 'error');
         }
       };
+
+      window.withdrawRating = async function(competitorId) {
+        if (!window.currentUser) { showLoginModal(); return; }
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/rate?competitor_id=' + competitorId + '&lang=' + (window.lang || 'ar'), {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '') }
+          });
+          const data = await res.json();
+          if (data.success) {
+            showToast((tr.ratings && tr.ratings.withdrawn) || 'Withdrawn', 'success');
+            await loadRatingSummary();
+          } else {
+            showToast(data.error || tr.rate_failed || 'Rating failed', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showToast(tr.rate_failed || 'Rating failed', 'error');
+        }
+      };
+
+      // R2-V: interim (live) / final (completed) tally, no rater identity.
+      async function loadRatingSummary() {
+        const box = document.getElementById('rateTally');
+        if (!box || !competitionData || (competitionData.status !== 'live' && competitionData.status !== 'completed')) return;
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/ratings/summary?lang=' + (window.lang || 'ar'));
+          const data = await res.json().catch(function(){ return null; });
+          if (!data || !data.success) return;
+          const rows = (data.data.competitors || []).map(function(e) {
+            const avg = e.average === null || e.average === undefined ? '—' : String(e.average);
+            return '<div>' + avg + ' × ' + e.count + '</div>';
+          }).join('');
+          box.innerHTML = rows || (((tr.ratings && tr.ratings.no_ratings) || 'No ratings yet'));
+          // Eligibility hint: live + logged viewer without 300s.
+          const hint = document.getElementById('rateEligibleHint');
+          if (hint) {
+            const w = competitionData.viewer_watch;
+            const show = competitionData.status === 'live' && w && w.eligible === false;
+            hint.classList.toggle('hidden', !show);
+          }
+        } catch (e) {}
+      }
+
+      // R2-V: tally updates arrive on the EXISTING competition channel.
+      let ratingsLiveES = null;
+      function subscribeRatingsLive() {
+        try {
+          if (ratingsLiveES) { try { ratingsLiveES.close(); } catch (e) {} ratingsLiveES = null; }
+          if (!competitionData || (competitionData.status !== 'live' && competitionData.status !== 'completed')) return;
+          const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
+          ratingsLiveES = es;
+          es.addEventListener('rating_updated', function() { loadRatingSummary(); });
+          es.addEventListener('competition_status', function() { loadRatingSummary(); });
+        } catch (e) {}
+      }
 
       // B2+B3: paged comments state (roots carry replies_count)
       let commentsItems = [];
@@ -831,6 +897,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       async function initCompetitionDynamics() {
         loadCommentsInitial();
         subscribeCommentsLive();
+        loadRatingSummary();
+        subscribeRatingsLive();
         // Sequential: the heartbeat must see the guest token the intent may
         // have just issued — concurrent first-view calls issued two day-rows
         // for one anonymous viewer.
