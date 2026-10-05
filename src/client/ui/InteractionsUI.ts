@@ -169,7 +169,62 @@ export class InteractionsUI {
     }
 
     /**
-     * Render like button HTML
+     * R2-L2: single-active reaction toggle (like/dislike/neutral) for
+     * thumbs buttons. Counts repaint from the server response only.
+     */
+    static async toggleReaction(competitionId: number, type: 'like' | 'dislike', button: HTMLElement): Promise<void> {
+        if (!State.currentUser) {
+            window.showLoginModal?.();
+            return;
+        }
+        const bar = button.closest('#reactionBar, [data-reaction-bar]') || button.parentElement;
+        const pressed = button.getAttribute('aria-pressed') === 'true';
+        const result = await InteractionService.setReaction(competitionId, type, pressed);
+        if (result.success && result.status && bar) {
+            const likeBtn = bar.querySelector('#likeBtn, [data-reaction="like"]');
+            const dislikeBtn = bar.querySelector('#dislikeBtn, [data-reaction="dislike"]');
+            const likeCount = bar.querySelector('#likeCount, [data-reaction-count="like"]');
+            const dislikeCount = bar.querySelector('#dislikeCount, [data-reaction-count="dislike"]');
+            likeBtn?.setAttribute('aria-pressed', String(result.status.liked));
+            dislikeBtn?.setAttribute('aria-pressed', String(result.status.disliked));
+            if (likeCount) likeCount.textContent = String(result.status.likes_count);
+            if (dislikeCount) dislikeCount.textContent = String(result.status.dislikes_count);
+        }
+    }
+
+    /**
+     * R2-L2: Like + Dislike button pair (thumbs, single-active). This is the
+     * forward path — renderLikeButton (heart) stays as a legacy alias only.
+     */
+    static renderReactionButtons(
+        competitionId: number,
+        status: { liked: boolean; disliked: boolean },
+        counts: { likes_count: number; dislikes_count: number }
+    ): string {
+        return `
+            <button
+                data-csp-on="click" data-csp-fn="InteractionsUI.toggleReaction" data-csp-args='[${competitionId},"like","@this"]'
+                data-reaction="like" aria-pressed="${status.liked}"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-full transition ${status.liked ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-gray-100 dark:bg-gray-800 hover:bg-green-50 hover:text-green-600'}"
+                aria-label="${t('like.title', State.lang)}"
+            >
+                <i class="fas fa-thumbs-up"></i>
+                <span data-reaction-count="like">${counts.likes_count}</span>
+            </button>
+            <button
+                data-csp-on="click" data-csp-fn="InteractionsUI.toggleReaction" data-csp-args='[${competitionId},"dislike","@this"]'
+                data-reaction="dislike" aria-pressed="${status.disliked}"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-full transition ${status.disliked ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'bg-gray-100 dark:bg-gray-800 hover:bg-red-50 hover:text-red-500'}"
+                aria-label="${t('interactions.dislike', State.lang)}"
+            >
+                <i class="fas fa-thumbs-down"></i>
+                <span data-reaction-count="dislike">${counts.dislikes_count}</span>
+            </button>
+        `;
+    }
+
+    /**
+     * Render like button HTML (legacy heart alias — prefer renderReactionButtons).
      */
     static renderLikeButton(competitionId: number, liked: boolean, likeCount: number): string {
         return `

@@ -235,6 +235,8 @@ export interface Comment extends TimestampedEntity {
   is_live: boolean;
   parent_id?: number | null;
   deleted_at?: string | null;
+  // R2-L2: VOD playback offset in seconds (NULL = live/unsynced comment).
+  video_offset?: number | null;
   // Joined user data
   display_name?: string;
   avatar_url?: string;

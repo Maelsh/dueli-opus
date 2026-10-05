@@ -892,7 +892,8 @@ class FakeStmt {
             return ok({ last_row_id: newId, changes: 1 });
         }
 
-        // INSERT INTO comments (competition_id, user_id, content, is_live, parent_id, created_at)
+        // INSERT INTO comments (..., video_offset, created_at) — R2-L2 adds
+        // video_offset as the 6th bind param (older shapes have 5).
         if (q.startsWith('insert into comments')) {
             const newId = ++this.db.commentSeq;
             this.db.comments.push({
@@ -902,6 +903,7 @@ class FakeStmt {
                 content: p[2],
                 is_live: p[3],
                 parent_id: p[4],
+                video_offset: p.length > 5 ? p[5] : null,
                 created_at: new Date().toISOString(),
             });
             return ok({ last_row_id: newId, changes: 1 });

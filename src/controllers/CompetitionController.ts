@@ -12,6 +12,7 @@ import {
     CompetitionRequestModel,
     CompetitionInvitationModel,
     CommentModel,
+    LikeModel,
     NotificationModel,
     UserModel,
     RatingModel,
@@ -218,12 +219,21 @@ export class CompetitionController extends BaseController {
             // B2+B3: lightweight per-user request indicator (no full array)
             // R2-J: plus the current user's own pending-invitation indicator.
             // Both are scoped to the caller — never another user's invites.
+            // R2-L2: the caller's like/dislike state rides along so the
+            // competition UI renders one effective reaction (like/dislike/
+            // neutral) without a second round-trip. Anonymous => neutral.
             const currentUser = this.getCurrentUser(c);
             let user_has_pending_request = false;
             let user_has_pending_invitation = false;
+            let user_reaction: { liked: boolean; disliked: boolean; likes_count: number; dislikes_count: number } | null = null;
             if (currentUser) {
                 user_has_pending_request = await requestModel.hasPendingForRequester(id, currentUser.id);
                 user_has_pending_invitation = await invitationModel.hasPendingInvitation(id, currentUser.id);
+                try {
+                    user_reaction = await new LikeModel(c.env.DB).getStatus(currentUser.id, id);
+                } catch {
+                    user_reaction = null;
+                }
             }
 
             const timer = ScheduledTaskService.getTimerDeadline(competition as any);
@@ -235,6 +245,7 @@ export class CompetitionController extends BaseController {
                 ratings_count,
                 user_has_pending_request,
                 user_has_pending_invitation,
+                user_reaction,
                 viewer_watch,
                 timer
             });
@@ -766,7 +777,7 @@ export class CompetitionController extends BaseController {
             const user = this.getCurrentUser(c);
             const competitionId = this.getParamInt(c, 'id');
 
-            const body = await this.getBody<{ content: string; is_live?: boolean; parent_id?: number }>(c);
+            const body = await this.getBody<{ content: string; is_live?: boolean; parent_id?: number; video_offset?: number }>(c);
             if (!body?.content) {
                 return this.validationError(c, this.t('errors.content_required', c));
             }
@@ -786,12 +797,16 @@ export class CompetitionController extends BaseController {
             }
 
             const commentModel = new CommentModel(c.env.DB);
+            // R2-L2: timed VOD comment — the client sends the current playback
+            // position; the model clamps it (>= 0 finite, else NULL). Live
+            // comments simply omit it.
             const comment = await commentModel.create({
                 competition_id: competitionId,
                 user_id: user.id,
                 content: Sanitize.cleanText(body.content),
                 is_live: body.is_live || false,
-                parent_id: body.parent_id ?? null
+                parent_id: body.parent_id ?? null,
+                video_offset: typeof body.video_offset === 'number' ? body.video_offset : null
             });
 
             // B2+B3: live publish after successful insert; broadcast failure
@@ -805,6 +820,7 @@ export class CompetitionController extends BaseController {
                     username: user.username,
                     avatar_url: user.avatar_url || null,
                     content: comment.content,
+                    video_offset: (comment as { video_offset?: number | null }).video_offset ?? null,
                     created_at: comment.created_at as string
                 });
             } catch (pushError) {
