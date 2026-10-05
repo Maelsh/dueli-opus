@@ -85,6 +85,22 @@ describe('deploy workflow release wiring', () => {
         expect(GATE).not.toContain('migrations apply');
     });
 
+    it('readiness index snapshot derives its tables from the manifest (no hardcoded list)', () => {
+        // Deploy #458 root cause: the sqlite_master snapshot hardcoded
+        // ('explore_result_sessions','explore_result_chunks'), so the existing
+        // idx_competition_views_day never reached the checker and the gate
+        // failed a healthy production. The table list must be derived from the
+        // same manifest the column loop uses — never a literal that rots on
+        // the next baseline bump.
+        const snapshotLines = DEPLOY.split('\n').filter((l) => l.includes('sqlite_master'));
+        expect(snapshotLines.length).toBeGreaterThan(0);
+        for (const line of snapshotLines) {
+            expect(line).not.toMatch(/IN \('[^']+','[^']*'\)/);
+            expect(line).toContain('INDEX_TABLES');
+        }
+        expect(DEPLOY).toContain('required_schema.tables');
+    });
+
     it('quality gate still runs the AST SEC-06 checker', () => {
         expect(GATE).toContain('node dev-tools/check-sec06-math-random.mjs');
     });

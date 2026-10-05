@@ -1,6 +1,13 @@
 
 
 
+## RELEASE READINESS PATH remediation (Deploy #458) · فرع `fix/release-readiness-path` (من `210008a` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/تعديل migrations/منتج. النطاق: سطر جامع الـdeploy + سطر الـrunbook + اختباراهما + سطرا docs.
+- ‏ROOT CAUSE مثبت على ‏D1 الحية: جامع الـworkflow كان يبني لقطة الفهارس بقائمة مكتوبة يدوياً (‏0033 فقط) فلم تصل ‏idx_competition_views_day الموجودة فعلاً إلى الفاحص — ‏#458 فشل على إنتاج سليم. الإصلاح: القائمة تُشتق من نفس الـmanifest (لا ‏hardcode يجعل ‏0034 يمر فقط؛ أي ‏baseline لاحقة محمية) + ‏runbook §2.
+- **الأدلة**: المسار الحرفي الكامل (‏bash جامع الإنتاج ‏read-only + journal + ‏pending فارغ + ‏SHA ‏210008a) ← ‏**READINESS GATE PASS** ‏(16/16)؛ الاستعلام القديم أُعيد حياً فأظهر ‏4 فهارس فقط (إعادة إنتاج العلة)؛ ‏release-readiness ‏15/15 + ‏pin هيكلي للجامع؛ ‏fail-closed محفوظ (‏unknown/hash/missing/target/sha)؛ كل متطلبات الـmanifest مُتحقَّق منها (‏3 جداول × أعمدة + ‏3 فهارس)؛ الكاملة ‏1195/1201 (الـ6 ‏jq على ‏Windows مثبتة على ‏BASE)؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏281 = ‏BASE.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم deploy الإصدار عبر المسار المصرّح (لا deploy يدوي هنا). أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## RELEASE MANIFEST 0034 remediation · فرع `fix/release-manifest-0034` (من `f4c1e66` = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/تعديل migrations. النطاق: manifest الـrelease + اختباراته + سطرا docs فقط.

@@ -22,11 +22,15 @@ npx wrangler d1 migrations list dueli-db --remote > /tmp/readiness-list.txt
 npx wrangler d1 execute dueli-db --remote --json \
   --command "SELECT name FROM d1_migrations ORDER BY rowid;"
 
-# لقطة المخطط المطلوب (الجداول من الـmanifest؛ لا استعلام حر)
+# لقطة المخطط المطلوب (الجداول من الـmanifest؛ لا استعلام حر ولا قائمة
+# جداول مكتوبة يدوياً — قائمة الفهارس تُشتق من نفس الـmanifest وإلا سقطت
+# جداول الأساسيات اللاحقة من اللقطة بصمت كما حدث مع competition_views في #458)
 npx wrangler d1 execute dueli-db --remote --json \
   --command "SELECT name FROM pragma_table_info('explore_result_sessions') ORDER BY cid;"
+TABLES=$(node -e "console.log(Object.keys(require('./dev-tools/release-schema-manifest.json').required_schema.tables).join(' '))")
+INDEX_TABLES=$(node -e "console.log(Object.keys(require('./dev-tools/release-schema-manifest.json').required_schema.tables).map(t=>\"'\"+t+\"'\").join(','))")
 npx wrangler d1 execute dueli-db --remote --json \
-  --command "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name IN ('explore_result_sessions','explore_result_chunks');"
+  --command "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name IN (${INDEX_TABLES});"
 ```
 
 ## 3. إعداد migration (يدوي، بتفويض، قبل أي apply)
