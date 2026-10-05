@@ -29,8 +29,11 @@ function goodInput(m = manifest()) {
                     'lang', 'status', 'total_count', 'chunk_size', 'created_at', 'expires_at',
                 ],
                 explore_result_chunks: ['session_id', 'chunk_index', 'ids_json'],
+                competition_views: [
+                    'id', 'competition_id', 'identity_kind', 'identity_key', 'view_day', 'created_at',
+                ],
             },
-            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry'],
+            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day'],
         },
     };
 }
@@ -53,6 +56,42 @@ describe('release readiness gate', () => {
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
         expect(actual.toLowerCase()).toBe(String(req.sha256).toLowerCase());
         expect(m.known_history).toContain(req.file);
+    });
+
+    it('manifest baseline-0034 requires 0034 with a hash matching the repo file', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0034');
+        const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
+        expect(req).toBeTruthy();
+        const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
+        expect(actual.toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        // Minimum required-schema checks for the 0034 surface.
+        expect(m.required_schema.tables.competition_views).toEqual(
+            expect.arrayContaining(['id', 'competition_id', 'identity_kind', 'identity_key', 'view_day', 'created_at'])
+        );
+        expect(m.required_schema.indexes).toContain('idx_competition_views_day');
+    });
+
+    it('production state (0034 applied, no pending) passes the gate', () => {
+        // Mirrors production after the authorized 0034 apply: the full known
+        // history applied, empty pending, full required schema present.
+        const r = evaluateReadiness(goodInput());
+        expect(r.ok).toBe(true);
+        expect(r.unexpected.applied).toEqual([]);
+        expect(r.unexpected.pending).toEqual([]);
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0034');
+    });
+
+    it('pre-0034 production (0034 missing) still fails closed', () => {
+        // The exact Deploy #456 block: 0034 applied remotely but unknown to a
+        // baseline-0033 manifest. Here from the other side — a baseline-0034
+        // gate must refuse a target that has not applied 0034 yet.
+        const input = goodInput();
+        input.applied = input.applied.filter((f) => f !== '0034_competition_views.sql');
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
     });
 
     it('manifest history is complete locally (every file exists)', () => {
@@ -106,18 +145,18 @@ describe('release readiness gate', () => {
 
     it('unexpected applied migration => FAIL and recorded (never auto-anything)', () => {
         const input = goodInput();
-        input.applied = [...input.applied, '0034_out_of_band.sql'];
+        input.applied = [...input.applied, '0035_out_of_band.sql'];
         const r = evaluateReadiness(input);
         expect(r.ok).toBe(false);
-        expect(r.unexpected.applied).toEqual(['0034_out_of_band.sql']);
+        expect(r.unexpected.applied).toEqual(['0035_out_of_band.sql']);
     });
 
     it('unexpected pending => FAIL and recorded, no apply path exists', () => {
         const input = goodInput();
-        input.pendingText = 'Migrations to be applied:\n0034_surprise.sql\n';
+        input.pendingText = 'Migrations to be applied:\n0035_surprise.sql\n';
         const r = evaluateReadiness(input);
         expect(r.ok).toBe(false);
-        expect(r.unexpected.pending).toEqual(['0034_surprise.sql']);
+        expect(r.unexpected.pending).toEqual(['0035_surprise.sql']);
         const src = readFileSync(resolve('dev-tools/check-release-readiness.mjs'), 'utf8');
         expect(src).not.toContain('wrangler d1');
         expect(src).not.toContain('child_process');
@@ -138,9 +177,9 @@ describe('release readiness gate', () => {
 
     it('parses pending names from migrations-list-style text', () => {
         expect(parsePendingNames('No migrations to apply!\n')).toEqual([]);
-        expect(parsePendingNames('Migrations to be applied:\n0033_explore_result_sessions.sql\n0034_x.sql\n')).toEqual([
+        expect(parsePendingNames('Migrations to be applied:\n0033_explore_result_sessions.sql\n0035_x.sql\n')).toEqual([
             '0033_explore_result_sessions.sql',
-            '0034_x.sql',
+            '0035_x.sql',
         ]);
     });
 });

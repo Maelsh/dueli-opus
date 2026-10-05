@@ -1,5 +1,5 @@
 {
-  "manifest_version": "R-RELEASE-1.baseline-0033",
+  "manifest_version": "R-RELEASE-1.baseline-0034",
   "target": {
     "pages_project": "project-8e7c178d",
     "database_name": "dueli-db"
@@ -8,6 +8,10 @@
     {
       "file": "0033_explore_result_sessions.sql",
       "sha256": "79b327daaf3d2f517cbd171dba93e5566bbf345ab70a990fddaeee7eae7309b9"
+    },
+    {
+      "file": "0034_competition_views.sql",
+      "sha256": "7c19c632290acebfdec474a9b733740dec3fe3973dbf4cff4ecb4855302e4a57"
     }
   ],
   "known_history": [
@@ -44,7 +48,8 @@
     "0030_chunk_upload_nonces.sql",
     "0031_realtime_tickets.sql",
     "0032_cron_run_guard.sql",
-    "0033_explore_result_sessions.sql"
+    "0033_explore_result_sessions.sql",
+    "0034_competition_views.sql"
   ],
   "required_schema": {
     "tables": {
@@ -61,12 +66,20 @@
         "created_at",
         "expires_at"
       ],
-      "explore_result_chunks": ["session_id", "chunk_index", "ids_json"]
+      "explore_result_chunks": ["session_id", "chunk_index", "ids_json"],
+      "competition_views": [
+        "id",
+        "competition_id",
+        "identity_kind",
+        "identity_key",
+        "view_day",
+        "created_at"
+      ]
     },
-    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry"]
+    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day"]
   },
   "notes": [
-    "Baseline R-RELEASE-1 requires migration 0033 applied with the pinned sha256 (no post-apply rewrite).",
+    "Baseline R-RELEASE-1.baseline-0034 requires migrations 0033 and 0034 applied with the pinned sha256 each (no post-apply rewrite).",
     "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
     "The gate never applies migrations. Unexpected pending is recorded and FAILS the gate; it is never auto-applied."
   ]
