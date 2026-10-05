@@ -32,6 +32,11 @@ function goodInput(m = manifest()) {
                 competition_views: [
                     'id', 'competition_id', 'identity_kind', 'identity_key', 'view_day', 'created_at',
                 ],
+                // Baseline-0035 surface: comments gains video_offset (0035).
+                comments: [
+                    'id', 'competition_id', 'user_id', 'content', 'parent_id', 'is_live',
+                    'likes_count', 'created_at', 'user_anonymized', 'deleted_at', 'video_offset',
+                ],
             },
             indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day'],
         },
@@ -58,9 +63,9 @@ describe('release readiness gate', () => {
         expect(m.known_history).toContain(req.file);
     });
 
-    it('manifest baseline-0034 requires 0034 with a hash matching the repo file', () => {
+    it('manifest baseline-0035 requires 0034 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0034');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0035');
         const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -73,14 +78,45 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_competition_views_day');
     });
 
-    it('production state (0034 applied, no pending) passes the gate', () => {
-        // Mirrors production after the authorized 0034 apply: the full known
+    it('manifest baseline-0035 requires 0035 with a hash matching the repo file', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0035');
+        const req = m.required_migrations.find((x) => x.file === '0035_comments_video_offset.sql');
+        expect(req).toBeTruthy();
+        const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
+        expect(actual.toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        // Minimum required-schema checks for the 0035 surface.
+        expect(m.required_schema.tables.comments).toEqual(expect.arrayContaining(['video_offset']));
+    });
+
+    it('production state (0035 applied, no pending) passes the gate', () => {
+        // Mirrors production after the authorized 0035 apply: the full known
         // history applied, empty pending, full required schema present.
         const r = evaluateReadiness(goodInput());
         expect(r.ok).toBe(true);
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
-        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0034');
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0035');
+    });
+
+    it('production-shape 0034 + manifest 0035 => required-pending FAIL (0035 not yet applied)', () => {
+        // Production still on the 0034 shape while the manifest already
+        // requires 0035: applied history stops at 0034, the pending list
+        // names 0035, and the schema snapshot lacks comments.video_offset.
+        const input = goodInput();
+        input.applied = input.applied.filter((f) => f !== '0035_comments_video_offset.sql');
+        input.pendingText = 'Migrations to be applied:\n0035_comments_video_offset.sql\n';
+        delete input.schema.tables.comments;
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
+    });
+
+    it('production-shape 0035 + manifest 0035 => readiness PASS', () => {
+        const r = evaluateReadiness(goodInput());
+        expect(r.ok).toBe(true);
+        expect(r.checks.every((c) => c.ok)).toBe(true);
     });
 
     it('Deploy #458 exact scenario: stale snapshot missing the 0034 index FAILS', () => {
