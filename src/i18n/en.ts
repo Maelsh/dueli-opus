@@ -1034,6 +1034,9 @@ export const en = {
     reply: 'Reply',
     replying_to: 'Replying to:',
 
+    // ── R2-L2: VOD timed comments ──────────────
+    vod_comment_at: 'Jump to moment',
+
     // ── T3.2: Profile posts ──────────────
     post_placeholder: 'Share a thought with your audience...',
     post_publish: 'Publish',

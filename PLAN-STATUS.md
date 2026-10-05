@@ -1,6 +1,13 @@
 
 
 
+## R2-L2 production live-room + Media/VOD + Like/Dislike + timed comments + single ad slot · فرع `feat/r2-l2-live-room` (من `35ccd4f` = origin/main بعد دمج R2-V #90)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية. ترحيل واحد مضاف (`0035_comments_video_offset`: عمود `video_offset` ‏NULL — ضروري فعلاً: لا بنية قائمة تحمل موضع التشغيل؛ تُختبر مع الترحيلات الحقيقية). J/L1/V مغلقة ولم تُعَد بناؤها (90/90 خضراء)؛ بلا H7/D1/D2 (إشارات Like/Dislike جاهزة شكلاً فقط)؛ بلا ranking؛ بلا تغيير صلاحيات start/end؛ اختبار S/device مؤجل لـR4 (غياب الجهاز ليس blocker للكود).
+- العقد: (1) الغرفة — creator/opponent/viewer يدخلون `/live/:id` الإنتاجية (الدور من الجلسة)؛ صفحات `/live/host|guest` التجريبية باقية للتشخيص وليست الوسيلة الوحيدة. (2) الوسائط — حالات waiting/playing/error/processing/ready/unavailable + retry يدوي (تكرار تلقائي محدود 8×15s)؛ الجاهزية من `hasPlayableRecording` وحده (بلا HEAD)؛ completed بلا تسجيل ≠ recorded. (3) Like/Dislike — thumbs بدل القلب، فعالة واحدة like/dislike/neutral تُرسم من استجابة الخادم (التبديل لا يضاعف)؛ `show()` تحمل `user_reaction`. (4) تعليقات موقوتة — `video_offset` في POST/SSE/GET على نفس قناة `competition:<id>` (لا نظام ثانٍ)؛ الالتقاط في VOD فقط؛ القائمة النهائية مرتبة زمنياً؛ تمييز متزامن مع `timeupdate`. (5) إعلان واحد تحت الإحصائيات بعيداً عن video/comments/ratings عبر الخدمة القائمة؛ impression مرة واحدة عند الظهور الفعلي (observer + idempotency)؛ الميزانية/الخصم خادمياً؛ بلا click ولا إجراء مدفوع.
+- **الأدلة**: T جديد `r2-l2-timed-comments` 6/6 (SqliteD1 بالترحيلات الحقيقية: offset/تقليم-NULL/SSE/get، ‏recorded مقابل bare، تبديل like→dislike بصف واحد وneutral، ‏user_reaction، حراس 403/409) + UI جديد `r2-l2-competition-ui` 9/9 (غرفة/حالات/retry/‏predicate/زوج التفاعل/توقيت/إعلان/‏i18n/‏dark-RTL)؛ الجيران J/L1/V/likes/comments/guards/ads ‏90/90؛ الكاملة ‏1226/1232 (الـ6 ‏quality-gate-poll: غياب ‏jq على ‏Windows — بيئية ومثبتة على ‏BASE)؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏CSS churn رُجع)؛ ‏G2 ‏281 = ‏BASE ‏281؛ routes بلا تغيير (لا endpoints جديدة).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R2-V live-only viewer ratings · فرع `feat/r2-v-live-ratings` (من `fbc8607` = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/تعديل migrations. R2-L1 مغلقة ومنشورة ولم تُمس (أُعيد استعمال SSOT الـwatch فقط)؛ بلا watch mechanism جديد؛ بلا L2/H7/D1/D2.

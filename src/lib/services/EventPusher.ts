@@ -127,12 +127,15 @@ export class EventPusher {
      * R2-L1: the payload carries BOTH display_name and username (with a
      * username fallback) so every surface renders the correct author without
      * a follow-up GET. `username` stays for older readers.
+     * R2-L2: `video_offset` rides along (NULL = live/unsynced) — same
+     * comment_new event on the same channel, no second system.
      */
     async publishComment(
         competitionId: number,
         comment: {
             id: number; user_id: number; display_name: string | null; username: string;
             avatar_url: string | null; content: string; created_at: string;
+            video_offset?: number | null;
         }
     ) {
         return this.publish(`competition:${competitionId}`, 'comment_new', { competition_id: competitionId, comment });

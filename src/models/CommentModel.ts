@@ -133,6 +133,11 @@ export class CommentModel extends BaseModel<Comment> {
 
     /**
      * Create comment
+     *
+     * R2-L2: accepts an optional VOD playback offset (`video_offset`, seconds).
+     * Clamped server-side: finite numbers >= 0 are kept, everything else
+     * becomes NULL (live/unsynced). Never trusted for auth or ordering
+     * guarantees beyond display sync.
      */
     async create(data: Partial<Comment> & { parent_id?: number | null }): Promise<Comment> {
         // B7: content length bound (comment ≤ 2000 chars) — enforced BEFORE any
@@ -166,15 +171,21 @@ export class CommentModel extends BaseModel<Comment> {
             }
         }
 
+        const videoOffset = typeof data.video_offset === 'number' &&
+            Number.isFinite(data.video_offset) && data.video_offset >= 0
+            ? Math.floor(data.video_offset)
+            : null;
+
         const result = await this.db.prepare(`
-            INSERT INTO comments (competition_id, user_id, content, is_live, parent_id, created_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO comments (competition_id, user_id, content, is_live, parent_id, video_offset, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
         `).bind(
             data.competition_id,
             data.user_id,
             data.content,
             data.is_live ? 1 : 0,
-            data.parent_id ?? null
+            data.parent_id ?? null,
+            videoOffset
         ).run();
 
         // Update competition comment count

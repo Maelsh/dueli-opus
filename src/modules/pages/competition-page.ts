@@ -203,7 +203,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                         <p class="text-lg font-bold mb-2">\${tr.status_live || 'البث مباشر'}</p>
                         <p class="text-sm opacity-75 mb-4">\${isCreator ? (tr.you_are_host || 'أنت المضيف') : (tr.you_are_guest || 'أنت الضيف')}</p>
-                        <a href="/live/\${isCreator ? 'host' : 'guest'}?comp=\${competitionId}&lang=\${lang}" 
+                        <!-- R2-L2: production room — creator/host, opponent and viewers
+                             all enter /live/:id (role resolved server-side from the
+                             session vs creator/opponent). The /live/host|guest test
+                             pages remain for diagnostics only, never the sole path. -->
+                        <a href="/live/\${competitionId}?lang=\${lang}"
                            class="px-6 py-3 bg-red-600 rounded-full font-bold hover:bg-red-700 transition-all inline-flex items-center gap-2">
                           <i class="fas fa-video"></i>
                           \${tr.join_stream || 'انضم للبث'}
@@ -247,11 +251,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         <video id="embeddedVideoPlayer2" autoplay playsinline 
                                class="absolute inset-0 transition-opacity duration-300 opacity-0 z-[1] bg-black"></video>
                         
-                        <!-- Status overlay -->
+                        <!-- Status overlay: R2-L2 explicit media states
+                             (waiting/playing/error/processing/ready/unavailable).
+                             Never an endless spinner — error/unavailable states
+                             offer a manual retry instead of silent polling. -->
                         <div id="embeddedStatusOverlay" class="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
                           <div class="text-center text-white">
-                            <i class="fas fa-spinner fa-spin text-4xl mb-3"></i>
+                            <i id="embeddedStatusIcon" class="fas fa-spinner fa-spin text-4xl mb-3"></i>
                             <p class="text-sm" id="embeddedStatusText">\${isLive ? (tr.connecting_to_stream || 'جاري الاتصال بالبث...') : (tr.loading_video || 'جاري تحميل الفيديو...')}</p>
+                            <p class="text-xs mt-1 opacity-70 hidden" id="embeddedStateLabel" data-media-state="waiting"></p>
+                            <button id="embeddedRetryBtn" data-csp-on="click" data-csp-fn="embeddedRetryMedia" data-csp-args='[]'
+                                    class="hidden mt-3 px-5 py-2 bg-purple-600 text-white rounded-full text-sm font-bold hover:bg-purple-700 transition-colors">
+                              <i class="fas fa-redo me-1"></i>\${tr.retry || 'Retry'}
+                            </button>
                           </div>
                         </div>
                         
@@ -478,12 +490,23 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     </div>
                   </div>
                   
-                  <!-- Interaction Buttons -->
-                  <div class="flex gap-2 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <button data-csp-on="click" data-csp-fn="toggleLike" data-csp-args='[]' id="likeBtn" 
-                      class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 \${comp.user_liked ? 'bg-red-100 dark:bg-red-900/30 text-red-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500'}">
-                      <i class="fas fa-heart"></i>
+                  <!-- Interaction Buttons: R2-L2 real Like + Dislike (single
+                       active reaction per identity: like/dislike/neutral).
+                       Counts always come from the server response — switching
+                       never double-counts. Signals are H7-ready; no ranking
+                       is computed here. -->
+                  <div class="flex gap-2 mt-6 pt-6 border-t border-gray-200 dark:border-gray-700" id="reactionBar">
+                    <button data-csp-on="click" data-csp-fn="setReaction" data-csp-args='["like"]' id="likeBtn"
+                      aria-pressed="false" aria-label="\${tr.like?.title || 'Like'}"
+                      class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-green-50 hover:text-green-600">
+                      <i class="fas fa-thumbs-up"></i>
                       <span id="likeCount">\${comp.likes_count || 0}</span>
+                    </button>
+                    <button data-csp-on="click" data-csp-fn="setReaction" data-csp-args='["dislike"]' id="dislikeBtn"
+                      aria-pressed="false" aria-label="\${tr.interactions?.dislike || 'Dislike'}"
+                      class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500">
+                      <i class="fas fa-thumbs-down"></i>
+                      <span id="dislikeCount">\${comp.dislikes_count || 0}</span>
                     </button>
                     <button data-csp-on="click" data-csp-fn="toggleReminder" data-csp-args='[]' id="reminderBtn" 
                       class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 \${comp.user_reminded ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-amber-50 hover:text-amber-500'}">
@@ -496,6 +519,17 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   </div>
                 </div>
                 
+                <!-- R2-L2: single competition ad slot (below stats, clear of
+                     video/comments/ratings). Impression fires once on ACTUAL
+                     view via IntersectionObserver — never on fetch. Budget /
+                     idempotency enforced server-side (chargeImpression). -->
+                <div class="card p-4 hidden" id="competitionAdSlot" aria-label="\${tr.ads?.sponsored_label || 'Sponsored'}">
+                  <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-bold uppercase tracking-wide text-gray-400">\${tr.ads?.sponsored_label || 'Sponsored'}</span>
+                  </div>
+                  <div id="competitionAdBody" class="min-h-[72px] flex items-center justify-center text-sm text-gray-500"></div>
+                </div>
+
                 <div class="card overflow-hidden">
                   <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                     <h3 class="font-bold text-gray-900 dark:text-white">\${tr.live_chat}</h3>
@@ -554,12 +588,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           
           const data = await res.json();
           if (data.success) {
-            // Redirect based on role
-            if (isCreator) {
-              window.location.href = '/live/host?comp=' + competitionId + '&lang=' + lang;
-            } else if (isOpponent) {
-              window.location.href = '/live/guest?comp=' + competitionId + '&lang=' + lang;
-            }
+            // R2-L2: production room for every role — /live/:id resolves
+            // host/opponent/viewer from the session (same guards as start).
+            window.location.href = '/live/' + competitionId + '?lang=' + lang;
           } else {
             showToast(data.error || 'Failed to start', 'error');
           }
@@ -789,16 +820,77 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } catch (e) {}
       }
 
+      // R2-L2: VOD timed comments — same comments/SSE system (no second
+      // system). Post-live comments carry the current playback offset;
+      // the final list is chronological by offset; playback highlights the
+      // comment at the current position. Live comments omit the offset.
+      function isVodMode() {
+        return !!competitionData && competitionData.status === 'completed';
+      }
+      function formatClock(s) {
+        s = Math.max(0, Math.floor(Number(s) || 0));
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m + ':' + (sec < 10 ? '0' : '') + sec;
+      }
+      function currentVodTime() {
+        if (!competitionData || competitionData.status !== 'completed') return null;
+        const v = document.getElementById('embeddedVideoPlayer1');
+        if (!v || typeof v.currentTime !== 'number' || !isFinite(v.currentTime)) return null;
+        const ctrls = document.getElementById('embeddedVodControls');
+        if (ctrls && ctrls.classList.contains('hidden')) return null;
+        return Math.floor(v.currentTime);
+      }
+      window.seekToCommentOffset = function(sec) {
+        const v = document.getElementById('embeddedVideoPlayer1');
+        if (!v) return;
+        const t = parseFloat(sec);
+        if (isNaN(t) || t < 0) return;
+        if (embeddedCurrentPlayer && embeddedCurrentPlayer.seekTo) embeddedCurrentPlayer.seekTo(t);
+        else { try { v.currentTime = t; } catch (e) {} }
+        try { v.play(); } catch (e) {}
+      };
+      function commentOffsetOf(cm) {
+        return (cm && typeof cm.video_offset === 'number' && isFinite(cm.video_offset)) ? cm.video_offset : null;
+      }
+      function orderCommentsForDisplay(items) {
+        if (!isVodMode()) return items;
+        return items.slice().sort(function(a, b) {
+          const ao = commentOffsetOf(a), bo = commentOffsetOf(b);
+          if (ao !== null && bo !== null && ao !== bo) return ao - bo;
+          if (ao !== null && bo === null) return -1;
+          if (ao === null && bo !== null) return 1;
+          const at = a && a.created_at ? String(a.created_at) : '';
+          const bt = b && b.created_at ? String(b.created_at) : '';
+          return at < bt ? -1 : (at > bt ? 1 : 0);
+        });
+      }
+      function syncTimedComments(cur) {
+        if (!isVodMode() || typeof cur !== 'number' || !isFinite(cur)) return;
+        const box = document.getElementById('chatMessages');
+        if (!box || typeof box.querySelectorAll !== 'function') return;
+        let current = null;
+        let currentOff = -1;
+        const nodes = box.querySelectorAll('[data-comment-offset]');
+        nodes.forEach(function(n) {
+          const off = parseFloat(n.getAttribute('data-comment-offset'));
+          n.classList.remove('bg-purple-50', 'dark:bg-purple-900/20', 'rounded-xl', 'px-1');
+          if (!isNaN(off) && off <= cur && off >= currentOff) { current = n; currentOff = off; }
+        });
+        if (current) current.classList.add('bg-purple-50', 'dark:bg-purple-900/20', 'rounded-xl', 'px-1');
+      }
+
       // T3.3: nested replies state
       let replyToComment = null;
 
       // T3.3: render comments as a tree — top-level posts with indented replies
       function commentHTML(cm) {
+        const off = commentOffsetOf(cm);
         return \`
-          <div class="flex gap-2 animate-fade-in">
+          <div class="flex gap-2 animate-fade-in"\${off !== null ? ' data-comment-offset="' + off + '"' : ''} data-comment-id="\${cm.id}">
             <img src="\${cm.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + cm.username}" class="w-8 h-8 rounded-full flex-shrink-0" alt="">
             <div class="min-w-0">
-              <p class="text-sm"><span class="font-semibold text-purple-600">\${cm.display_name || cm.username || ''}</span></p>
+              <p class="text-sm"><span class="font-semibold text-purple-600">\${cm.display_name || cm.username || ''}</span>\${off !== null ? ' <button data-csp-on="click" data-csp-fn="seekToCommentOffset" data-csp-args="[' + off + ']" class="text-[11px] font-mono text-purple-500 hover:text-purple-700 hover:underline" title="' + (tr.vod_comment_at || 'Jump to moment') + '"><i class="fas fa-clock me-0.5"></i>' + formatClock(off) + '</button>' : ''}</p>
               <p class="text-sm text-gray-600 dark:text-gray-300 break-words">\${cm.content}</p>
               \${window.currentUser ? \`
                 <span class="inline-flex items-center gap-3 mt-0.5">
@@ -816,7 +908,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       }
 
       function renderCommentsTree(comments) {
-        const tops = comments.filter(function(c){ return !c.parent_id; });
+        const tops = orderCommentsForDisplay(comments.filter(function(c){ return !c.parent_id; }));
         const byParent = {};
         comments.forEach(function(c){
           if (c.parent_id) {
@@ -864,7 +956,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             body: JSON.stringify({
               content: content,
               is_live: competitionData?.status === 'live',
-              parent_id: replyToComment || null
+              parent_id: replyToComment || null,
+              video_offset: currentVodTime()
             })
           });
           const data = await res.json().catch(function(){ return null; });
@@ -899,6 +992,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         subscribeCommentsLive();
         loadRatingSummary();
         subscribeRatingsLive();
+        loadReactionStatus();
+        loadCompetitionAd();
         // Sequential: the heartbeat must see the guest token the intent may
         // have just issued — concurrent first-view calls issued two day-rows
         // for one anonymous viewer.
@@ -987,34 +1082,154 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         } catch (e) {}
       }
-      async function toggleLike() {
-        if (!window.currentUser) { showLoginModal(); return; }
-        const btn = document.getElementById('likeBtn');
-        const countEl = document.getElementById('likeCount');
-        const isLiked = btn.classList.contains('bg-red-100');
-        
+      // R2-L2: single-active reaction per identity (like/dislike/neutral).
+      // One effective signal: POSTing a reaction atomically clears the
+      // opposite server-side (LikeModel.setReaction, one batch); clicking
+      // the active one DELETEs back to neutral. Counts are ALWAYS taken
+      // from the server response — switching never double-counts.
+      window.__reaction = { liked: false, disliked: false };
+      function paintReaction() {
+        const likeBtn = document.getElementById('likeBtn');
+        const dislikeBtn = document.getElementById('dislikeBtn');
+        const likeCount = document.getElementById('likeCount');
+        const dislikeCount = document.getElementById('dislikeCount');
+        const r = window.__reaction || { liked: false, disliked: false };
+        if (likeBtn) {
+          likeBtn.setAttribute('aria-pressed', r.liked ? 'true' : 'false');
+          likeBtn.className = 'flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ' +
+            (r.liked ? 'bg-green-100 dark:bg-green-900/30 text-green-600'
+                     : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-green-50 hover:text-green-600');
+        }
+        if (dislikeBtn) {
+          dislikeBtn.setAttribute('aria-pressed', r.disliked ? 'true' : 'false');
+          dislikeBtn.className = 'flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ' +
+            (r.disliked ? 'bg-red-100 dark:bg-red-900/30 text-red-600'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500');
+        }
+        if (likeCount && typeof r.likes_count === 'number') likeCount.textContent = String(r.likes_count);
+        if (dislikeCount && typeof r.dislikes_count === 'number') dislikeCount.textContent = String(r.dislikes_count);
+      }
+      async function loadReactionStatus() {
+        // Prefer the show() payload (no extra round-trip); fall back to GET.
+        const pre = competitionData && competitionData.user_reaction;
+        if (pre && typeof pre.liked === 'boolean') {
+          window.__reaction = { liked: !!pre.liked, disliked: !!pre.disliked, likes_count: pre.likes_count, dislikes_count: pre.dislikes_count };
+          paintReaction();
+          return;
+        }
         try {
-          const res = await fetch('/api/competitions/' + competitionId + '/like', {
-            method: isLiked ? 'DELETE' : 'POST',
+          const res = await fetch('/api/competitions/' + competitionId + '/like');
+          const data = await res.json().catch(function(){ return null; });
+          if (data && data.success && data.data) {
+            window.__reaction = {
+              liked: !!data.data.liked, disliked: !!data.data.disliked,
+              likes_count: data.data.likes_count, dislikes_count: data.data.dislikes_count
+            };
+            const likeCount = document.getElementById('likeCount');
+            const dislikeCount = document.getElementById('dislikeCount');
+            if (likeCount && !window.currentUser) likeCount.textContent = String(data.data.likes_count || 0);
+            if (dislikeCount && !window.currentUser) dislikeCount.textContent = String(data.data.dislikes_count || 0);
+            paintReaction();
+          }
+        } catch (e) {}
+      }
+      window.setReaction = async function(type) {
+        if (!window.currentUser) { showLoginModal(); return; }
+        if (type !== 'like' && type !== 'dislike') return;
+        const r = window.__reaction || { liked: false, disliked: false };
+        const active = (type === 'like' && r.liked) || (type === 'dislike' && r.disliked);
+        const method = active ? 'DELETE' : 'POST';
+        const path = '/api/competitions/' + competitionId + '/' + type;
+        try {
+          const res = await fetch(path, {
+            method: method,
             headers: {
               'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
               'Content-Type': 'application/json'
             }
           });
-          
-          if (res.ok) {
-            const currentCount = parseInt(countEl.textContent) || 0;
-            if (isLiked) {
-              btn.classList.remove('bg-red-100', 'dark:bg-red-900/30', 'text-red-600');
-              btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
-              countEl.textContent = Math.max(0, currentCount - 1);
-            } else {
-              btn.classList.add('bg-red-100', 'dark:bg-red-900/30', 'text-red-600');
-              btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
-              countEl.textContent = currentCount + 1;
-            }
+          const data = await res.json().catch(function(){ return null; });
+          if (res.ok && data && data.success && data.data) {
+            window.__reaction = {
+              liked: !!data.data.liked, disliked: !!data.data.disliked,
+              likes_count: data.data.likes_count, dislikes_count: data.data.dislikes_count
+            };
+            paintReaction();
+          } else if (res.status === 404 && active) {
+            // Already neutral server-side — converge locally.
+            window.__reaction = { liked: false, disliked: false, likes_count: r.likes_count, dislikes_count: r.dislikes_count };
+            paintReaction();
+          } else {
+            showToast((data && data.error) || tr.error_occurred || 'Error', 'error');
           }
         } catch (err) { console.error(err); }
+      };
+      // R2-L2: single competition ad slot. Serving reuses AdServingService
+      // via GET /api/advertisements?competition_id=&context=competition&limit=1
+      // (server-side targeting/cap/sensitive-context). The impression POSTs
+      // ONCE on actual view (IntersectionObserver) with an idempotency key —
+      // never on fetch. Budget/idempotency stay server-side. No click is
+      // fired, no paid action, no test purchase.
+      window.__compAdImpressed = false;
+      async function loadCompetitionAd() {
+        const slot = document.getElementById('competitionAdSlot');
+        const body = document.getElementById('competitionAdBody');
+        if (!slot || !body) return;
+        let ad = null;
+        try {
+          const res = await fetch('/api/advertisements?competition_id=' + competitionId + '&context=competition&limit=1');
+          const data = await res.json().catch(function(){ return null; });
+          const items = data && data.success && Array.isArray(data.data) ? data.data : [];
+          if (items.length === 0) return;
+          ad = items[0];
+        } catch (e) { return; }
+        if (!ad || !ad.id) return;
+        const title = ad.title || ad.name || '';
+        const text = ad.description || ad.body || '';
+        body.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.className = 'w-full text-center';
+        const t = document.createElement('p');
+        t.className = 'font-bold text-gray-800 dark:text-gray-100';
+        t.textContent = title;
+        wrap.appendChild(t);
+        if (text) {
+          const d = document.createElement('p');
+          d.className = 'text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2';
+          d.textContent = text;
+          wrap.appendChild(d);
+        }
+        body.appendChild(wrap);
+        slot.classList.remove('hidden');
+        // Impression on ACTUAL view only — once per page view. The
+        // idempotency key makes retries replay server-side without a
+        // second charge; fetch alone never counts.
+        const key = 'comp-' + competitionId + '-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+        const fire = async function() {
+          if (window.__compAdImpressed) return;
+          window.__compAdImpressed = true;
+          try {
+            await fetch('/api/advertisements/' + ad.id + '/impression', {
+              method: 'POST',
+              headers: commentAuthHeaders({ 'Content-Type': 'application/json' }),
+              body: JSON.stringify({ competition_id: parseInt(competitionId, 10), idempotency_key: key })
+            });
+          } catch (e) {}
+        };
+        try {
+          if ('IntersectionObserver' in window) {
+            const obs = new IntersectionObserver(function(entries) {
+              for (const en of entries) {
+                if (en.isIntersecting) { fire(); try { obs.disconnect(); } catch (e) {} }
+              }
+            }, { threshold: 0.5 });
+            obs.observe(slot);
+          }
+        } catch (e) {}
+      }
+      // Legacy alias (heart-era callers): like toggle only.
+      async function toggleLike() {
+        return window.setReaction('like');
       }
       
       async function toggleReminder() {
@@ -1276,16 +1491,63 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           document.getElementById('embeddedVideoPlayer2')
         ];
         
+        // R2-L2: explicit media state machine. States: waiting (no stream
+        // yet) / playing (live chunks or VOD flowing) / error (fatal playback
+        // or fetch failure) / processing (completed, recording finalizing) /
+        // ready (completed + playable recording, VOD playing) / unavailable
+        // (completed with no recording, or live service missing). The state
+        // is painted on #embeddedStateLabel and mirrored to
+        // window.__mediaState for targeted UI tests. Error/unavailable offer
+        // a manual retry — never an endless spinner.
+        var MEDIA_STATES = ['waiting', 'playing', 'error', 'processing', 'ready', 'unavailable'];
+        var MEDIA_ICONS = {
+          waiting: 'fas fa-clock text-4xl mb-3',
+          playing: 'fas fa-play-circle text-4xl mb-3',
+          error: 'fas fa-exclamation-triangle text-4xl mb-3',
+          processing: 'fas fa-cog fa-spin text-4xl mb-3',
+          ready: 'fas fa-film text-4xl mb-3',
+          unavailable: 'fas fa-video-slash text-4xl mb-3'
+        };
+        function setMediaState(state) {
+          if (MEDIA_STATES.indexOf(state) === -1) state = 'waiting';
+          window.__mediaState = state;
+          const label = document.getElementById('embeddedStateLabel');
+          if (label) {
+            label.textContent = 'media:' + state;
+            label.setAttribute('data-media-state', state);
+            label.classList.remove('hidden');
+          }
+          const icon = document.getElementById('embeddedStatusIcon');
+          if (icon) icon.className = MEDIA_ICONS[state];
+          const retry = document.getElementById('embeddedRetryBtn');
+          if (retry) retry.classList.toggle('hidden', !(state === 'error' || state === 'unavailable'));
+        }
+        // R2-L2: client mirror of the server playableRecording predicate
+        // (vod_url OR youtube_video_url trimmed non-empty). This is the ONLY
+        // readiness source — no HEAD request per discovery. completed without
+        // a recording is NOT recorded (processing/unavailable, never VOD).
+        function hasPlayableRecording(comp) {
+          if (!comp) return false;
+          const vod = (comp.vod_url || '').trim();
+          const yt = (comp.youtube_video_url || '').trim();
+          return vod !== '' || yt !== '';
+        }
+        // R2-L2: manual retry from error/unavailable states.
+        window.embeddedRetryMedia = function() {
+          window._vodRetryCount = 0;
+          initEmbeddedViewer();
+        };
+
         function setEmbeddedStatus(text) {
           const el = document.getElementById('embeddedStatusText');
           if (el) el.textContent = text;
         }
-        
+
         function hideStatusOverlay() {
           const overlay = document.getElementById('embeddedStatusOverlay');
           if (overlay) overlay.classList.add('hidden');
         }
-        
+
         function showStatusOverlay(text) {
           const overlay = document.getElementById('embeddedStatusOverlay');
           const el = document.getElementById('embeddedStatusText');
@@ -1308,15 +1570,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         }
         
-        // T1.3 FIX: VOD not ready → poll every 15s (up to 5 min) while
-        // the ffmpeg server finalizes the merged recording.
+        // R2-L2: VOD not ready → bounded auto-poll (8 × 15s) while the
+        // ffmpeg server finalizes the merged recording, then the
+        // unavailable state with a MANUAL retry (no endless spinner).
+        var VOD_MAX_RETRIES = 8;
         function handleVodNotReady() {
-          showStatusOverlay(tr.recording_processing || 'جاري تجهيز التسجيل...');
           if (!window._vodRetryCount) window._vodRetryCount = 0;
-          if (window._vodRetryCount < 20) {
+          if (window._vodRetryCount < VOD_MAX_RETRIES) {
             window._vodRetryCount++;
+            setMediaState('processing');
+            showStatusOverlay(tr.recording_processing || 'جاري تجهيز التسجيل...');
             setTimeout(function() { initEmbeddedViewer(); }, 15000);
           } else {
+            setMediaState('unavailable');
             showStatusOverlay(tr.recording_not_ready || 'Recording not available');
           }
         }
@@ -1328,7 +1594,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           // Re-fetch fresh competition data from API to get latest status
           setEmbeddedStatus(tr.loading || 'Loading...');
           const freshRes = await fetch('/api/competitions/' + competitionId);
-          if (!freshRes.ok) { showStatusOverlay(tr.stream_not_available || 'Stream not available'); return; }
+          if (!freshRes.ok) { setMediaState('error'); showStatusOverlay(tr.stream_not_available || 'Stream not available'); return; }
           const freshData = await freshRes.json();
           const comp = freshData.data || freshData;
           
@@ -1342,13 +1608,15 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           if (isLiveComp) {
             // === LIVE: Use ChunkManager + LiveSequentialPlayer ===
             setEmbeddedStatus(tr.connecting_to_stream || 'Connecting to stream...');
+            setMediaState('waiting');
             updateEmbeddedMode('live');
-            
+
             if (!window.ChunkManager || !window.LiveSequentialPlayer) {
+              setMediaState('error');
               showStatusOverlay(tr.streaming_unavailable || 'Streaming service unavailable');
               return;
             }
-            
+
             const chunkManager = new window.ChunkManager(competitionId, 'mp4');
             embeddedCurrentPlayer = new window.LiveSequentialPlayer({
               videoPlayers: videoPlayers,
@@ -1356,16 +1624,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               onChunkChange: function(index) {
                 const info = document.getElementById('embeddedChunkInfo');
                 if (info) { info.textContent = (tr.chunk || 'Chunk') + ' ' + (index + 1); info.classList.remove('hidden'); }
+                setMediaState('playing');
                 hideStatusOverlay();
               },
               onStatus: function(status) { log(status); },
               onError: function(err) {
                 log('Viewer error: ' + err.message, 'error');
+                setMediaState('error');
                 showStatusOverlay(tr.stream_not_available || 'Stream not available');
               },
               // عند انتهاء البث: تحقق من الحالة وانتقل لـ VOD إن كانت مكتملة
               onStreamEnd: async function() {
                 log('Stream ended - checking competition status...', 'info');
+                setMediaState('waiting');
                 showStatusOverlay(tr.stream_ended || 'انتهى البث، جاري التحقق...');
                 // انتظر قليلاً ثم تحقق من قاعدة البيانات
                 await new Promise(function(r) { setTimeout(r, 3000); });
@@ -1408,10 +1679,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             
           } else if (isCompletedComp) {
             // === VOD: Use SmartVodPlayer ===
+            // R2-L2: completed WITHOUT a recording is NOT recorded — route
+            // to processing/unavailable (bounded poll + manual retry), never
+            // the VOD badge/controls.
+            if (!hasPlayableRecording(comp)) {
+              handleVodNotReady();
+              return;
+            }
             setEmbeddedStatus(tr.loading_video || 'Loading video...');
+            setMediaState('waiting');
             updateEmbeddedMode('vod');
-            
+
             if (!window.SmartVodPlayer) {
+              setMediaState('error');
               showStatusOverlay(tr.streaming_unavailable || 'Video service unavailable');
               return;
             }
@@ -1443,8 +1723,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               },
               onChunkLoaded: function(index, loaded) {},
               onReady: function(info) {
+                setMediaState('ready');
                 hideStatusOverlay();
-                window._vodRetryCount = 0; // T1.3: reset poll counter on success
+                window._vodRetryCount = 0; // reset poll counter on success
                 const vodControls = document.getElementById('embeddedVodControls');
                 if (vodControls) vodControls.classList.remove('hidden');
                 embeddedSetupVodControls(videoPlayers[0], info.totalDuration);
@@ -1454,17 +1735,20 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               },
               onError: function(err) {
                 log('VOD error: ' + err.message, 'error');
+                setMediaState('error');
                 showStatusOverlay(tr.recording_not_ready || 'Recording not available');
               }
             });
             await embeddedCurrentPlayer.start();
           } else {
-            // Status is not live or completed  
+            // Status is not live or completed
+            setMediaState('waiting');
             showStatusOverlay(tr.stream_not_available || 'Stream not available yet');
           }
-          
+
         } catch (err) {
           log('Embedded viewer error: ' + err.message, 'error');
+          setMediaState('error');
           showStatusOverlay(tr.error_occurred || 'An error occurred');
         }
       }
@@ -1487,6 +1771,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             const total = videoEl.duration || totalDuration || 0;
             if (seekbar) seekbar.value = total > 0 ? (cur / total * 100) : 0;
             if (timeDisplay) timeDisplay.textContent = formatTime(cur) + ' / ' + formatTime(total);
+            // R2-L2: VOD is flowing → playing; timed comments sync off this.
+            if (!videoEl.paused) setMediaState('playing');
+            if (typeof syncTimedComments === 'function') syncTimedComments(cur);
             // Update play/pause icon
             const icon = document.getElementById('embeddedPlayPauseIcon');
             if (icon) icon.className = videoEl.paused ? 'fas fa-play text-sm' : 'fas fa-pause text-sm';

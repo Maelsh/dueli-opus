@@ -20,6 +20,18 @@ export interface ReportData {
 }
 
 /**
+ * R2-L2: single-active reaction state (like/dislike/neutral + counters).
+ * Mirrors GET /api/competitions/:id/like. Ready to feed H7 later; no
+ * ranking is computed here.
+ */
+export interface ReactionStatus {
+    liked: boolean;
+    disliked: boolean;
+    likes_count: number;
+    dislikes_count: number;
+}
+
+/**
  * Interaction Service Class
  * خدمة التفاعلات (الإعجابات والبلاغات)
  */
@@ -79,6 +91,114 @@ export class InteractionService {
         } else {
             const result = await this.like(competitionId);
             return { ...result, liked: true };
+        }
+    }
+
+    /**
+     * R2-L2: single-active reaction helpers. The server clears the opposite
+     * reaction atomically, so like/dislike/neutral never coexist and counts
+     * come from the response (no client-side double counting).
+     */
+    static async dislike(competitionId: number): Promise<{ success: boolean; status?: ReactionStatus }> {
+        if (!State.currentUser) {
+            Toast.warning(t('auth.login_required', State.lang));
+            return { success: false };
+        }
+        try {
+            const response = await ApiClient.post(`/api/competitions/${competitionId}/dislike`);
+            if (response.success) {
+                return { success: true, status: response.data as ReactionStatus };
+            }
+            Toast.error(response.error || t('errors.something_wrong', State.lang));
+            return { success: false };
+        } catch (error) {
+            console.error('Dislike error:', error);
+            return { success: false };
+        }
+    }
+
+    static async undislike(competitionId: number): Promise<{ success: boolean; status?: ReactionStatus }> {
+        if (!State.currentUser) return { success: false };
+        try {
+            const response = await ApiClient.delete(`/api/competitions/${competitionId}/dislike`);
+            if (response.success) {
+                return { success: true, status: response.data as ReactionStatus };
+            }
+            return { success: false };
+        } catch (error) {
+            console.error('Undislike error:', error);
+            return { success: false };
+        }
+    }
+
+    static async setReaction(
+        competitionId: number,
+        type: 'like' | 'dislike',
+        currentlyActive: boolean
+    ): Promise<{ success: boolean; status?: ReactionStatus }> {
+        if (currentlyActive) {
+            return type === 'like' ? this.unlikeFull(competitionId) : this.undislike(competitionId);
+        }
+        return type === 'like'
+            ? this.likeFull(competitionId)
+            : this.dislike(competitionId);
+    }
+
+    private static toStatus(data: unknown): ReactionStatus | undefined {
+        if (!data || typeof data !== 'object') return undefined;
+        const d = data as Record<string, unknown>;
+        if (typeof d.liked !== 'boolean') return undefined;
+        return {
+            liked: !!d.liked,
+            disliked: !!d.disliked,
+            likes_count: Number(d.likes_count) || 0,
+            dislikes_count: Number(d.dislikes_count) || 0,
+        };
+    }
+
+    private static async likeFull(competitionId: number): Promise<{ success: boolean; status?: ReactionStatus }> {
+        if (!State.currentUser) {
+            Toast.warning(t('auth.login_required', State.lang));
+            return { success: false };
+        }
+        try {
+            const response = await ApiClient.post(`/api/competitions/${competitionId}/like`);
+            if (response.success) {
+                return { success: true, status: this.toStatus(response.data) };
+            }
+            Toast.error(response.error || t('errors.something_wrong', State.lang));
+            return { success: false };
+        } catch (error) {
+            console.error('Like error:', error);
+            return { success: false };
+        }
+    }
+
+    private static async unlikeFull(competitionId: number): Promise<{ success: boolean; status?: ReactionStatus }> {
+        if (!State.currentUser) return { success: false };
+        try {
+            const response = await ApiClient.delete(`/api/competitions/${competitionId}/like`);
+            if (response.success) {
+                return { success: true, status: this.toStatus(response.data) };
+            }
+            return { success: false };
+        } catch (error) {
+            console.error('Unlike error:', error);
+            return { success: false };
+        }
+    }
+
+    static async getReactionStatus(competitionId: number): Promise<ReactionStatus> {
+        const neutral: ReactionStatus = { liked: false, disliked: false, likes_count: 0, dislikes_count: 0 };
+        try {
+            const response = await ApiClient.get(`/api/competitions/${competitionId}/like`);
+            if (response.success) {
+                return this.toStatus(response.data) ?? neutral;
+            }
+            return neutral;
+        } catch (error) {
+            console.error('Get reaction status error:', error);
+            return neutral;
         }
     }
 
