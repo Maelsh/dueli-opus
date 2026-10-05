@@ -25,7 +25,6 @@ import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
 import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError, ValidationError } from '../lib/errors/AppError';
 import { WatchService, WATCH_ELIGIBILITY_SECONDS } from '../lib/services/WatchService';
-import { isWindowOpen } from '../models/RatingModel';
 
 /**
  * Competition Controller Class
@@ -694,19 +693,28 @@ export class CompetitionController extends BaseController {
                 return this.success(c, { ended: true, status: 'completed', already_completed: true });
             }
 
-            // Delete chunk keys when competition ends (live â†’ completed)
+            // Delete chunk keys when competition ends (live → completed)
             // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة
             await model.deleteChunkKeys(id);
 
-            // T1.5: Finalization is DEFERRED — viewers rate AFTER completion (rate endpoint),
-            // so a scheduled task finalizes winner/payouts 24h after end.
+            // R2-V: cutoff FIRST (guarded live->completed above — from here on
+            // every rating write is rejected), THEN the final result/ELO/
+            // payouts exactly once. No 24h window, no grace period.
+            // finalizeCompetition is idempotent (DB-claimed ELO + claimed
+            // payout ledger tx), so concurrent ends / retries converge.
             try {
                 const taskService = new ScheduledTaskService(c.env.DB);
-                const finalizeAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-                await taskService.schedule(id, 'finalize_payouts', finalizeAt);
-            } catch (scheduleError) {
-                console.error(`[End] Failed to schedule finalize_payouts for ${id}:`, scheduleError);
+                await taskService.finalizeCompetition(id);
+            } catch (finalizeError) {
+                console.error(`[End] Finalize failed for ${id}, scheduling retry:`, finalizeError);
+                try {
+                    const taskService = new ScheduledTaskService(c.env.DB);
+                    await taskService.schedule(id, 'finalize_payouts', new Date(Date.now() + 60 * 1000));
+                } catch (scheduleError) {
+                    console.error(`[End] Failed to schedule finalize retry for ${id}:`, scheduleError);
+                }
             }
+            await this.broadcastRatingTally(c.env.DB, c.env, id, true);
 
             return this.success(c, { ended: true, status: 'completed' });
         } catch (error) {
@@ -971,8 +979,57 @@ export class CompetitionController extends BaseController {
     }
 
     /**
-     * Rate competitor
+     * R2-V: map an eligibility denial to its localized key + HTTP status.
+     * CLOSED (post-cutoff) and NOT_LIVE (pre-live) are both 403, with
+     * distinct messages so the UI can render live vs read-only-final states.
+     * Legacy DUPLICATE stays 409 for backward-compat (new code replaces).
+     */
+    private ratingDenial(key: RatingEligibilityError['eligibilityCode']): { i18n: string; status: number } {
+        switch (key) {
+            case 'SELF': return { i18n: 'competition_errors.rating_self_forbidden', status: 403 };
+            case 'WATCH': return { i18n: 'competition_errors.rating_watch_required', status: 403 };
+            case 'NOT_LIVE': return { i18n: 'competition_errors.rating_live_only', status: 403 };
+            case 'CLOSED':
+            case 'WINDOW': return { i18n: 'competition_errors.rating_window_closed', status: 403 };
+            case 'DUPLICATE': return { i18n: 'competition_errors.already_rated', status: 409 };
+            case 'NOT_COMPLETED':
+            default: return { i18n: 'competition_errors.rating_live_only', status: 403 };
+        }
+    }
+
+    /**
+     * R2-V: broadcast the interim (live, provisional) tally on the EXISTING
+     * competition SSE channel. Best-effort: broadcast failure never fails
+     * the vote itself.
+     */
+    private async broadcastRatingTally(db: D1Database, env: unknown, competitionId: number, final: boolean): Promise<void> {
+        try {
+            const ratingModel = new RatingModel(db);
+            const comp = await new CompetitionModel(db).findById(competitionId) as
+                | { creator_id: number; opponent_id: number | null }
+                | null;
+            if (!comp) return;
+            const ids = [comp.creator_id, comp.opponent_id].filter((v): v is number => typeof v === 'number' && v !== null);
+            const competitors = await ratingModel.getSummary(competitionId, ids);
+            await new EventPusher(db, env).publishRatingUpdated(competitionId, {
+                competitors,
+                result: undefined,
+                final,
+            });
+        } catch (e) {
+            console.error(`[Rate] tally broadcast failed for ${competitionId}:`, e);
+        }
+    }
+
+    /**
+     * R2-V: rate a competitor — live only, L1 300s eligibility (SSOT).
      * POST /api/competitions/:id/rate
+     *
+     * Upsert semantics: the first vote creates (201), a second vote for the
+     * same (viewer, competition, competitor) REPLACES the value (200) — one
+     * effective vote, never a duplicate row. The write itself is guarded by
+     * the live status inside SQL, so an end-vs-rate race resolves to 403,
+     * never a post-cutoff row.
      */
     async rate(c: AppContext) {
         try {
@@ -989,7 +1046,7 @@ export class CompetitionController extends BaseController {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
 
-            if (body.rating < 1 || body.rating > 5) {
+            if (!Number.isInteger(body.rating) || body.rating < 1 || body.rating > 5) {
                 return this.validationError(c, this.t('errors.invalid_rating', c));
             }
 
@@ -1000,74 +1057,85 @@ export class CompetitionController extends BaseController {
             if (!competition) {
                 return this.notFound(c, this.t('competition_errors.not_found', c));
             }
-            if (competition.status !== 'completed') {
-                return this.error(c, this.t('competition_errors.not_completed', c), 403);
-            }
 
-            // B10: participant guard — creator/opponent can never rate this
+            // R2-V: participant guard — creator/opponent can never rate this
             // competition (self-rating), whoever the target is.
             const comp = competition as never as { creator_id: number; opponent_id: number | null };
             if (user.id === comp.creator_id || user.id === comp.opponent_id) {
                 return this.error(c, this.t('competition_errors.rating_self_forbidden', c), 403);
             }
             // Target must be a participant; otherwise invalid request.
+            // (Body-only claims are ignored — identity comes from the session.)
             if (body.competitor_id !== comp.creator_id && body.competitor_id !== comp.opponent_id) {
                 return this.validationError(c, this.t('errors.invalid_request', c));
             }
 
-            // B10: server-side eligibility (watch / 24h window / duplicate).
+            // R2-V: server-side eligibility (live + L1 300s SSOT). This is a
+            // pre-check for a precise error message; the write below re-guards
+            // live+watch inside SQL so the cutoff race stays closed.
             try {
                 await ratingModel.checkEligibility(competition as never, user.id, body.competitor_id);
             } catch (eligError) {
                 if (eligError instanceof RatingEligibilityError) {
-                    const key = eligError.eligibilityCode === 'SELF'
-                        ? 'competition_errors.rating_self_forbidden'
-                        : eligError.eligibilityCode === 'WATCH'
-                            ? 'competition_errors.rating_watch_required'
-                            : eligError.eligibilityCode === 'WINDOW'
-                                ? 'competition_errors.rating_window_closed'
-                                : 'competition_errors.already_rated';
-                    const status = eligError.eligibilityCode === 'NOT_COMPLETED' ? 403 : eligError.eligibilityCode === 'DUPLICATE' ? 409 : 403;
-                    return this.error(c, this.t(key, c), status);
+                    const { i18n, status } = this.ratingDenial(eligError.eligibilityCode);
+                    return this.error(c, this.t(i18n, c), status);
                 }
                 throw eligError;
             }
 
-            const rating = await ratingModel.create(
-                competitionId,
-                user.id,
-                body.competitor_id,
-                body.rating
-            );
+            let outcome: 'created' | 'updated';
+            try {
+                outcome = await ratingModel.rateLiveAtomic(
+                    competitionId,
+                    user.id,
+                    body.competitor_id,
+                    body.rating,
+                );
+            } catch (eligError) {
+                if (eligError instanceof RatingEligibilityError) {
+                    const { i18n, status } = this.ratingDenial(eligError.eligibilityCode);
+                    return this.error(c, this.t(i18n, c), status);
+                }
+                throw eligError;
+            }
 
-            // T1.5: Recompute averages/winner/ELO/payout-split after each vote
+            // R2-V: provisional aggregates/winner/payout-split after each vote
+            // (ELO stays untouched until the cutoff — see end/finalize).
+            // Failure never fails the vote; a durable retry is scheduled.
             try {
                 const taskService = new ScheduledTaskService(c.env.DB);
                 await taskService.updateAggregatesAfterVote(competitionId);
             } catch (voteError) {
                 console.error(`[Rate] Aggregate update failed for competition ${competitionId}:`, voteError);
             }
+            await this.broadcastRatingTally(c.env.DB, c.env, competitionId, false);
 
-            return this.success(c, rating, 201);
+            if (outcome === 'updated') {
+                return this.success(c, {
+                    updated: true,
+                    message: this.t('competition_errors.rating_replaced', c),
+                    competition_id: competitionId,
+                    competitor_id: body.competitor_id,
+                    rating: body.rating,
+                }, 200);
+            }
+            return this.success(c, {
+                created: true,
+                competition_id: competitionId,
+                competitor_id: body.competitor_id,
+                rating: body.rating,
+            }, 201);
         } catch (error) {
             if (error instanceof BlockedInteractionError) {
                 return this.forbidden(c, this.t('errors.blocked_interaction', c));
             }
             if (error instanceof RatingEligibilityError) {
-                // TOCTOU race: two concurrent first-time votes — the loser's
-                // UNIQUE insert surfaces here; report as duplicate, 409.
-                const key = error.eligibilityCode === 'SELF'
-                    ? 'competition_errors.rating_self_forbidden'
-                    : error.eligibilityCode === 'WATCH'
-                        ? 'competition_errors.rating_watch_required'
-                        : error.eligibilityCode === 'WINDOW'
-                            ? 'competition_errors.rating_window_closed'
-                            : 'competition_errors.already_rated';
-                const status = error.eligibilityCode === 'DUPLICATE' ? 409 : 403;
-                return this.error(c, this.t(key, c), status);
+                const { i18n, status } = this.ratingDenial(error.eligibilityCode);
+                return this.error(c, this.t(i18n, c), status);
             }
             const msg = (error as Error)?.message || '';
             if (msg.includes('UNIQUE constraint failed: ratings')) {
+                // Defensive: should already be absorbed as replacement above.
                 return this.error(c, this.t('competition_errors.already_rated', c), 409);
             }
             return this.serverError(c, error as Error);
@@ -1075,8 +1143,90 @@ export class CompetitionController extends BaseController {
     }
 
     /**
-     * B11: anonymous ratings summary (public, no rater identity).
+     * R2-V: explicit replacement path (PUT).
+     * PUT /api/competitions/:id/rate
+     *
+     * Same guards as POST, but requires a pre-existing vote (404 when the
+     * viewer never rated this competitor). Live-guarded atomically.
+     */
+    async updateRating(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const competitionId = this.getParamInt(c, 'id');
+            const body = await this.getBody<{ competitor_id: number; rating: number }>(c);
+            if (!body?.competitor_id || !body?.rating) {
+                return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+            if (!Number.isInteger(body.rating) || body.rating < 1 || body.rating > 5) {
+                return this.validationError(c, this.t('errors.invalid_rating', c));
+            }
+            const model = new CompetitionModel(c.env.DB);
+            const ratingModel = new RatingModel(c.env.DB);
+            const competition = await model.findById(competitionId);
+            if (!competition) return this.notFound(c, this.t('competition_errors.not_found', c));
+            const comp = competition as never as { creator_id: number; opponent_id: number | null };
+            if (user.id === comp.creator_id || user.id === comp.opponent_id) {
+                return this.error(c, this.t('competition_errors.rating_self_forbidden', c), 403);
+            }
+            if (body.competitor_id !== comp.creator_id && body.competitor_id !== comp.opponent_id) {
+                return this.validationError(c, this.t('errors.invalid_request', c));
+            }
+            try {
+                await ratingModel.checkEligibility(competition as never, user.id, body.competitor_id);
+            } catch (eligError) {
+                if (eligError instanceof RatingEligibilityError) {
+                    const { i18n, status } = this.ratingDenial(eligError.eligibilityCode);
+                    return this.error(c, this.t(i18n, c), status);
+                }
+                throw eligError;
+            }
+            let replaced = false;
+            try {
+                replaced = await ratingModel.updateLiveAtomic(competitionId, user.id, body.competitor_id, body.rating);
+            } catch (eligError) {
+                if (eligError instanceof RatingEligibilityError) {
+                    const { i18n, status } = this.ratingDenial(eligError.eligibilityCode);
+                    return this.error(c, this.t(i18n, c), status);
+                }
+                throw eligError;
+            }
+            if (!replaced) return this.notFound(c, this.t('ratings.no_ratings', c));
+            try {
+                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId);
+            } catch (voteError) {
+                console.error(`[Rate:update] Aggregate update failed for ${competitionId}:`, voteError);
+            }
+            await this.broadcastRatingTally(c.env.DB, c.env, competitionId, false);
+            return this.success(c, {
+                updated: true,
+                message: this.t('competition_errors.rating_replaced', c),
+                competition_id: competitionId,
+                competitor_id: body.competitor_id,
+                rating: body.rating,
+            }, 200);
+        } catch (error) {
+            if (error instanceof BlockedInteractionError) {
+                return this.forbidden(c, this.t('errors.blocked_interaction', c));
+            }
+            if (error instanceof RatingEligibilityError) {
+                const { i18n, status } = this.ratingDenial(error.eligibilityCode);
+                return this.error(c, this.t(i18n, c), status);
+            }
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R2-V: anonymous ratings summary (public, no rater identity).
      * GET /api/competitions/:id/ratings/summary
+     *
+     * During live the tally is provisional (updates after every vote via the
+     * competition SSE channel); after the cutoff it is the read-only final
+     * result. no-ratings and ties never produce a fake winner:
+     * winner_id != null => winner; else votes on both sides with equal
+     * averages (or a completed two-sided tally with votes) => draw; else
+     * pending_result.
      */
     async ratingsSummary(c: AppContext) {
         try {
@@ -1088,18 +1238,21 @@ export class CompetitionController extends BaseController {
             const comp = competition;
             const ids = [comp.creator_id, comp.opponent_id].filter((v) => typeof v === 'number' && v !== null);
             const competitors = await ratingModel.getSummary(competitionId, ids);
-            // B12: explicit, localized result status (winner / draw / pending)
+            // R2-V: explicit, localized result status (winner / draw / pending).
             const compRow = comp as { status?: string; opponent_id?: number | null; winner_id?: number | null };
             const hasVotes = competitors.some((c) => c.count > 0);
             const resultStatus: 'winner' | 'draw' | 'pending_result' =
                 compRow.winner_id != null
                     ? 'winner'
-                    : compRow.status === 'completed' && compRow.opponent_id && hasVotes
+                    : hasVotes && compRow.opponent_id
                         ? 'draw'
                         : 'pending_result';
+            const final = compRow.status === 'completed';
             return this.success(c, {
                 competitors,
                 result: { status: resultStatus, label: this.t(`competition.${resultStatus}`, c) },
+                provisional: !final,
+                final,
             });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -1107,8 +1260,11 @@ export class CompetitionController extends BaseController {
     }
 
     /**
-     * B11: withdraw own rating inside the 24h window only.
+     * R2-V: withdraw own rating — live only, atomically guarded.
      * DELETE /api/competitions/:id/rate?competitor_id=
+     *
+     * After the cutoff every withdraw is rejected immediately (403 CLOSED);
+     * there is no 24h window and no grace period.
      */
     async withdrawRating(c: AppContext) {
         try {
@@ -1123,13 +1279,29 @@ export class CompetitionController extends BaseController {
             if (!competition) return this.notFound(c, this.t('competition_errors.not_found', c));
             const comp = competition;
             if (competitorId !== comp.creator_id && competitorId !== comp.opponent_id) return this.validationError(c, this.t('errors.invalid_request', c));
-            const { isWindowOpen } = await import('../models/RatingModel');
-            const endedAt = comp.ended_at ?? null;
-            if (!isWindowOpen(endedAt, Date.now())) return this.error(c, this.t('competition_errors.rating_window_closed', c), 409);
-            const removed = await ratingModel.withdrawRating(competitionId, user.id, competitorId);
+            let removed = false;
+            try {
+                removed = await ratingModel.withdrawRating(competitionId, user.id, competitorId);
+            } catch (eligError) {
+                if (eligError instanceof RatingEligibilityError) {
+                    const { i18n, status } = this.ratingDenial(eligError.eligibilityCode);
+                    return this.error(c, this.t(i18n, c), status);
+                }
+                throw eligError;
+            }
             if (!removed) return this.notFound(c, this.t('ratings.no_ratings', c));
+            try {
+                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId);
+            } catch (voteError) {
+                console.error(`[Rate:withdraw] Aggregate update failed for ${competitionId}:`, voteError);
+            }
+            await this.broadcastRatingTally(c.env.DB, c.env, competitionId, false);
             return this.success(c, { withdrawn: true, message: this.t('ratings.withdrawn', c) });
         } catch (error) {
+            if (error instanceof RatingEligibilityError) {
+                const { i18n, status } = this.ratingDenial(error.eligibilityCode);
+                return this.error(c, this.t(i18n, c), status);
+            }
             return this.serverError(c, error as Error);
         }
     }

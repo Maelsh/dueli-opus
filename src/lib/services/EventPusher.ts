@@ -145,6 +145,21 @@ export class EventPusher {
         });
     }
 
+    /**
+     * R2-V: interim (live, provisional) or final (completed, read-only)
+     * rating tally on the EXISTING competition channel — no new realtime
+     * system. Payload is display-only aggregates (no rater identity).
+     */
+    async publishRatingUpdated(
+        competitionId: number,
+        tally: { competitors: unknown; result: unknown; final: boolean },
+    ) {
+        return this.publish(`competition:${competitionId}`, 'rating_updated', {
+            competition_id: competitionId,
+            ...tally,
+        });
+    }
+
     async publishInvite(
         inviteeId: number,
         invite: { competition_id: number; inviter_username: string; message?: string }

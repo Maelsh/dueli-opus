@@ -316,6 +316,32 @@ class FakeStmt {
             return hit ? { '1': 1 } : null;
         }
 
+        // --- R2-V: cumulative live seconds (L1 SSOT read for rating eligibility) ---
+        if (q.startsWith('select coalesce(watch_duration_seconds, 0) as s from watch_history')) {
+            const hit = this.db.watchHistory.find(
+                (w) => w.user_id === p[0] && w.competition_id === p[1]
+            );
+            return { s: hit ? Number(hit.watch_duration_seconds ?? 0) : 0 };
+        }
+
+        // --- R2-V: live-guard reads (competition status + participants) ---
+        if (q.startsWith('select status, creator_id, opponent_id from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp
+                ? { status: comp.status, creator_id: comp.creator_id, opponent_id: comp.opponent_id ?? null }
+                : null;
+        }
+        if (q.startsWith('select status from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp ? { status: comp.status } : null;
+        }
+        if (q.startsWith('select status, creator_id, opponent_id, started_at from competitions where id = ?')) {
+            const comp = this.db.competitions.find((c) => c.id === p[0]);
+            return comp
+                ? { status: comp.status, creator_id: comp.creator_id, opponent_id: comp.opponent_id ?? null, started_at: comp.started_at ?? null }
+                : null;
+        }
+
         // --- ratings ---
         if (q.startsWith('select 1 from ratings')) {
             const hit = this.db.ratings.find(
@@ -811,6 +837,7 @@ class FakeStmt {
         // --- B12: generic UPDATE competitions SET <cols...> WHERE id = ?
         // Honors the `elo_applied_at IS NULL` claim guard like real SQLite:
         // a second concurrent claim inside a serialized batch is a no-op.
+        // R2-V: also honors `AND status = 'live'` cutoff guards (end/auto-end).
         if (q.startsWith('update competitions set')) {
             const setPart = q.slice('update competitions set'.length).split(' where ')[0];
             const cols = [...setPart.matchAll(/(\w+)\s*=\s*\?/g)].map((m) => m[1]);
@@ -820,9 +847,32 @@ class FakeStmt {
             if (q.includes('elo_applied_at is null') && comp.elo_applied_at != null) {
                 return ok({ last_row_id: null, changes: 0 });
             }
+            if (q.includes("and status = 'live'") && comp.status !== 'live') {
+                return ok({ last_row_id: null, changes: 0 });
+            }
             cols.forEach((col, i) => {
                 comp[col] = p[i];
             });
+            // R2-V cutoff literals (status/ended_at/auto reason set without
+            // bind params) still flip the row when the live guard passed.
+            if (q.includes("set status = 'completed'") && q.includes("and status = 'live'")) {
+                comp.status = 'completed';
+                comp.ended_at = new Date().toISOString();
+            }
+            return ok({ last_row_id: null, changes: 1 });
+        }
+
+        // --- R2-V: guarded rating replacement (live + 300s inside SQL) ---
+        if (q.startsWith('update ratings set rating = ?')) {
+            const [rating, compId, userId, competitorId, guardCompId, watchUser, watchComp] = p;
+            const comp = this.db.competitions.find((c) => c.id === (guardCompId ?? compId));
+            if (!comp || comp.status !== 'live') return ok({ last_row_id: null, changes: 0 });
+            const watch = this.db.watchHistory.find((w) => w.user_id === (watchUser ?? userId) && w.competition_id === (watchComp ?? compId));
+            if (Number(watch?.watch_duration_seconds ?? 0) < 300) return ok({ last_row_id: null, changes: 0 });
+            const row = this.db.ratings.find((r) => r.competition_id === compId && r.user_id === userId && r.competitor_id === competitorId);
+            if (!row) return ok({ last_row_id: null, changes: 0 });
+            row.rating = rating;
+            row.created_at = new Date().toISOString();
             return ok({ last_row_id: null, changes: 1 });
         }
 
@@ -954,6 +1004,17 @@ class FakeStmt {
             return ok({ last_row_id: newId, changes: 1 });
         }
 
+        // --- R2-V: guarded withdraw (live cutoff inside SQL) ---
+        // DELETE FROM ratings WHERE ... AND (SELECT status ...) = 'live'
+        if (q.startsWith('delete from ratings') && q.includes("(select status from competitions")) {
+            const [compId, userId, competitorId, guardCompId] = p;
+            const comp = this.db.competitions.find((c) => c.id === (guardCompId ?? compId));
+            if (!comp || comp.status !== 'live') return ok({ last_row_id: null, changes: 0 });
+            const before = this.db.ratings.length;
+            this.db.ratings = this.db.ratings.filter((r) => !(r.competition_id === compId && r.user_id === userId && r.competitor_id === competitorId));
+            return ok({ last_row_id: null, changes: before - this.db.ratings.length });
+        }
+
         // --- B11: DELETE FROM ratings (withdraw) + recompute competitions aggregates ---
         if (q.startsWith('delete from ratings')) {
             const before = this.db.ratings.length;
@@ -991,6 +1052,22 @@ class FakeStmt {
 
         // INSERT INTO ratings (competition_id, user_id, competitor_id, rating, created_at)
         if (q.startsWith('insert into ratings')) {
+            // R2-V conditional insert: INSERT ... SELECT ... WHERE live+300s.
+            // Emulates the guard: no live or <300s => zero changes (no row).
+            if (q.includes('select ?, ?, ?, ?') || q.includes('select ?,?,?,?')) {
+                const [compId, userId, competitorId, rating, guardCompId, watchUser, watchComp] = p;
+                const comp = this.db.competitions.find((c) => c.id === (guardCompId ?? compId));
+                if (!comp || comp.status !== 'live') return ok({ last_row_id: null, changes: 0 });
+                const watch = this.db.watchHistory.find((w) => w.user_id === (watchUser ?? userId) && w.competition_id === (watchComp ?? compId));
+                if (Number(watch?.watch_duration_seconds ?? 0) < 300) return ok({ last_row_id: null, changes: 0 });
+                const dup = this.db.ratings.find((r) => r.competition_id === compId && r.user_id === userId && r.competitor_id === competitorId);
+                if (dup) throw new Error('UNIQUE constraint failed: ratings.competition_id, ratings.user_id, ratings.competitor_id');
+                const newId = ++this.db.ratingSeq;
+                this.db.ratings.push({ id: newId, competition_id: compId, user_id: userId, competitor_id: competitorId, rating, created_at: new Date().toISOString() });
+                return ok({ last_row_id: newId, changes: 1 });
+            }
+            const dup = this.db.ratings.find((r) => r.competition_id === p[0] && r.user_id === p[1] && r.competitor_id === p[2]);
+            if (dup) throw new Error('UNIQUE constraint failed: ratings.competition_id, ratings.user_id, ratings.competitor_id');
             const newId = ++this.db.ratingSeq;
             this.db.ratings.push({
                 id: newId,

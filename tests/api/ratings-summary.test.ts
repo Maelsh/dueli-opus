@@ -35,7 +35,7 @@ async function withNow<T>(nowMs: number, fn: () => Promise<T>): Promise<T> {
     }
 }
 
-describe('B11 anonymous ratings summary + in-window withdrawal (RED-FIRST)', () => {
+describe('R2-V anonymous ratings summary + live-only withdrawal', () => {
     let db: FakeD1;
     let creatorId: number;
     let opponentId: number;
@@ -50,9 +50,10 @@ describe('B11 anonymous ratings summary + in-window withdrawal (RED-FIRST)', () 
         const sess = new SessionModel(db as unknown as D1Database);
         creatorId = (await users.create({ email: 'b11c@test.local', username: 'b11_c', display_name: 'B11 C' })).id;
         opponentId = (await users.create({ email: 'b11o@test.local', username: 'b11_o', display_name: 'B11 O' })).id;
+        // R2-V: ratings are live-only (no 24h window); eligibility is 300s.
         db.competitions.push({
             id: 20001, title: 'B11 comp', creator_id: creatorId, opponent_id: opponentId,
-            status: 'completed', ended_at: iso(FIXED_NOW - 60 * 60 * 1000),
+            status: 'live',
             creator_rating: 0, opponent_rating: 0, average_rating: 0,
         });
         const ratings = [5, 5, 4, 4, 3];
@@ -60,7 +61,7 @@ describe('B11 anonymous ratings summary + in-window withdrawal (RED-FIRST)', () 
             const u = await users.create({ email: `b11r${i}@test.local`, username: `b11_r${i}`, display_name: `B11 R${i}` });
             raterIds.push(u.id);
             sessions.push((await sess.create({ user_id: u.id })).id);
-            db.watchHistory.push({ user_id: u.id, competition_id: 20001, watch_duration_seconds: 120 });
+            db.watchHistory.push({ user_id: u.id, competition_id: 20001, watch_duration_seconds: 300 });
         }
         for (let i = 0; i < 5; i++) {
             db.ratings.push({
@@ -83,7 +84,7 @@ describe('B11 anonymous ratings summary + in-window withdrawal (RED-FIRST)', () 
         expect(entry.distribution).toEqual({ '1': 0, '2': 0, '3': 1, '4': 2, '5': 2 });
     });
 
-    it('3. DELETE inside window => 200 and average recomputed', async () => {
+    it('3. DELETE while live => 200 and average recomputed', async () => {
         const res = await withNow(FIXED_NOW, () =>
             app.request(`/api/competitions/20001/rate?competitor_id=${creatorId}`, {
                 method: 'DELETE',
@@ -99,16 +100,16 @@ describe('B11 anonymous ratings summary + in-window withdrawal (RED-FIRST)', () 
         expect(entry.average).toBeCloseTo(4.0, 5);
     });
 
-    it('4. DELETE outside window => 409 and average unchanged', async () => {
-        const late = FIXED_NOW + 24 * 60 * 60 * 1000 + 60 * 1000;
-        const res = await withNow(late, () =>
+    it('4. DELETE after cutoff => 403 and average unchanged (no grace)', async () => {
+        db.competitions.find((c) => c.id === 20001)!.status = 'completed';
+        const res = await withNow(FIXED_NOW, () =>
             app.request(`/api/competitions/20001/rate?competitor_id=${creatorId}`, {
                 method: 'DELETE',
                 headers: { 'X-CSRF-Token': 't', Authorization: `Bearer ${sessions[0]}` },
             }, env(db)));
-        expect(res.status).toBe(409);
+        expect(res.status).toBe(403);
         expect(db.ratings.length).toBe(5);
-        const sum = await withNow(late, () =>
+        const sum = await withNow(FIXED_NOW, () =>
             app.request('/api/competitions/20001/ratings/summary', { method: 'GET' }, env(db)));
         const json = (await sum.json()) as any;
         const entry = json.data.competitors.find((c: any) => c.competitor_id === creatorId);

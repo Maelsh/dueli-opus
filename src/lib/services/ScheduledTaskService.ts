@@ -15,19 +15,23 @@ export class ScheduledTaskService {
     constructor(private db: D1Database) { }
 
     /**
-     * T1.5: Finalize a completed competition:
-     * aggregate viewer ratings → winner_id → ELO → automatic payouts.
+     * R2-V: finalize a cutoff competition (status already completed):
+     * final aggregates → winner_id → one-time ELO → one-time payouts.
      *
-     * B12: aggregates + winner + one-time ELO now run through the atomic
-     * db.batch() in updateAggregatesAfterVote (ELO applied at most once
-     * per competition, enforced by the DB via competitions.elo_applied_at).
-     * Only the financial finalization (finalize_payouts — untouched) is
-     * added on top.
+     * The cutoff (guarded live->completed) ALWAYS happens first in the
+     * caller (end/complete or endLiveMaxDuration) — from there on every
+     * rating write is rejected, so this method observes the frozen tally.
+     * Idempotent: aggregates+ELO run through the atomic DB-claimed batch in
+     * updateAggregatesAfterVote, payouts through the claimed ledger tx in
+     * LivePayoutEngine.finalizePayouts. Concurrent ends, retries and
+     * duplicate finalize_payouts tasks all converge to exactly one effect.
+     * Formulas (winner/ELO/20-80) are untouched — only timing moved to cutoff.
      */
     async finalizeCompetition(competitionId: number): Promise<{ winnerId: number | null }> {
         const { LivePayoutEngine } = await import('./LivePayoutEngine');
 
-        // Atomic aggregates + winner + one-time ELO (idempotent)
+        // Final aggregates + winner + one-time ELO (idempotent).
+        // For a completed competition updateAggregatesAfterVote finalizes ELO.
         await this.updateAggregatesAfterVote(competitionId);
 
         const row = await this.db.prepare(`
@@ -37,7 +41,14 @@ export class ScheduledTaskService {
         try {
             await new LivePayoutEngine(this.db).finalizePayouts(competitionId);
         } catch (e) {
+            // Durable retry: the finalize_payouts task re-runs this whole
+            // method (idempotent), so a transient ledger failure recovers.
             console.error(`[Finalize] Payout failed for #${competitionId}:`, e);
+            try {
+                await this.schedule(competitionId, 'finalize_payouts', new Date(Date.now() + 60 * 1000));
+            } catch (scheduleError) {
+                console.error(`[Finalize] Failed to schedule payout retry for #${competitionId}:`, scheduleError);
+            }
         }
 
         return { winnerId: row?.winner_id ?? null };
@@ -314,12 +325,15 @@ export class ScheduledTaskService {
             if (hoursLive < minLiveHours) return false;
         }
 
-        await this.db.prepare(`
+        // R2-V: guarded cutoff — only live -> completed fixes the tally.
+        // Already-completed (historical) rows are never recomputed here.
+        const cutoff = await this.db.prepare(`
             UPDATE competitions
             SET status = 'completed', ended_at = datetime('now'), updated_at = datetime('now'),
                 auto_deleted_reason = 'live_max_2hr'
-            WHERE id = ?
+            WHERE id = ? AND status = 'live'
         `).bind(competitionId).run();
+        if (Number(cutoff?.meta?.changes ?? 1) === 0) return false;
 
         await this.db.prepare(`
             UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
@@ -342,6 +356,14 @@ export class ScheduledTaskService {
                 t('notification.comp_ended', 'en'),
                 competitionId
             ).run();
+        }
+
+        // R2-V: cutoff first, then final result/ELO/payouts exactly once
+        // (idempotent — concurrent auto-ends converge).
+        try {
+            await this.finalizeCompetition(competitionId);
+        } catch (e) {
+            console.error(`[AutoEnd] Finalize failed for #${competitionId}:`, e);
         }
 
         return true;
@@ -431,36 +453,41 @@ export class ScheduledTaskService {
     }
 
     /**
-     * T1.5: Recompute aggregates/winner/ELO/payout-split after each new vote
-     * (lightweight — does NOT credit earnings; that happens once via finalize_payouts)
+     * R2-V: recompute aggregates/winner after each live vote (provisional),
+     * or finalize them once after the cutoff (completed).
      *
-     * B12 — atomicity & ELO idempotency:
-     * - All writes (aggregates + winner_id + ELO + elo_applied_at claim) run in
-     *   ONE db.batch() — D1 executes a batch as a single serialized transaction,
-     *   so no interleaved run() sequence can produce a torn state.
-     * - ELO is applied at most once per competition, enforced INSIDE the
-     *   database (not JavaScript): the user-rating writes are guarded by
-     *   `(SELECT elo_applied_at FROM competitions WHERE id = ?) IS NULL` and the
-     *   claim itself is `UPDATE competitions SET elo_applied_at = ? WHERE id = ?
-     *   AND elo_applied_at IS NULL`. A concurrent duplicate batch (serialized
-     *   after the first) finds the claim set and its guarded writes match 0 rows.
-     * - Draw rule (documented in docs/05): equal averages (including both zero
-     *   or missing opponent) → winner_id = NULL and the draw ELO rule
-     *   (0.5 / 0.5) applies once.
-     * - Failure handling: if the batch fails, the vote (caller) still succeeds;
-     *   the failure is logged and a `recalc_aggregates` scheduled task is
-     *   recorded as a durable retry (executed by processPendingTasks).
+     * - LIVE: aggregates + winner_id stay provisional (visible interim tally,
+     *   no ELO). A later vote/withdraw simply overwrites them.
+     * - COMPLETED (cutoff already fixed by end/complete): aggregates + winner
+     *   become final and ELO is applied exactly once (DB-claimed).
+     * - Any other status: no-op (ratings are live-only, so this path is only
+     *   reachable for live/completed).
+     *
+     * Winner/ELO formulas and the 20/80 payout split are untouched — only the
+     * TIMING changed (final at cutoff, not 24h later). Historical completed
+     * rows are never recomputed by votes (writes are rejected post-cutoff);
+     * only the explicit finalize path touches them, idempotently.
+     *
+     * B12 atomicity & ELO idempotency are preserved:
+     * - All writes run in ONE db.batch() (serialized transaction).
+     * - ELO at most once per competition, enforced INSIDE the database via
+     *   the elo_applied_at claim. Concurrent duplicates find it set.
+     * - Draw rule: equal averages (including both zero) or missing opponent
+     *   => explicit winner_id = NULL + draw ELO (0.5/0.5) once.
+     * - Failure never fails the vote: a durable `recalc_aggregates` retry is
+     *   scheduled (idempotent re-run via processPendingTasks).
      */
     async updateAggregatesAfterVote(competitionId: number): Promise<void> {
         const { LivePayoutEngine } = await import('./LivePayoutEngine');
         const { computeEloChange } = await import('./EloRatingService');
-        const { isWindowOpen } = await import('../../models/RatingModel');
 
         const competition = await this.db.prepare(`
             SELECT id, creator_id, opponent_id, status, ended_at, elo_applied_at FROM competitions WHERE id = ?
         `).bind(competitionId).first<any>();
 
-        if (!competition || competition.status !== 'completed') return;
+        if (!competition) return;
+        // R2-V: ratings exist only for live; completed is the finalize path.
+        if (competition.status !== 'live' && competition.status !== 'completed') return;
 
         const agg = await this.db.prepare(`
             SELECT
@@ -474,7 +501,7 @@ export class ScheduledTaskService {
         const parts = (creatorAvg > 0 ? 1 : 0) + (opponentAvg > 0 ? 1 : 0);
         const overallAvg = parts > 0 ? (creatorAvg + opponentAvg) / parts : 0;
 
-        // B12 draw rule: tie (equal averages, including both zero) or missing
+        // Draw rule: tie (equal averages, including both zero) or missing
         // opponent => explicit winner_id = NULL (never left implicit).
         let winnerId: number | null = null;
         if (competition.opponent_id) {
@@ -482,18 +509,14 @@ export class ScheduledTaskService {
             else if (opponentAvg > creatorAvg) winnerId = competition.opponent_id;
         }
 
-        // B12: ELO is finalized only once the rating window (ended_at + 24h,
-        // B10) has closed — until then aggregates/winner_id stay provisional
-        // and ELO is not claimed, so a later vote/withdrawal can never leave
-        // the ELO inconsistent with the final result. Legacy rows without
-        // ended_at have no applicable window (isWindowOpen(null) === true) so
-        // their ELO stays untouched, same as their rating window.
-        const resultFinal = !isWindowOpen(competition.ended_at ?? null, Date.now());
+        // R2-V: final exactly at the cutoff — no 24h window. Live stays
+        // provisional (ELO untouched); completed finalizes ELO once.
+        const resultFinal = competition.status === 'completed';
 
         try {
             await this.applyAggregatesAndEloOnce(competition, creatorAvg, opponentAvg, overallAvg, winnerId, computeEloChange, resultFinal);
         } catch (e) {
-            // B12: do NOT swallow silently and do NOT fail the vote — record a
+            // Do NOT swallow silently and do NOT fail the vote — record a
             // durable scheduled retry instead. processPendingTasks re-runs this
             // method (idempotent) until aggregates + ELO land.
             console.error(`[Vote] Aggregate/ELO batch failed for #${competitionId}:`, e);

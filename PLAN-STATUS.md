@@ -1,6 +1,13 @@
 
 
 
+## R2-V live-only viewer ratings · فرع `feat/r2-v-live-ratings` (من `fbc8607` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/تعديل migrations. R2-L1 مغلقة ومنشورة ولم تُمس (أُعيد استعمال SSOT الـwatch فقط)؛ بلا watch mechanism جديد؛ بلا L2/H7/D1/D2.
+- العقد: تقييم 1..5 للمسجل المؤهل (300s live لنفس المنافسة عبر `getViewerWatch` وحده؛ 299⇒403 و300⇒201؛ بلا ثقة بمدخلات العميل)؛ الطرفان معاً مسموحان؛ التعديل يستبدل (POST upsert 201/200 + PUT صريح 200/404؛ صوت فعال واحد)؛ كل كتابة (rate/update/withdraw) محروسة داخل SQL بحالة `live` (سباق القطع ⇒ 403 بلا صف)؛ بعد النهاية كل كتابة مرفوضة فوراً (لا 24h ولا grace)؛ أثناء البث حصيلة مؤقتة معلنة تُبث عبر قناة `competition:<id>` القائمة (`rating_updated`)؛ عند الإغلاق قطع أولاً ثم نتيجة نهائية/ELO/finalize مرة واحدة مع retry/idempotency؛ المعادلات (winner/ELO) والـ20/80 والتاريخ المغلق محفوظة؛ no-ratings/tie بلا نتيجة وهمية؛ واجهة ar/en بالحالات (provisional/final/not-eligible/read-only).
+- **الأدلة**: RED أولاً على BASE (جديد `r2-v-live-ratings` 9/10 فشل)؛ T جديد 10/10 (SqliteD1 بالترحيلات الحقيقية) + UI جديد 6/6؛ عقود B10/B11/B12 أُعيدت كتابتها لـR2-V (بلا 24h) + L1/finance بلا regression (83/83)؛ الكاملة 1211/1217 (الـ6 jq على Windows مثبتة على BASE)؛ `tsc` ✅؛ `build` ✅؛ G2 289 = BASE 289؛ routes 201←202.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## RELEASE READINESS PATH remediation (Deploy #458) · فرع `fix/release-readiness-path` (من `210008a` = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/تعديل migrations/منتج. النطاق: سطر جامع الـdeploy + سطر الـrunbook + اختباراهما + سطرا docs.

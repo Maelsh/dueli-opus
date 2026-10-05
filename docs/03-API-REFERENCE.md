@@ -55,17 +55,24 @@
 - الحظر المركزي (B6) مطبَّق على الفعلين: زوج محظور ⇒ 403 `errors.blocked_interaction` بلا كتابة أي صف.
 - لا ترحيل جديد: الجدولان `likes` و`dislikes` موجودان في `0001_initial_schema.sql`.
 
-## B10/B11 — التقييم: الأهلية والملخص والسحب
+## R2-V — التقييم: live-only + استبدال + قطع فوري (تحل محل نافذة 24h الملغاة)
 
-- `POST /api/competitions/:id/rate` — للمشاهدين فقط (لا تقييم ذاتي)، `completed` فقط،
-  وجود سجل `watch_history`، نافذة 24h من `ended_at`، بلا تكرار (تعارض متزامن ⇒ 409).
-  التفاصيل في `docs/05-COMPETITION-LIFECYCLE.md` (أهلية التقييم).
+- `POST /api/competitions/:id/rate` — للمشاهد المسجل المؤهل فقط (لا تقييم
+  ذاتي)، `live` فقط + `watch_history.watch_duration_seconds >= 300` (SSOT
+  L1؛ 299⇒403، 300⇒201)، upsert: إنشاء 201 أو **استبدال** 200 (صوت فعال
+  واحد لكل viewer/competition/competitor؛ الطرفان معاً مسموحان). كل كتابة
+  محروسة داخل SQL بحالة `live` — سباق القطع ⇒ 403 بلا صف. التفاصيل في
+  `docs/05-COMPETITION-LIFECYCLE.md` (أهلية التقييم).
+- `PUT /api/competitions/:id/rate` — **جديد**: استبدال صريح (200؛ بلا صف
+  سابق ⇒ 404) بنفس حراسة `live` + 300s.
 - `GET /api/competitions/:id/ratings/summary` — متوسط/count/توزيع 1–5 لكل مشارك
-  (`average=null` عند الصفر) + `result:{status,label}`؛ **بلا أي هوية مقيّم**.
-- `DELETE /api/competitions/:id/rate?competitor_id=` — سحب التقييم داخل النافذة فقط
-  (خارجها ⇒ 409)؛ الحذف + إعادة حساب المجاميع في `db.batch()` واحد.
-- الفائز/ELO ذرّيان (B12): `winner_id` يُحسم بعد إغلاق النافذة، وELO مرة واحدة عبر
-  مطالبة `elo_applied_at` (0018) — انظر `docs/05` (النتيجة النهائية).
+  (`average=null` عند الصفر) + `result:{status,label}` + `provisional/final`؛
+  **بلا أي هوية مقيّم**. أثناء البث مؤقتة (SSE `rating_updated`)، وبعده نهائية.
+- `DELETE /api/competitions/:id/rate?competitor_id=` — سحب التقييم أثناء `live`
+  فقط (بعد القطع ⇒ 403)؛ الحذف محروس داخل SQL بحالة `live`.
+- الفائز/ELO ذرّيان (B12): `winner_id` مؤقت أثناء البث ويتثبت عند القطع، وELO
+  مرة واحدة عبر مطالبة `elo_applied_at` (0018) عند `finalizeCompetition`
+  الفوري — انظر `docs/05` (النتيجة النهائية). المعادلات والـ20/80 كما هي.
 
 ## ❌ موجودة ككود لكنها غير مربوطة (404)
 

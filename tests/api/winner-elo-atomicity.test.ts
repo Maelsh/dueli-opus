@@ -10,9 +10,12 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const env = (db: FakeD1) => ({ DB: db }) as any;
 
 /**
- * B12 test-side ELO oracle: independently re-derives the expected
- * single-application result (K=32) so the assertion cannot pass by
- * accident or by copying a production bug.
+ * R2-V winner determination + ELO atomicity/idempotency.
+ * Formulas (winner/ELO/draw) are UNTOUCHED — only TIMING moved:
+ * - LIVE: provisional aggregates/winner after every vote, ELO untouched.
+ * - CUTOFF (live->completed via end): final result + ELO + payouts once,
+ *   idempotent across retries/concurrent ends.
+ * Legacy B12 contract (completed+24h window, ELO after window) is removed.
  */
 const K = 32;
 function expectedElo(
@@ -44,9 +47,6 @@ async function withNow<T>(nowMs: number, fn: () => Promise<T>): Promise<T> {
     }
 }
 
-/** LATE: after the 24h rating window has closed — the only moment ELO is finalized (B12). */
-const LATE = FIXED_NOW + 25 * 60 * 60 * 1000;
-
 /** Simulates a transient DB failure inside the aggregate batch. */
 class FailingBatchD1 extends FakeD1 {
     failBatch = true;
@@ -56,7 +56,7 @@ class FailingBatchD1 extends FakeD1 {
     }
 }
 
-describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () => {
+describe('R2-V winner determination + ELO atomicity/idempotency', () => {
     let db: FakeD1;
     let creatorId: number;
     let opponentId: number;
@@ -72,8 +72,7 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
             title: 'B12 comp',
             creator_id: creatorId,
             opponent_id: opponentId,
-            status: 'completed',
-            ended_at: iso(FIXED_NOW - 60 * 60 * 1000),
+            status: 'live',
             creator_rating: 0,
             opponent_rating: 0,
             average_rating: 0,
@@ -92,7 +91,7 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         users: UserModel
     ): Promise<void> {
         const u = await users.create({ email: `b12v${i}@test.local`, username: `b12_v${i}`, display_name: `B12 V${i}` });
-        target.watchHistory.push({ user_id: u.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
+        target.watchHistory.push({ user_id: u.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
     }
 
     async function rate(sid: string, competitorId: number, rating: number, ip: string): Promise<Response> {
@@ -108,7 +107,7 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         }, env(db));
     }
 
-    it('1. 50 concurrent votes => exactly one winner, ratings=50, ELO applied once', async () => {
+    it('1. 50 concurrent live votes => provisional winner, ratings=50, ELO untouched until cutoff', async () => {
         const users = new UserModel(db as unknown as D1Database);
         const sessions: string[] = [];
         for (let i = 0; i < 50; i++) {
@@ -122,19 +121,20 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
             Promise.all(sessions.map((sid, i) => rate(sid, creatorId, 5, `10.12.1.${i + 1}`)))
         );
         for (const r of responses) {
-            expect(r.status, 'every vote must succeed').toBe(201);
+            expect(r.status, 'every live vote must succeed').toBe(201);
         }
         expect(db.ratings.length).toBe(50);
         const comp = db.competitions.find((c) => c.id === COMP_ID);
-        // One stable winner — the creator (every vote is 5 for the creator)
+        // Provisional winner during live — the creator (every vote is 5 for the creator)
         expect(comp.winner_id).toBe(creatorId);
         expect(comp.winner_id).not.toBe(opponentId);
-        // While the rating window is open, ELO is NOT yet finalized
+        // ELO is NOT finalized while live
         expect(comp.elo_applied_at ?? null).toBeNull();
 
-        // After the window closes, ELO is applied exactly once (DB-claimed)
+        // Cutoff, then ELO applied exactly once (DB-claimed)
+        db.competitions.find((c) => c.id === COMP_ID)!.status = 'completed';
         const svc = new ScheduledTaskService(db as unknown as D1Database);
-        await withNow(LATE, () => svc.updateAggregatesAfterVote(COMP_ID));
+        await withNow(FIXED_NOW, () => svc.finalizeCompetition(COMP_ID));
         const creator = db.users.find((u) => u.id === creatorId);
         const opponent = db.users.find((u) => u.id === opponentId);
         const once = expectedElo(1500, 1500, creatorId, creatorId, opponentId);
@@ -143,26 +143,26 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         expect(db.competitions.find((c) => c.id === COMP_ID).elo_applied_at).toBeTruthy();
     });
 
-    it('2. updateAggregatesAfterVote twice => ELO not doubled', async () => {
+    it('2. finalize twice => ELO not doubled', async () => {
         const users = new UserModel(db as unknown as D1Database);
         const r1 = await users.create({ email: 'b12r1@test.local', username: 'b12_r1', display_name: 'B12 R1' });
         const r2 = await users.create({ email: 'b12r2@test.local', username: 'b12_r2', display_name: 'B12 R2' });
-        db.watchHistory.push({ user_id: r1.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
-        db.watchHistory.push({ user_id: r2.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
+        db.watchHistory.push({ user_id: r1.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
+        db.watchHistory.push({ user_id: r2.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
         const s1 = await createSession(r1.id);
         const s2 = await createSession(r2.id);
         expect((await withNow(FIXED_NOW, () => rate(s1, creatorId, 5, '10.12.2.1'))).status).toBe(201);
         expect((await withNow(FIXED_NOW, () => rate(s2, opponentId, 2, '10.12.2.2'))).status).toBe(201);
 
         const svc = new ScheduledTaskService(db as unknown as D1Database);
-        // ELO is finalized only after the window closes; two invocations there
+        db.competitions.find((c) => c.id === COMP_ID)!.status = 'completed';
         const once = expectedElo(1500, 1500, creatorId, creatorId, opponentId);
-        await withNow(LATE, () => svc.updateAggregatesAfterVote(COMP_ID));
+        await withNow(FIXED_NOW, () => svc.finalizeCompetition(COMP_ID));
         expect(db.users.find((u) => u.id === creatorId).elo_rating).toBe(once.creator);
         expect(db.users.find((u) => u.id === opponentId).elo_rating).toBe(once.opponent);
 
         // Second invocation must be a no-op for ELO
-        await withNow(LATE, () => svc.updateAggregatesAfterVote(COMP_ID));
+        await withNow(FIXED_NOW, () => svc.finalizeCompetition(COMP_ID));
         expect(db.users.find((u) => u.id === creatorId).elo_rating).toBe(once.creator);
         expect(db.users.find((u) => u.id === opponentId).elo_rating).toBe(once.opponent);
         expect(db.competitions.find((c) => c.id === COMP_ID).winner_id).toBe(creatorId);
@@ -175,16 +175,16 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         // Unequal starting ELOs so the draw delta is observable
         db.users.find((u) => u.id === creatorId).elo_rating = 1500;
         db.users.find((u) => u.id === opponentId).elo_rating = 1600;
-        db.watchHistory.push({ user_id: r1.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
-        db.watchHistory.push({ user_id: r2.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
+        db.watchHistory.push({ user_id: r1.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
+        db.watchHistory.push({ user_id: r2.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
         const s1 = await createSession(r1.id);
         const s2 = await createSession(r2.id);
         expect((await withNow(FIXED_NOW, () => rate(s1, creatorId, 4, '10.12.3.1'))).status).toBe(201);
         expect((await withNow(FIXED_NOW, () => rate(s2, opponentId, 4, '10.12.3.2'))).status).toBe(201);
 
         const svc = new ScheduledTaskService(db as unknown as D1Database);
-        // ELO is finalized only after the window closes; two invocations there
-        await withNow(LATE, () => svc.updateAggregatesAfterVote(COMP_ID));
+        db.competitions.find((c) => c.id === COMP_ID)!.status = 'completed';
+        await withNow(FIXED_NOW, () => svc.finalizeCompetition(COMP_ID));
         const comp = db.competitions.find((c) => c.id === COMP_ID);
         // Explicit documented draw rule: equal averages => winner_id = NULL
         expect(comp.winner_id).toBeNull();
@@ -192,7 +192,7 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         expect(db.users.find((u) => u.id === creatorId).elo_rating).toBe(drawOnce.creator);
         expect(db.users.find((u) => u.id === opponentId).elo_rating).toBe(drawOnce.opponent);
         // Re-running must not apply the draw ELO again
-        await withNow(LATE, () => svc.updateAggregatesAfterVote(COMP_ID));
+        await withNow(FIXED_NOW, () => svc.finalizeCompetition(COMP_ID));
         expect(db.users.find((u) => u.id === creatorId).elo_rating).toBe(drawOnce.creator);
         expect(db.users.find((u) => u.id === opponentId).elo_rating).toBe(drawOnce.opponent);
     });
@@ -208,7 +208,7 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         // Create the voter on the shared users table (keeps id sequence sane)
         const users = new UserModel(db as unknown as D1Database);
         const r = await users.create({ email: 'b12f@test.local', username: 'b12_f', display_name: 'B12 F' });
-        fdb.watchHistory.push({ user_id: r.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
+        fdb.watchHistory.push({ user_id: r.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
         const sessions = new SessionModel(fdb as unknown as D1Database);
         const sid = (await sessions.create({ user_id: r.id })).id;
         const res = await withNow(FIXED_NOW, () =>
@@ -221,45 +221,45 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         // The vote itself must not fail because aggregates failed
         expect(res.status).toBe(201);
         expect(fdb.ratings.length).toBe(1);
-        // No half-written state: winner untouched while the batch failed
-        const comp = fdb.competitions.find((c) => c.id === COMP_ID);
-        expect(comp.winner_id).toBeNull();
         // Failure is durably recorded and a retry is scheduled
         const retry = fdb.scheduledTasks.find((t) => t.task_type === 'recalc_aggregates');
         expect(retry).toBeTruthy();
         expect(retry.status).toBe('pending');
 
-        // The scheduled retry recovers the aggregates + one-time ELO
-        // (run with the clock past the rating window so ELO is finalizable)
+        // The scheduled retry recovers the provisional aggregates
+        // (ELO still untouched while live — it finalizes only at cutoff).
         retry.execute_at = iso(Date.now() - 1000);
         fdb.failBatch = false;
         const svc = new ScheduledTaskService(fdb as unknown as D1Database);
-        await withNow(LATE, () => svc.processPendingTasks());
+        await withNow(FIXED_NOW, () => svc.processPendingTasks());
         expect(fdb.competitions.find((c) => c.id === COMP_ID).winner_id).toBe(creatorId);
+        // Cutoff, then one-time ELO.
+        fdb.competitions.find((c) => c.id === COMP_ID)!.status = 'completed';
+        await withNow(FIXED_NOW, () => svc.finalizeCompetition(COMP_ID));
         const once = expectedElo(1500, 1500, creatorId, creatorId, opponentId);
         expect(fdb.users.find((u) => u.id === creatorId).elo_rating).toBe(once.creator);
         expect(fdb.users.find((u) => u.id === opponentId).elo_rating).toBe(once.opponent);
     });
 
-    it('5. late vote after the 24h window => rejected, winner_id and ELO untouched', async () => {
+    it('5. vote after cutoff => rejected, winner_id and ELO untouched (no grace)', async () => {
         const users = new UserModel(db as unknown as D1Database);
         const r1 = await users.create({ email: 'b12w1@test.local', username: 'b12_w1', display_name: 'B12 W1' });
         const r2 = await users.create({ email: 'b12w2@test.local', username: 'b12_w2', display_name: 'B12 W2' });
-        db.watchHistory.push({ user_id: r1.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
-        db.watchHistory.push({ user_id: r2.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
+        db.watchHistory.push({ user_id: r1.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
+        db.watchHistory.push({ user_id: r2.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
         const s1 = await createSession(r1.id);
         const s2 = await createSession(r2.id);
         expect((await withNow(FIXED_NOW, () => rate(s1, creatorId, 5, '10.12.5.1'))).status).toBe(201);
-        // Finalize ELO once after the window closes
+        // Cutoff + finalize once
+        db.competitions.find((c) => c.id === COMP_ID)!.status = 'completed';
         const svc = new ScheduledTaskService(db as unknown as D1Database);
-        await withNow(LATE, () => svc.updateAggregatesAfterVote(COMP_ID));
+        await withNow(FIXED_NOW, () => svc.finalizeCompetition(COMP_ID));
         const comp = db.competitions.find((c) => c.id === COMP_ID);
         const winnerBefore = comp.winner_id;
         const eloBefore = db.users.find((u) => u.id === creatorId).elo_rating;
         const claimBefore = comp.elo_applied_at;
 
-        const late = FIXED_NOW + 24 * 60 * 60 * 1000 + 60 * 1000;
-        const res = await withNow(late, () => rate(s2, opponentId, 5, '10.12.5.2'));
+        const res = await withNow(FIXED_NOW + 60 * 1000, () => rate(s2, opponentId, 5, '10.12.5.2'));
         expect(res.status).toBe(403);
         expect(db.ratings.length).toBe(1);
         const compAfter = db.competitions.find((c) => c.id === COMP_ID);
@@ -278,7 +278,7 @@ describe('B12 winner determination + ELO atomicity/idempotency (RED-FIRST)', () 
         }
         const users = new UserModel(db as unknown as D1Database);
         const r = await users.create({ email: 'b12s@test.local', username: 'b12_s', display_name: 'B12 S' });
-        db.watchHistory.push({ user_id: r.id, competition_id: COMP_ID, watch_duration_seconds: 120 });
+        db.watchHistory.push({ user_id: r.id, competition_id: COMP_ID, watch_duration_seconds: 300 });
         const sid = await createSession(r.id);
         expect((await withNow(FIXED_NOW, () => rate(sid, creatorId, 5, '10.12.6.1'))).status).toBe(201);
         const sum = await withNow(FIXED_NOW, () =>

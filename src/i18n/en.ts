@@ -315,8 +315,11 @@ export const en = {
         request_pending_exists: 'This user already has a pending join request for this competition',
         competition_closed: 'This competition is no longer accepting participants',
         rating_self_forbidden: 'You cannot rate yourself or your own competition',
-        rating_watch_required: 'You must watch the competition before rating it',
-        rating_window_closed: 'Rating window has closed (24 hours after the competition ended)',
+        rating_watch_required: 'Watch 300 seconds of the live broadcast first to unlock rating',
+        rating_window_closed: 'The broadcast has ended — ratings are closed and the result is final',
+        rating_live_only: 'Ratings are only available during the live broadcast',
+        rating_updated: 'Rating update',
+        rating_replaced: 'Your rating has been updated',
     },
 
     // User Error Messages
@@ -1011,11 +1014,17 @@ export const en = {
     rate_winner_banner: 'Winner by public rating',
 
     // ── B11: anonymous ratings summary + withdrawal ──────────────
+    // ── R2-V: provisional live tally + read-only final after close ──
     ratings: {
         summary_title: 'Ratings summary',
         average: 'Average',
         no_ratings: 'No ratings yet',
         withdrawn: 'Your rating has been withdrawn',
+        live_provisional: 'Provisional tally — updating live during the broadcast',
+        final_readonly: 'Final result — ratings are closed',
+        not_eligible: 'Watch 300 seconds of the broadcast to unlock rating',
+        update_rating: 'Update rating',
+        withdraw_rating: 'Withdraw rating',
     },
 
     // ── T1.3: Streaming ──────────────

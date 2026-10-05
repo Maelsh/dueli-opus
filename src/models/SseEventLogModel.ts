@@ -25,6 +25,8 @@ export type SseEventType =
     | 'invite_declined'
     | 'competition_suspended'
     | 'competition_status'
+    // R2-V: interim/final rating tally on the existing competition channel.
+    | 'rating_updated'
     | 'notification'
     | 'withdrawal_status'
     // 8.E: donation received during a live competition (existing SSE infra,
