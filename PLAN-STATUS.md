@@ -1,6 +1,13 @@
 
 
 
+## RELEASE MANIFEST 0034 remediation · فرع `fix/release-manifest-0034` (من `f4c1e66` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/تعديل migrations. النطاق: manifest الـrelease + اختباراته + سطرا docs فقط.
+- السبب: ‏production طبقت ‏0034 بتفويض بينما الـmanifest بقي ‏baseline-0033 فسجل البوابة ‏0034 ‏unexpected-applied ومنع ‏Deploy #456 (المحاولة 2). الإصلاح: ‏baseline-0034 (‏0034 بـhash الملف ‏`7c19c632…e4a57` + ‏history ‏35 + فحوص ‏competition_views/index) — بلا مساس بالـchecker (عام بالتصميم) أو الـmigrations أو الـworkflows.
+- **الأدلة**: ‏`release-readiness` ‏14/14 (‏pin ‏0034، سيناريو الإنتاج ‏PASS، ‏pre-0034 ‏FAIL-closed، ‏fail-closed الباقي محفوظ)؛ محاكاة البوابة على مدخلات الإنتاج الحقيقية (journal + ‏pending فارغ + لقطة مخطط حية + ‏SHA ‏f4c1e66) ← ‏**READINESS GATE PASS**؛ الكاملة ‏1193/1199 (الـ6 ‏jq على ‏Windows مثبتة على ‏BASE)؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏281 = ‏BASE.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم deploy الإصدار عبر المسار المصرّح (لا deploy يدوي هنا). أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R2-L1 التعليقات المشتركة والمشاهدة والحضور · فرع `feat/r2-l1-comments-watch` (من `4c6ddd9` = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية. migration واحدة مضافة (`0034_competition_views`: UNIQUE identity/competition/day — ضرورية فعلاً: لا بنية قائمة تحمل guest+day؛ مختبرة reset من فراغ 23/23).
