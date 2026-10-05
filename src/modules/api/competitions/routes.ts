@@ -110,6 +110,18 @@ competitionsRoutes.post('/:id/update-vod', (c) => controller.updateVod(c));
 competitionsRoutes.post('/:id/comments', (c) => controller.addComment(c));
 
 /**
+ * R2-L1 (H2): record one watch intent (idempotent per identity/day).
+ * POST /api/competitions/:id/watch
+ */
+competitionsRoutes.post('/:id/watch', (c) => controller.recordWatch(c));
+
+/**
+ * R2-L1 (H1+H2): one bounded playback pulse (server-derived, capped).
+ * POST /api/competitions/:id/watch-heartbeat
+ */
+competitionsRoutes.post('/:id/watch-heartbeat', (c) => controller.watchHeartbeat(c));
+
+/**
  * Rate competitor
  * POST /api/competitions/:id/rate
  */

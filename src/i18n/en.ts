@@ -179,6 +179,8 @@ export const en = {
     rate: 'Rate',
     rating: 'Rating',
     viewers: 'views',
+    // R2-L1: live presence is displayed separately from the counted total.
+    viewers_now: 'watching now',
 
     // Comments
     comment: 'Comment',

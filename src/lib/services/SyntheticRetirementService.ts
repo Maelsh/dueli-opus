@@ -101,6 +101,8 @@ export const COMPETITION_DEPENDENTS: Dependent[] = [
     { table: 'competition_heartbeats', column: 'competition_id' },
     { table: 'donations', column: 'competition_id' },
     { table: 'users', column: 'current_competition_id' },
+    // R2-L1: qualified daily views reference their competition (0034).
+    { table: 'competition_views', column: 'competition_id' },
 ];
 
 async function existingTables(db: D1Database): Promise<Set<string>> {

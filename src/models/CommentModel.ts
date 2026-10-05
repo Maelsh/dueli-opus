@@ -6,7 +6,7 @@
 import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { Comment } from '../config/types';
 import { UserBlockModel } from './UserBlockModel';
-import { BlockedInteractionError, ContentTooLongError } from '../lib/errors/AppError';
+import { BlockedInteractionError, ContentTooLongError, ValidationError } from '../lib/errors/AppError';
 
 /**
  * B7: maximum allowed comment length (chars).
@@ -142,11 +142,12 @@ export class CommentModel extends BaseModel<Comment> {
             throw new ContentTooLongError();
         }
 
-        // T3.3: nested replies — validate the parent belongs to the same competition
+        // T3.3: nested replies — validate the parent belongs to the same competition.
+        // R2-L1: a typed validation error (422 upstream), never a 500.
         if (data.parent_id) {
             const parent = await this.findById(data.parent_id);
             if (!parent || parent.competition_id !== data.competition_id) {
-                throw new Error('Invalid parent comment');
+                throw new ValidationError('Invalid parent comment');
             }
         }
 

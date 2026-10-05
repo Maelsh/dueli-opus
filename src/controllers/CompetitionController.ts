@@ -23,7 +23,8 @@ import { getUILanguage } from '../i18n';
 import { EventPusher } from '../lib/services/EventPusher';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
-import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError } from '../lib/errors/AppError';
+import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError, ValidationError } from '../lib/errors/AppError';
+import { WatchService, WATCH_ELIGIBILITY_SECONDS } from '../lib/services/WatchService';
 import { isWindowOpen } from '../models/RatingModel';
 
 /**
@@ -201,7 +202,14 @@ export class CompetitionController extends BaseController {
                 return this.notFound(c, this.t('competition_errors.not_found', c));
             }
 
-            await model.incrementViews(id);
+            // R2-L1 (H2): reading details never counts a view — only the
+            // explicit watch-intent / watch-heartbeat paths insert day-rows.
+            // The current user's H1 watch state rides along for R2-V to read.
+            const currentWatcher = this.getCurrentUser(c);
+            let viewer_watch: { seconds: number; eligible: boolean; required: number } | null = null;
+            if (typeof currentWatcher?.id === 'number') {
+                viewer_watch = await new WatchService(c.env.DB).getViewerWatch(id, currentWatcher.id);
+            }
 
             // B2+B3: light payload — counts only, no full arrays.
             const comments_count = await commentModel.countVisible(id);
@@ -228,6 +236,7 @@ export class CompetitionController extends BaseController {
                 ratings_count,
                 user_has_pending_request,
                 user_has_pending_invitation,
+                viewer_watch,
                 timer
             });
         } catch (error) {
@@ -784,7 +793,8 @@ export class CompetitionController extends BaseController {
                 await pusher.publishComment(competitionId, {
                     id: comment.id,
                     user_id: user.id,
-                    username: user.display_name || user.username,
+                    display_name: user.display_name || null,
+                    username: user.username,
                     avatar_url: user.avatar_url || null,
                     content: comment.content,
                     created_at: comment.created_at as string
@@ -793,7 +803,14 @@ export class CompetitionController extends BaseController {
                 console.error('[CompetitionController] publishComment failed:', pushError);
             }
 
-            return this.success(c, comment, 201);
+            // R2-L1: the POST response carries the same author shape as the
+            // list/SSE payloads, so the client merges by id with no extra GET.
+            return this.success(c, {
+                ...comment,
+                display_name: user.display_name || null,
+                username: user.username,
+                avatar_url: user.avatar_url || null,
+            }, 201);
         } catch (error) {
             if (error instanceof BlockedInteractionError) {
                 return this.forbidden(c, this.t('errors.blocked_interaction', c));
@@ -801,6 +818,10 @@ export class CompetitionController extends BaseController {
             // B7: oversized comment → 400 + localized message, no row written
             if (error instanceof ContentTooLongError) {
                 return this.error(c, this.t('errors.content_too_long', c), 400);
+            }
+            // R2-L1: invalid parent reply → 422, never a 500.
+            if (error instanceof ValidationError) {
+                return this.validationError(c, this.t('errors.invalid_request', c));
             }
             return this.serverError(c, error as Error);
         }
@@ -869,7 +890,81 @@ export class CompetitionController extends BaseController {
             }
 
             await commentModel.softDelete(commentId);
+            // R2-L1: deletion sync so live surfaces converge without refresh.
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCommentDeleted(competitionId, commentId);
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCommentDeleted failed:', pushError);
+            }
             return this.success(c, { deleted: true });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R2-L1 (H2): record one watch intent.
+     * POST /api/competitions/:id/watch
+     *
+     * Public (auth-optional): the logged-in account wins, else the
+     * first-party guest token (issued here on first use, persisted
+     * caller-side). Idempotent per (competition, identity, UTC day):
+     * repeats return counted=false and never move the counter.
+     * MVC: policy lives in WatchService, SQL in the Models.
+     */
+    async recordWatch(c: AppContext) {
+        try {
+            const competitionId = this.getParamInt(c, 'id');
+            const competition = await new CompetitionModel(c.env.DB).findById(competitionId);
+            if (!competition) {
+                return this.notFound(c, this.t('competition_errors.not_found', c));
+            }
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const { identity, issuedGuestToken } = WatchService.identityForCreate(
+                userId, c.req.header('X-Guest-Token') ?? null
+            );
+            const service = new WatchService(c.env.DB);
+            const { counted, totalViews } = await service.recordWatchIntent(competitionId, identity);
+            return this.success(c, { counted, total_views: totalViews, guest_token: issuedGuestToken });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R2-L1 (H1+H2): one bounded playback pulse.
+     * POST /api/competitions/:id/watch-heartbeat
+     *
+     * Same identity rules as recordWatch. Always counts the H2 daily view
+     * first, then — logged-in users on a LIVE competition only — credits a
+     * server-derived, capped slice to the H1 duration. The body is never
+     * read: seconds/user_id/live claims from the client are ignored by
+     * construction. Replays add ~0; races serialize on the stored timestamp.
+     */
+    async watchHeartbeat(c: AppContext) {
+        try {
+            const competitionId = this.getParamInt(c, 'id');
+            const competition = await new CompetitionModel(c.env.DB).findById(competitionId);
+            if (!competition) {
+                return this.notFound(c, this.t('competition_errors.not_found', c));
+            }
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const { identity, issuedGuestToken } = WatchService.identityForCreate(
+                userId, c.req.header('X-Guest-Token') ?? null
+            );
+            const service = new WatchService(c.env.DB);
+            const result = await service.heartbeat(competitionId, userId, identity);
+            return this.success(c, {
+                counted: result.counted,
+                live: result.live,
+                watch_seconds: result.watchSeconds,
+                watch_eligible: result.watchEligible,
+                watch_required: WATCH_ELIGIBILITY_SECONDS,
+                total_views: result.totalViews,
+                guest_token: issuedGuestToken,
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }

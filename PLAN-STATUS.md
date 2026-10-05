@@ -1,6 +1,13 @@
 
 
 
+## R2-L1 التعليقات المشتركة والمشاهدة والحضور · فرع `feat/r2-l1-comments-watch` (من `4c6ddd9` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية. migration واحدة مضافة (`0034_competition_views`: UNIQUE identity/competition/day — ضرورية فعلاً: لا بنية قائمة تحمل guest+day؛ مختبرة reset من فراغ 23/23).
+- العقد: تعليقات مشتركة ومحفوظة API/SSE بالكاتب الصحيح وdedup بالمعرف وتبقى بعد refresh (أصلحنا سباق init-at-parse الذي كان يترك الصندوق فارغاً بعد كل reload)؛ الحضور (signaling) مستقل عن العدّ؛ GET لا يعدّ؛ H2 مشاهدة واحدة لكل identity/competition/day (مسجل + ضيف first-party، بلا IP)؛ H1 ‏300s تراكمية live للمسجل فقط بشرائح خادمية capped (‏120s) بلا ثقة بالجسم، وreconnect/replay لا يضاعفان؛ ‏V تقرأ من ‏`getViewerWatch` وحده (سلوك التقييم الحالي untouched)؛ ‏recorded/pending لا تراكم ‏H1؛ بلا ‏R2-V/L2/Like/video-time/H7/J/#86.
+- **الأدلة**: ‏RED أولاً على ‏BASE؛ ‏T ‏`r2-l1-watch-comments` ‏12/12 (‏299/300، ‏cap، ‏replay＋0، تزوير مرفوض، ‏day، ضيوف، تزامن، ‏401/403/404/422)؛ ‏UI ‏`r2-l1-comments-watch` ‏6/6؛ ‏E2E حقيقي ‏1/1 ‏ar + ‏1/1 ‏en (‏A/B/C بنفس القائمة والعدّ بعد ‏refresh، حذف يزامن حياً، عدّاد ثابت، نبض مكرر/مزور بلا أثر، ‏mobile/keyboard، صفر أخطاء)؛ الجيران + الكاملة ‏1190/1196 (الـ6 ‏jq على ‏Windows مثبتة على ‏BASE)؛ ‏schema-contract ‏23/23؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏281 = ‏BASE؛ ‏routes ‏199←201.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-EXPLORE-CONTEXT-1 سياق View All والفرع في Explore · فرع `feat/r3-explore-context-1` (من `020eacc` = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية، بلا migrations (إعادة استعمال جداول ‏0033)، بلا engine/store جديد، بلا H7/ranking، بلا R2-J/#75/#76/#82.

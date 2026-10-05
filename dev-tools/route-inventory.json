@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-03T01:34:43.107Z",
-  "total": 199,
+  "generatedAt": "2026-10-05T06:16:25.111Z",
+  "total": 201,
   "routes": [
     {
       "method": "GET",
@@ -740,6 +740,20 @@
     {
       "method": "POST",
       "path": "/api/competitions/:id/update-vod",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/watch",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/:id/watch-heartbeat",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/competitions/routes.ts"

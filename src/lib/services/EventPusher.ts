@@ -123,11 +123,26 @@ export class EventPusher {
     // Convenience factory methods (semantic helpers for controllers)
     // ----------------------------------------------------------
 
+    /**
+     * R2-L1: the payload carries BOTH display_name and username (with a
+     * username fallback) so every surface renders the correct author without
+     * a follow-up GET. `username` stays for older readers.
+     */
     async publishComment(
         competitionId: number,
-        comment: { id: number; user_id: number; username: string; avatar_url: string | null; content: string; created_at: string }
+        comment: {
+            id: number; user_id: number; display_name: string | null; username: string;
+            avatar_url: string | null; content: string; created_at: string;
+        }
     ) {
         return this.publish(`competition:${competitionId}`, 'comment_new', { competition_id: competitionId, comment });
+    }
+
+    /** R2-L1: deletion sync so A/B/C converge without a refresh. */
+    async publishCommentDeleted(competitionId: number, commentId: number) {
+        return this.publish(`competition:${competitionId}`, 'comment_deleted', {
+            competition_id: competitionId, comment_id: commentId,
+        });
     }
 
     async publishInvite(

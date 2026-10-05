@@ -98,6 +98,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           
           competitionData = data.data;
           renderCompetition(competitionData);
+          // Dynamics need the rendered DOM (chat box, stats) and the loaded
+          // competitionData — starting them at parse time raced the async
+          // injection and painted nothing. Re-runs (invite/request flows)
+          // reset timers/streams instead of stacking them.
+          initCompetitionDynamics();
 
           // T3.2: universal lifecycle countdown (join window / start window / live limit)
           if (competitionData.timer && competitionData.timer.deadline && typeof window.createCountdownTimer === 'function') {
@@ -457,8 +462,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 <div class="card p-6">
                   <div class="grid grid-cols-2 gap-4 text-center">
                     <div>
-                      <p class="text-3xl font-bold text-purple-600">\${(comp.total_views || 0).toLocaleString()}</p>
+                      <p class="text-3xl font-bold text-purple-600" id="statViews">\${(comp.total_views || 0).toLocaleString()}</p>
                       <p class="text-sm text-gray-500">\${tr.viewers}</p>
+                      <p class="text-xs text-gray-400 hidden" id="presenceNow" aria-live="polite"></p>
                     </div>
                     <div>
                       <p class="text-3xl font-bold text-purple-600">\${comp.comments_count ?? comp.total_comments ?? 0}</p>
@@ -662,22 +668,56 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const btn = document.getElementById('commentsMoreBtn');
         if (btn) btn.classList.toggle('hidden', !(commentsItems.length < commentsTotal));
       }
-      function prependLiveComment(cm) {
-        // Live comment arrives via SSE — newest first at the top.
-        commentsItems = [cm].concat(commentsItems);
-        commentsTotal += 1;
+      function upsertLiveComment(cm) {
+        // R2-L1: merge by id — the SSE echo of our own POST (or a reconnect
+        // replay) must never render twice. Newest first at the top.
+        if (!cm || cm.id === undefined || cm.id === null) return;
+        const at = commentsItems.findIndex(function(c){ return c && c.id === cm.id; });
+        if (at !== -1) {
+          commentsItems[at] = cm;
+        } else {
+          commentsItems = [cm].concat(commentsItems);
+          commentsTotal += 1;
+        }
         const box = document.getElementById('chatMessages');
         if (box) box.innerHTML = renderCommentsTree(commentsItems) || '';
         paintCommentsEmpty();
         syncMoreBtn();
       }
+      function removeLiveComment(commentId) {
+        // R2-L1: deletion sync — converge without a refresh.
+        const before = commentsItems.length;
+        commentsItems = commentsItems.filter(function(c){ return !c || c.id !== commentId; });
+        if (commentsItems.length !== before) {
+          commentsTotal = Math.max(0, commentsTotal - (before - commentsItems.length));
+          const box = document.getElementById('chatMessages');
+          if (box) box.innerHTML = renderCommentsTree(commentsItems) || '';
+          paintCommentsEmpty();
+          syncMoreBtn();
+        }
+      }
+      // R2-L1: exactly one live subscription per rendered competition —
+      // re-renders (invite/request flows reload via loadCompetition) close
+      // the previous stream instead of stacking EventSources.
+      let commentsLiveES = null;
       function subscribeCommentsLive() {
         try {
+          if (commentsLiveES) {
+            try { commentsLiveES.close(); } catch (e) {}
+            commentsLiveES = null;
+          }
           const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
+          commentsLiveES = es;
           es.addEventListener('comment_new', function(ev) {
             try {
               const payload = JSON.parse(ev.data);
-              if (payload && payload.comment) prependLiveComment(payload.comment);
+              if (payload && payload.comment) upsertLiveComment(payload.comment);
+            } catch (e) {}
+          });
+          es.addEventListener('comment_deleted', function(ev) {
+            try {
+              const payload = JSON.parse(ev.data);
+              if (payload && payload.comment_id !== undefined) removeLiveComment(payload.comment_id);
             } catch (e) {}
           });
         } catch (e) {}
@@ -692,7 +732,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           <div class="flex gap-2 animate-fade-in">
             <img src="\${cm.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + cm.username}" class="w-8 h-8 rounded-full flex-shrink-0" alt="">
             <div class="min-w-0">
-              <p class="text-sm"><span class="font-semibold text-purple-600">\${cm.display_name}</span></p>
+              <p class="text-sm"><span class="font-semibold text-purple-600">\${cm.display_name || cm.username || ''}</span></p>
               <p class="text-sm text-gray-600 dark:text-gray-300 break-words">\${cm.content}</p>
               \${window.currentUser ? \`
                 <span class="inline-flex items-center gap-3 mt-0.5">
@@ -735,6 +775,16 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       };
 
+      // R2-L1: shared headers — the session Bearer when present (the server
+      // always binds identity to the session, never to body fields).
+      function commentAuthHeaders(extra) {
+        const h = extra || {};
+        const sess = (window.sessionId || localStorage.getItem('sessionId'));
+        if (sess) h['Authorization'] = 'Bearer ' + sess;
+        const guest = localStorage.getItem('dueli_guest_token');
+        if (guest) h['X-Guest-Token'] = guest;
+        return h;
+      }
       async function sendComment(e) {
         e.preventDefault();
         if (!window.currentUser) return;
@@ -742,27 +792,133 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const content = input.value.trim();
         if (!content) return;
         try {
-          await fetch('/api/competitions/' + competitionId + '/comments', {
+          const res = await fetch('/api/competitions/' + competitionId + '/comments', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: commentAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
-              user_id: window.currentUser.id,
               content: content,
               is_live: competitionData?.status === 'live',
               parent_id: replyToComment || null
             })
           });
+          const data = await res.json().catch(function(){ return null; });
+          if (!res.ok || !data || !data.success) {
+            showToast((data && data.error) || tr.error_occurred || 'Error', 'error');
+            return;
+          }
           input.value = '';
           input.placeholder = tr.add_comment + '...';
           replyToComment = null;
-          await loadCommentsInitial();
-        } catch (err) { console.error(err); }
+          // Merge the author-joined POST response by id (the SSE echo of
+          // this same row dedups instead of doubling).
+          if (data.data && data.data.id !== undefined) {
+            upsertLiveComment(data.data);
+          } else {
+            await loadCommentsInitial();
+          }
+        } catch (err) {
+          console.error(err);
+          showToast(tr.error_occurred || 'Error', 'error');
+        }
       };
 
-      // B2+B3: hydrate paged comments + live subscription after first render
-      loadCommentsInitial();
-      subscribeCommentsLive();
-      
+      // R2-L1: start (or restart, after a re-render) everything that needs
+      // the rendered competition DOM. Parse-time starts raced the async
+      // renderCompetition injection and silently painted nothing — init runs
+      // here, once the box, stats and competitionData exist.
+      // B2+B3: hydrate paged comments + live subscription after first render.
+      let watchTimers = [];
+      async function initCompetitionDynamics() {
+        loadCommentsInitial();
+        subscribeCommentsLive();
+        // Sequential: the heartbeat must see the guest token the intent may
+        // have just issued — concurrent first-view calls issued two day-rows
+        // for one anonymous viewer.
+        await recordWatchIntent();
+        sendWatchHeartbeat();
+        refreshPresence();
+        for (const t of watchTimers) {
+          try { clearInterval(t); } catch (e) {}
+        }
+        watchTimers = [
+          setInterval(sendWatchHeartbeat, 30000),
+          setInterval(refreshPresence, 30000)
+        ];
+      }
+
+      // R2-L1: one watch intent per page view (H2) + bounded live pulses
+      // (H1) + presence display. GETs never count; only these explicit calls
+      // insert day-rows. Failures are silent (counters are informational).
+      function watchHeaders() {
+        const h = commentAuthHeaders({ 'Content-Type': 'application/json' });
+        return h;
+      }
+      function storeGuestToken(token) {
+        try {
+          if (token && !localStorage.getItem('dueli_guest_token')) {
+            localStorage.setItem('dueli_guest_token', token);
+          }
+        } catch (e) {}
+      }
+      function paintViewsTotal(total) {
+        // Plain String(): the server renders the same counter without a
+        // locale, and a browser-locale toLocaleString would flip Western to
+        // Eastern Arabic digits on ar pages (breaking digits-based checks).
+        const el = document.getElementById('statViews');
+        if (el && typeof total === 'number') el.textContent = String(total);
+      }
+      async function recordWatchIntent() {
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/watch', {
+            method: 'POST',
+            headers: watchHeaders()
+          });
+          const data = await res.json().catch(function(){ return null; });
+          if (data && data.success && data.data) {
+            storeGuestToken(data.data.guest_token);
+            paintViewsTotal(data.data.total_views);
+          }
+        } catch (e) {}
+      }
+      async function sendWatchHeartbeat() {
+        if (document.visibilityState !== 'visible') return;
+        if (!competitionData || competitionData.status !== 'live') return;
+        try {
+          const res = await fetch('/api/competitions/' + competitionId + '/watch-heartbeat', {
+            method: 'POST',
+            headers: watchHeaders()
+          });
+          const data = await res.json().catch(function(){ return null; });
+          if (data && data.success && data.data) {
+            storeGuestToken(data.data.guest_token);
+            paintViewsTotal(data.data.total_views);
+          }
+        } catch (e) {}
+      }
+      async function refreshPresence() {
+        const el = document.getElementById('presenceNow');
+        if (!el) return;
+        if (!competitionData || competitionData.status !== 'live' || !window.currentUser) {
+          el.classList.add('hidden');
+          return;
+        }
+        try {
+          const sess = (window.sessionId || localStorage.getItem('sessionId'));
+          if (!sess) { el.classList.add('hidden'); return; }
+          const res = await fetch('/api/signaling/session?competition_id=' + competitionId, {
+            headers: { 'Authorization': 'Bearer ' + sess }
+          });
+          const data = await res.json().catch(function(){ return null; });
+          const count = data && data.success && data.data && data.data.presence
+            ? data.data.presence.viewer_count : null;
+          if (typeof count === 'number') {
+            el.textContent = count + ' ' + (tr.viewers_now || 'watching now');
+            el.classList.remove('hidden');
+          } else {
+            el.classList.add('hidden');
+          }
+        } catch (e) {}
+      }
       async function toggleLike() {
         if (!window.currentUser) { showLoginModal(); return; }
         const btn = document.getElementById('likeBtn');

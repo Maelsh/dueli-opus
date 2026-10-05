@@ -61,13 +61,17 @@ async function renderRoom(lang: 'ar' | 'en'): Promise<string> {
 const countId = (html: string, id: string) =>
     [...html.matchAll(new RegExp(`id="${id}"`, 'g'))].length;
 
-/** Extract the page's OWN sendComment and run it against fakes. */
+/**
+ * Extract the page's OWN shared-path renderer and run it against fakes.
+ * R2-L1: room comments flow through the shared API/SSE append path
+ * (appendRoomComment, id-deduped) — the text-sink guarantee now pins that
+ * path instead of the removed DOM-only sendComment.
+ */
 function runPageSendComment(src: string, inputValue: string) {
-    const m = src.match(/window\.sendComment = (function\(\) \{[\s\S]*?\n            \});/);
-    expect(m, 'page must define its own window.sendComment').toBeTruthy();
+    const m = src.match(/function appendRoomComment\(cm\) \{([\s\S]*?)\n            \}/);
+    expect(m, 'page must define its own appendRoomComment').toBeTruthy();
     const appended: Record<string, unknown>[] = [];
     const assigned: { kind: string; value: unknown }[] = [];
-    const fakeInput = { value: inputValue };
     const fakeContainer = {
         appendChild: (c: unknown) => void appended.push(c as Record<string, unknown>),
         append: (...c: unknown[]) => void appended.push(...(c as Record<string, unknown>[])),
@@ -75,7 +79,7 @@ function runPageSendComment(src: string, inputValue: string) {
         scrollHeight: 0,
     };
     const fakeDocument = {
-        getElementById: (id: string) => (id === 'commentInput' ? fakeInput : fakeContainer),
+        getElementById: () => fakeContainer,
         createElement: () => {
             const node: Record<string, unknown> = { children: [] as unknown[] };
             Object.defineProperties(node, {
@@ -86,19 +90,19 @@ function runPageSendComment(src: string, inputValue: string) {
                 void (node.children as unknown[]).push(...c);
             (node as Record<string, unknown>).appendChild = (c: unknown) =>
                 void (node.children as unknown[]).push(c);
+            (node as Record<string, unknown>).setAttribute = () => {};
             return node;
         },
     };
     const fn = new Function(
         'document',
-        'window',
-        'log',
-        `return (${(m as RegExpMatchArray)[1]});`,
+        'roomCommentsSeen',
+        `function appendRoomComment(cm) {${(m as RegExpMatchArray)[1]}}\nreturn appendRoomComment;`,
     );
-    // Invoke the page's own sendComment with fakes.
-    const send = fn(fakeDocument, { currentUser: { username: 'u' } }, () => {}) as () => void;
-    send();
-    return { appended, assigned, input: fakeInput };
+    // Invoke the page's own renderer with fakes.
+    const append = fn(fakeDocument, new Set()) as (cm: unknown) => void;
+    append({ id: 1, display_name: 'u', username: 'u', content: inputValue });
+    return { appended, assigned, input: { value: inputValue } };
 }
 
 describe('R1.6 live room comment DOM (P11-007)', () => {

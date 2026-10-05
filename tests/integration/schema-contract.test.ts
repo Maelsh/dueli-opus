@@ -67,6 +67,7 @@ const EXPECTED_MIGRATIONS = [
     '0031_realtime_tickets.sql',
     '0032_cron_run_guard.sql',
     '0033_explore_result_sessions.sql',
+    '0034_competition_views.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -94,6 +95,7 @@ const EXPECTED_TABLES = [
     'cron_runs',
     'explore_result_sessions',
     'explore_result_chunks',
+    'competition_views',
 ];
 
 let migrationOutput = '';
@@ -178,8 +180,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 34 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(34);
+    it('has exactly 35 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(35);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -292,6 +294,10 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
     it('R3-B7 session store exists: explore_result_sessions + explore_result_chunks (0033)', () => {
         expect(tables).toContain('explore_result_sessions');
         expect(tables).toContain('explore_result_chunks');
+    });
+
+    it('R2-L1 qualified view store exists: competition_views (0034)', () => {
+        expect(tables).toContain('competition_views');
     });
 
     it('9.C tables exist: ad_click_tokens, ad_clicks, ad_impression_dedup (0027)', () => {
