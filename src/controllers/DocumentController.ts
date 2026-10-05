@@ -10,6 +10,7 @@
 import { BaseController, AppContext } from './base/BaseController';
 import {
     ManagedDocumentModel,
+    ManagedDocument,
     ManagedDocumentStatus,
     ManagedDocumentVisibility,
     MANAGED_DOCUMENT_STATUSES,
@@ -18,7 +19,7 @@ import {
 } from '../models/ManagedDocumentModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
 
-function safeDoc(row: any) {
+function safeDoc(row: ManagedDocument | null) {
     if (!row) return null;
     return {
         id: row.id,

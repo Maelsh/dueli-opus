@@ -22,7 +22,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
     if (sessionId) {
         try {
             const session = await new SessionModel(c.env.DB).findValidSession(sessionId);
-            if (session?.user && (session.user as any).is_admin !== 1) {
+            if (session?.user && session.user.is_admin !== 1) {
                 const denied = `
                 ${getNavigation(lang)}
                 <div class="flex-1"><div class="container mx-auto px-4 py-16 max-w-xl text-center">
@@ -32,7 +32,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
                     <a href="/?lang=${lang}" class="inline-block mt-6 px-6 py-2 bg-purple-600 text-white rounded-full font-bold">Dueli</a>
                 </div></div>
                 ${getFooter(lang)}`;
-                return c.html(generateHTML(denied, lang, tt('access_denied'), nonce), 403 as any);
+                return c.html(generateHTML(denied, lang, tt('access_denied'), nonce), 403);
             }
         } catch {
             // Fall through to the shell; the API + client checks still apply.

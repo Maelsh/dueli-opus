@@ -8,6 +8,7 @@
  */
 
 import { BaseController, AppContext } from './base/BaseController';
+import type { User } from '../config/types';
 import { UserModel } from '../models/UserModel';
 import { SessionModel } from '../models/SessionModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
@@ -17,7 +18,7 @@ import { CryptoUtils } from '../lib/services/CryptoUtils';
 const USERNAME_RE = /^[a-z0-9][a-z0-9_.]{1,28}[a-z0-9]$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function safeAccountDTO(user: any) {
+function safeAccountDTO(user: User) {
     return {
         id: user.id,
         username: user.username ?? null,
@@ -94,7 +95,7 @@ export class AccountController extends BaseController {
             const userModel = new UserModel(c.env.DB);
             const fresh = await userModel.findById(me.id);
             if (!fresh) return this.notFound(c);
-            if (!(await CryptoUtils.verifyPassword(body.current_password, (fresh as any).password_hash))) {
+            if (!(await CryptoUtils.verifyPassword(body.current_password, fresh.password_hash ?? ''))) {
                 return this.error(c, this.t('account.current_password_incorrect', c), 401);
             }
             const hash = await CryptoUtils.hashPassword(body.new_password);
@@ -145,8 +146,10 @@ export class AccountController extends BaseController {
                     return this.error(c, this.t('account.email_taken', c), 409);
                 }
             } else {
+                const same = await userModel.findById(me.id);
+                if (!same) return this.notFound(c);
                 return this.success(c, {
-                    user: safeAccountDTO(await userModel.findById(me.id)),
+                    user: safeAccountDTO(same),
                     reverify_required: false,
                     message: this.t('account.email_updated', c),
                 });
@@ -159,6 +162,7 @@ export class AccountController extends BaseController {
             await userModel.update(me.id, { is_verified: false });
             await userModel.setVerificationToken(me.id, token, expires);
             const updated = await userModel.findById(me.id);
+            if (!updated) return this.notFound(c);
 
             try {
                 await new AdminAuditLogModel(c.env.DB).log(

@@ -1,5 +1,5 @@
 {
-  "manifest_version": "R-RELEASE-1.baseline-0035",
+  "manifest_version": "R-RELEASE-1.baseline-0036",
   "target": {
     "pages_project": "project-8e7c178d",
     "database_name": "dueli-db"
@@ -16,6 +16,10 @@
     {
       "file": "0035_comments_video_offset.sql",
       "sha256": "645e8ba369ee06de2ec27032f8ae95737ae9d95e8f2d5f9843e5d08d1596a04d"
+    },
+    {
+      "file": "0036_managed_documents.sql",
+      "sha256": "fbbfd37414e53d70380dcd6d1168a3562adbf13c1365344851ef68d338709a37"
     }
   ],
   "known_history": [
@@ -54,7 +58,8 @@
     "0032_cron_run_guard.sql",
       "0033_explore_result_sessions.sql",
       "0034_competition_views.sql",
-      "0035_comments_video_offset.sql"
+      "0035_comments_video_offset.sql",
+      "0036_managed_documents.sql"
     ],
   "required_schema": {
     "tables": {
@@ -82,12 +87,28 @@
       ],
       "comments": [
         "video_offset"
+      ],
+      "managed_documents": [
+        "id",
+        "slug",
+        "title_ar",
+        "title_en",
+        "body_ar",
+        "body_en",
+        "status",
+        "visibility",
+        "version",
+        "is_seed",
+        "created_by",
+        "updated_by",
+        "created_at",
+        "updated_at"
       ]
     },
-    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day"]
+    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status"]
   },
   "notes": [
-    "Baseline R-RELEASE-1.baseline-0035 requires migrations 0033, 0034 and 0035 applied with the pinned sha256 each (no post-apply rewrite).",
+    "Baseline R-RELEASE-1.baseline-0036 requires migrations 0033, 0034, 0035 and 0036 applied with the pinned sha256 each (no post-apply rewrite).",
     "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
     "The gate never applies migrations. Unexpected pending is recorded and FAILS the gate; it is never auto-applied."
   ]

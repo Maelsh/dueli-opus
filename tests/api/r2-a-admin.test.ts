@@ -108,6 +108,10 @@ describe('R2-A admin identity, settings, roles, H9 documents', () => {
         expect((await api(db, 'GET', '/api/admin/roles', adminTok)).status).toBe(200);
         expect((await api(db, 'GET', '/api/admin/roles', plainTok)).status).toBe(403);
         expect((await api(db, 'GET', '/api/admin/roles')).status).toBe(403);
+        // The dashboard shell loads from /enhanced-stats (independent code
+        // path — it never touches the broken totalRevenue()/amount query
+        // behind /stats), so the new R2-A UI stays usable.
+        expect((await api(db, 'GET', '/api/admin/enhanced-stats', adminTok)).status).toBe(200);
 
         const adminPage = await app.request('/admin?lang=en', {
             headers: { ...headers(), Cookie: `sessionId=${adminTok}` },
