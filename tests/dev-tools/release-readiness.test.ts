@@ -83,6 +83,18 @@ describe('release readiness gate', () => {
         expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0034');
     });
 
+    it('Deploy #458 exact scenario: stale snapshot missing the 0034 index FAILS', () => {
+        // The old collector hardcoded two tables, so a healthy production
+        // (index present in D1) still evaluated with the index absent. The
+        // gate must refuse that snapshot — and pass once collected properly.
+        const stale = goodInput();
+        stale.schema.indexes = stale.schema.indexes.filter((i) => i !== 'idx_competition_views_day');
+        const r = evaluateReadiness(stale);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok && c.name === 'required-schema').length).toBeGreaterThan(0);
+        expect(evaluateReadiness(goodInput()).ok).toBe(true);
+    });
+
     it('pre-0034 production (0034 missing) still fails closed', () => {
         // The exact Deploy #456 block: 0034 applied remotely but unknown to a
         // baseline-0033 manifest. Here from the other side — a baseline-0034
