@@ -236,11 +236,18 @@ analyticsRoutes.post('/track', async (c) => {
 
 /**
  * POST /api/analytics/view
- * Track competition view
+ * Legacy compat alias for recording a competition view.
+ *
+ * R3-D1-REM1 (H2 invariant): this endpoint MUST NOT inflate counters
+ * directly. It delegates to the one counted-view writer
+ * (WatchService.recordWatchIntent — one counted view per identity /
+ * competition / UTC day, idempotent). `watch_time` from the client is
+ * ignored by construction: H1 duration accrues only via the bounded
+ * playback heartbeat. Response carries the idempotent outcome so
+ * repeats are observable as counted=false with an untouched counter.
  */
 analyticsRoutes.post('/view', async (c) => {
     try {
-        const user = c.get('user');
         const body = await c.req.json<{
             competition_id: number;
             watch_time?: number;
@@ -251,19 +258,23 @@ analyticsRoutes.post('/view', async (c) => {
         }
 
         const db = c.env.DB;
+        const { CompetitionModel } = await import('../../../models/CompetitionModel');
+        const { WatchService } = await import('../../../lib/services/WatchService');
 
-        // Record view
-        await db.prepare(`
-            INSERT INTO competition_views (competition_id, user_id, watch_time, created_at)
-            VALUES (?, ?, ?, datetime('now'))
-        `).bind(body.competition_id, user?.id || null, body.watch_time || 0).run();
+        const competition = await new CompetitionModel(db).findById(body.competition_id);
+        if (!competition) {
+            return c.json({ success: false, error: 'Competition not found' }, 404);
+        }
 
-        // Update competition view count
-        await db.prepare(`
-            UPDATE competitions SET total_views = total_views + 1 WHERE id = ?
-        `).bind(body.competition_id).run();
+        const user = c.get('user');
+        const userId = typeof user?.id === 'number' ? user.id : null;
+        const { identity, issuedGuestToken } = WatchService.identityForCreate(
+            userId, c.req.header('X-Guest-Token') ?? null
+        );
+        const service = new WatchService(db);
+        const { counted, totalViews } = await service.recordWatchIntent(body.competition_id, identity);
 
-        return c.json({ success: true });
+        return c.json({ success: true, data: { counted, total_views: totalViews, guest_token: issuedGuestToken } });
 
     } catch (error) {
         console.error('Track view error:', error);

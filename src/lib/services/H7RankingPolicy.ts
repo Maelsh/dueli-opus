@@ -271,19 +271,40 @@ export const H7_DIVERSITY = {
 /** §4 search text layers (before score; higher textual layer never buried by fame). */
 export type H7SearchLayer = 0 | 1 | 2 | 3;
 
-export function h7SearchLayer(title: string, description: string | null, query: string): H7SearchLayer {
+/**
+ * Unicode-aware whole-word test (ar/en + digits).
+ * `\b` is ASCII-only: it splits INSIDE Arabic words, so a complete Arabic
+ * word mid-text would wrongly fall through to the partial layer. Unicode
+ * letter/number lookarounds treat every script as word characters, so
+ * punctuation/whitespace (either side, either script) delimit words while
+ * infixes never match. Mixed ar-en queries work the same way.
+ */
+export function h7HasWholeWord(text: string, query: string): boolean {
+    const t = text.toLowerCase();
     const q = query.trim().toLowerCase();
-    if (q === '') return 3;
-    const t = (title || '').toLowerCase();
-    const d = (description || '').toLowerCase();
-    if (t === q) return 0;
-    if (t.startsWith(q)) return 1;
+    if (q === '' || t === '') return false;
     const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     try {
-        if (new RegExp(`\\b${escaped}\\b`).test(t)) return 1;
+        return new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'u').test(t);
     } catch {
-        if (t.includes(` ${q} `)) return 1;
+        // Non-Unicode-regex runtimes (never expected): conservative
+        // space-padding covers the plain interior case only.
+        return t.includes(` ${q} `) || t.startsWith(`${q} `) || t.endsWith(` ${q}`) || t === q;
     }
+}
+
+function h7NormText(s: string): string {
+    return s.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export function h7SearchLayer(title: string, description: string | null, query: string): H7SearchLayer {
+    const q = h7NormText(query);
+    if (q === '') return 3;
+    const t = h7NormText(title || '');
+    const d = h7NormText(description || '');
+    if (t === q) return 0;
+    if (t.startsWith(q)) return 1;
+    if (h7HasWholeWord(t, q)) return 1;
     if (t.includes(q) || (d !== '' && d.includes(q))) return 2;
     return 3;
 }

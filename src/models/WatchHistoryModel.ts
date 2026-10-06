@@ -156,6 +156,12 @@ export class WatchHistoryModel {
     /**
      * Extract keywords from competition for recommendations
      * استخراج كلمات مفتاحية للتوصيات
+     *
+     * R3-D1-REM1: the `fav:` namespace is RESERVED for the explicit
+     * Settings-favorites writer (H7SignalsModel.setFavoriteSlugs). Title
+     * words are attacker-influenced (any user picks titles), so any word
+     * carrying a colon is skipped — it can never become a `fav:*` row and
+     * pollute explicit favorites with inferred interests.
      */
     private async extractKeywords(userId: number, competitionId: number): Promise<void> {
         // Get competition title
@@ -169,6 +175,7 @@ export class WatchHistoryModel {
         const keywords = competition.title
             .split(/\s+/)
             .filter(word => word.length > 3)
+            .filter(word => !word.includes(':'))
             .slice(0, 5); // Max 5 keywords per competition
 
         // Insert or update keywords

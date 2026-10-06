@@ -1,6 +1,13 @@
 
 
 
+## R3-D1-REM1 close 4 known follow-ups · فرع `fix/r3-d1-rem1-followups` (من `1c84bc4` = origin/main بعد دمج R3-D1 #96)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/مسارات جديدة (routes ‏225←225). النطاق: الملاحظات الأربع فقط (Unicode search، حماية `fav:`، invariant عدّ المشاهدات، تصحيح التعليق) — بلا توسع إلى D2.
+- العقد: طبقات H7 بلا تغيير (exact → prefix/whole-word → partial) مع whole-word Unicode حقيقي ar/en؛ `fav:` محجوز لمسار الإعدادات (generic writers محايَدة + taxonomy/ownership قائمتان)؛ H2 invariant حقيقي (كاتب واحد SSOT، `/analytics/view` alias idempotent، dead trap محذوف)؛ التعليق يصف الحقيقة الجديدة بعد الإثبات.
+- **الأدلة**: T جديد `r3-d1-rem1-followups` ‏18/18 + الحراس المتأثرة (H7/search، favorites/settings، L1/watch/views، CSP، schema ‏127/127) خضراء؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏churn رُجع)؛ ‏G2 ‏+0 ‏any.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-D1 H7 approved ranking (h7-v1) · فرع `feat/r3-d1-ranking` (من `17d6dd7` = origin/main بعد دمج R2-F #95)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/خدمات مدفوعة/ترحيل جديد (routes ‏221←225: similar-sessions ×2 + settings/favorites ×2).

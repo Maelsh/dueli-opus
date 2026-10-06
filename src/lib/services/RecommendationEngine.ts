@@ -410,31 +410,31 @@ export class RecommendationEngine {
     }
 
     /**
-     * Record a view
+     * R3-D1-REM1: removed `recordView` (unconditional total_views +1 with a
+     * client-supplied duration upsert into watch_history). It had zero
+     * callers and violated the H2 invariant — the only counted-view writer
+     * is WatchService.recordWatchIntent (one counted view per identity /
+     * competition / UTC day). H1 duration accrues only via the bounded
+     * playback heartbeat. Do not reintroduce client-duration view writes.
      */
-    async recordView(userId: number, competitionId: number, duration: number = 0): Promise<void> {
-        await this.db.prepare(`
-            INSERT INTO watch_history (user_id, competition_id, watched_at, watch_duration_seconds)
-            VALUES (?, ?, datetime('now'), ?)
-            ON CONFLICT(user_id, competition_id)
-            DO UPDATE SET watch_duration_seconds = watch_duration_seconds + ?, watched_at = datetime('now')
-        `).bind(userId, competitionId, duration, duration).run();
-
-        await this.db.prepare(`
-            UPDATE competitions SET total_views = COALESCE(total_views, 0) + 1 WHERE id = ?
-        `).bind(competitionId).run();
-    }
 
     /**
-     * Record search keyword for future recommendations
+     * Record search keyword for future recommendations.
+     *
+     * R3-D1-REM1: the `fav:` namespace is RESERVED for the explicit
+     * Settings-favorites writer. A user-typed query starting with `fav:`
+     * (any case/whitespace) is never persisted as a keyword, so generic
+     * writers cannot mint or touch explicit favorites.
      */
     async recordSearch(userId: number, keyword: string): Promise<void> {
+        const normalized = keyword.toLowerCase().trim();
+        if (normalized === '' || normalized.startsWith('fav:')) return;
         await this.db.prepare(`
             INSERT INTO user_keywords (user_id, keyword, weight, updated_at)
             VALUES (?, ?, 1.0, datetime('now'))
             ON CONFLICT(user_id, keyword)
             DO UPDATE SET weight = weight + 0.1, updated_at = datetime('now')
-        `).bind(userId, keyword.toLowerCase().trim()).run();
+        `).bind(userId, normalized).run();
     }
 
     /**

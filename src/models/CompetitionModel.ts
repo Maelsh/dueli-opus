@@ -534,7 +534,14 @@ export class CompetitionModel extends BaseModel<Competition> {
     }
 
     /**
-     * Increment views
+     * Increment views — H2 SSOT writer, one call per newly counted view.
+     *
+     * R3-D1-REM1 invariant: the ONLY caller is
+     * WatchService.recordWatchIntent, and only when a new
+     * (competition, identity, UTC-day) row is created in
+     * `competition_views`. Never call from GET/polling/presence, analytics
+     * aliases, or client-supplied durations — those paths delegate to (or
+     * are denied by) the SSOT instead.
      */
     async incrementViews(id: number): Promise<void> {
         await this.db.prepare(
