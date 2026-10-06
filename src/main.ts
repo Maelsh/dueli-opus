@@ -282,7 +282,7 @@ app.get('/', (c) => {
       </div>
 
       <!-- Main Content -->
-      <main class="container mx-auto px-4 pb-24 space-y-10" id="mainContent">
+      <main class="container mx-auto px-4 pb-24 space-y-10" id="main-content">
         <div class="flex flex-col items-center justify-center py-16">
           <i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i>
           <p class="text-gray-500">${tr.loading}</p>
@@ -312,10 +312,12 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
+import { aboutPage, helpPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
+app.get('/help', helpPage);
+app.get('/faq', helpPage);
 app.get('/verify', verifyPage);
 app.get('/competition/:id', competitionPage);
 app.get('/create', createPage);
@@ -374,6 +376,9 @@ const onNotFound = (c: Context<{ Bindings: Bindings; Variables: Variables }>) =>
         <a href="/?lang=${lang}" class="btn-primary inline-block">
           ${tr.back_to_home}
         </a>
+        <p class="mt-4 text-sm">
+          <a href="/help?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">${tr.help || 'Help'}</a>
+        </p>
       </div>
     </div>
     ${getFooter(lang)}

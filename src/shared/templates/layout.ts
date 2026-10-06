@@ -24,7 +24,7 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#6366f1">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -51,6 +51,7 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     </style>
 </head>
 <body class="bg-white dark:bg-[#0f0f0f] text-gray-900 dark:text-gray-100 min-h-screen flex flex-col transition-colors duration-300">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:start-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-purple-600 focus:text-white focus:rounded-lg">${tr.skip_to_content || 'Skip to content'}</a>
     ${content}
     <script nonce="${nonce}">
       // Register Service Worker

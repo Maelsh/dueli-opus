@@ -97,40 +97,43 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
         const mainCats = categories.filter(c => !c.parent_id);
         
         document.getElementById('createFormContainer').innerHTML = \`
-          <form id="createForm" class="card p-8 space-y-6">
+          <form id="createForm" class="card p-8 space-y-6" aria-describedby="createHelpHint">
+            <p id="createHelpHint" class="text-sm text-gray-500 dark:text-gray-400">
+              <a href="/help?lang=\${lang}#topic-create" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a>
+            </p>
             <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_title} *</label>
-              <input type="text" name="title" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3">
+              <label for="createTitle" class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_title} *</label>
+              <input type="text" id="createTitle" name="title" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3">
             </div>
-            
+
             <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.select_category} *</label>
-              <select name="category_id" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" data-csp-on="change" data-csp-fn="updateSubcategories" data-csp-args='["@this.value"]'>
+              <label for="createCategory" class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.select_category} *</label>
+              <select id="createCategory" name="category_id" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" data-csp-on="change" data-csp-fn="updateSubcategories" data-csp-args='["@this.value"]'>
                 <option value="">\${tr.select_category}</option>
                 \${mainCats.map(c => \`<option value="\${c.id}">\${lang === 'ar' ? (c.name_ar || c.name_en) : (c.name_en || c.name_ar)}</option>\`).join('')}
               </select>
             </div>
             
             <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.select_subcategory}</label>
+              <label for="subcategorySelect" class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.select_subcategory}</label>
               <select name="subcategory_id" id="subcategorySelect" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3">
                 <option value="">\${tr.select_subcategory}</option>
               </select>
             </div>
             
             <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_description}</label>
-              <textarea name="description" rows="3" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3"></textarea>
+              <label for="createDescription" class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_description}</label>
+              <textarea id="createDescription" name="description" rows="3" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3"></textarea>
             </div>
             
             <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_rules} *</label>
-              <textarea name="rules" rows="5" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" placeholder="\${tr.rules_placeholder}"></textarea>
+              <label for="createRules" class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_rules} *</label>
+              <textarea id="createRules" name="rules" rows="5" required class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3" placeholder="\${tr.rules_placeholder}"></textarea>
             </div>
             
             <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.scheduled_time}</label>
-              <input type="datetime-local" name="scheduled_at" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3">
+              <label for="createScheduled" class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.scheduled_time}</label>
+              <input type="datetime-local" id="createScheduled" name="scheduled_at" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-xl p-3">
             </div>
             
             <button type="submit" class="btn-primary w-full py-4 text-lg">

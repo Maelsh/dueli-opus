@@ -39,18 +39,18 @@ export function getLoginModal(lang: Language): string {
         </div>
 
         <!-- Messages -->
-        <div id="authMessage" class="hidden mb-4 p-3 rounded-lg text-sm"></div>
+        <div id="authMessage" role="alert" aria-live="assertive" class="hidden mb-4 p-3 rounded-lg text-sm"></div>
 
         <!-- Login Form -->
         <div id="loginForm">
           <form data-csp-on="submit" data-csp-fn="handleLogin" data-csp-args='["@event"]' class="space-y-4 mb-6">
             <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
+              <label for="loginEmail" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
               <input type="email" id="loginEmail" required title="${tr.email_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
             <div>
               <div class="flex justify-between items-center mb-2">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">${tr.password_label}</label>
+                <label for="loginPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">${tr.password_label}</label>
                 <button type="button" data-csp-on="click" data-csp-fn="showForgotPassword" data-csp-args='[]' class="text-sm text-purple-600 hover:text-purple-500 font-medium">
                   ${tr.forgot_password}
                 </button>
@@ -132,7 +132,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
       <!-- Step 1: Email -->
       <form id="resetStep1" data-csp-on="submit" data-csp-fn="handleForgotPassword" data-csp-args='["@event"]' class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
+          <label for="resetEmail" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
           <input type="email" id="resetEmail" required title="${tr.email_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <button type="submit" class="w-full py-3 ${DUELI_AUTH_GRADIENT} text-white rounded-lg font-semibold hover:opacity-90 transition-all">
@@ -143,7 +143,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
       <!-- Step 2: Verify Code -->
       <form id="resetStep2" data-csp-on="submit" data-csp-fn="handleVerifyResetCode" data-csp-args='["@event"]' class="space-y-4 hidden">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.verification_code_label}</label>
+          <label for="resetCode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.verification_code_label}</label>
           <input type="text" id="resetCode" required title="${tr.verification_code_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-center text-2xl tracking-widest">
           <p class="text-xs text-gray-500 mt-2 text-center">${tr.code_sent_to_email}</p>
         </div>
@@ -155,7 +155,7 @@ function getForgotPasswordForm(lang: Language, rtl: boolean, tr: any): string {
       <!-- Step 3: New Password -->
       <form id="resetStep3" data-csp-on="submit" data-csp-fn="handleResetPassword" data-csp-args='["@event"]' class="space-y-4 hidden">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.new_password_label}</label>
+          <label for="newPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.new_password_label}</label>
           <input type="password" id="newPassword" required minlength="6" title="${tr.new_password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <button type="submit" class="w-full py-3 ${DUELI_AUTH_GRADIENT} text-white rounded-lg font-semibold hover:opacity-90 transition-all">
@@ -174,15 +174,15 @@ function getRegisterForm(lang: Language, tr: any): string {
     <div id="registerForm" class="hidden">
       <form data-csp-on="submit" data-csp-fn="handleRegister" data-csp-args='["@event"]' class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.name_label}</label>
+          <label for="registerName" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.name_label}</label>
           <input type="text" id="registerName" required title="${tr.name_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
+          <label for="registerEmail" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.email_label}</label>
           <input type="email" id="registerEmail" required title="${tr.email_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.password_label}</label>
+          <label for="registerPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">${tr.password_label}</label>
           <input type="password" id="registerPassword" required minlength="6" title="${tr.password_label}" class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
           <p class="text-xs text-gray-500 mt-1">${tr.password_min_length}</p>
         </div>

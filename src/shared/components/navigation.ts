@@ -26,14 +26,14 @@ export function getNavigation(lang: Language): string {
 
         <!-- Right Side Actions -->
         <div class="flex items-center gap-1.5">
-          <!-- Help Icon (hidden by default using auth-hidden, shown for non-logged-in users via JS) -->
-          <a href="/about?lang=${lang}" id="helpIcon" title="${tr.help || 'Help'}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors auth-hidden">
-            <i class="far fa-question-circle text-2xl"></i>
+          <!-- Help entry (R3-C1: visible to everyone — guests and members) -->
+          <a href="/help?lang=${lang}" id="helpIcon" aria-label="${tr.help || 'Help'}" title="${tr.help || 'Help'}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors">
+            <i class="far fa-question-circle text-2xl" aria-hidden="true"></i>
           </a>
           
           <!-- Country/Language Switcher -->
           <div class="relative">
-            <button id="countryButton" data-csp-on="click" data-csp-fn="toggleCountryMenu" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" title="${tr.country_language || 'Language & Country'}">
+            <button id="countryButton" data-csp-on="click" data-csp-fn="toggleCountryMenu" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors" aria-label="${tr.country_language || 'Language & Country'}" title="${tr.country_language || 'Language & Country'}">
               <i class="fas fa-globe text-xl"></i>
             </button>
             <div id="countryMenu" class="dropdown-panel hidden w-80 bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 z-50 max-h-96 overflow-hidden flex flex-col">
@@ -59,7 +59,7 @@ export function getNavigation(lang: Language): string {
           </div>
           
           <!-- Dark Mode Toggle -->
-          <button data-csp-on="click" data-csp-fn="toggleDarkMode" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors" title="${tr.theme || 'Theme'}">
+          <button data-csp-on="click" data-csp-fn="toggleDarkMode" data-csp-args='[]' class="nav-icon text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-amber-400 transition-colors" aria-label="${tr.theme || 'Theme'}" title="${tr.theme || 'Theme'}">
             <i id="moonIcon" class="fas fa-moon text-2xl"></i>
             <i id="sunIcon" class="fas fa-sun text-2xl text-amber-400 theme-icon-hidden"></i>
           </button>
@@ -69,7 +69,7 @@ export function getNavigation(lang: Language): string {
 
           <!-- Auth Section - Login Button (hidden when logged in) -->
           <div id="authSection">
-            <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30 cursor-pointer" title="${tr.login || 'Login'}">
+            <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-full hover:opacity-90 transition-all shadow-lg shadow-purple-500/30 cursor-pointer" aria-label="${tr.login || 'Login'}" title="${tr.login || 'Login'}">
               <i class="fas fa-sign-in-alt text-lg"></i>
             </button>
           </div>
@@ -78,7 +78,7 @@ export function getNavigation(lang: Language): string {
           <div id="userSection" class="flex items-center gap-2 hidden">
             <!-- Notifications Button -->
             <div class="relative">
-              <button data-csp-on="click" data-csp-fn="toggleNotifications" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors cursor-pointer" title="${tr.notifications || 'Notifications'}">
+              <button data-csp-on="click" data-csp-fn="toggleNotifications" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors cursor-pointer" aria-label="${tr.notifications || 'Notifications'}" title="${tr.notifications || 'Notifications'}">
                 <i class="fas fa-bell text-xl"></i>
                 <span id="notificationBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
@@ -102,7 +102,7 @@ export function getNavigation(lang: Language): string {
 
             <!-- Messages Button with Dropdown -->
             <div class="relative">
-              <button data-csp-on="click" data-csp-fn="toggleMessages" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors cursor-pointer" title="${tr.messages?.title || 'Messages'}">
+              <button data-csp-on="click" data-csp-fn="toggleMessages" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors cursor-pointer" aria-label="${tr.messages?.title || 'Messages'}" title="${tr.messages?.title || 'Messages'}">
                 <i class="fas fa-envelope text-xl"></i>
                 <span id="messagesBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">0</span>
               </button>
@@ -126,7 +126,7 @@ export function getNavigation(lang: Language): string {
 
             <!-- User Avatar & Menu -->
             <div class="relative">
-              <button data-csp-on="click" data-csp-fn="toggleUserMenu" data-csp-args='[]' class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer" title="${tr.profile || 'Profile'}">
+              <button data-csp-on="click" data-csp-fn="toggleUserMenu" data-csp-args='[]' class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer" aria-label="${tr.profile || 'Profile'}" aria-haspopup="menu" title="${tr.profile || 'Profile'}">
                 <img id="userAvatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="" class="w-12 h-12 rounded-full border-2 border-purple-400">
               </button>
               <div id="userMenu" class="user-menu ${isRTL ? 'left-0' : 'right-0'}">
@@ -176,6 +176,10 @@ export function getNavigation(lang: Language): string {
                 <a href="/admin?lang=${lang}" id="adminMenuItem" class="user-menu-item hidden" title="${tr.admin?.admin_panel || 'Admin Panel'}">
                   <i class="fas fa-shield-alt text-gray-500"></i>
                   <span>${tr.admin?.admin_panel || 'Admin Panel'}</span>
+                </a>
+                <a href="/help?lang=${lang}" class="user-menu-item" title="${tr.help || 'Help'}">
+                  <i class="fas fa-question-circle text-gray-500"></i>
+                  <span>${tr.help || 'Help'}</span>
                 </a>
                 <a href="/settings?lang=${lang}" class="user-menu-item" title="${tr.settings || 'Settings'}">
                   <i class="fas fa-cog text-gray-500"></i>

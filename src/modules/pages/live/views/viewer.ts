@@ -33,11 +33,11 @@ export function getViewerContent(lang: Language): string {
         
         <!-- Competition ID Input (سيختفي بعد تحديد المنافسة) -->
         <div id="compInputSection" class="mb-4 text-center flex flex-wrap justify-center items-center gap-2">
-            <input type="number" id="compIdInput" class="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded-lg w-32 text-center font-mono" placeholder="${tr.enter_number}" title="${tr.competition_number}">
-            <button data-csp-on="click" data-csp-fn="window.checkAndLoad" data-csp-args='[]' class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition" title="${tr.start_watching}">
+            <input type="number" id="compIdInput" class="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 rounded-lg w-32 text-center font-mono" aria-label="${tr.competition_number}" placeholder="${tr.enter_number}" title="${tr.competition_number}">
+            <button data-csp-on="click" data-csp-fn="window.checkAndLoad" data-csp-args='[]' class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition" aria-label="${tr.start_watching}" title="${tr.start_watching}">
                 <i class="fas fa-play" aria-hidden="true"></i>
             </button>
-            <button data-csp-on="click" data-csp-fn="window.stopStream" data-csp-args='[]' class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" title="${tr.stop_watching}">
+            <button data-csp-on="click" data-csp-fn="window.stopStream" data-csp-args='[]' class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" aria-label="${tr.stop_watching}" title="${tr.stop_watching}">
                 <i class="fas fa-stop" aria-hidden="true"></i>
             </button>
         </div>
@@ -53,19 +53,19 @@ export function getViewerContent(lang: Language): string {
         <div id="vodControls" class="hidden bg-gray-200 dark:bg-gray-800 rounded-lg p-3 mb-4">
             <div class="flex items-center gap-3">
                 <!-- Play/Pause -->
-                <button id="playPauseBtn" data-csp-on="click" data-csp-fn="window.togglePlayPause" data-csp-args='[]' class="w-10 h-10 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700" title="Play/Pause">
+                <button id="playPauseBtn" data-csp-on="click" data-csp-fn="window.togglePlayPause" data-csp-args='[]' class="w-10 h-10 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700" aria-label="Play/Pause" title="Play/Pause">
                     <i id="playPauseIcon" class="fas fa-play"></i>
                 </button>
                 <!-- Time Display -->
                 <span id="vodTimeDisplay" class="text-sm font-mono text-gray-600 dark:text-gray-300 min-w-20">0:00 / 0:00</span>
                 <!-- Seekbar -->
-                <input type="range" id="vodSeekbar" min="0" max="100" value="0" 
+                <input type="range" id="vodSeekbar" min="0" max="100" value="0"
                     class="flex-1 h-2 bg-gray-400 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                    title="Seek" />
+                    aria-label="Seek" title="Seek" />
                 <!-- Loading Info -->
                 <span id="vodLoadingInfo" class="text-xs text-gray-500 min-w-12">0/0</span>
                 <!-- Fullscreen -->
-                <button data-csp-on="click" data-csp-fn="window.toggleVideoFullscreen" data-csp-args='[]' class="w-10 h-10 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700" title="${tr.fullscreen}">
+                <button data-csp-on="click" data-csp-fn="window.toggleVideoFullscreen" data-csp-args='[]' class="w-10 h-10 flex items-center justify-center bg-gray-600 text-white rounded-full hover:bg-gray-700" aria-label="${tr.fullscreen}" title="${tr.fullscreen}">
                     <i id="fullscreenIcon" class="fas fa-expand"></i>
                 </button>
             </div>

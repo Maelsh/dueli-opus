@@ -47,14 +47,17 @@ export class ScheduleUI {
         const modal = document.createElement('div');
         modal.id = 'schedule-modal';
         modal.className = 'fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', t('schedule.title', State.lang));
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-900 w-full max-w-2xl max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
                 <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                         <i class="fas fa-calendar-alt mr-2 text-purple-500"></i>${t('schedule.title', State.lang)}
                     </h2>
-                    <button data-csp-on="click" data-csp-fn="ScheduleUI.close" data-csp-args='[]' class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
-                        <i class="fas fa-times"></i>
+                    <button data-csp-on="click" data-csp-fn="ScheduleUI.close" data-csp-args='[]' aria-label="${t('close', State.lang)}" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
                 
@@ -70,6 +73,12 @@ export class ScheduleUI {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) this.close();
         });
+        // R3-C1: Escape dismisses; focus starts on the dialog itself.
+        modal.setAttribute('tabindex', '-1');
+        modal.addEventListener('keydown', (e) => {
+            if ((e as KeyboardEvent).key === 'Escape') this.close();
+        });
+        modal.focus?.();
     }
 
     /**

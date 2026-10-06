@@ -1,6 +1,21 @@
 
 
 
+## R3-C1 contextual help + FAQ/role guides + i18n/a11y · فرع `feat/r3-c1-help-a11y` (من `d5233f4` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل جديد/مسارات جديدة (routes ‏235←235). D2/D1/L2/L1/M/P/R2-A/J وR3-EXPLORE وR3-RAILS وR3-B7 مغلقة ولم تُمس خارج العقد.
+
+- العقد:
+  (1) صفحة Help & Guides `GET /help` + `/faq` → `helpPage`: نظرة عامة، أدوار صانع/منافس/مشاهد (3 أدلة)، 10 مواضيع منظمة (إنشاء / دعوة / بث / تسجيل / تقييم / تفاعل / تعليقات / اكتشاف / تسوية / دعم) بحدود/أسئلة شائعة، و قسم الوصول، كل ‏#anchor قابل للوصول عبر روابط "تعرف على المزيد" السياقية في (إنشاء / منافسة / بث / أرباح / تبرع / رسائل/الدعم الإداري / 404).
+  (2) i18n `help_guide` (ar≠en): 10 مواضيع × عنوان + 3 فقرات + سؤال + إجابة + حدود + 3 أدوار × 6 فقررات + FAQ 10×(سؤال+إجابة+حدود) + ملاحظة وصول + `skip_to_content`.
+  (3) مدخلات مساعدة: أيقونة مساعدة في الناف بار للجميع (`/help?lang=...` + `aria-label`)، رابط في قائمة المستخدم، روابط "اتصل بالمسؤول" و "مساعدة" في الفوتر، رابط /help في الـ 404، `Modal.showHelp()` يوجه بدل `alert()` مفتاح مفقود.
+  (4) وصول: زوم قابل للتمكين (`initial-scale=1.0`، إزالة `maximum-scale`/`user-scalable=no`) + رابط تخطي المحتوى إلى `#main-content` (تم توحيد المعرف في `main.ts`/`HomePage.ts`/`about-page.ts`/`help-page.ts`/`help-page` + جميع الصفحات/الكمبوننتات التي تشير إلى `mainContent` → `main-content`)؛ `Toast` كمنطقة معرَّفة `role="status"` + `aria-live="polite"`؛ نصوص خطأ `role="alert"` (تسجيل/استرداد/سحب)؛ ارتباط حقول/عناوين بصري حقيقي (`for`/`id`) في (تسجيل/تسجيل جديد/إعادة تعيين / إنشاء / سحب); نوافذ مخصصة (`settings`/`schedule`/`report`/`invite`) `role="dialog"` + `aria-modal` + زر إغلاق مع `aria-label` + إغلاق `Escape`؛ أسماء وصول للأزرار وحيدة الأيقونة (كاميرا/ميكروفون/إظهار محلي/إظهار الشاشة/التبديل/الاتصال/الانفصال/التوقف/التشغيل/التبديل/السابق/التالي)؛ نجوم التقييم مجموعة `radiogroup` مع `aria-checked` + اسم المنافس.
+  (5) غير أهداف صريحة: إعادة تصميم كامل لمنصة المساعدة (هذا تغطية مساحة فارغة)؛ إصلاحات خارج الأسطح المتأثرة مباشرة (CSP/Cron/SEC)؛ إعادة كتابة `t()`؛ أي تغيير في H7/التقييم/المالية/المصادقة/الحياة/النقل/الصيغة/المخطط.
+
+- **الأدلة**: T جديد `r3-c1-help-a11y` 17/17 (صفحة + مسارات + روابط سياقية → مراسلة صحيحة + حدود حقيقية + i18n ar≠en + مدخلات + viewport/skip + live region + `role="alert"` + `for`/`id` + dialogs + accessible names + radiogroup + RTL/LTR + dark)؛ `tsc --noEmit` ✅؛ `npm run build` ✅ (`_worker.js` 1,390 kB + client + CSS)؛ الحراس الكاملة 1356/1372 (الـ 16 المتبقية بيئية Windows مسبقة على BASE: 6 `jq` في `quality-gate-poll` + 10 في `release-readiness` — بلا مساس).
+
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-D2 user discovery + matchmaking (h7-v1) · فرع `feat/r3-d2-user-discovery` (PR #98، من `f8c7add` = origin/main بعد دمج R3-D1-REM1 #97)
 
 - 🔧 ‏REMOTE REJECT ← إصلاح LOCAL مكتمل على نفس الفرع/PR، بانتظار re-REMOTE — ليست DONE. بلا PR جديد/دمج/نشر/كتابة إنتاجية/ترحيل (routes ‏225←235 ثابتة). D1+REM1 مغلقتان؛ H7-v1 بلا تغيير أوزان.

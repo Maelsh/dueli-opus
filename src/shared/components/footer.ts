@@ -20,6 +20,10 @@ export function getFooter(lang: Language): string {
           <span class="font-bold text-gray-700 dark:text-white">${tr.app_title}</span>
         </div>
         <p>${tr.footer}</p>
+        <nav aria-label="${tr.help || 'Help'}" class="flex items-center gap-4">
+          <a href="/help?lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400 font-semibold">${tr.help || 'Help'}</a>
+          <a href="/messages?tab=admin&lang=${lang}" class="hover:text-purple-600 dark:hover:text-purple-400">${tr.contact_admin || 'Contact'}</a>
+        </nav>
       </div>
     </footer>
   `;

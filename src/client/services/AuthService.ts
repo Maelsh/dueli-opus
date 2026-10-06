@@ -293,8 +293,8 @@ export class AuthService {
             // Show upcoming tab for logged-in users
             if (upcomingTab) upcomingTab.classList.remove('hidden');
 
-            // Hide help icon for logged-in users (use auth-hidden to override nav-icon)
-            if (helpIcon) helpIcon.classList.add('auth-hidden');
+            // R3-C1: the Help entry is visible to everyone (guests and members).
+            if (helpIcon) helpIcon.classList.remove('auth-hidden');
 
             // R2-A: admin entry — visible only for admins (server + API
             // guards remain authoritative; this is navigation only).

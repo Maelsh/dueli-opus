@@ -354,6 +354,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                             <i class="fas fa-user-plus me-1"></i>
                             \${tr.matchmaking?.invite_opponent_btn || tr.invite || 'Invite Opponent'}
                           </button>
+                          <p class="mt-2 text-xs"><a href="/help?lang=\${lang}#topic-invite" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a></p>
                         \` : ''}
                         \${window.currentUser && !isCreator && hasInvite && isPending ? \`
                           <p class="mt-3 text-sm font-semibold text-purple-700 dark:text-purple-300">\${tr.invites_you || 'Invites you to compete'}</p>
@@ -373,6 +374,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                             <i class="fas fa-hand-paper"></i>
                             \${tr.request_join}
                           </button>
+                          <p class="mt-2 text-xs text-center"><a href="/help?lang=\${lang}#topic-invite" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a></p>
                         \` : ''}
                         \${window.currentUser && !isCreator && !hasInvite && hasRequested ? \`
                           <button data-csp-on="click" data-csp-fn="cancelRequest" data-csp-args='[]' class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full text-sm font-bold hover:bg-gray-300 transition-all">
@@ -417,6 +419,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       \${tr.rate_title || 'Rate the competitors'}
                     </h3>
                     <p id="rateStateLine" class="text-xs font-semibold mb-4 \${isLive ? 'text-sky-600 dark:text-sky-400' : 'text-gray-500 dark:text-gray-400'}">\${isLive ? ((tr.ratings && tr.ratings.live_provisional) || 'Provisional tally') : ((tr.ratings && tr.ratings.final_readonly) || 'Final result')}</p>
+                    <p class="text-xs mb-4"><a href="/help?lang=\${lang}#topic-ratings" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a></p>
                     <div id="rateTally" class="text-sm text-gray-600 dark:text-gray-300 mb-4">\${(tr.ratings && tr.ratings.summary_title) || ''}</div>
                     \${isLive && window.currentUser && !isCreator && !isOpponent ? \`
                     <div class="space-y-4" id="rateStars">
@@ -432,11 +435,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           })}
                           <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.creator_name}</span>
                         </div>
-                        <div class="flex gap-1" dir="ltr">
+                        <div class="flex gap-1" dir="ltr" role="radiogroup" aria-label="\${comp.creator_name}">
                           \${[1,2,3,4,5].map(v => \`
                             <button data-csp-on="click" data-csp-fn="submitRating" data-csp-args='[\${comp.creator_id},\${v},"@this"]' data-val="\${v}"
                               class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
-                              aria-label="\${v}/5"><i class="fas fa-star"></i></button>
+                              role="radio" aria-checked="false" aria-label="\${comp.creator_name} \${v}/5"><i class="fas fa-star" aria-hidden="true"></i></button>
                           \`).join('')}
                         </div>
                       </div>
@@ -453,11 +456,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           })}
                           <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.opponent_name}</span>
                         </div>
-                        <div class="flex gap-1" dir="ltr">
+                        <div class="flex gap-1" dir="ltr" role="radiogroup" aria-label="\${comp.opponent_name}">
                           \${[1,2,3,4,5].map(v => \`
                             <button data-csp-on="click" data-csp-fn="submitRating" data-csp-args='[\${comp.opponent_id},\${v},"@this"]' data-val="\${v}"
                               class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
-                              aria-label="\${v}/5"><i class="fas fa-star"></i></button>
+                              role="radio" aria-checked="false" aria-label="\${comp.opponent_name} \${v}/5"><i class="fas fa-star" aria-hidden="true"></i></button>
                           \`).join('')}
                         </div>
                       </div>
@@ -513,8 +516,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <i class="fas fa-bell"></i>
                       \${comp.user_reminded ? tr.reminder_set || 'Reminder On' : tr.remind_me || 'Remind Me'}
                     </button>
-                    <button data-csp-on="click" data-csp-fn="showReportModal" data-csp-args='[]' class="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all">
-                      <i class="fas fa-flag"></i>
+                    <button data-csp-on="click" data-csp-fn="showReportModal" data-csp-args='[]' aria-label="\${tr.report?.title || tr.submit_report || 'Report'}" title="\${tr.report?.title || tr.submit_report || 'Report'}" class="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all">
+                      <i class="fas fa-flag" aria-hidden="true"></i>
                     </button>
                   </div>
                 </div>
@@ -531,8 +534,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 </div>
 
                 <div class="card overflow-hidden">
-                  <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                  <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between gap-2">
                     <h3 class="font-bold text-gray-900 dark:text-white">\${tr.live_chat}</h3>
+                    <a href="/help?lang=\${lang}#topic-comments" class="text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a>
                   </div>
                   <div class="h-80 overflow-y-auto p-4 space-y-3" id="chatMessages">
                     <p class="text-center text-gray-400" id="commentsEmpty"></p>

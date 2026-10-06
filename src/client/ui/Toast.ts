@@ -24,6 +24,8 @@ export class Toast {
 
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
         toast.textContent = message;
         toast.style.cssText = isRTL(State.lang) ? 'left: 24px;' : 'right: 24px;';
 

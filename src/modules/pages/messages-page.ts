@@ -468,7 +468,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const threads = (data.success && data.data?.threads) || [];
                     supportThreadsCache = threads;
                     box.innerHTML = threads.length === 0
-                        ? \`<div class="p-8 text-center text-gray-400"><i class="fas fa-shield-alt text-4xl mb-4"></i><p>\${tr.support?.no_threads || 'No admin messages yet'}</p></div>\`
+                        ? \`<div class="p-8 text-center text-gray-400"><i class="fas fa-shield-alt text-4xl mb-4"></i><p>\${tr.support?.no_threads || 'No admin messages yet'}</p><p class="mt-2 text-sm"><a href="/help?lang=\${window.lang || 'ar'}#topic-support" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a></p></div>\`
                         : threads.map(t => \`
                             <button data-csp-on="click" data-csp-fn="openSupportThread" data-csp-args='[\${t.id}]'
                                 class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 \${isRTL ? 'text-right' : 'text-left'}">
