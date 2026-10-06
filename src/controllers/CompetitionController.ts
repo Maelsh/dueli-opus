@@ -19,8 +19,8 @@ import {
     UserBlockModel
 } from '../models';
 import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
-import { ExploreSessionService } from '../lib/services/ExploreSessionService';
-import { getUILanguage } from '../i18n';
+import { ExploreResultProvider, ExploreSessionService } from '../lib/services/ExploreSessionService';
+import { getUILanguage, normalizeContentLanguage } from '../i18n';
 import { EventPusher } from '../lib/services/EventPusher';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
@@ -36,6 +36,13 @@ export class CompetitionController extends BaseController {
     /**
      * List competitions with filters
      * GET /api/competitions
+     *
+     * R3-D1 (h7-v1): eligibility first (same predicate as the session
+     * build), then H7 ordering — never ORDER BY RANDOM(). The full
+     * eligible set is ranked in JS and sliced by limit/offset so every
+     * eligible card stays reachable; frozen sessions remain the stable
+     * paging path (Home/Explore rails), this listing is the H7-ordered
+     * compat surface.
      */
     async list(c: AppContext) {
         try {
@@ -49,12 +56,71 @@ export class CompetitionController extends BaseController {
                 search: this.getQuery(c, 'search') || undefined,
                 creatorId: this.getQueryInt(c, 'creator') || undefined,
                 userId: this.getQueryInt(c, 'user') || undefined, // creator OR opponent
-                limit: this.getQueryInt(c, 'limit', 20),
-                offset: this.getQueryInt(c, 'offset', 0)
             };
+            const limit = Math.min(Math.max(this.getQueryInt(c, 'limit', 20) || 20, 1), 50);
+            const offset = Math.max(this.getQueryInt(c, 'offset', 0) || 0, 0);
+            const lang = normalizeContentLanguage(c.get('lang') || filters.language || 'ar');
+            const currentUser = this.getCurrentUser(c);
+            const viewerId = typeof currentUser?.id === 'number' ? currentUser.id : null;
 
-            const competitions = await model.findByFilters(filters);
-            return this.success(c, competitions);
+            const eligibleIds = await model.findEligibleIds(filters);
+            if (eligibleIds.length === 0) return this.success(c, []);
+            const { H7SignalsModel } = await import('../models/H7SignalsModel');
+            const ranking = await import('../lib/services/H7RankingService');
+            const policy = await import('../lib/services/H7RankingPolicy');
+            const signalsModel = new H7SignalsModel(c.env.DB);
+            const rows = await signalsModel.loadCompetitions(eligibleIds);
+            const ctx = await signalsModel.loadViewerContext(c.env.DB, viewerId, lang, null);
+            const nowMs = Date.now();
+            if (filters.search) {
+                const q = String(filters.search);
+                const layered = rows.map((r) => ({
+                    row: r,
+                    layer: policy.h7SearchLayer(r.title || '', r.description ?? null, q),
+                }));
+                const out: typeof rows = [];
+                for (const layer of [0, 1, 2, 3]) {
+                    const group = layered.filter((l) => l.layer === layer);
+                    if (group.length === 0) continue;
+                    const scored = group.map(({ row }) => ({
+                        id: row.id,
+                        score: ranking.h7SearchScore(
+                            { ...row, nowMs },
+                            ctx,
+                            ranking.h7TopicRelevance(row, String(filters.category ?? ''), String(filters.subcategory ?? ''), ctx)
+                        ),
+                        recency: policy.h7RecencyOf({ ...row }, nowMs),
+                    }));
+                    const ordered = ranking.h7OrderScored(scored);
+                    const byId = new Map(rows.map((r) => [r.id, r] as [number, (typeof rows)[number]]));
+                    for (const s of ordered) {
+                        const r = byId.get(s.id);
+                        if (r) out.push(r);
+                    }
+                }
+                const ids = out.map((r) => r.id).slice(offset, offset + limit);
+                const cards = await model.findByIds(ids);
+                const byId = new Map(cards.map((card) => [card.id, card] as [number, (typeof cards)[number]]));
+                return this.success(c, ids.map((id) => byId.get(id)).filter(Boolean));
+            }
+            const uids: number[] = [];
+            for (const r of rows) {
+                uids.push(r.creator_id);
+                if (r.opponent_id !== null) uids.push(r.opponent_id);
+            }
+            const profiles = await signalsModel.loadProfiles(uids);
+            const identity = viewerId === null ? 'guest' : 'user';
+            const statusRaw = String(filters.status ?? '');
+            const bucket = statusRaw === 'live' || statusRaw === 'recorded' || statusRaw === 'upcoming' ? statusRaw : 'mixed';
+            const scored = rows.map((r) => {
+                const { score } = ranking.h7ScoreCard({ ...r, nowMs }, ctx, identity, bucket, profiles);
+                return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs) };
+            });
+            const ordered = ranking.h7OrderScored(scored);
+            const ids = ordered.map((s) => s.id).slice(offset, offset + limit);
+            const cards = await model.findByIds(ids);
+            const byId = new Map(cards.map((card) => [card.id, card] as [number, (typeof cards)[number]]));
+            return this.success(c, ids.map((id) => byId.get(id)).filter(Boolean));
         } catch (error) {
             return this.serverError(c, error as Error);
         }
@@ -103,9 +169,12 @@ export class CompetitionController extends BaseController {
             const { identity, issuedGuestToken } = ExploreSessionService.identityForCreate(userId, presentedGuest);
 
             const service = new ExploreSessionService(c.env.DB);
-            const { session } = await service.createSession(
+            const { session } = await service.createSessionWithProvider(
                 identity,
-                { search: canonical.search, category: canonical.category, subcategory: canonical.subcategory, status: canonical.status },
+                new ExploreResultProvider(
+                    { search: canonical.search, category: canonical.category, subcategory: canonical.subcategory, status: canonical.status },
+                    userId
+                ),
                 getUILanguage(this.getLanguage(c))
             );
 
@@ -172,6 +241,96 @@ export class CompetitionController extends BaseController {
                 return this.validationError(c, this.t('errors.invalid_request', c));
             }
 
+            return this.success(c, {
+                items: outcome.page.items,
+                nextCursor: outcome.page.nextCursor,
+                hasMore: outcome.page.hasMore,
+                session: outcome.page.session,
+            });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R3-D1 (h7-v1): freeze one similar-competitions session.
+     * POST /api/competitions/:id/similar-sessions
+     *
+     * Eligibility first (public set minus reference minus blocks), then
+     * H7 similar weights (§4), frozen once at T0 on the shared store.
+     * MVC: no SQL here — persistence lives in the Models + service.
+     */
+    async createSimilarSession(c: AppContext) {
+        try {
+            const refId = this.getParamInt(c, 'id');
+            if (!refId) return this.validationError(c, this.t('errors.invalid_id', c));
+            const ref = await new CompetitionModel(c.env.DB).findById(refId);
+            if (!ref) return this.notFound(c, this.t('competition_errors.not_found', c));
+            const lang = normalizeContentLanguage(c.get('lang') || 'ar');
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const presentedGuest = c.req.header('X-Guest-Token') ?? null;
+            const { identity, issuedGuestToken } = ExploreSessionService.identityForCreate(userId, presentedGuest);
+            const { loadRailExclusions } = await import('../models/HomeRailProviders');
+            const { SimilarCompetitionProvider } = await import('../models/H7SessionProviders');
+            const exclusions = await loadRailExclusions(c.env.DB, userId);
+            const provider = new SimilarCompetitionProvider({
+                refId,
+                lang,
+                userId,
+                excludedCreatorIds: exclusions.creatorIds,
+            });
+            const service = new ExploreSessionService(c.env.DB);
+            const { session } = await service.createSessionWithProvider(identity, provider, lang);
+            return this.success(c, {
+                session: { id: session.id, total: session.total_count, expires_at: session.expires_at },
+                guest_token: issuedGuestToken,
+            }, 201);
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R3-D1 (h7-v1): read one page of a frozen similar session.
+     * GET /api/competitions/:id/similar-sessions/:sid/page?cursor&limit
+     */
+    async readSimilarSessionPage(c: AppContext) {
+        try {
+            const refId = this.getParamInt(c, 'id');
+            const sessionId = this.getParam(c, 'sid');
+            if (!refId || !sessionId) return this.validationError(c, this.t('errors.invalid_id', c));
+            const lang = normalizeContentLanguage(c.get('lang') || 'ar');
+            const currentUser = this.getCurrentUser(c);
+            const userId = typeof currentUser?.id === 'number' ? currentUser.id : null;
+            const presentedGuest = c.req.header('X-Guest-Token') ?? null;
+            const identity = ExploreSessionService.identityForRead(userId, presentedGuest);
+            const { loadRailExclusions } = await import('../models/HomeRailProviders');
+            const { SimilarCompetitionProvider } = await import('../models/H7SessionProviders');
+            const exclusions = await loadRailExclusions(c.env.DB, userId);
+            const provider = new SimilarCompetitionProvider({
+                refId,
+                lang,
+                userId,
+                excludedCreatorIds: exclusions.creatorIds,
+            });
+            const service = new ExploreSessionService(c.env.DB);
+            const outcome = await service.readPageWithProvider(identity, sessionId, {
+                cursor: c.req.query('cursor') ?? null,
+                limit: c.req.query('limit') ?? undefined,
+                provider,
+                lang,
+            });
+            if ('failure' in outcome) {
+                const code = outcome.failure;
+                if (code === 'session_not_found') return this.notFound(c);
+                if (code === 'session_expired') return this.error(c, this.t('errors.session_expired', c), 410);
+                if (code === 'session_building') return this.error(c, this.t('errors.retry', c), 409);
+                if (code === 'session_context_mismatch') {
+                    return this.error(c, this.t('errors.invalid_request', c), 409);
+                }
+                return this.validationError(c, this.t('errors.invalid_request', c));
+            }
             return this.success(c, {
                 items: outcome.page.items,
                 nextCursor: outcome.page.nextCursor,

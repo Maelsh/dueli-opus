@@ -50,7 +50,10 @@ export type { WithdrawalRequest, WithdrawalRequestWithUser, CreateWithdrawalData
 export { SseEventLogModel } from './SseEventLogModel';
 export type { SseEventLog, SseChannel, SseEventType } from './SseEventLogModel';
 
-// R2-A (H9): admin-managed documents/data
+// R3-D1 (H7): ranking signals (SQL lives here, arithmetic in lib/services)
+export { H7SignalsModel } from './H7SignalsModel';
+export type { H7CompetitionSignals, H7ViewerContext } from './H7SignalsModel';
+export { h7FavKeyword, h7IsFavKeyword, h7FavSlug } from './H7SignalsModel';
 export { ManagedDocumentModel } from './ManagedDocumentModel';
 export type { ManagedDocument, ManagedDocumentInput, ManagedDocumentStatus, ManagedDocumentVisibility } from './ManagedDocumentModel';
 

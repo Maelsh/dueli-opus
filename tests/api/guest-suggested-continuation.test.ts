@@ -10,7 +10,7 @@
  * Contract under test:
  * - GET /api/recommendations keeps its envelope; the guest set is every
  *   PUBLIC competition (pending/accepted/live + completed-with-recording),
- *   same scoring weights, suspended/cancelled/archived and
+ *   h7-v1 scoring (R3-D1), suspended/cancelled/archived and
  *   completed-without-recording excluded from the rail.
  * - POST /api/recommendations/suggested-sessions freezes that scored set
  *   once (same #75 store/cursor engine, new provider — no second engine).
@@ -21,7 +21,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import app from '../../src/main';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
-import { RecommendationEngine } from '../../src/lib/services/RecommendationEngine';
 import type { D1Database } from '@cloudflare/workers-types';
 
 type Env = Parameters<typeof app.request>[2];
@@ -179,33 +178,35 @@ describe('R3-GUEST-1 — guest suggested rail reaches every public competition',
         ({ eligible } = await seed(db));
     });
 
-    it('1. guest GET covers all 31 public rows with unchanged scoring weights', async () => {
+    it('1. guest GET covers all 31 public rows with h7-v1 scoring', async () => {
         const res = await guestGet(db, '?limit=50&lang=ar');
         expect(res.status).toBe(200);
         expect(res.data?.totalAvailable).toBe(eligible.length);
         const ids = res.data?.competitions.map((c) => c.id) ?? [];
         expect(new Set(ids).size).toBe(eligible.length);
         for (const id of eligible) expect(ids).toContain(id);
-        // The pinned row keeps the exact legacy arithmetic:
-        // language 25 + views(100 × 0.01) + recency-max 10.
+        // h7-v1: every score on the 0–100 scale; the pinned row (ar +
+        // fresh + 100 counted views, pending) scores high (language match
+        // + near-max recency + solid Q), well above the empty-signal floor.
         const pinned = res.data?.competitions.find((c) => c.id === eligible[eligible.length - 1]);
-        expect(pinned?.score).toBeCloseTo(
-            RecommendationEngine.WEIGHT_LANGUAGE_MATCH
-            + 100 * RecommendationEngine.VIEW_POPULARITY_FACTOR
-            + RecommendationEngine.WEIGHT_RECENCY_MAX,
-            10,
-        );
+        expect(pinned?.score).toBeGreaterThan(50);
+        expect(pinned?.score).toBeLessThanOrEqual(100);
+        for (const c of res.data?.competitions ?? []) {
+            expect(c.score).toBeGreaterThanOrEqual(0);
+            expect(c.score).toBeLessThanOrEqual(100);
+        }
         // Rows still carry the card fields the rail renders.
         expect(res.data?.competitions[0]?.category_name).toBeTruthy();
     });
 
-    it('2. user GET keeps its extended engine contract (shape + live scope)', async () => {
+    it('2. user GET keeps its envelope (h7-v1 mixed public scope)', async () => {
         const res = await guestGet(db, '?limit=50&lang=ar', { token: 'sess-g1-user3' });
         expect(res.status).toBe(200);
         expect(res.data?.totalAvailable).toBeGreaterThan(0);
         const statuses = new Set(res.data?.competitions.map((c) => c.status));
-        expect(statuses.has('pending')).toBe(false);
-        for (const s of statuses) expect(['live', 'completed']).toContain(s);
+        // h7-v1 Suggested covers the whole public set (upcoming included).
+        for (const s of statuses) expect(['pending', 'accepted', 'live', 'completed']).toContain(s);
+        expect(statuses.size).toBeGreaterThan(0);
     });
 
     it('3. session freezes the full public set; traversal is exactly-once to real exhaustion', async () => {

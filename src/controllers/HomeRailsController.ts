@@ -60,6 +60,7 @@ export class HomeRailsController extends BaseController {
                 status: rail.status,
                 lang,
                 identityKind: userId === null ? 'guest' : 'user',
+                userId,
                 excludedCreatorIds: exclusions.creatorIds,
             }),
         };

@@ -585,6 +585,17 @@ export const en = {
         no_results: 'No results found',
     },
 
+    // R3-D1 (h7-v1): explicit interest favorites (optional Settings choice)
+    favorites: {
+        title: 'Favorite sections',
+        hint: 'Pick sections and branches you care about to improve recommendations (optional)',
+        saved: 'Favorites saved',
+        empty: 'No favorites yet — you will see general recommendations',
+    },
+    similar: {
+        title: 'Similar competitions',
+    },
+
     // Profile page (new)
     wins: 'Wins',
     posts: 'Posts',

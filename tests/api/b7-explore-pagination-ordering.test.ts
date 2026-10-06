@@ -1,27 +1,33 @@
 /**
- * B7 pagination stability — EVIDENCE, not a fix.
+ * B7 pagination stability — RESOLVED by R3-D1 (h7-v1).
  *
- * The REMOTE review reported that the data source behind Explore's progressive
- * loading uses `ORDER BY RANDOM()`, which makes `LIMIT/OFFSET` paging
- * unstable (pages overlap / records get skipped). This test PROVES the finding
- * against the real SQL (real migrations via the node:sqlite D1 shim).
+ * History: the REMOTE review proved Explore's progressive loading used
+ * `ORDER BY RANDOM()`, making `LIMIT/OFFSET` paging unstable (overlap /
+ * skips). R3-D1 removes the last competition-discovery RANDOM():
+ * ranked discovery now freezes the full H7-ordered id set once at T0 on
+ * the shared session store (chunks + opaque cursor + skip-and-fill to
+ * real exhaustion). The legacy `findByFilters` compat surface is
+ * deterministic newest-first.
  *
- * It is deliberately a characterisation test, not a fix: changing the browse
- * ordering is a product/ranking decision and is out of scope for this batch.
- * It exists so the Lead has hard evidence for that decision.
+ * This file now pins the FIXED contract:
+ *  1. no `ORDER BY RANDOM()` remains in competition discovery SQL
+ *     (ads keep their own single-row shuffle — out of D1 scope);
+ *  2. consecutive legacy pages are stable (no overlap, no gaps);
+ *  3. frozen H7 sessions traverse exactly-once to real exhaustion.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CompetitionModel } from '../../src/models/CompetitionModel';
 import { UserModel } from '../../src/models/UserModel';
+import { ExploreResultProvider, ExploreSessionService } from '../../src/lib/services/ExploreSessionService';
 import { createSqliteD1 } from '../helpers/sqlite-d1';
 import type { D1Database } from '@cloudflare/workers-types';
 
 const TOTAL = 40;
 const PAGE = 10;
 
-describe('B7 — Explore pagination ordering (evidence)', () => {
+describe('B7 — Explore pagination ordering (R3-D1 fixed)', () => {
     let db: D1Database;
     let model: CompetitionModel;
 
@@ -29,7 +35,7 @@ describe('B7 — Explore pagination ordering (evidence)', () => {
         db = createSqliteD1() as unknown as D1Database;
         model = new CompetitionModel(db);
         // A real creator row is required by the competitions foreign key.
-        const creator = await new UserModel(db).create({
+        await new UserModel(db).create({
             email: 'pager@example.com',
             username: 'pager',
             password_hash: 'x',
@@ -37,11 +43,7 @@ describe('B7 — Explore pagination ordering (evidence)', () => {
             country: 'SA',
             language: 'ar',
         } as never);
-        // Rows are inserted directly: the point under test is findByFilters'
-        // ORDER BY, not the insert path (and the real FK graph wants a country).
         const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-        // Migrations define the schema but do not seed reference data, so the
-        // category join needs one row.
         await db.prepare(
             `INSERT INTO categories (slug, name_ar, name_en) VALUES ('probe', 'probe', 'probe')`
         ).run();
@@ -58,25 +60,62 @@ describe('B7 — Explore pagination ordering (evidence)', () => {
         }
     });
 
-    it('the Explore data source really does order randomly', () => {
+    it('no ORDER BY RANDOM() remains in competition discovery SQL', () => {
         const src = readFileSync(join(process.cwd(), 'src/models/CompetitionModel.ts'), 'utf-8');
-        expect(src).toMatch(/ORDER BY RANDOM\(\) LIMIT \? OFFSET \?/);
+        // Strip comments: historical notes may NAME the removed pattern;
+        // only executable SQL counts.
+        const code = src
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/(^|\s)\/\/.*$/gm, '$1');
+        expect(code).not.toMatch(/ORDER BY RANDOM\(\)/);
+        expect(code).toMatch(/ORDER BY c\.created_at DESC, c\.id ASC LIMIT \? OFFSET \?/);
     });
 
-    it('consecutive limit/offset pages can overlap (unstable pagination)', async () => {
-        // Sample several page pairs: with a random order the same competition
-        // can legitimately appear on two different pages.
-        let overlaps = 0;
-        for (let attempt = 0; attempt < 5; attempt++) {
-            const page1 = await model.findByFilters({ limit: PAGE, offset: 0 } as never);
-            const page2 = await model.findByFilters({ limit: PAGE, offset: PAGE } as never);
-            const ids1 = new Set(page1.map((c) => c.id));
-            const overlap = page2.filter((c) => ids1.has(c.id));
-            if (overlap.length > 0) overlaps++;
-            expect(page1).toHaveLength(PAGE);
-            expect(page2).toHaveLength(PAGE);
+    it('consecutive legacy pages are stable (no overlap, no gaps)', async () => {
+        const seen = new Set<number>();
+        for (let offset = 0; offset < TOTAL; offset += PAGE) {
+            const page = await model.findByFilters({ limit: PAGE, offset } as never);
+            expect(page).toHaveLength(PAGE);
+            for (const row of page) {
+                expect(seen.has(row.id), `duplicate ${row.id} across legacy pages`).toBe(false);
+                seen.add(row.id);
+            }
         }
-        // Proof for the Lead: pagination is NOT stable today.
-        expect(overlaps, 'expected random ordering to produce overlapping pages').toBeGreaterThan(0);
+        expect(seen.size).toBe(TOTAL);
+    });
+
+    it('frozen sessions traverse exactly-once to real exhaustion', async () => {
+        const service = new ExploreSessionService(db);
+        const identity = { kind: 'guest', key: 'guest:b7-fixed-probe' } as const;
+        const { session } = await service.createSessionWithProvider(
+            identity,
+            new ExploreResultProvider({ status: '' }),
+            'ar'
+        );
+        expect(session.total_count).toBe(TOTAL);
+        const ids: number[] = [];
+        let cursor: string | null | undefined;
+        for (let pages = 0; ; pages += 1) {
+            const outcome = await service.readPageWithProvider(
+                identity,
+                session.id,
+                {
+                    cursor: cursor ?? null,
+                    limit: PAGE,
+                    provider: new ExploreResultProvider({ status: '' }),
+                    lang: 'ar',
+                }
+            );
+            if ('failure' in outcome) throw new Error(`unexpected session failure: ${outcome.failure}`);
+            ids.push(...outcome.page.items.map((c) => c.id));
+            if (!outcome.page.hasMore) {
+                expect(outcome.page.nextCursor).toBeNull();
+                break;
+            }
+            cursor = outcome.page.nextCursor ?? undefined;
+            if (pages > 20) throw new Error('session traversal did not terminate');
+        }
+        expect(ids).toHaveLength(TOTAL);
+        expect(new Set(ids).size).toBe(TOTAL);
     });
 });

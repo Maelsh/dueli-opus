@@ -22,17 +22,10 @@
  *   empty or unready recordings never enter a Recorded rail, and scarcity
  *   is never patched by repeating rows.
  *
- * Ordering (H7 coefficients stay OPEN — nothing numeric is invented here):
- * - Suggested Guest/User keep the PINNED scoring arithmetic already shipped
- *   (#76: language match + views + recency tiers); the identity only NARROWS
- *   the set (own / blocked / hidden for users). Status now actually filters
- *   (the #76 status-less provider is untouched for compatibility).
- * - Category/subcategory rails freeze the CURRENT listing order ONCE at T0
- *   (one WebCrypto Fisher–Yates pass standing in for the current per-batch
- *   ORDER BY RANDOM(), exactly like B7 did for Explore) — never RANDOM()
- *   per batch. Weighted ordering for every section/branch is documented as
- *   OPEN (policy rail-v1, WEIGHTED HOME OPEN) and lands in D1 after owner
- *   approval; continuation alone does not close Home.
+ * Ordering (R3-D1 h7-v1 approved): Suggested Guest/User and every
+ * category/subcategory rail rank with the approved H7 weights (§2),
+ * frozen ONCE at T0 with the shared discovery/diversity pass — never
+ * RANDOM() per batch. Continuation alone never closed Home; H7 does.
  *
  * No `#private` fields (Cloudflare Workers compat). SQL lives in the Models
  * (CompetitionModel / RecommendationModel); the exclusions loader below is
@@ -51,9 +44,13 @@ import {
     RecommendationModel,
     SUGGESTED_GUEST_SURFACE,
 } from './RecommendationModel';
+import { H7SignalsModel } from './H7SignalsModel';
+import { h7ApplyDiscoveryDiversity, h7OrderScored, h7ScoreCard } from '../lib/services/H7RankingService';
+import { h7RecencyOf } from '../lib/services/H7RankingPolicy';
+import type { H7StatusBucket } from '../lib/services/H7RankingPolicy';
 
-/** Policy version pinned into every rail context (H7 lands as rail-v2+). */
-export const RAIL_POLICY_VERSION = 'rail-v1';
+/** Policy version pinned into every rail context (h7-v1 approved). */
+export const RAIL_POLICY_VERSION = 'h7-v1';
 
 /** Session surface for the logged-in Suggested rail (guest reuses #76's). */
 export const HOME_SUGGESTED_USER_SURFACE = 'home_suggested_user';
@@ -235,12 +232,10 @@ function railContextKey(parts: {
 }
 
 /**
- * R3-RAILS-1A: status-aware Suggested provider for GUESTS.
- * Same pinned scoring + same public predicate as #76 — the ONLY change is
- * that the Home tab status actually narrows the frozen set (live /
- * pending+accepted / completed+playable) instead of being dropped on the
- * floor. Same surface family as #76 (the context key separates sessions);
- * the #76 status-less provider class is untouched.
+ * R3-D1 (h7-v1): status-aware Suggested provider for GUESTS.
+ * Same public predicate as #76 — the Home tab status narrows the frozen
+ * set (live / pending+accepted / completed+playable); ORDER is h7-v1.
+ * The #76 status-less provider class is untouched for compatibility.
  */
 export class SuggestedGuestRailProvider implements ResultSessionProvider {
     readonly surface = SUGGESTED_GUEST_SURFACE;
@@ -274,10 +269,10 @@ export class SuggestedGuestRailProvider implements ResultSessionProvider {
 }
 
 /**
- * R3-RAILS-1A: Suggested provider for LOGGED-IN users.
- * Same pinned scoring arithmetic as the guest rail (no H7 numerics invented);
- * the identity only narrows: own competitions, both block directions, and
- * hidden competitions never enter the snapshot at build time, and newly
+ * R3-D1 (h7-v1): Suggested provider for LOGGED-IN users.
+ * H7 arithmetic (personal signals via the viewer context); the identity
+ * also narrows: own competitions, both block directions, and hidden
+ * competitions never enter the snapshot at build time, and newly
  * excluded rows are skipped-and-filled at read time.
  */
 export class SuggestedUserRailProvider implements ResultSessionProvider {
@@ -322,12 +317,11 @@ export class SuggestedUserRailProvider implements ResultSessionProvider {
 }
 
 /**
- * R3-RAILS-1A: Dialogue/Science/Talents + every subcategory rail, each
+ * R3-D1 (h7-v1): Dialogue/Science/Talents + every subcategory rail, each
  * crossed with Live/Recorded/Upcoming.
- * The FULL qualified set is fetched (no LIMIT, no first-100 window) and the
- * current listing order is frozen ONCE at T0 with one WebCrypto shuffle —
- * never ORDER BY RANDOM() per batch. Weighted ordering for every section
- * and branch stays OPEN (rail-v1) for D1 after owner approval.
+ * The FULL qualified set is fetched (no LIMIT, no first-100 window) and
+ * ordered with the approved H7 weights, frozen ONCE at T0 with the shared
+ * discovery/diversity pass — never ORDER BY RANDOM() per batch.
  */
 export class CategoryRailProvider implements ResultSessionProvider {
     readonly surface = HOME_CATEGORY_SURFACE;
@@ -336,6 +330,7 @@ export class CategoryRailProvider implements ResultSessionProvider {
     private readonly status: HomeRailStatus;
     private readonly lang: string;
     private readonly identityKind: 'user' | 'guest';
+    private readonly userId: number | null;
     private readonly excludedCreatorIds: number[];
 
     constructor(options: {
@@ -344,6 +339,7 @@ export class CategoryRailProvider implements ResultSessionProvider {
         status: HomeRailStatus;
         lang: string;
         identityKind: 'user' | 'guest';
+        userId?: number | null;
         excludedCreatorIds: number[];
     }) {
         this.category = options.category;
@@ -351,6 +347,7 @@ export class CategoryRailProvider implements ResultSessionProvider {
         this.status = options.status;
         this.lang = options.lang;
         this.identityKind = options.identityKind;
+        this.userId = typeof options.userId === 'number' ? options.userId : null;
         this.excludedCreatorIds = [...options.excludedCreatorIds];
     }
 
@@ -367,13 +364,42 @@ export class CategoryRailProvider implements ResultSessionProvider {
     }
 
     async buildOrderedIds(db: D1Database): Promise<number[]> {
-        const ids = await new CompetitionModel(db).findHomeRailIds({
+        const eligible = await new CompetitionModel(db).findHomeRailIds({
             status: this.status,
             category: this.category,
             subcategory: this.subcategory,
             excludeCreatorIds: this.excludedCreatorIds,
         });
-        return ExploreSessionService.freezeShuffle(ids);
+        if (eligible.length === 0) return [];
+        const bucket: H7StatusBucket = this.status;
+        const signalsModel = new H7SignalsModel(db);
+        const rows = await signalsModel.loadCompetitions(eligible);
+        const ctx = await signalsModel.loadViewerContext(db, this.userId, this.lang, null);
+        const uids: number[] = [];
+        for (const r of rows) {
+            uids.push(r.creator_id);
+            if (r.opponent_id !== null) uids.push(r.opponent_id);
+        }
+        const profiles = await signalsModel.loadProfiles(uids);
+        const nowMs = Date.now();
+        const identity = this.userId === null ? 'guest' : 'user';
+        const scored = rows.map((r) => {
+            const { score } = h7ScoreCard({ ...r, nowMs }, ctx, identity, bucket, profiles);
+            return { id: r.id, score, recency: h7RecencyOf({ ...r }, nowMs), row: r };
+        });
+        const ordered = h7OrderScored(scored);
+        const diverse = h7ApplyDiscoveryDiversity(
+            ordered.map((s) => ({
+                id: s.id,
+                creator_id: s.row.creator_id,
+                opponent_id: s.row.opponent_id,
+                created_at: s.row.created_at,
+                total_views: s.row.total_views,
+            })),
+            nowMs
+        );
+        const rank = new Map(diverse.map((d, i) => [d.id, i] as [number, number]));
+        return diverse.map((d) => d.id).sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
     }
 
     isEligible(row: CompetitionWithDetails): boolean {

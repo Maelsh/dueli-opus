@@ -10,6 +10,8 @@ import { BaseController } from './base/BaseController';
 import { Sanitize } from '../lib/services/Sanitize';
 import { UserSettingsModel } from '../models/UserSettingsModel';
 import { UserPostModel } from '../models/UserSettingsModel';
+import { H7SignalsModel } from '../models/H7SignalsModel';
+import { CATEGORY_SUBCATEGORIES } from '../shared/constants';
 
 /**
  * Settings Controller Class
@@ -147,6 +149,62 @@ export class SettingsController extends BaseController {
             return this.success(c, { posts });
         } catch (error) {
             console.error('Get feed error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R3-D1 (h7-v1): explicit interest favorites (Settings choice on the
+     * taxonomy). Slugs only, saved + restored ar/en (slugs are
+     * language-independent). Optional — never a signup requirement.
+     * GET /api/settings/favorites
+     */
+    async getFavorites(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const favs = await new H7SignalsModel(c.env.DB).getFavoriteSlugs(user.id);
+            return this.success(c, { favorites: favs });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * R3-D1 (h7-v1): replace explicit favorites.
+     * PUT /api/settings/favorites { favorites: string[] }
+     * Unknown slugs => 422 (never widened to All).
+     */
+    async setFavorites(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const body = await this.getBody<{ favorites?: unknown }>(c);
+            const raw = body?.favorites;
+            if (!Array.isArray(raw)) {
+                return this.validationError(c, this.t('errors.invalid_request', c));
+            }
+            const known = new Set<string>();
+            for (const parent of Object.keys(CATEGORY_SUBCATEGORIES)) {
+                known.add(parent.toLowerCase());
+                for (const child of CATEGORY_SUBCATEGORIES[parent] ?? []) known.add(child.toLowerCase());
+            }
+            const clean: string[] = [];
+            for (const item of raw) {
+                if (typeof item !== 'string') {
+                    return this.validationError(c, this.t('errors.invalid_request', c));
+                }
+                const slug = item.trim().toLowerCase().slice(0, 64);
+                if (slug === '') continue;
+                if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(slug) || !known.has(slug)) {
+                    return this.validationError(c, this.t('errors.invalid_request', c));
+                }
+                if (!clean.includes(slug)) clean.push(slug);
+                if (clean.length >= 60) break;
+            }
+            const saved = await new H7SignalsModel(c.env.DB).setFavoriteSlugs(user.id, clean);
+            return this.success(c, { favorites: saved });
+        } catch (error) {
             return this.serverError(c, error as Error);
         }
     }
