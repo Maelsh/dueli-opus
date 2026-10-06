@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-06T12:23:59.777Z",
-  "total": 225,
+  "generatedAt": "2026-10-06T18:49:26.871Z",
+  "total": 235,
   "routes": [
     {
       "method": "GET",
@@ -872,6 +872,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/competitions/candidate-sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/candidate-sessions/:id/page",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
       "path": "/api/competitions/explore-sessions",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
@@ -880,6 +894,20 @@
     {
       "method": "GET",
       "path": "/api/competitions/explore-sessions/:id/page",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/competitions/participation-sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/participation-sessions/:id/page",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/competitions/routes.ts"
@@ -1067,6 +1095,20 @@
       "file": "src/modules/api/matchmaking/routes.ts"
     },
     {
+      "method": "POST",
+      "path": "/api/matchmaking/opponent-sessions",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/matchmaking/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/matchmaking/opponent-sessions/:id/page",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/matchmaking/routes.ts"
+    },
+    {
       "method": "GET",
       "path": "/api/messages/unread",
       "classification": "UNGUARDED ⚠",
@@ -1230,8 +1272,22 @@
     {
       "method": "GET",
       "path": "/api/search/users",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/search/users-sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/search/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/users-sessions/:id/page",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/search/routes.ts"
     },
     {
@@ -1541,6 +1597,20 @@
       "classification": "AUTHENTICATED",
       "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/users/delete-account.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/follow-sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/follow-sessions/:id/page",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/users/routes.ts"
     },
     {
       "method": "PUT",

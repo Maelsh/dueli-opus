@@ -7,11 +7,12 @@
 
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
-import { CompetitionController } from '../../../controllers';
+import { CompetitionController, UserDiscoveryController } from '../../../controllers';
 import { authMiddleware } from '../../../middleware/auth';
 
 const competitionsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new CompetitionController();
+const discoveryController = new UserDiscoveryController();
 
 // Apply optional auth middleware to all routes to set user context when authenticated
 // Controllers will check requireAuth() for protected endpoints
@@ -38,6 +39,23 @@ competitionsRoutes.post('/explore-sessions', (c) => controller.createExploreSess
  * GET /api/competitions/explore-sessions/:id/page
  */
 competitionsRoutes.get('/explore-sessions/:id/page', (c) => controller.readExploreSessionPage(c));
+
+/**
+ * R3-D2: freeze one participation session (user→competition eligible seats).
+ * POST /api/competitions/participation-sessions
+ * GET /api/competitions/participation-sessions/:id/page
+ */
+competitionsRoutes.post('/participation-sessions', (c) => discoveryController.createParticipationSession(c));
+competitionsRoutes.get('/participation-sessions/:id/page', (c) => discoveryController.readParticipationSessionPage(c));
+
+/**
+ * R3-D2: competition→user candidate sessions (same H7 opponent provider +
+ * layers as the matchmaking side, surfaced under the competition).
+ * POST /api/competitions/candidate-sessions {competition_id}
+ * GET /api/competitions/candidate-sessions/:id/page?competition_id=
+ */
+competitionsRoutes.post('/candidate-sessions', (c) => discoveryController.createOpponentSession(c));
+competitionsRoutes.get('/candidate-sessions/:id/page', (c) => discoveryController.readOpponentSessionPage(c));
 
 /**
  * R3-D1 (h7-v1): freeze one similar-competitions session.

@@ -66,8 +66,15 @@ export class SearchController extends BaseController {
             const limit = this.getQueryInt(c, 'limit') || 20;
             const offset = this.getQueryInt(c, 'offset') || 0;
 
+            // R3-D2: viewer identity narrows self/block only; ranking is H7.
+            const user = this.getCurrentUser(c);
             const searchModel = new SearchModel(c.env.DB);
-            const result = await searchModel.searchUsers(query, limit, offset);
+            const result = await searchModel.searchUsers(
+                query,
+                limit,
+                offset,
+                user ? { id: user.id } : undefined
+            );
 
             return this.success(c, result);
         } catch (error) {

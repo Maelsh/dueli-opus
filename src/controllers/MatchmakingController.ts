@@ -48,8 +48,13 @@ export class MatchmakingController extends BaseController {
 
             // Verify the caller is the competition creator
             const competition = await db.prepare(`
-                SELECT id, creator_id, opponent_id, status, category_id, language, country
-                FROM competitions WHERE id = ?
+                SELECT c.id, c.creator_id, c.opponent_id, c.status, c.category_id,
+                       c.subcategory_id, c.language, c.country,
+                       cat.slug AS category_slug, subcat.slug AS subcategory_slug
+                  FROM competitions c
+                  JOIN categories cat ON c.category_id = cat.id
+                  LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
+                 WHERE c.id = ?
             `).bind(competitionId).first<any>();
 
             if (!competition) {
@@ -68,126 +73,109 @@ export class MatchmakingController extends BaseController {
                 return this.error(c, this.t('matchmaking.competition_not_open', c));
             }
 
-            // Build the main query with recommendation scoring
-            const lang = this.getLanguage(c);
-
-            // Get user's followed users for scoring
-            const followedRes = await db.prepare(`
-                SELECT following_id FROM follows WHERE follower_id = ?
-            `).bind(user.id).all();
-            const followedIds = (followedRes.results || []).map((f: any) => f.following_id);
-            const followedClause = followedIds.length > 0
-                ? followedIds.join(',')
-                : '0';
-
-            // Build search clause
-            let searchClause = '';
-            if (search && search.trim()) {
-                searchClause = `AND (u.display_name LIKE ? OR u.username LIKE ?)`;
+            // R3-D2 (h7-v1 §4 opponent): mandatory layers BEFORE score —
+            // same subcategory+language+country → same subcategory+language
+            // other country → close spec in main category → fallback. Fame /
+            // Profile never bury a higher layer. busy NEVER excludes and
+            // NEVER down-ranks (ranking snapshot); a followed qualifier
+            // stays a candidate; invite eligibility is rechecked at SEND.
+            const { UserSignalsModel } = await import('../models/UserSignalsModel');
+            const ranking = await import('../lib/services/H7UserRankingService');
+            const signals = new UserSignalsModel(db);
+            const allIds = await signals.findAllActiveUserIds();
+            const rows = await signals.loadUsers(allIds);
+            const [blocked, invitees, requesters, closedRequests, following, viewerSpecs] = await Promise.all([
+                signals.loadBlockedIds(user.id),
+                signals.loadPendingInviteeIds(competitionId),
+                signals.loadPendingRequesterIds(competitionId),
+                signals.loadRequestsClosedIds(allIds),
+                signals.loadFollowingIds(user.id),
+                signals.loadSpecializations([user.id]),
+            ]);
+            const compCtx = {
+                subcategory: String(competition.subcategory_slug ?? ''),
+                category: String(competition.category_slug ?? ''),
+                language: (competition.language as string | null) ?? null,
+                country: (competition.country as string | null) ?? null,
+            };
+            const q = (search || '').trim();
+            let eligible = rows.filter((r) => {
+                if (r.id === user.id) return false;
+                if (blocked.has(r.id)) return false;
+                if (invitees.has(r.id)) return false;
+                if (requesters.has(r.id)) return false;
+                if (closedRequests.has(r.id)) return false;
+                return true;
+            });
+            if (q !== '') {
+                const lowered = q.toLowerCase();
+                eligible = eligible.filter((r) =>
+                    (r.username || '').toLowerCase().includes(lowered) ||
+                    (r.display_name || '').toLowerCase().includes(lowered)
+                );
+            }
+            const total = eligible.length;
+            const viewerSpec = viewerSpecs.get(user.id) ?? null;
+            const viewerMe = rows.find((r) => r.id === user.id);
+            const viewerCtx = {
+                viewerId: user.id,
+                language: viewerMe?.language ?? null,
+                country: viewerMe?.country ?? null,
+                followingIds: following,
+                viewerSpec,
+            };
+            const ids = eligible.map((r) => r.id);
+            const [candSpecs, profiles] = await Promise.all([
+                signals.loadSpecializations(ids),
+                signals.getProfiles(ids),
+            ]);
+            const nowMs = Date.now();
+            const byLayer = new Map<number, typeof eligible>();
+            for (const row of eligible) {
+                // Text search narrows inside the frozen H7 order: keep only
+                // textual matches, then layer them (search layer never drops
+                // the opponent layer — both apply: text match required, then
+                // opponent layer, then intra-layer H7 score).
+                const layer = ranking.h7OpponentLayer(row, candSpecs.get(row.id), compCtx);
+                const arr = byLayer.get(layer) ?? [];
+                arr.push(row);
+                byLayer.set(layer, arr);
+            }
+            const known = {
+                profile: ids.some((id) => (profiles.get(id)?.profile ?? null) !== null),
+                specialization:
+                    (viewerSpec?.totalParticipations ?? 0) > 0 ||
+                    (viewerSpec?.explicitFavs.length ?? 0) > 0,
+            };
+            const orderedIds: number[] = [];
+            for (const layer of [0, 1, 2, 3]) {
+                const group = byLayer.get(layer) ?? [];
+                if (group.length === 0) continue;
+                const scored = group.map((row) => ({
+                    id: row.id,
+                    score: ranking.h7OpponentScore(row, candSpecs.get(row.id), profiles.get(row.id), viewerCtx, compCtx, nowMs, known),
+                }));
+                orderedIds.push(...ranking.h7OrderUserScored(scored).map((s) => s.id));
+            }
+            const pageIds = orderedIds.slice(Math.max(0, offset), Math.max(0, offset) + Math.max(1, limit));
+            let users: unknown[] = [];
+            if (pageIds.length > 0) {
+                const placeholders = pageIds.map(() => '?').join(',');
+                const pageRes = await db.prepare(
+                    `SELECT u.id, u.username, u.display_name, u.avatar_url, u.country,
+                            u.language, u.is_online, u.last_seen_at, u.is_busy,
+                            u.is_verified, u.is_fake, u.average_rating,
+                            u.total_competitions, u.total_wins
+                       FROM users u WHERE u.id IN (${placeholders})`
+                ).bind(...pageIds).all();
+                const byId = new Map<number, unknown>();
+                for (const item of (pageRes.results || [])) byId.set((item as { id: number }).id, item);
+                users = pageIds.map((id) => byId.get(id)).filter((r): r is unknown => !!r);
             }
 
-            const query = `
-                SELECT 
-                    u.id,
-                    u.username,
-                    u.display_name,
-                    u.avatar_url,
-                    u.country,
-                    u.language,
-                    u.is_online,
-                    u.last_seen_at,
-                    u.is_busy,
-                    u.is_verified,
-                    u.is_fake,
-                    u.average_rating,
-                    u.total_competitions,
-                    u.total_wins,
-                    (
-                        CASE WHEN u.is_online = 1 THEN 30 ELSE 0 END +
-                        CASE WHEN u.language = ? THEN 25 ELSE 0 END +
-                        CASE WHEN u.country = ? THEN 20 ELSE 0 END +
-                        CASE WHEN u.id IN (${followedClause}) THEN 15 ELSE 0 END +
-                        COALESCE(u.average_rating, 0) * 2 +
-                        CASE WHEN u.total_competitions > 0 THEN 5 ELSE 0 END
-                    ) as compatibility_score
-                FROM users u
-                WHERE u.id != ?
-                AND u.is_active = 1
-                AND u.is_busy = 0
-                AND u.id NOT IN (
-                    SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
-                    UNION
-                    SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
-                )
-                AND u.id NOT IN (
-                    SELECT invitee_id FROM competition_invitations 
-                    WHERE competition_id = ? AND status = 'pending'
-                )
-                -- T2.1: exclude users who closed incoming competition requests
-                AND NOT EXISTS (
-                    SELECT 1 FROM user_settings us
-                    WHERE us.user_id = u.id AND us.allow_requests = 0
-                )
-                ${searchClause}
-                ORDER BY 
-                    u.is_online DESC,
-                    compatibility_score DESC,
-                    u.last_seen_at DESC NULLS LAST
-                LIMIT ? OFFSET ?
-            `;
-
-            // Re-order params to match SQL placeholder order
-            // The scoring params (language, country) come before the WHERE clause params
-            const orderedParams = [
-                competition.language || lang,   // scoring: language
-                competition.country || 'SA',    // scoring: country
-                user.id,                        // exclude self
-                user.id,                        // block check blocker
-                user.id,                        // block check blocked
-                competitionId,                  // already invited check
-                ...(search && search.trim() ? [`%${search.trim()}%`, `%${search.trim()}%`] : []),
-                limit,
-                offset,
-            ];
-
-            const result = await db.prepare(query).bind(...orderedParams).all();
-
-            // Get total count for pagination
-            const countQuery = `
-                SELECT COUNT(*) as total
-                FROM users u
-                WHERE u.id != ?
-                AND u.is_active = 1
-                AND u.is_busy = 0
-                AND u.id NOT IN (
-                    SELECT blocked_id FROM user_blocks WHERE blocker_id = ?
-                    UNION
-                    SELECT blocker_id FROM user_blocks WHERE blocked_id = ?
-                )
-                AND u.id NOT IN (
-                    SELECT invitee_id FROM competition_invitations 
-                    WHERE competition_id = ? AND status = 'pending'
-                )
-                AND NOT EXISTS (
-                    SELECT 1 FROM user_settings us
-                    WHERE us.user_id = u.id AND us.allow_requests = 0
-                )
-                ${searchClause ? 'AND (u.display_name LIKE ? OR u.username LIKE ?)' : ''}
-            `;
-
-            const countParams = [
-                user.id,
-                user.id,
-                user.id,
-                competitionId,
-                ...(search && search.trim() ? [`%${search.trim()}%`, `%${search.trim()}%`] : []),
-            ];
-
-            const countResult = await db.prepare(countQuery).bind(...countParams).first<{ total: number }>();
-
             return this.success(c, {
-                users: result.results || [],
-                total: countResult?.total || 0,
+                users,
+                total,
                 limit,
                 offset,
             });

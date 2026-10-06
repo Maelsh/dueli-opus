@@ -1,6 +1,13 @@
 
 
 
+## R3-D2 user discovery + matchmaking (h7-v1) · فرع `feat/r3-d2-user-discovery` (من `f8c7add` = origin/main بعد دمج R3-D1-REM1 #97)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل (routes ‏225←235: عشر جلسات D2). D1+REM1 مغلقتان ولم تُعَد فتحهما؛ H7-v1 بلا تغيير أوزان.
+- العقد: Profile SSOT ‏(SUM نجوم فعالة ÷ منافسات فعلية بخصم ‏opponent IS NOT NULL — بلا ‏clamp، بلا قسمة صفر) يُستخدم في العرض والترتيب؛ بحث المستخدمين طبقات Unicode ‏(exact → prefix/whole-word → partial) ثم ‏H7 داخل الطبقة ‏(60/15/15/5/5)؛ الخصم طبقات إلزامية ‏(sub+lang+country → sub+lang → main → fallback) ثم ‏H7 داخل الطبقة ‏(40/20/15/15/10)؛ المتابعة ‏H7 ‏(25/20/10/15/10/10/10)؛ المشاركة مقاعد ‏pending بلا خصم فقط + ‏H7 ‏(35/20/10/10/15/10)؛ الجلسات ‏frozen/exhaustion/skip-fill بلا ‏RANDOM/OFFSET.
+- **الأدلة**: T جديد `r3-d2-user-ranking` ‏13/13 + ‏UI جديد `r3-d2-profile-display` ‏5/5؛ الحراس المتأثرة ‏163/163 (‏H7/search/ranking/follow/invite/ratings/settings)؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏churn رُجع)؛ ‏G2 ‏+0 ‏any.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-D1-REM1 close 4 known follow-ups · فرع `fix/r3-d1-rem1-followups` (من `1c84bc4` = origin/main بعد دمج R3-D1 #96)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/مسارات جديدة (routes ‏225←225). النطاق: الملاحظات الأربع فقط (Unicode search، حماية `fav:`، invariant عدّ المشاهدات، تصحيح التعليق) — بلا توسع إلى D2.

@@ -71,10 +71,12 @@ export class UserController extends BaseController {
                 return this.notFound(c, this.t('user_errors.not_found', c));
             }
 
-            const [followersCount, followingCount, competitions] = await Promise.all([
+            const { UserSignalsModel } = await import('../models/UserSignalsModel');
+            const [followersCount, followingCount, competitions, competitorProfile] = await Promise.all([
                 followModel.getFollowersCount(user.id),
                 followModel.getFollowingCount(user.id),
-                competitionModel.findByUser(user.id, { limit: 10 })
+                competitionModel.findByUser(user.id, { limit: 10 }),
+                new UserSignalsModel(DB).getProfile(user.id),
             ]);
 
             // Check if current user is following
@@ -95,6 +97,13 @@ export class UserController extends BaseController {
                 total_wins: user.total_wins,
                 total_views: user.total_views,
                 average_rating: user.average_rating,
+                // R3-D2 Profile (08/11 SSOT): SUM effective stars /
+                // contested competitions (denominator = competitions, never
+                // raters/ratings). May exceed 5 — never clamped. Null when
+                // the user contested zero competitions (no division by zero).
+                profile_score: competitorProfile.profile,
+                profile_competitions: competitorProfile.competitions,
+                profile_stars: competitorProfile.starsSum,
                 is_verified: (user as any).is_verified,
                 created_at: user.created_at,
                 followers_count: followersCount,

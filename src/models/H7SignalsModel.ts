@@ -260,7 +260,19 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
         return clean;
     }
 
-    /** Per-competitor Profile aggregates: SUM stars + actual participations. */
+    /**
+     * Per-competitor Profile aggregates: SUM effective stars + ACTUAL
+     * participations (R3-D2 SSOT — Owner formula in 08/11:
+     * Profile = SUM stars / number of competitions actually contested).
+     *
+     * Denominator rule (matches the participation-category precedent in
+     * loadViewerContext below): a competition counts only when a real
+     * matchup exists (opponent_id IS NOT NULL). A bare pending row created
+     * by the user with no opponent, an invitation/request, or a cancelled
+     * pre-match row is NOT a contested competition. Creator and opponent
+     * sides both count once. Ratings SUM counts effective rows only
+     * (one per rater/competitor/competition via rateLiveAtomic).
+     */
     async loadProfiles(userIds: number[]): Promise<Map<number, { sum: number; count: number }>> {
         const unique = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
         const out = new Map<number, { sum: number; count: number }>();
@@ -274,7 +286,7 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
             );
             const counts = await this.query<{ uid: number; n: number }>(
                 `SELECT u AS uid, COUNT(*) AS n FROM (
-                     SELECT creator_id AS u FROM competitions WHERE creator_id IN (${placeholders})
+                     SELECT creator_id AS u FROM competitions WHERE creator_id IN (${placeholders}) AND opponent_id IS NOT NULL
                      UNION ALL
                      SELECT opponent_id AS u FROM competitions WHERE opponent_id IN (${placeholders})
                  ) WHERE u IS NOT NULL GROUP BY u`,

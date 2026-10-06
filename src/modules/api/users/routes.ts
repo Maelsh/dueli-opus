@@ -7,12 +7,21 @@
 
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
-import { UserController } from '../../../controllers';
+import { UserController, UserDiscoveryController } from '../../../controllers';
 import { authMiddleware } from '../../../middleware/auth';
 const usersRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new UserController();
+const discovery = new UserDiscoveryController();
 // T3.4 FIX: controllers read c.get('user') — mount optional auth so requireAuth works
 usersRoutes.use('*', authMiddleware({ required: false }));
+
+/**
+ * R3-D2: frozen H7 follow-suggestion sessions (auth required inside).
+ * POST /api/users/follow-sessions
+ * GET /api/users/follow-sessions/:id/page
+ */
+usersRoutes.post('/follow-sessions', (c) => discovery.createFollowSession(c));
+usersRoutes.get('/follow-sessions/:id/page', (c) => discovery.readFollowSessionPage(c));
 
 // ============================================
 // User Profile Routes

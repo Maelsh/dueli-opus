@@ -1,15 +1,15 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-06T12:23:59.777Z
+> تاريخ التوليد: 2026-10-06T18:49:26.871Z
 
-## الإجمالي: 225 مسار
+## الإجمالي: 235 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 118 |
-| AUTHENTICATED | 61 |
-| UNGUARDED ⚠ | 43 |
+| PUBLIC(auth-optional, in-handler check required) | 127 |
+| AUTHENTICATED | 63 |
+| UNGUARDED ⚠ | 42 |
 | SERVICE(origin-only ⚠) | 3 |
 
 ## الحماية على مستوى المجموعات (main.ts)
@@ -148,8 +148,12 @@
 | POST | `/api/competitions/:id/update-vod` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/watch` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/watch-heartbeat` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| POST | `/api/competitions/candidate-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| GET | `/api/competitions/candidate-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/explore-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | GET | `/api/competitions/explore-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| POST | `/api/competitions/participation-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| GET | `/api/competitions/participation-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/complaints` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/complaints/routes.ts` |
 | GET | `/api/complaints/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/complaints/routes.ts` |
 | GET | `/api/complaints/my` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/complaints/routes.ts` |
@@ -176,6 +180,8 @@
 | POST | `/api/matchmaking/heartbeat` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
 | POST | `/api/matchmaking/offline` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
 | GET | `/api/matchmaking/online-users` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
+| POST | `/api/matchmaking/opponent-sessions` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
+| GET | `/api/matchmaking/opponent-sessions/:id/page` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
 | GET | `/api/messages/unread` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/messages/routes.ts` |
 | GET | `/api/notifications` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
 | POST | `/api/notifications/:id/read` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
@@ -199,7 +205,9 @@
 | GET | `/api/search/pending` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
 | GET | `/api/search/suggestions` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
 | GET | `/api/search/trending` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
-| GET | `/api/search/users` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
+| GET | `/api/search/users` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
+| POST | `/api/search/users-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
+| GET | `/api/search/users-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
 | GET | `/api/settings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
 | PUT | `/api/settings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
 | GET | `/api/settings/favorites` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
@@ -244,6 +252,8 @@
 | GET | `/api/users/:username` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | POST | `/api/users/delete-account` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/users/delete-account.ts` |
 | POST | `/api/users/delete-account/verify` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/users/delete-account.ts` |
+| POST | `/api/users/follow-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
+| GET | `/api/users/follow-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | PUT | `/api/users/preferences` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | GET | `/api/withdrawals` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |
 | POST | `/api/withdrawals` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |

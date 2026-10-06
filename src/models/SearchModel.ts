@@ -174,50 +174,129 @@ export class SearchModel {
     }
 
     /**
-     * Search users by query
+     * Search users — R3-D2 (h7-v1 §4 user search).
+     *
+     * Text layers FIRST (exact → prefix/whole-word → partial, Unicode-aware
+     * ar/en via h7SearchLayer — the D1-REM1 whole-word fix, never ASCII \b),
+     * then H7 inside the layer (text 60, specialization 15, Profile 15,
+     * language 5, country 5). Followed/busy/inactive-alone NEVER exclude;
+     * self/block hold only when the caller identity is known (viewerId).
+     * Callers that need a frozen scroll use the user-search sessions; this
+     * offset slice ranks the SAME H7 order (no old fame order remains).
      */
-    async searchUsers(query: string, limit: number = 20, offset: number = 0): Promise<SearchResult<User>> {
-        const searchTerm = `%${query}%`;
-
-        // Count total
-        const countQuery = `
-            SELECT COUNT(*) as total FROM users 
-            WHERE (username LIKE ? OR display_name LIKE ?) AND is_active = 1
-        `;
-        const countResult = await this.db.prepare(countQuery)
-            .bind(searchTerm, searchTerm)
-            .first<{ total: number }>();
-        const total = countResult?.total || 0;
-
-        // Get items with followers count
-        const itemsQuery = `
-            SELECT 
-                u.id, u.username, u.display_name, u.avatar_url, u.bio, 
+    async searchUsers(
+        query: string,
+        limit: number = 20,
+        offset: number = 0,
+        viewer?: { id: number; language?: string | null; country?: string | null }
+    ): Promise<SearchResult<User>> {
+        const q = query.trim();
+        const safeLimit = Math.min(Math.max(limit || 20, 1), 50);
+        const safeOffset = Math.max(offset || 0, 0);
+        const { UserSignalsModel } = await import('./UserSignalsModel');
+        const ranking = await import('../lib/services/H7UserRankingService');
+        const signals = new UserSignalsModel(this.db);
+        const allIds = await signals.findAllActiveUserIds();
+        const rows = await signals.loadUsers(allIds);
+        const viewerId = viewer?.id ?? null;
+        const blocked = viewerId === null ? new Set<number>() : await signals.loadBlockedIds(viewerId);
+        const eligible = rows.filter((r) => {
+            if (viewerId !== null && r.id === viewerId) return false;
+            if (blocked.has(r.id)) return false;
+            return true;
+        });
+        const withLayer = eligible.map((r) => ({ row: r, layer: ranking.h7UserSearchLayer(r, q) }));
+        const kept = q === '' ? withLayer : withLayer.filter((l) => l.layer <= 2);
+        const ctx = viewerId === null
+            ? {
+                viewerId: null,
+                language: viewer?.language ?? null,
+                country: viewer?.country ?? null,
+                followingIds: new Set<number>(),
+                viewerSpec: null,
+            }
+            : await (async () => {
+                const [following, specs, me] = await Promise.all([
+                    signals.loadFollowingIds(viewerId),
+                    signals.loadSpecializations([viewerId]),
+                    signals.loadUsers([viewerId]),
+                ]);
+                const m = me[0];
+                return {
+                    viewerId,
+                    language: m?.language ?? viewer?.language ?? null,
+                    country: m?.country ?? viewer?.country ?? null,
+                    followingIds: following,
+                    viewerSpec: specs.get(viewerId) ?? null,
+                };
+            })();
+        const ids = kept.map((k) => k.row.id);
+        const [specs, profiles] = await Promise.all([
+            signals.loadSpecializations(ids),
+            signals.getProfiles(ids),
+        ]);
+        const byLayer = new Map<number, typeof kept>();
+        for (const item of kept) {
+            const arr = byLayer.get(item.layer) ?? [];
+            arr.push(item);
+            byLayer.set(item.layer, arr);
+        }
+        const known = {
+            profile: ids.some((id) => (profiles.get(id)?.profile ?? null) !== null),
+            specialization:
+                (ctx.viewerSpec?.totalParticipations ?? 0) > 0 ||
+                (ctx.viewerSpec?.explicitFavs.length ?? 0) > 0,
+        };
+        const orderedIds: number[] = [];
+        for (const layer of [0, 1, 2, 3]) {
+            const group = byLayer.get(layer) ?? [];
+            if (group.length === 0) continue;
+            const scored = group.map(({ row }) => ({
+                id: row.id,
+                score: ranking.h7UserSearchScore(row, ctx, specs.get(row.id), profiles.get(row.id), known),
+            }));
+            orderedIds.push(...ranking.h7OrderUserScored(scored).map((s) => s.id));
+        }
+        const total = orderedIds.length;
+        const pageIds = orderedIds.slice(safeOffset, safeOffset + safeLimit);
+        if (pageIds.length === 0) {
+            return { items: [], total, hasMore: safeOffset < total };
+        }
+        const placeholders = pageIds.map(() => '?').join(',');
+        const itemsResult = await this.db.prepare(
+            `SELECT
+                u.id, u.username, u.display_name, u.avatar_url, u.bio,
                 u.country, u.language, u.is_verified, u.is_fake,
                 u.total_competitions, u.total_wins, u.average_rating, u.created_at,
                 (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
                 (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
-                CASE 
+                CASE
                     WHEN EXISTS (
-                        SELECT 1 FROM competitions c 
-                        WHERE (c.creator_id = u.id OR c.opponent_id = u.id) 
+                        SELECT 1 FROM competitions c
+                        WHERE (c.creator_id = u.id OR c.opponent_id = u.id)
                         AND c.status = 'live'
-                    ) THEN 1 ELSE 0 
+                    ) THEN 1 ELSE 0
                 END as is_busy
             FROM users u
-            WHERE (u.username LIKE ? OR u.display_name LIKE ?) AND u.is_active = 1
-            ORDER BY u.total_competitions DESC, u.average_rating DESC
-            LIMIT ? OFFSET ?
-        `;
-
-        const itemsResult = await this.db.prepare(itemsQuery)
-            .bind(searchTerm, searchTerm, limit, offset)
-            .all<User>();
+            WHERE u.id IN (${placeholders})`
+        ).bind(...pageIds).all<User>();
+        const byId = new Map<number, User>();
+        for (const item of (itemsResult.results || [])) byId.set((item as User & { id: number }).id, item);
+        const items = pageIds.map((id) => byId.get(id)).filter((r): r is User => !!r);
+        // Attach Profile SSOT (display shares the ranking source; may exceed 5, never clamped).
+        const profMap = await signals.getProfiles(pageIds);
+        for (const item of items) {
+            const p = profMap.get((item as User & { id: number }).id);
+            const rec = item as unknown as Record<string, unknown>;
+            rec['profile_score'] = p?.profile ?? null;
+            rec['profile_competitions'] = p?.competitions ?? 0;
+            rec['profile_stars'] = p?.starsSum ?? 0;
+        }
 
         return {
-            items: itemsResult.results || [],
+            items,
             total,
-            hasMore: offset + limit < total
+            hasMore: safeOffset + safeLimit < total
         };
     }
 
@@ -324,8 +403,11 @@ export class SearchModel {
     }
 
     /**
-     * Get suggested users to follow
-     * Based on: same country/language, popular users, active users
+     * Follow suggestions — R3-D2 (h7-v1 §4: interest 25, lang 20, country 10,
+     * Profile 15, experience 10, activity 10, new-account 10).
+     *
+     * Follow eligibility is SEPARATE from duel/search eligibility: self,
+     * block and already-followed excluded; busy NEVER blocks follow.
      */
     async getSuggestedUsers(
         userId: number,
@@ -333,33 +415,72 @@ export class SearchModel {
         country: string,
         limit: number = 10
     ): Promise<User[]> {
-        const query = `
-            SELECT 
+        const safeLimit = Math.min(Math.max(limit || 10, 1), 50);
+        const { UserSignalsModel } = await import('./UserSignalsModel');
+        const ranking = await import('../lib/services/H7UserRankingService');
+        const signals = new UserSignalsModel(this.db);
+        const allIds = await signals.findAllActiveUserIds();
+        const rows = await signals.loadUsers(allIds);
+        const [blocked, following, specs, me] = await Promise.all([
+            signals.loadBlockedIds(userId),
+            signals.loadFollowingIds(userId),
+            signals.loadSpecializations([userId]),
+            signals.loadUsers([userId]),
+        ]);
+        const eligible = rows.filter((r) => {
+            if (r.id === userId) return false;
+            if (blocked.has(r.id)) return false;
+            if (following.has(r.id)) return false;
+            return true;
+        });
+        if (eligible.length === 0) return [];
+        void language;
+        void country;
+        const m = me[0];
+        const ctx = {
+            viewerId: userId,
+            language: m?.language ?? null,
+            country: m?.country ?? null,
+            followingIds: following,
+            viewerSpec: specs.get(userId) ?? null,
+        };
+        const ids = eligible.map((r) => r.id);
+        const [candSpecs, profiles] = await Promise.all([
+            signals.loadSpecializations(ids),
+            signals.getProfiles(ids),
+        ]);
+        const nowMs = Date.now();
+        const known = {
+            profile: ids.some((id) => (profiles.get(id)?.profile ?? null) !== null),
+            specialization:
+                (ctx.viewerSpec?.totalParticipations ?? 0) > 0 ||
+                (ctx.viewerSpec?.explicitFavs.length ?? 0) > 0,
+        };
+        const scored = eligible.map((row) => ({
+            id: row.id,
+            score: ranking.h7FollowScore(row, candSpecs.get(row.id), profiles.get(row.id), ctx, nowMs, known),
+        }));
+        const ordered = ranking.h7OrderUserScored(scored).map((s) => s.id).slice(0, safeLimit);
+        if (ordered.length === 0) return [];
+        const placeholders = ordered.map(() => '?').join(',');
+        const result = await this.db.prepare(
+            `SELECT
                 u.id, u.username, u.display_name, u.avatar_url, u.bio,
-                u.country, u.language, u.total_competitions, u.total_wins, u.average_rating,
-                CASE 
-                    WHEN u.language = ? AND u.country = ? THEN 3
-                    WHEN u.language = ? THEN 2
-                    WHEN u.country = ? THEN 1
-                    ELSE 0
-                END as relevance_score
+                u.country, u.language, u.total_competitions, u.total_wins, u.average_rating
             FROM users u
-            WHERE u.id != ?
-            AND u.id NOT IN (
-                SELECT following_id FROM follows WHERE follower_id = ?
-            )
-            ORDER BY 
-                relevance_score DESC,
-                u.total_competitions DESC,
-                u.average_rating DESC
-            LIMIT ?
-        `;
-
-        const result = await this.db.prepare(query)
-            .bind(language, country, language, country, userId, userId, limit)
-            .all<User>();
-
-        return result.results || [];
+            WHERE u.id IN (${placeholders})`
+        ).bind(...ordered).all<User>();
+        const byId = new Map<number, User>();
+        for (const item of (result.results || [])) byId.set((item as User & { id: number }).id, item);
+        const items = ordered.map((id) => byId.get(id)).filter((r): r is User => !!r);
+        const profMap = await signals.getProfiles(ordered);
+        for (const item of items) {
+            const p = profMap.get((item as User & { id: number }).id);
+            const rec = item as unknown as Record<string, unknown>;
+            rec['profile_score'] = p?.profile ?? null;
+            rec['profile_competitions'] = p?.competitions ?? 0;
+        }
+        return items;
     }
 
     /**

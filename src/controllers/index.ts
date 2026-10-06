@@ -20,3 +20,4 @@ export { SettingsController } from './SettingsController';
 export { ScheduleController } from './ScheduleController';
 export { MatchmakingController } from './MatchmakingController';
 export { RecommendationController } from './RecommendationController';
+export { UserDiscoveryController } from './UserDiscoveryController';
