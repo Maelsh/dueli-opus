@@ -12,10 +12,13 @@ export class FollowModel {
             throw new BlockedInteractionError();
         }
         try {
-            await this.db.prepare(
+            // R2-F: INSERT OR IGNORE is idempotent — report whether this call
+            // created the row so callers can skip duplicate side-effects
+            // (e.g. a second follow notification for an existing follow).
+            const result = await this.db.prepare(
                 'INSERT OR IGNORE INTO follows (follower_id, following_id, created_at) VALUES (?, ?, datetime("now"))'
             ).bind(followerId, followingId).run();
-            return true;
+            return (result.meta.changes ?? 0) > 0;
         } catch {
             return false;
         }

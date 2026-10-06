@@ -31,7 +31,7 @@ describe('F-5B follow controller behavior', () => {
         }, { DB: db as unknown as D1Database } as never);
     }
 
-    it('preserves duplicate follow success, one relation, and one notification per call', async () => {
+    it('R2-F: repeat follow stays idempotent — one relation, exactly one notification', async () => {
         for (let i = 0; i < 2; i++) {
             const res = await call('POST', '/api/users/2/follow');
             expect(res.status).toBe(200);
@@ -39,7 +39,7 @@ describe('F-5B follow controller behavior', () => {
         }
         expect((await db.prepare('SELECT * FROM follows').all()).results).toHaveLength(1);
         const notifications = (await db.prepare('SELECT * FROM notifications ORDER BY id').all()).results;
-        expect(notifications).toHaveLength(2);
+        expect(notifications).toHaveLength(1);
         for (const row of notifications) {
             expect(row).toMatchObject({ user_id: 2, type: 'follow', reference_type: 'user', reference_id: 1 });
             expect(JSON.parse(row.message)).toEqual({ actor: 'F5B A' });
@@ -82,12 +82,12 @@ describe('F-5B follow controller behavior', () => {
         expect((await db.prepare('SELECT * FROM notifications').all()).results).toEqual([]);
     });
 
-    it('preserves ignored insert failure: controller still sends notification and reports success', async () => {
+    it('R2-F: ignored insert failure reports success but emits no notification (no row ⇒ no side-effect)', async () => {
         db.exec(`CREATE TRIGGER fail_follow BEFORE INSERT ON follows BEGIN SELECT RAISE(ABORT, 'test insert failure'); END`);
         const res = await call('POST', '/api/users/2/follow');
         expect(res.status).toBe(200);
         expect(await res.json()).toEqual({ success: true, data: { followed: true } });
         expect((await db.prepare('SELECT * FROM follows').all()).results).toEqual([]);
-        expect((await db.prepare('SELECT * FROM notifications').all()).results).toHaveLength(1);
+        expect((await db.prepare('SELECT * FROM notifications').all()).results).toHaveLength(0);
     });
 });

@@ -265,6 +265,9 @@ export class ComplaintController extends BaseController {
             const tracker = await arbitrationService.getComplaintTracker(reportId);
 
             if (!tracker) return this.notFound(c);
+            // R2-F: ownership-scoped — a user may only track their own
+            // complaints (404 otherwise, no cross-user disclosure).
+            if (tracker.report.reporter_id !== user.id) return this.notFound(c);
             return this.success(c, { tracker });
         } catch (error) {
             console.error('Complaint track error:', error);

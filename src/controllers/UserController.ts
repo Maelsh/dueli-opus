@@ -199,16 +199,20 @@ export class UserController extends BaseController {
             const followModel = new FollowModel(DB);
             const notificationModel = new NotificationModel(DB);
 
-            await followModel.follow(currentUser.id, targetId);
+            const created = await followModel.follow(currentUser.id, targetId);
 
-            // B9: stored as `type + payload`; label rendered at read time.
-            await notificationModel.createForType({
-                user_id: targetId,
-                type: 'follow',
-                payload: { actor: currentUser.display_name || currentUser.username },
-                reference_type: 'user',
-                reference_id: currentUser.id
-            });
+            // R2-F: repeat POST is idempotent — only a newly-created follow
+            // emits a notification (no duplicate notifications on retry).
+            if (created) {
+                // B9: stored as `type + payload`; label rendered at read time.
+                await notificationModel.createForType({
+                    user_id: targetId,
+                    type: 'follow',
+                    payload: { actor: currentUser.display_name || currentUser.username },
+                    reference_type: 'user',
+                    reference_id: currentUser.id
+                });
+            }
 
             return this.success(c, { followed: true });
         } catch (error) {
@@ -274,12 +278,17 @@ export class UserController extends BaseController {
     async markNotificationRead(c: AppContext) {
         try {
             if (!this.requireAuth(c)) return this.unauthorized(c);
+            const currentUser = this.getCurrentUser(c);
 
             const { DB } = c.env;
             const notificationId = this.getParamInt(c, 'id');
 
             const notificationModel = new NotificationModel(DB);
-            await notificationModel.markAsRead(notificationId);
+            // R2-F: ownership-scoped — another user's row is 404, never marked.
+            const marked = await notificationModel.markAsReadForUser(notificationId, currentUser.id);
+            if (!marked) {
+                return this.notFound(c, this.t('not_found', c));
+            }
 
             return this.success(c, { success: true });
         } catch (error) {

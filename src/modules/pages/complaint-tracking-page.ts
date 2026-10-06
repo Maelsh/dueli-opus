@@ -46,7 +46,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         async function loadComplaints() {
             try {
-                const token = localStorage.getItem('session_id');
+                const token = localStorage.getItem('session_id') || localStorage.getItem('sessionId');
                 if (!token) return;
                 const res = await fetch('/api/complaints/my', { headers: { 'Authorization': 'Bearer ' + token } });
                 const data = await res.json();
@@ -54,7 +54,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
                     document.getElementById('complaintsList').innerHTML = data.data.complaints.map(c => {
                         const report = c.report;
                         const statusClass = 'arb-' + c.current_status;
-                        return '<div data-csp-on="click" data-csp-fn="viewComplaint" data-csp-args='[" + report.id + "]' class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-purple-300 transition-colors"><div class="flex justify-between items-start"><div><h3 class="font-bold">${t("report.reason", lang)}: ' + report.reason + '</h3><p class="text-sm text-gray-500 mt-1">${t("report.target_type", lang)}: ' + report.target_type + ' #' + report.target_id + '</p><p class="text-xs text-gray-400 mt-1">' + new Date(report.created_at).toLocaleString() + '</p></div><span class="arb-status ' + statusClass + '">' + c.current_status + '</span></div>' + (c.assigned_admin_role ? '<p class="text-sm text-gray-500 mt-2">${tt("assigned_admin")}: <span class="font-medium">' + c.assigned_admin_role + '</span></p>' : '') + '</div>';
+                        return '<div data-csp-on="click" data-csp-fn="viewComplaint" data-csp-args=\\'[' + report.id + ']\\' class="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-gray-700 cursor-pointer hover:border-purple-300 transition-colors"><div class="flex justify-between items-start"><div><h3 class="font-bold">${t("report.reason", lang)}: ' + report.reason + '</h3><p class="text-sm text-gray-500 mt-1">${t("report.target_type", lang)}: ' + report.target_type + ' #' + report.target_id + '</p><p class="text-xs text-gray-400 mt-1">' + new Date(report.created_at).toLocaleString() + '</p></div><span class="arb-status ' + statusClass + '">' + c.current_status + '</span></div>' + (c.assigned_admin_role ? '<p class="text-sm text-gray-500 mt-2">${tt("assigned_admin")}: <span class="font-medium">' + c.assigned_admin_role + '</span></p>' : '') + '</div>';
                     }).join('');
                 } else {
                     document.getElementById('complaintsList').innerHTML = '<div class="text-center py-12 text-gray-400"><i class="fas fa-gavel text-4xl mb-3"></i><p>${tt("no_complaints")}</p></div>';
@@ -63,7 +63,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
         }
         async function viewComplaint(id) {
             try {
-                const token = localStorage.getItem('session_id');
+                const token = localStorage.getItem('session_id') || localStorage.getItem('sessionId');
                 const res = await fetch('/api/complaints/' + id, { headers: { 'Authorization': 'Bearer ' + token } });
                 const data = await res.json();
                 if (!data.success) return;

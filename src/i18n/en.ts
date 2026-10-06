@@ -508,6 +508,10 @@ export const en = {
         title: 'Report',
         reason: 'Reason',
         select_reason: 'Select a reason',
+        target_type: 'Report about',
+        select_target_type: 'Select what to report',
+        target_id: 'Target ID',
+        target_id_placeholder: 'User, competition or comment ID',
         description: 'Additional Details',
         description_placeholder: 'Provide more details about the issue...',
         submit: 'Submit Report',
@@ -748,6 +752,9 @@ export const en = {
         amount_confirm: 'I confirm this donation amount',
         amount_confirm_required: 'You must confirm the donation amount',
         be_first: 'Be the first supporter!',
+        my_donations: 'My Donations',
+        my_donations_empty: 'You have not donated yet',
+        my_donations_error: 'Could not load your donations',
     },
 
     // Reports Page
