@@ -76,6 +76,11 @@ export const USER_DEPENDENTS: Dependent[] = [
     { table: 'ad_click_tokens', column: 'user_id' },
     { table: 'ad_clicks', column: 'user_id' },
     { table: 'ad_impression_dedup', column: 'user_id' },
+    // R2-M: independent admin-messaging FKs to users (0037). Users with
+    // support rows are never retirement candidates, so support data is
+    // never auto-destroyed and deletes can never fail on these FKs.
+    { table: 'support_threads', column: 'user_id' },
+    { table: 'support_messages', column: 'sender_id' },
 ];
 
 /** Every (table, column) with an FK to competitions(id) in the final schema. */

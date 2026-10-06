@@ -1,6 +1,14 @@
 
 
 
+## R2-M personal + independent admin messaging (H6) · فرع `feat/r2-m-messaging` (من `c2c3e4c` = origin/main بعد دمج R2-A #92)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية. ترحيل واحد مضاف (`0037_support_messaging`: جداول `support_threads/messages` + 4 فهارس — لا صفوف seed) + بيان الإصدار `baseline-0037` في نفس الفرع. R2-A/J/L1/V/L2 مغلقة ولم تُمس؛ بلا R2-P/H7/D1/D2.
+- العقد: (1) الشخصي — النظام القائم كما هو (ALREADY DONE: بدء/إرسال/قراءة/unread/حدود/حظر) ومثبت باختبار إثبات (محادثة ثنائية + ثبات refresh + حجب الغريب 403 + مجهول 401). (2) الإداري — نظام مستقل H6: تخزين `support_*` فقط (ممنوع الشخصي)، مسارات `/api/support/*` للمستخدم (خيوطه فقط) و`/api/admin/support/*` للوكلاء؛ كتابة SuperAdmin/Moderator وقراءة Auditor (غيره 403)؛ الرد الرسمي `sender_kind=admin` بهوية Dueli الرسمية (لا رابط شخصي) مع `sender_id` + audit؛ إشعار مميز `admin_message` برابط الخيط الإداري (لا خلط مع `message`). (3) UI — تبويبا personal/admin بعدادات مستقلة + روابط عميقة (`tab/conversation/thread/user`)؛ أيقونة Contact Admin → `?tab=admin` (الميت `?admin=true` أُزيل)؛ إشعار الإدارة يفتح الخيط الصحيح؛ صندوق وارد مستقل في لوحة الإدارة؛ ar/en + RTL + CSP.
+- **الأدلة**: T شخصي `r2-m-personal` ‏3/3 + T إداري `r2-m-admin` ‏5/5 (SqliteD1 بالترحيلات الحقيقية: فتح/رد/إغلاق-409/إعادة-فتح، أدوار ‏200/403، فصل unreads، فصل تخزين بالعدّ الصفري، رابط الإشعار ‏`tab=admin&thread=`) + UI جديد `r2-m-messages-ui` ‏11/11؛ الجيران المباشرون (notification-types/messages-i18n/messages-contract/template/avatar) خضراء — كشف قديم واحد (`messages-contract` يثبت collection واحدة) حُفظ بإعادة تسمية متغير الدعم؛ الكل ‏95/95؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏CSS churn رُجع)؛ ‏G2 ‏281 = ‏BASE ‏281 (صفر جديد)؛ routes ‏211←221 (5 دعم + 5 صندوق إداري)؛ readiness ‏22/22 (‏0036-shape ‏FAIL + ‏0037-shape ‏PASS).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. تطبيق 0037 إنتاجياً يبقى owner-gated بعد الدمج. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+- **FIX (CI #240، نفس الفرع)**: فاحص `SyntheticRetirement` كشف FKs غير مغطاة (`support_threads.user_id` + `support_messages.sender_id`) — أُضيفت القائمتان بنمط `USER_DEPENDENTS` القائم (تخطي مالكي صفوف الدعم، بلا تدمير تلقائي، بلا تغيير migration/manifest) + إثبات سلوكي (تقاعد الحر يُقبل، مالك الخيط يُتخطى بلا FK failure). المستهدف ‏55/55 ✅، ‏G2 ‏281 = ‏BASE.
+
 ## R2-A admin identity/access + account settings + roles + H9 documents/data · فرع `feat/r2-a-admin` (من `fed9b93` = origin/main بعد دمج R2-L2 #91)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية. ترحيل واحد مضاف (`0036_managed_documents` — لا صفوف seed فيه؛ بيانات الاختبار في `db/seed.sql` موسومة `is_seed=1`). J/L1/V/L2 مغلقة ولم تُمس؛ بلا R2-M/R2-P/bank/H7/D1/D2. حساب `admin/admin` مؤقت للتطوير فقط (سكربت، لا migration/seed، والإنتاج H8/owner-gated).

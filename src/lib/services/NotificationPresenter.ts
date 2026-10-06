@@ -40,6 +40,8 @@ export interface NotificationTypePresentation {
  */
 export const NOTIFICATION_TYPE_PRESENTATION: Record<NotificationType, NotificationTypePresentation> = {
     message: { titleKey: 'notification.new_message', bodyKey: 'notification.new_message_body' },
+    // R2-M: official admin reply — own label, own deep link (never the personal thread).
+    admin_message: { titleKey: 'notification.new_admin_message', bodyKey: 'notification.new_admin_message_body' },
     post_like: { titleKey: 'notification.new_post_like', bodyKey: 'notification.new_post_like_body' },
     post_comment: { titleKey: 'notification.new_post_comment', bodyKey: 'notification.new_post_comment_body' },
     comment: { titleKey: 'notification.new_comment', bodyKey: 'notification.new_comment_body' },
@@ -58,6 +60,7 @@ export const NOTIFICATION_GENERIC_KEY = 'notification.generic';
 /** Body key for a specific label key (overrides the type default). */
 export const NOTIFICATION_BODY_KEYS: Record<string, string> = {
     'notification.new_message': 'notification.new_message_body',
+    'notification.new_admin_message': 'notification.new_admin_message_body',
     'notification.new_comment': 'notification.new_comment_body',
     'notification.new_post_like': 'notification.new_post_like_body',
     'notification.new_post_comment': 'notification.new_post_comment_body',
@@ -173,6 +176,8 @@ export class NotificationPresenter {
                 return `/competition/${id}?${suffix}`;
             case 'conversation':
                 return `/messages?conversation=${id}&${suffix}`;
+            case 'support_thread':
+                return `/messages?tab=admin&thread=${id}&${suffix}`;
             case 'post': {
                 // Posts live on their author's profile (`/profile/:username`).
                 const payload = NotificationPresenter.parsePayload(row.message);

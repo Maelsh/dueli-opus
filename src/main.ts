@@ -57,6 +57,7 @@ import adReportRoutes from './modules/api/ad-reports/routes';
 import blocksRoutes from './modules/api/blocks/routes';
 import accountRoutes from './modules/api/account/routes';
 import documentsRoutes from './modules/api/documents/routes';
+import supportRoutes from './modules/api/support/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -185,6 +186,7 @@ app.route('/api/ad-reports', adReportRoutes);               // T4.3: ad reportin
 app.route('/api/blocks', blocksRoutes);                     // blocking users (T3.x: user Blocks APIs)
 app.route('/api/account', accountRoutes);                   // R2-A: self-service username/password/email
 app.route('/api/documents', documentsRoutes);               // R2-A (H9): published+public managed documents
+app.route('/api/support', supportRoutes);                   // R2-M (H6): user support threads (independent system)
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);

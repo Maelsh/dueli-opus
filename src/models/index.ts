@@ -53,3 +53,7 @@ export type { SseEventLog, SseChannel, SseEventType } from './SseEventLogModel';
 // R2-A (H9): admin-managed documents/data
 export { ManagedDocumentModel } from './ManagedDocumentModel';
 export type { ManagedDocument, ManagedDocumentInput, ManagedDocumentStatus, ManagedDocumentVisibility } from './ManagedDocumentModel';
+
+// R2-M (H6): independent admin-messaging store
+export { SupportModel } from './SupportModel';
+export type { SupportThread, SupportMessage, SupportThreadStatus, SupportSenderKind, SupportThreadWithMeta } from './SupportModel';

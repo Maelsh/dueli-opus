@@ -119,6 +119,8 @@ export type RequestStatus = 'pending' | 'accepted' | 'declined';
  *  constraint, so widening this union needs no migration.
  *  R2-J: `invitation_accepted` is the invite-acceptance type, deliberately
  *  distinct from `request` (new_join_request).
+ *  R2-M: `admin_message` is the official-reply type, deliberately distinct
+ *  from personal `message` (own reference type `support_thread`).
  */
 export type NotificationType =
   | 'request'
@@ -129,6 +131,7 @@ export type NotificationType =
   | 'invitation'
   | 'invitation_accepted'
   | 'message'
+  | 'admin_message'
   | 'post_like'
   | 'post_comment';
 

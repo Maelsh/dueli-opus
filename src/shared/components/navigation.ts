@@ -155,7 +155,7 @@ export function getNavigation(lang: Language): string {
                   <i class="fas fa-flag text-gray-500"></i>
                   <span>${tr.submit_report || 'Submit Report'}</span>
                 </a>
-                <a href="/messages?lang=${lang}&admin=true" class="user-menu-item" title="${tr.contact_admin || 'Contact Admin'}">
+                <a href="/messages?tab=admin&lang=${lang}" class="user-menu-item" title="${tr.contact_admin || 'Contact Admin'}">
                   <i class="fas fa-headset text-gray-500"></i>
                   <span>${tr.contact_admin || 'Contact Admin'}</span>
                 </a>

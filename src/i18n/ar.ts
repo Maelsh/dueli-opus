@@ -399,6 +399,9 @@ export const ar = {
         request_accepted_message: 'تم قبول طلبك للانضمام للمنافسة',
         new_message: 'رسالة جديدة',
         new_message_body: '{actor}: {preview}',
+        // R2-M: رد إداري رسمي — عنوان مستقل عن الرسائل الشخصية.
+        new_admin_message: 'رسالة جديدة من دعم Dueli',
+        new_admin_message_body: '{preview}',
         new_post_like: 'إعجاب جديد على منشورك',
         new_post_like_body: '{actor} أعجب بمنشورك',
         new_post_comment: 'تعليق جديد على منشورك',
@@ -435,6 +438,23 @@ export const ar = {
         no_messages: 'لا توجد رسائل',
         type_message: 'اكتب رسالة...',
         enter_message: 'أدخل رسالتك',
+    },
+
+    // R2-M (H6): محادثات الدعم / صندوق الإدارة
+    support: {
+        personal_tab: 'المحادثات',
+        admin_tab: 'رسائل الإدارة',
+        official_sender: 'دعم Dueli',
+        new_thread: 'رسالة جديدة للإدارة',
+        subject_label: 'الموضوع (اختياري)',
+        no_threads: 'لا توجد رسائل إدارية',
+        select_thread: 'اختر رسالة',
+        thread_closed: 'هذه المحادثة مغلقة',
+        admin_inbox: 'صندوق الدعم',
+        reply_label: 'رد رسمي',
+        close_thread: 'إغلاق المحادثة',
+        reopen_thread: 'إعادة فتح المحادثة',
+        unread_admin: 'رسائل إدارية غير مقروءة',
     },
 
     // رسائل أخطاء الرسائل (تستخدم بواسطة MessageController)

@@ -423,6 +423,9 @@ export const en = {
         request_accepted_message: 'Your request to join the competition has been accepted',
         new_message: 'New Message',
         new_message_body: '{actor}: {preview}',
+        // R2-M: official admin reply — distinct label from personal messages.
+        new_admin_message: 'New message from Dueli Support',
+        new_admin_message_body: '{preview}',
         new_post_like: 'New Like on Your Post',
         new_post_like_body: '{actor} liked your post',
         new_post_comment: 'New Comment on Your Post',
@@ -459,6 +462,23 @@ export const en = {
         no_messages: 'No messages yet',
         type_message: 'Type a message...',
         enter_message: 'Enter your message',
+    },
+
+    // R2-M (H6): support threads / admin inbox
+    support: {
+        personal_tab: 'Chats',
+        admin_tab: 'Admin messages',
+        official_sender: 'Dueli Support',
+        new_thread: 'New message to admin',
+        subject_label: 'Subject (optional)',
+        no_threads: 'No admin messages yet',
+        select_thread: 'Select a message',
+        thread_closed: 'This thread is closed',
+        admin_inbox: 'Support inbox',
+        reply_label: 'Reply officially',
+        close_thread: 'Close thread',
+        reopen_thread: 'Reopen thread',
+        unread_admin: 'unread admin messages',
     },
 
     // Message error keys (used by MessageController)

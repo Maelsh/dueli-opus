@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { AdminController } from '../../../controllers/AdminController';
 import { DocumentController } from '../../../controllers/DocumentController';
+import { SupportController } from '../../../controllers/SupportController';
 import { authMiddleware } from '../../../middleware/auth';
 const adminRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // T3.4 FIX: isAdmin() reads c.get('user') which only authMiddleware sets —
@@ -9,6 +10,7 @@ const adminRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 adminRoutes.use('*', authMiddleware({ required: false }));
 const controller = new AdminController();
 const documentController = new DocumentController();
+const supportController = new SupportController();
 
 // =====================================
 // Dashboard
@@ -103,5 +105,15 @@ adminRoutes.post('/documents', async (c) => documentController.createDocument(c)
 adminRoutes.get('/documents/:id', async (c) => documentController.getDocument(c));
 adminRoutes.put('/documents/:id', async (c) => documentController.updateDocument(c));
 adminRoutes.delete('/documents/:id', async (c) => documentController.deleteDocument(c));
+
+// =====================================
+// R2-M (H6): Admin Support Inbox (independent system)
+// =====================================
+
+adminRoutes.get('/support/threads', async (c) => supportController.adminList(c));
+adminRoutes.get('/support/threads/:id', async (c) => supportController.adminGet(c));
+adminRoutes.post('/support/threads/:id/reply', async (c) => supportController.adminReply(c));
+adminRoutes.put('/support/threads/:id/status', async (c) => supportController.adminSetStatus(c));
+adminRoutes.get('/support/unread', async (c) => supportController.adminUnread(c));
 
 export default adminRoutes;
