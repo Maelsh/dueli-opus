@@ -101,20 +101,22 @@ function specializationScore(
     viewer: UserSpecialization | null
 ): number | null {
     if (!candidate) return null;
-    if (!viewer || viewer.totalParticipations <= 0) {
-        // No viewer specialization to compare against: explicit-fav overlap
-        // only; session-wide unknown is handled by the caller.
+    if (!viewer || (viewer.totalParticipations <= 0 && viewer.explicitFavs.length === 0)) {
+        // No viewer specialization to compare against at all (neither
+        // contested participations nor explicit favs): session-wide unknown
+        // is handled by the caller (redistribution).
         return null;
     }
-    if (candidate.totalParticipations <= 0) return H7_NEUTRAL;
+    if (candidate.totalParticipations <= 0 && candidate.explicitFavs.length === 0) return H7_NEUTRAL;
     const viewerTop = new Set<string>();
     let best = 0;
     for (const [slug, n] of viewer.categoryCounts) {
         if (n > best) best = n;
     }
-    if (best <= 0) return null;
-    for (const [slug, n] of viewer.categoryCounts) {
-        if (n >= best * 0.5) viewerTop.add(slug);
+    if (best > 0) {
+        for (const [slug, n] of viewer.categoryCounts) {
+            if (n >= best * 0.5) viewerTop.add(slug);
+        }
     }
     for (const fav of viewer.explicitFavs) viewerTop.add(fav);
     if (viewerTop.size === 0) return null;
@@ -197,7 +199,17 @@ export interface OpponentCompetitionContext {
     country: string | null;
 }
 
-/** Layer 0/1/2/3 for one candidate (3 = fallback, never dropped). */
+/**
+ * Layer 0/1/2/3 for one candidate (3 = fallback, never dropped).
+ *
+ * §11 layers with the language gate (R3-D2 REMOTE fix): the appropriate
+ * language is a REQUIREMENT of layers 0–2, never a bonus an upper layer
+ * may waive. A same-subcategory candidate with a KNOWN-WRONG language
+ * falls through to the generic fallback (3) — it must never outrank a
+ * layer-2 candidate with the appropriate language on fame/Profile alone.
+ * Missing language on either side stays a wildcard (unknown ≠ mismatch);
+ * an explicit competition language is never relaxed.
+ */
 export function h7OpponentLayer(
     candidate: UserSignalRow,
     candidateSpec: UserSpecialization | undefined,
@@ -214,15 +226,16 @@ export function h7OpponentLayer(
         : [];
     const candLang = (candidate.language || '').toLowerCase();
     const candCountry = (candidate.country || '').toLowerCase();
+    // Appropriate language: exact match, or unknown on either side.
+    // A KNOWN mismatch fails every approved layer (0/1/2).
+    const langMismatch = lang !== '' && candLang !== '' && candLang !== lang;
     const hasSub = sub !== '' && candSub.includes(sub);
-    const langOk = lang === '' || candLang === '' || candLang === lang;
-    if (hasSub && langOk) {
+    if (hasSub && !langMismatch) {
         if (country === '' || candCountry === '' || candCountry === country) return 0;
         return 1;
     }
-    if (hasSub) return 1;
     const main = comp.category.toLowerCase();
-    if (main !== '' && candCat.includes(main) && langOk) return 2;
+    if (!langMismatch && main !== '' && candCat.includes(main)) return 2;
     return 3;
 }
 
@@ -346,10 +359,15 @@ export function h7ParticipationScore(
     viewer: ParticipationViewer,
     topicRelevance: number,
     creatorActivity: number,
-    nowMs: number
+    nowMs: number,
+    known: { creatorHistory?: boolean } = {}
 ): number {
+    // §5: a missing creator Profile inside a session where the signal is
+    // available scores neutral 0.5 (never a weight drop that would reward
+    // the data-poor card); a measured true zero stays 0; a session-wide
+    // unavailable signal redistributes instead.
     const creatorProfile = viewer.creatorProfiles.get(card.creator_id);
-    const creatorHistory = profileSignal(creatorProfile);
+    const creatorHistory = knownOrRedistribute(profileSignal(creatorProfile), known.creatorHistory);
     const follow = viewer.followingIds.has(card.creator_id) ? 1 : 0;
     // Recency from creation (pending seats have no ended_at anchor).
     let recency = H7_NEUTRAL;
@@ -369,9 +387,9 @@ export function h7ParticipationScore(
         { w: H7_PARTICIPATION_WEIGHTS.recency, s: recency },
         { w: H7_PARTICIPATION_WEIGHTS.schedule, s: schedule },
     ];
-    const known = parts.filter((p) => p.s !== null) as Array<{ w: number; s: number }>;
-    if (known.length === 0) return 0;
-    return h7Redistribute(known);
+    const scored = parts.filter((p) => p.s !== null) as Array<{ w: number; s: number }>;
+    if (scored.length === 0) return 0;
+    return h7Redistribute(scored);
 }
 
 /** Deterministic ordering: score desc, id asc (stable, no random). */

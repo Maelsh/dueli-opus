@@ -6,15 +6,15 @@
  * services). Pure arithmetic lives in H7UserRankingService.
  *
  * Profile SSOT: SUM effective stars / ACTUAL contested competitions comes
- * from H7SignalsModel.loadProfiles (denominator = competitions with
- * opponent_id IS NOT NULL — a bare pending row with no opponent is NOT a
- * contested competition). This model reuses that SSOT and never recomputes
- * the denominator its own way.
+ * from H7SignalsModel.loadProfiles (denominator = started competitions
+ * via ACTUAL_PARTICIPATION_WHERE — bare pendings, accepted-never-started
+ * and suspended-before-start rows never count). This model reuses that
+ * SSOT and never recomputes the denominator its own way.
  *
  * No `#private` fields (Cloudflare Workers compat).
  */
 
-import { H7SignalsModel } from './H7SignalsModel';
+import { ACTUAL_PARTICIPATION_WHERE, H7SignalsModel } from './H7SignalsModel';
 import { h7ProfileDisplay } from '../lib/services/H7RankingPolicy';
 
 export interface UserSignalRow {
@@ -116,9 +116,10 @@ export class UserSignalsModel {
     }
 
     /**
-     * Specialization from CONTESTED participations only (opponent set) —
-     * creating rows never counts as "practising" a category. Explicit favs
-     * come from the namespaced user_keywords store (fav: slugs).
+     * Specialization from ACTUALLY CONTESTED participations only
+     * (ACTUAL_PARTICIPATION_WHERE — started competitions; creating rows or
+     * merely accepting never counts as "practising" a category). Explicit
+     * favs come from the namespaced user_keywords store (fav: slugs).
      */
     async loadSpecializations(userIds: number[]): Promise<Map<number, UserSpecialization>> {
         const unique = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
@@ -141,7 +142,7 @@ export class UserSignalsModel {
                    FROM competitions c
                    JOIN categories cat ON c.category_id = cat.id
                    LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
-                  WHERE c.opponent_id IS NOT NULL
+                  WHERE c.${ACTUAL_PARTICIPATION_WHERE}
                     AND (c.creator_id IN (${placeholders}) OR c.opponent_id IN (${placeholders}))`
             ).bind(...batch, ...batch).all<{
                 creator_id: number; opponent_id: number | null; cat_slug: string; sub_slug: string | null;

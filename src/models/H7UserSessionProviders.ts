@@ -413,6 +413,9 @@ export class ParticipationProvider implements ResultSessionProvider {
         ]);
         const creatorSeen = new Map<number, string | null>();
         for (const u of creatorRows) creatorSeen.set(u.id, u.last_seen_at);
+        // §5: creator history is session-known when ANY seat creator holds
+        // a contested Profile; a missing one then scores neutral 0.5.
+        const historyKnown = creatorIds.some((id) => (creatorProfiles.get(id)?.profile ?? null) !== null);
         const nowMs = Date.now();
         const scored = eligible.map((c) => {
             const rec = c as unknown as Record<string, unknown>;
@@ -461,7 +464,8 @@ export class ParticipationProvider implements ResultSessionProvider {
                     },
                     topic,
                     creatorActivity,
-                    nowMs
+                    nowMs,
+                    { creatorHistory: historyKnown }
                 ),
             };
         });

@@ -107,17 +107,23 @@ async function addCompetition(
     opts: {
         title: string; categoryId?: number; subcategoryId?: number | null; creatorId?: number;
         opponentId?: number | null; lang?: string; country?: string | null; status?: string;
+        /** Lifecycle truth: live/completed imply started unless explicitly null. */
+        startedAt?: string | null;
     }
 ): Promise<number> {
+    const status = opts.status ?? 'pending';
+    const startedAt = opts.startedAt !== undefined
+        ? opts.startedAt
+        : (status === 'live' || status === 'completed' ? '2026-01-01 10:00:00' : null);
     const r = await db.prepare(
         `INSERT INTO competitions
             (title, description, rules, category_id, subcategory_id, creator_id, opponent_id,
-             language, country, status, created_at, total_views, likes_count, dislikes_count)
-          VALUES (?, 'd', 'r', ?, ?, ?, ?, ?, ?, ?, datetime('now'), 0, 0, 0)`
+             language, country, status, started_at, created_at, total_views, likes_count, dislikes_count)
+          VALUES (?, 'd', 'r', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 0, 0, 0)`
     ).bind(
         opts.title, opts.categoryId ?? 11, opts.subcategoryId ?? null,
         opts.creatorId ?? 2, opts.opponentId ?? null, opts.lang ?? 'ar', opts.country ?? null,
-        opts.status ?? 'pending'
+        status, startedAt
     ).run();
     return Number(r.meta.last_row_id);
 }
@@ -200,8 +206,8 @@ describe('R3-D2 Profile SSOT (08/11)', () => {
     });
 
     it('denominator is contested competitions, not raters/ratings', async () => {
-        // Competitor 20: ONE contested competition (with opponent) rated by
-        // THREE raters (5+5+5) + ONE bare pending row with no opponent.
+        // Competitor 20: ONE started competition rated by THREE raters
+        // (5+5+5) + ONE bare pending row with no opponent.
         await addUser(db, { id: 20, username: 'star20' });
         await addUser(db, { id: 21, username: 'opp21' });
         const c1 = await addCompetition(db, { title: 'Duel A', creatorId: 20, opponentId: 21, status: 'completed' });
@@ -214,6 +220,36 @@ describe('R3-D2 Profile SSOT (08/11)', () => {
         expect(p.competitions).toBe(1);
         expect(p.starsSum).toBe(15);
         expect(p.profile).toBe(15);
+    });
+
+    it('actual participation = started_at (lifecycle matrix)', async () => {
+        // Competitor 26: every lifecycle shape exactly once.
+        await addUser(db, { id: 26, username: 'matrix26' });
+        await addUser(db, { id: 27, username: 'opp27' });
+        // 1. pending, no opponent — never a contest.
+        await addCompetition(db, { title: 'M-pending', creatorId: 26, status: 'pending' });
+        // 2. accepted + opponent but NEVER started — not contested.
+        await addCompetition(db, { title: 'M-accepted', creatorId: 26, opponentId: 27, status: 'accepted', startedAt: null });
+        // 3. suspended-before-start + opponent — never contested.
+        await addCompetition(db, { title: 'M-suspended', creatorId: 26, opponentId: 27, status: 'suspended', startedAt: null });
+        // 4. live + started — contested.
+        await addCompetition(db, { title: 'M-live', creatorId: 26, opponentId: 27, status: 'live', startedAt: '2026-02-01 10:00:00' });
+        // 5. completed + started — contested.
+        const done = await addCompetition(db, { title: 'M-done', creatorId: 26, opponentId: 27, status: 'completed', startedAt: '2026-02-02 10:00:00' });
+        // 6. archived-after-start (suspended post-contest) — contested by meaning.
+        await addCompetition(db, { title: 'M-archived', creatorId: 27, opponentId: 26, status: 'archived', startedAt: '2026-02-03 10:00:00' });
+        await addRating(db, done, 2, 26, 4);
+        // Ratings on a fabricated never-started row do NOT leak into the SUM.
+        const fake = await addCompetition(db, { title: 'M-fake', creatorId: 26, opponentId: 27, status: 'accepted', startedAt: null });
+        await addRating(db, fake, 2, 26, 5);
+        const signals = new UserSignalsModel(db);
+        const p = await signals.getProfile(26);
+        expect(p.competitions).toBe(3);
+        expect(p.starsSum).toBe(4);
+        // Specialization + experience count the same three contests only.
+        const specs = await signals.loadSpecializations([26]);
+        expect(specs.get(26)?.totalParticipations).toBe(3);
+        expect(specs.get(26)?.categoryCounts.get('science')).toBe(3);
     });
 
     it('Profile may exceed 5 (never clamped) and zero means null', async () => {
@@ -439,6 +475,51 @@ describe('R3-D2 opponent suggestions (layers before score)', () => {
         expect(self.status).toBe(409);
     });
 
+    it('language gates layers: wrong-language same-sub never beats correct-language L2 (ar/en)', async () => {
+        // A: same physics subcategory but WRONG language, superstar Profile.
+        await addUser(db, { id: 57, username: 'wronglang57', display: 'Physics EN only', lang: 'en', country: 'US' });
+        const a1 = await addCompetition(db, { title: 'PA', categoryId: 11, subcategoryId: 13, creatorId: 57, opponentId: 3, status: 'completed' });
+        const a2 = await addCompetition(db, { title: 'PA2', categoryId: 11, subcategoryId: 13, creatorId: 57, opponentId: 2, status: 'completed' });
+        for (const u of [2, 3]) {
+            await addRating(db, a1, u, 57, 5);
+            await addRating(db, a2, u, 57, 5);
+        }
+        // B: nearby science specialization + CORRECT ar language, modest record.
+        await addUser(db, { id: 58, username: 'nearby58', display: 'Science generalist', lang: 'ar', country: 'EG' });
+        await addCompetition(db, { title: 'G', categoryId: 11, subcategoryId: null, creatorId: 58, opponentId: 3, status: 'completed' });
+        const pA = await new UserSignalsModel(db).getProfile(57);
+        const pB = await new UserSignalsModel(db).getProfile(58);
+        expect(pA.profile).toBeGreaterThan(pB.profile ?? 0);
+
+        // Unit pins: wrong-language same-sub is fallback (3), never layer 1.
+        const compCtx = { subcategory: 'physics', category: 'science', language: 'ar', country: 'SA' };
+        expect(h7OpponentLayer(
+            { language: 'en', country: 'US' } as never,
+            { categoryCounts: new Map([['science', 2]]), subcategoryCounts: new Map([['physics', 2]]), explicitFavs: [], totalParticipations: 2 },
+            compCtx
+        )).toBe(3);
+        // Other-country + correct language stays layer 1 …
+        expect(h7OpponentLayer(
+            { language: 'ar', country: 'EG' } as never,
+            { categoryCounts: new Map([['science', 1]]), subcategoryCounts: new Map([['physics', 1]]), explicitFavs: [], totalParticipations: 1 },
+            compCtx
+        )).toBe(1);
+        // … and main-category + correct language is layer 2, ahead of fallback.
+        expect(h7OpponentLayer(
+            { language: 'ar', country: 'EG' } as never,
+            { categoryCounts: new Map([['science', 1]]), subcategoryCounts: new Map(), explicitFavs: [], totalParticipations: 1 },
+            compCtx
+        )).toBe(2);
+
+        // End to end: B (layer 2, weaker) outranks A (fallback, superstar).
+        const created = await createSession(db, '/api/matchmaking/opponent-sessions', { competition_id: compId }, { token: 'sess-d2-user2' });
+        expect(created.status).toBe(201);
+        const ids = await traverse(db, '/api/matchmaking/opponent-sessions', created.data!.session.id, { competition_id: String(compId) }, { token: 'sess-d2-user2' });
+        expect(ids).toContain(57);
+        expect(ids).toContain(58);
+        expect(ids.indexOf(58)).toBeLessThan(ids.indexOf(57));
+    });
+
     it('competition→user candidate-sessions mirror the opponent provider', async () => {
         const created = await createSession(db, '/api/competitions/candidate-sessions', { competition_id: compId }, { token: 'sess-d2-user2' });
         expect(created.status).toBe(201);
@@ -530,6 +611,52 @@ describe('R3-D2 participation (user→competition, real seats only)', () => {
         );
         expect(ps).toBeGreaterThanOrEqual(0);
         expect(ps).toBeLessThanOrEqual(100);
+    });
+
+    it('missing creator Profile is neutral 0.5 (never a weight-drop advantage); true zero differs', async () => {
+        // Identical seats except the creator history signal: all other
+        // sub-scores pinned at 1 so the history component decides alone.
+        const card = (id: number, creator: number) => ({
+            id, category_slug: 'science', subcategory_slug: 'physics', creator_id: creator,
+            language: 'ar', country: 'SA', created_at: new Date(0).toISOString(), scheduled_at: null,
+            total_views: 0, stars_sum: 0, likes_count: 0, dislikes_count: 0,
+        });
+        const viewerBase = {
+            viewerId: 2, language: 'ar', country: 'SA', followingIds: new Set([70, 71, 72]),
+            viewerSpec: null, creatorLastSeen: new Map(),
+        };
+        const now = Date.now();
+        // Creator 70: contested but unrated → measured true zero (N(0;20)=0).
+        await addUser(db, { id: 70, username: 'zero70' });
+        await addCompetition(db, { title: 'Z', creatorId: 70, opponentId: 3, status: 'completed' });
+        // Creator 71: no record at all → unknown.
+        await addUser(db, { id: 71, username: 'unknown71' });
+        // Creator 72: contested + rated above the neutral band
+        // (Profile 25 → N(25;20) ≈ 0.52 > 0.5) → known positive.
+        await addUser(db, { id: 72, username: 'rated72' });
+        for (const r of [90, 91, 92]) await addUser(db, { id: r, username: `b3rater${r}` });
+        const rc = await addCompetition(db, { title: 'R', creatorId: 72, opponentId: 3, status: 'completed' });
+        for (const u of [2, 3, 90, 91, 92]) await addRating(db, rc, u, 72, 5);
+        const signals = new UserSignalsModel(db);
+        const profiles = await signals.getProfiles([70, 71, 72]);
+        expect(profiles.get(70)?.profile).toBe(0);
+        expect(profiles.get(71)?.profile).toBeNull();
+        const viewer = { ...viewerBase, creatorProfiles: profiles };
+        // Session where the signal is available (creator 72 holds one).
+        const missing = h7ParticipationScore(card(1, 71), viewer, 1, 1, now, { creatorHistory: true });
+        const zero = h7ParticipationScore(card(2, 70), viewer, 1, 1, now, { creatorHistory: true });
+        const positive = h7ParticipationScore(card(3, 72), viewer, 1, 1, now, { creatorHistory: true });
+        // Missing = neutral: (35+20*.5+10+10+15*.5?…) — recency of epoch-0 is
+        // ~0 and schedule-neutral is .5; the exact arithmetic is pinned below.
+        expect(missing).toBeCloseTo((35 * 1 + 20 * 0.5 + 10 * 1 + 10 * 1 + 15 * 0 + 10 * 0.5) / 100 * 100, 5);
+        // True zero sits strictly below unknown …
+        expect(zero).toBeLessThan(missing);
+        // … and a measured positive sits strictly above unknown.
+        expect(positive).toBeGreaterThan(missing);
+        // Session-wide unavailable → proportional redistribution (documented
+        // §5 behavior, only when NO creator holds the signal).
+        const dropped = h7ParticipationScore(card(4, 71), viewer, 1, 1, now, { creatorHistory: false });
+        expect(dropped).toBeGreaterThan(missing);
     });
 });
 

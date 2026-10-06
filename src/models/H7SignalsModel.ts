@@ -75,6 +75,21 @@ export interface H7ViewerContext {
 
 const FAV_PREFIX = 'fav:';
 
+/**
+ * R3-D2 actual-participation predicate (SSOT — Owner 08: "competitions
+ * actually participated in", never bare rows/invites/requests).
+ *
+ * Proven against the lifecycle (CompetitionModel): `startLive` is the SOLE
+ * writer of `started_at` repo-wide, guarded `accepted → live`; `complete`
+ * is the sole writer of `ended_at`, guarded `live → completed`; there is
+ * no cancelled-status writer (suspension keeps `started_at` intact).
+ * Therefore `started_at IS NOT NULL` ⟺ both sides actually entered the
+ * contest: pending / accepted-never-started / suspended-before-start stay
+ * out; live-started, completed-started — and suspended/archived-after-start
+ * — count, by meaning, not by status name.
+ */
+export const ACTUAL_PARTICIPATION_WHERE = `started_at IS NOT NULL`;
+
 export function h7FavKeyword(slug: string): string {
     return `${FAV_PREFIX}${slug.trim().toLowerCase()}`;
 }
@@ -204,7 +219,7 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
             .prepare(
                 `SELECT cat.slug AS slug, COUNT(*) AS n FROM competitions c
                  JOIN categories cat ON c.category_id = cat.id
-                 WHERE (c.creator_id = ? OR c.opponent_id = ?) AND c.opponent_id IS NOT NULL
+                 WHERE (c.creator_id = ? OR c.opponent_id = ?) AND c.${ACTUAL_PARTICIPATION_WHERE}
                  GROUP BY cat.slug`
             )
             .bind(userId, userId)
@@ -265,13 +280,14 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
      * participations (R3-D2 SSOT — Owner formula in 08/11:
      * Profile = SUM stars / number of competitions actually contested).
      *
-     * Denominator rule (matches the participation-category precedent in
-     * loadViewerContext below): a competition counts only when a real
-     * matchup exists (opponent_id IS NOT NULL). A bare pending row created
-     * by the user with no opponent, an invitation/request, or a cancelled
-     * pre-match row is NOT a contested competition. Creator and opponent
-     * sides both count once. Ratings SUM counts effective rows only
-     * (one per rater/competitor/competition via rateLiveAtomic).
+     * Denominator rule (ACTUAL_PARTICIPATION_WHERE): a competition counts
+     * only when it actually started (`started_at IS NOT NULL` — the sole
+     * lifecycle marker written by `startLive`). Bare pendings, accepted-
+     * never-started rows, and suspended-before-start rows never count, even
+     * with an opponent set; invitations/requests are not competitions at
+     * all. Creator and opponent sides both count once. Ratings SUM counts
+     * effective rows of started competitions only (live-only writes via
+     * rateLiveAtomic, one per rater/competitor/competition).
      */
     async loadProfiles(userIds: number[]): Promise<Map<number, { sum: number; count: number }>> {
         const unique = [...new Set(userIds.filter((id) => Number.isInteger(id) && id > 0))];
@@ -281,14 +297,17 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
             const batch = unique.slice(i, i + 80);
             const placeholders = batch.map(() => '?').join(',');
             const sums = await this.query<{ competitor_id: number; s: number }>(
-                `SELECT competitor_id, SUM(rating) AS s FROM ratings WHERE competitor_id IN (${placeholders}) GROUP BY competitor_id`,
+                `SELECT r.competitor_id AS competitor_id, SUM(r.rating) AS s FROM ratings r
+                  JOIN competitions c ON r.competition_id = c.id
+                 WHERE r.competitor_id IN (${placeholders}) AND c.${ACTUAL_PARTICIPATION_WHERE}
+                 GROUP BY r.competitor_id`,
                 ...batch
             );
             const counts = await this.query<{ uid: number; n: number }>(
                 `SELECT u AS uid, COUNT(*) AS n FROM (
-                     SELECT creator_id AS u FROM competitions WHERE creator_id IN (${placeholders}) AND opponent_id IS NOT NULL
+                     SELECT creator_id AS u FROM competitions WHERE creator_id IN (${placeholders}) AND ${ACTUAL_PARTICIPATION_WHERE}
                      UNION ALL
-                     SELECT opponent_id AS u FROM competitions WHERE opponent_id IN (${placeholders})
+                     SELECT opponent_id AS u FROM competitions WHERE opponent_id IN (${placeholders}) AND ${ACTUAL_PARTICIPATION_WHERE}
                  ) WHERE u IS NOT NULL GROUP BY u`,
                 ...batch,
                 ...batch
