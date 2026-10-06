@@ -2,26 +2,27 @@
  * Recommendation Model
  * نموذج التوصيات
  *
- * R3-GUEST-1: the guest suggestion queries live here — never inline in the
+ * R3-D1 (h7-v1): the guest suggestion queries live here — never inline in the
  * Controller (MVC, same rule #75 enforced for Explore).
  *
- * Scoring is byte-identical to the legacy guest branch it replaces: language
- * match 25, views × 0.01, recency tiers 10/7/4/1d/3d/7d (constants sourced
- * from RecommendationEngine — H7 coefficients stay OPEN, these current values
- * are pinned by tests and must not drift silently). What changes is ONLY the
- * eligible set: every PUBLIC competition instead of completed-with-video
- * alone — pending/accepted (waiting/appointment cards) and live join the
- * completed-with-playable-recording slice per the 05 §4 public table.
- * Suspended/cancelled/archived stay excluded, and completed rows WITHOUT a
- * playable recording stay out of the rail (watchability preserved: nothing
- * is presented as watchable-but-broken, and scarcity is never patched by
- * repeating rows). D1 later swaps the provider; this store is reused as-is.
+ * Ordering is the approved h7-v1 (H7RankingPolicy + H7RankingService over
+ * H7SignalsModel rows): eligibility first (every PUBLIC competition —
+ * pending/accepted/live + completed with a playable recording per 05 §4),
+ * then H7 weights frozen once at T0. Suspended/cancelled/archived stay
+ * excluded, and completed rows WITHOUT a playable recording stay out of
+ * the rail (watchability preserved; scarcity never patched by repeats).
+ * The legacy point weights are kept only as a commented reference
+ * (scoreExpression, unused by ranking); D1 reuses this store as-is.
  *
  * No `#private` fields (Cloudflare Workers compat).
  */
 import { RecommendationEngine } from '../lib/services/RecommendationEngine';
 import type { ResultSessionProvider } from '../lib/services/ExploreSessionService';
 import type { CompetitionWithDetails } from './CompetitionModel';
+import { H7SignalsModel } from './H7SignalsModel';
+import { h7ApplyDiscoveryDiversity, h7OrderScored, h7ScoreCard } from '../lib/services/H7RankingService';
+import { h7RecencyOf } from '../lib/services/H7RankingPolicy';
+import type { H7StatusBucket } from '../lib/services/H7RankingPolicy';
 
 /** Session surface for the Home «مقترح لك» guest rail (D1 reuses the store). */
 export const SUGGESTED_GUEST_SURFACE = 'suggested_guest';
@@ -116,7 +117,7 @@ export class RecommendationModel {
         return yt !== '';
     }
 
-    /** Score expression — identical arithmetic to the legacy guest branch. */
+    /** Score expression — legacy pinned arithmetic (kept for reference only; D1 ranks via H7). */
     private scoreExpression(): string {
         return `CASE WHEN c.language = ? THEN ${RecommendationEngine.WEIGHT_LANGUAGE_MATCH} ELSE 0 END`
             + ` + COALESCE(c.total_views, 0) * ${RecommendationEngine.VIEW_POPULARITY_FACTOR}`
@@ -130,47 +131,61 @@ export class RecommendationModel {
         return lang === 'ar' ? 'name_ar' : 'name_en';
     }
 
-    /**
-     * Guest suggestion page — same row shape as the legacy branch
-     * (c.* + category/creator aliases + score), widened eligible set.
-     * `lang` must be normalized ('ar' | anything-else-is-'en') by the caller.
-     */
-    async findGuestSuggestedPage(lang: string, limit: number, offset: number): Promise<GuestSuggestedRow[]> {
-        const column = this.nameColumn(lang);
-        const result = await this.db.prepare(`
-            SELECT c.*,
-                   cat.${column} as category_name,
-                   cat.slug as category_slug,
-                   cat.icon as category_icon,
-                   cat.color as category_color,
-                   u.username as creator_username,
-                   u.display_name as creator_name,
-                   u.avatar_url as creator_avatar,
-                   ${this.scoreExpression()}
-                   as score
-            FROM competitions c
-            JOIN categories cat ON c.category_id = cat.id
-            JOIN users u ON c.creator_id = u.id
-            WHERE ${RecommendationModel.PUBLIC_SUGGESTED_WHERE}
-            ORDER BY score DESC, c.created_at DESC, c.id ASC
-            LIMIT ? OFFSET ?
-        `).bind(lang, limit, offset).all<GuestSuggestedRow>();
-        return (result.results || []) as GuestSuggestedRow[];
-    }
-
-    /** Full ordered id set for a frozen session — no LIMIT, no total cap. */
-    async findGuestSuggestedIds(lang: string): Promise<number[]> {
-        return this.findGuestSuggestedIdsForStatus(lang, '');
+    private static statusBucket(status: string): H7StatusBucket {
+        if (status === 'live' || status === 'recorded' || status === 'upcoming') return status;
+        return 'mixed';
     }
 
     /**
-     * R3-RAILS-1A: full ordered id set for ONE Home tab slice.
-     * Same scoring weights, same public predicate — the status slice is the
-     * only narrowing (live=live, upcoming=pending+accepted,
-     * recorded=completed+playable via the shared WHERE). No LIMIT, no cap:
-     * the session service freezes the whole qualified set at T0.
+     * R3-D1 (h7-v1): order an eligible id set with the approved weights.
+     * Eligibility (public predicate + status slice + exclusions) is applied
+     * in SQL first; ranking happens here via H7RankingService, frozen once
+     * at T0 with discovery/diversity. No LIMIT, no cap, no RANDOM.
      */
-    async findGuestSuggestedIdsForStatus(lang: string, status: string): Promise<number[]> {
+    private async h7OrderIds(
+        eligibleIds: number[],
+        lang: string,
+        userId: number | null,
+        bucket: H7StatusBucket
+    ): Promise<{ ids: number[]; scores: Map<number, number> }> {
+        if (eligibleIds.length === 0) return { ids: [], scores: new Map() };
+        const signalsModel = new H7SignalsModel(this.db);
+        const rows = await signalsModel.loadCompetitions(eligibleIds);
+        const ctx = await signalsModel.loadViewerContext(this.db, userId, lang, null);
+        const uids: number[] = [];
+        for (const r of rows) {
+            uids.push(r.creator_id);
+            if (r.opponent_id !== null) uids.push(r.opponent_id);
+        }
+        const profiles = await signalsModel.loadProfiles(uids);
+        const nowMs = Date.now();
+        const identity = userId === null ? 'guest' : 'user';
+        const scored = rows.map((r) => {
+            const { score } = h7ScoreCard({ ...r, nowMs }, ctx, identity, bucket, profiles);
+            return { id: r.id, score, recency: h7RecencyOf({ ...r }, nowMs), row: r };
+        });
+        const ordered = h7OrderScored(scored);
+        const diverse = h7ApplyDiscoveryDiversity(
+            ordered.map((s) => ({
+                id: s.id,
+                creator_id: s.row.creator_id,
+                opponent_id: s.row.opponent_id,
+                created_at: s.row.created_at,
+                total_views: s.row.total_views,
+            })),
+            nowMs
+        );
+        const scoreById = new Map(ordered.map((s) => [s.id, s.score] as [number, number]));
+        const orderRank = new Map(diverse.map((d, i) => [d.id, i] as [number, number]));
+        const finalIds = [...diverse.map((d) => d.id)].sort((a, b) => {
+            // Diverse order is authoritative; keep it (already discovery-ordered).
+            return (orderRank.get(a) ?? 0) - (orderRank.get(b) ?? 0);
+        });
+        // Re-sort scored by diverse sequence: diverse array IS the final order.
+        return { ids: finalIds, scores: scoreById };
+    }
+
+    private async eligibleGuestIds(status: string): Promise<number[]> {
         const slice = RecommendationModel.statusSliceWhere(status);
         const result = await this.db.prepare(`
             SELECT c.id as id
@@ -179,19 +194,69 @@ export class RecommendationModel {
             JOIN users u ON c.creator_id = u.id
             WHERE ${RecommendationModel.PUBLIC_SUGGESTED_WHERE}
             ${slice}
-            ORDER BY ${this.scoreExpression()} DESC, c.created_at DESC, c.id ASC
-        `).bind(lang).all<{ id: number }>();
+        `).all<{ id: number }>();
         return (result.results || []).map((row) => row.id);
     }
 
     /**
-     * R3-RAILS-1A: full ordered id set for the logged-in Suggested rail.
-     * Same pinned scoring arithmetic as the guest rail (H7 coefficients stay
-     * OPEN — no new ranking is invented here); the user identity only
-     * NARROWS the set: own competitions, both directions of blocks, and
-     * explicitly hidden competitions never enter the snapshot. Exclusion
-     * lists are loaded by the caller (the rail provider) so build-time and
-     * read-time re-checks share one source.
+     * Guest suggestion page — H7-ordered (R3-D1). Same row shape as before
+     * (c.* + category/creator aliases + score); the score is now h7-v1
+     * (0–100). Paging slices the frozen H7 order so every eligible card
+     * stays reachable until exhaustion.
+     * `lang` must be normalized ('ar' | anything-else-is-'en') by the caller.
+     */
+    async findGuestSuggestedPage(lang: string, limit: number, offset: number): Promise<GuestSuggestedRow[]> {
+        const column = this.nameColumn(lang);
+        const eligible = await this.eligibleGuestIds('');
+        const { ids, scores } = await this.h7OrderIds(eligible, lang, null, 'mixed');
+        const pageIds = ids.slice(Math.max(0, offset), Math.max(0, offset) + Math.max(0, limit));
+        if (pageIds.length === 0) return [];
+        const placeholders = pageIds.map(() => '?').join(',');
+        const result = await this.db.prepare(`
+            SELECT c.*,
+                   cat.${column} as category_name,
+                   cat.slug as category_slug,
+                   cat.icon as category_icon,
+                   cat.color as category_color,
+                   u.username as creator_username,
+                   u.display_name as creator_name,
+                   u.avatar_url as creator_avatar
+            FROM competitions c
+            JOIN categories cat ON c.category_id = cat.id
+            JOIN users u ON c.creator_id = u.id
+            WHERE c.id IN (${placeholders})
+        `).bind(...pageIds).all<GuestSuggestedRow>();
+        const byId = new Map<number, GuestSuggestedRow>();
+        for (const row of (result.results || []) as GuestSuggestedRow[]) byId.set(row.id, row);
+        return pageIds
+            .map((id) => byId.get(id))
+            .filter((r): r is GuestSuggestedRow => !!r)
+            .map((r) => ({ ...r, score: scores.get(r.id) ?? 0 }));
+    }
+
+    /** Full ordered id set for a frozen session — no LIMIT, no total cap. */
+    async findGuestSuggestedIds(lang: string): Promise<number[]> {
+        return this.findGuestSuggestedIdsForStatus(lang, '');
+    }
+
+    /**
+     * R3-D1 (h7-v1): full ordered id set for ONE Home tab slice.
+     * Same public predicate + status slice (live=live, upcoming=
+     * pending+accepted, recorded=completed+playable); ORDER is h7-v1,
+     * frozen once at T0. No LIMIT, no cap.
+     */
+    async findGuestSuggestedIdsForStatus(lang: string, status: string): Promise<number[]> {
+        const eligible = await this.eligibleGuestIds(status);
+        const { ids } = await this.h7OrderIds(eligible, lang, null, RecommendationModel.statusBucket(status));
+        return ids;
+    }
+
+    /**
+     * R3-D1 (h7-v1): full ordered id set for the logged-in Suggested rail.
+     * Same H7 arithmetic as the guest rail; the user identity only NARROWS
+     * the set (own, blocks, hidden) and ADDS personal signals (interests,
+     * follows, history) via the viewer context. Exclusion lists are loaded
+     * by the caller so build-time and read-time re-checks share one source.
      */
     async findUserSuggestedIdsForStatus(
         lang: string,
@@ -199,7 +264,7 @@ export class RecommendationModel {
         exclusions: { excludeCreatorIds: number[]; excludeCompetitionIds: number[]; excludeOwnId: number | null }
     ): Promise<number[]> {
         const slice = RecommendationModel.statusSliceWhere(status);
-        const params: number[] = [];
+        const params: Array<string | number> = [];
         let extra = '';
         const own = exclusions.excludeOwnId;
         const creators = [...new Set(exclusions.excludeCreatorIds.filter((id) => Number.isInteger(id) && id > 0))];
@@ -216,9 +281,6 @@ export class RecommendationModel {
             extra += ` AND c.id NOT IN (${competitions.map(() => '?').join(',')})`;
             params.push(...competitions);
         }
-        // Positional binding follows TEXTUAL placeholder order: the WHERE
-        // exclusions precede the scoring expression's lang placeholder in
-        // ORDER BY — binding lang first would shift every exclusion.
         const result = await this.db.prepare(`
             SELECT c.id as id
             FROM competitions c
@@ -227,9 +289,11 @@ export class RecommendationModel {
             WHERE ${RecommendationModel.PUBLIC_SUGGESTED_WHERE}
             ${slice}
             ${extra}
-            ORDER BY ${this.scoreExpression()} DESC, c.created_at DESC, c.id ASC
-        `).bind(...params, lang).all<{ id: number }>();
-        return (result.results || []).map((row) => row.id);
+        `).bind(...params).all<{ id: number }>();
+        const eligible = (result.results || []).map((row) => row.id);
+        const userId = typeof own === 'number' && Number.isInteger(own) && own > 0 ? own : null;
+        const { ids } = await this.h7OrderIds(eligible, lang, userId, RecommendationModel.statusBucket(status));
+        return ids;
     }
 
     async countGuestSuggested(): Promise<number> {

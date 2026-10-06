@@ -180,10 +180,12 @@ export class CompetitionModel extends BaseModel<Competition> {
             params.push(filters.userId, filters.userId);
         }
 
-        // Search filter
+        // Search filter (R3-D1 h7-v1 layers need title OR description in the
+        // eligible set; ranking into exact/prefix/partial happens in the
+        // session provider, never here).
         if (filters.search) {
-            clause += ' AND c.title LIKE ?';
-            params.push(`%${filters.search}%`);
+            clause += ' AND (c.title LIKE ? OR c.description LIKE ?)';
+            params.push(`%${filters.search}%`, `%${filters.search}%`);
         }
 
         return { clause, params };
@@ -215,13 +217,15 @@ export class CompetitionModel extends BaseModel<Competition> {
         `;
 
     /**
-     * Find competitions with filters
+     * Find competitions with filters (legacy compat surface, no callers in
+     * ranked discovery — R3-D1 ranks via H7 sessions + CompetitionController.list).
+     * Deterministic newest-first; never ORDER BY RANDOM().
      */
     async findByFilters(filters: CompetitionFilters): Promise<CompetitionWithDetails[]> {
         const { clause, params } = this.buildFilterWhere(filters);
 
         // Order and pagination
-        const query = CompetitionModel.DETAILS_SELECT + clause + ' ORDER BY RANDOM() LIMIT ? OFFSET ?';
+        const query = CompetitionModel.DETAILS_SELECT + clause + ' ORDER BY c.created_at DESC, c.id ASC LIMIT ? OFFSET ?';
         const allParams: Array<string | number> = [...params, filters.limit || 20, filters.offset || 0];
 
         return this.query<CompetitionWithDetails>(query, ...allParams);

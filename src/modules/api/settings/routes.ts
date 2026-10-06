@@ -62,11 +62,24 @@ settingsRoutes.delete('/posts/:id', async (c) => {
 });
 
 /**
- * GET /api/users/:id/posts
+ * GET /api/settings/users/:id/posts
  * Get user's posts
  */
 settingsRoutes.get('/users/:id/posts', async (c) => {
     return controller.getUserPosts(c);
+});
+
+/**
+ * R3-D1 (h7-v1): explicit interest favorites (taxonomy slugs).
+ * GET /api/settings/favorites
+ * PUT /api/settings/favorites
+ */
+settingsRoutes.get('/favorites', async (c) => {
+    return controller.getFavorites(c);
+});
+
+settingsRoutes.put('/favorites', async (c) => {
+    return controller.setFavorites(c);
 });
 
 export default settingsRoutes;

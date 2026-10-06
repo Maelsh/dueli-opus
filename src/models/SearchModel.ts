@@ -42,19 +42,21 @@ export class SearchModel {
     }
 
     /**
-     * Search competitions by filters
+     * Search competitions by filters — R3-D1 (h7-v1).
+     *
+     * Eligibility first (permission/privacy/blocked handled by callers
+     * where identity is known; text/category/status/language/country here),
+     * then text layers exact → prefix/whole-word → partial/description (§4)
+     * with the H7 in-layer score (text 60, topic 15, Q 10, lang 5, country 5,
+     * recency 5). A higher textual layer is never buried by fame. Empty
+     * query falls back to watch browsing order (H7 watch weights).
      */
     async searchCompetitions(filters: SearchFilters): Promise<SearchResult<Competition>> {
+        const limit = Math.min(Math.max(filters.limit || 20, 1), 50);
+        const offset = Math.max(filters.offset || 0, 0);
+        const q = (filters.query || '').trim();
         const conditions: string[] = [];
         const params: any[] = [];
-        const limit = filters.limit || 20;
-        const offset = filters.offset || 0;
-
-        // Text search on title and description
-        if (filters.query) {
-            conditions.push(`(c.title LIKE ? OR c.description LIKE ?)`);
-            params.push(`%${filters.query}%`, `%${filters.query}%`);
-        }
 
         // Category filter
         if (filters.category_id) {
@@ -88,14 +90,65 @@ export class SearchModel {
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        // Count total
-        const countQuery = `SELECT COUNT(*) as total FROM competitions c ${whereClause}`;
-        const countResult = await this.db.prepare(countQuery).bind(...params).first<{ total: number }>();
-        const total = countResult?.total || 0;
-
-        // Get items with joins
+        // Eligible id set first (no ORDER/LIMIT here).
+        const idRows = await this.db.prepare(
+            `SELECT c.id as id, c.title as title, c.description as description FROM competitions c ${whereClause}`
+        ).bind(...params).all<{ id: number; title: string; description: string | null }>();
+        let eligible = (idRows.results || []).map((r) => ({ id: r.id, title: r.title || '', description: r.description ?? null }));
+        if (q !== '') {
+            const lowered = q.toLowerCase();
+            eligible = eligible.filter((r) =>
+                r.title.toLowerCase().includes(lowered) || (r.description || '').toLowerCase().includes(lowered)
+            );
+        }
+        const total = eligible.length;
+        if (total === 0) {
+            return { items: [], total, hasMore: false };
+        }
+        const { H7SignalsModel } = await import('./H7SignalsModel');
+        const ranking = await import('../lib/services/H7RankingService');
+        const policy = await import('../lib/services/H7RankingPolicy');
+        const signalsModel = new H7SignalsModel(this.db);
+        const rows = await signalsModel.loadCompetitions(eligible.map((e) => e.id));
+        const ctx = await signalsModel.loadViewerContext(this.db, null, filters.language ?? null, filters.country ?? null);
+        const nowMs = Date.now();
+        let orderedIds: number[];
+        if (q === '') {
+            const uids: number[] = [];
+            for (const r of rows) {
+                uids.push(r.creator_id);
+                if (r.opponent_id !== null) uids.push(r.opponent_id);
+            }
+            const profiles = await signalsModel.loadProfiles(uids);
+            const scored = rows.map((r) => {
+                const { score } = ranking.h7ScoreCard({ ...r, nowMs }, ctx, 'guest', 'mixed', profiles);
+                return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs) };
+            });
+            orderedIds = ranking.h7OrderScored(scored).map((s) => s.id);
+        } else {
+            const layered = rows.map((r) => ({
+                row: r,
+                layer: policy.h7SearchLayer(r.title || '', r.description ?? null, q),
+            }));
+            orderedIds = [];
+            for (const layer of [0, 1, 2, 3]) {
+                const group = layered.filter((l) => l.layer === layer);
+                if (group.length === 0) continue;
+                const scored = group.map(({ row }) => ({
+                    id: row.id,
+                    score: ranking.h7SearchScore({ ...row, nowMs }, ctx, 0.5),
+                    recency: policy.h7RecencyOf({ ...row }, nowMs),
+                }));
+                orderedIds.push(...ranking.h7OrderScored(scored).map((s) => s.id));
+            }
+        }
+        const pageIds = orderedIds.slice(offset, offset + limit);
+        if (pageIds.length === 0) {
+            return { items: [], total, hasMore: offset < total };
+        }
+        const placeholders = pageIds.map(() => '?').join(',');
         const itemsQuery = `
-            SELECT 
+            SELECT
                 c.*,
                 u.username as creator_username,
                 u.display_name as creator_display_name,
@@ -106,17 +159,15 @@ export class SearchModel {
             FROM competitions c
             LEFT JOIN users u ON c.creator_id = u.id
             LEFT JOIN categories cat ON c.category_id = cat.id
-            ${whereClause}
-            ORDER BY c.created_at DESC
-            LIMIT ? OFFSET ?
+            WHERE c.id IN (${placeholders})
         `;
-
-        const itemsResult = await this.db.prepare(itemsQuery)
-            .bind(...params, limit, offset)
-            .all<Competition>();
+        const itemsResult = await this.db.prepare(itemsQuery).bind(...pageIds).all<Competition>();
+        const byId = new Map<number, Competition>();
+        for (const item of (itemsResult.results || [])) byId.set((item as Competition & { id: number }).id, item);
+        const items = pageIds.map((id) => byId.get(id)).filter((r): r is Competition => !!r);
 
         return {
-            items: itemsResult.results || [],
+            items,
             total,
             hasMore: offset + limit < total
         };
@@ -171,8 +222,77 @@ export class SearchModel {
     }
 
     /**
-     * Get suggested competitions for a user
-     * Based on: language, country, trending (views), recent
+     * H7 card hydration in ranked order (shared by the slices below).
+     */
+    private async hydrateCards(ids: number[]): Promise<Competition[]> {
+        if (ids.length === 0) return [];
+        const placeholders = ids.map(() => '?').join(',');
+        const q = `
+            SELECT
+                c.*,
+                u.username as creator_username,
+                u.display_name as creator_display_name,
+                u.avatar_url as creator_avatar,
+                cat.name_ar as category_name_ar,
+                cat.name_en as category_name_en,
+                cat.slug as category_slug
+            FROM competitions c
+            LEFT JOIN users u ON c.creator_id = u.id
+            LEFT JOIN categories cat ON c.category_id = cat.id
+            WHERE c.id IN (${placeholders})
+        `;
+        const res = await this.db.prepare(q).bind(...ids).all<Competition>();
+        const byId = new Map<number, Competition>();
+        for (const item of (res.results || [])) byId.set((item as Competition & { id: number }).id, item);
+        return ids.map((id) => byId.get(id)).filter((r): r is Competition => !!r);
+    }
+
+    private async h7RankIds(
+        ids: number[],
+        viewerUserId: number | null,
+        lang: string | null,
+        country: string | null,
+        bucket: 'live' | 'recorded' | 'upcoming' | 'mixed'
+    ): Promise<number[]> {
+        if (ids.length === 0) return [];
+        const { H7SignalsModel } = await import('./H7SignalsModel');
+        const ranking = await import('../lib/services/H7RankingService');
+        const policy = await import('../lib/services/H7RankingPolicy');
+        const signalsModel = new H7SignalsModel(this.db);
+        const rows = await signalsModel.loadCompetitions(ids);
+        const ctx = await signalsModel.loadViewerContext(this.db, viewerUserId, lang, country);
+        const uids: number[] = [];
+        for (const r of rows) {
+            uids.push(r.creator_id);
+            if (r.opponent_id !== null) uids.push(r.opponent_id);
+        }
+        const profiles = await signalsModel.loadProfiles(uids);
+        const nowMs = Date.now();
+        const identity = viewerUserId === null ? 'guest' : 'user';
+        const scored = rows.map((r) => {
+            const { score } = ranking.h7ScoreCard({ ...r, nowMs }, ctx, identity, bucket, profiles);
+            return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), row: r };
+        });
+        const ordered = ranking.h7OrderScored(scored);
+        const diverse = ranking.h7ApplyDiscoveryDiversity(
+            ordered.map((s) => ({
+                id: s.id,
+                creator_id: s.row.creator_id,
+                opponent_id: s.row.opponent_id,
+                created_at: s.row.created_at,
+                total_views: s.row.total_views,
+            })),
+            nowMs
+        );
+        const rank = new Map(diverse.map((d, i) => [d.id, i] as [number, number]));
+        return diverse.map((d) => d.id).sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+    }
+
+    /**
+     * Get suggested competitions for a user — R3-D1 (h7-v1).
+     * Eligibility: public upcoming + live slices (waiting/appointment/live
+     * cards); recorded needs a session with playable media (out of this
+     * lightweight slot). Ranked H7, sliced by limit.
      */
     async getSuggestedCompetitions(
         userId: number | null,
@@ -180,7 +300,6 @@ export class SearchModel {
         country: string,
         limit: number = 10
     ): Promise<Competition[]> {
-        // Get user preferences if logged in
         let userLanguage = language;
         let userCountry = country;
 
@@ -195,39 +314,13 @@ export class SearchModel {
             }
         }
 
-        // Get suggested competitions: prioritize same language/country, then trending
-        const query = `
-            SELECT 
-                c.*,
-                u.username as creator_username,
-                u.display_name as creator_display_name,
-                u.avatar_url as creator_avatar,
-                cat.name_ar as category_name_ar,
-                cat.name_en as category_name_en,
-                cat.slug as category_slug,
-                CASE 
-                    WHEN c.language = ? AND c.country = ? THEN 3
-                    WHEN c.language = ? THEN 2
-                    WHEN c.country = ? THEN 1
-                    ELSE 0
-                END as relevance_score
-            FROM competitions c
-            LEFT JOIN users u ON c.creator_id = u.id
-            LEFT JOIN categories cat ON c.category_id = cat.id
-            WHERE c.status IN ('pending', 'live')
-            ORDER BY 
-                relevance_score DESC,
-                c.status = 'live' DESC,
-                c.total_views DESC,
-                c.created_at DESC
-            LIMIT ?
-        `;
-
-        const result = await this.db.prepare(query)
-            .bind(userLanguage, userCountry, userLanguage, userCountry, limit)
-            .all<Competition>();
-
-        return result.results || [];
+        const idRows = await this.db.prepare(
+            `SELECT c.id as id FROM competitions c
+             WHERE c.status IN ('pending', 'accepted', 'live')`
+        ).all<{ id: number }>();
+        const ids = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);
+        const ranked = await this.h7RankIds(ids, userId, userLanguage, userCountry, 'mixed');
+        return this.hydrateCards(ranked.slice(0, Math.max(0, limit)));
     }
 
     /**
@@ -270,94 +363,52 @@ export class SearchModel {
     }
 
     /**
-     * Get trending competitions (most views in recent period)
+     * Get trending competitions — R3-D1 (h7-v1).
+     * Eligibility kept (live/completed of the last 7 days); ORDER is H7
+     * mixed-status, never views-only.
      */
     async getTrendingCompetitions(limit: number = 10): Promise<Competition[]> {
-        const query = `
-            SELECT 
-                c.*,
-                u.username as creator_username,
-                u.display_name as creator_display_name,
-                u.avatar_url as creator_avatar,
-                cat.name_ar as category_name_ar,
-                cat.name_en as category_name_en,
-                cat.slug as category_slug
-            FROM competitions c
-            LEFT JOIN users u ON c.creator_id = u.id
-            LEFT JOIN categories cat ON c.category_id = cat.id
-            WHERE c.status IN ('live', 'completed')
-            AND c.created_at >= datetime('now', '-7 days')
-            ORDER BY c.total_views DESC, c.total_comments DESC
-            LIMIT ?
-        `;
-
-        const result = await this.db.prepare(query).bind(limit).all<Competition>();
-        return result.results || [];
+        const idRows = await this.db.prepare(
+            `SELECT c.id as id FROM competitions c
+             WHERE c.status IN ('live', 'completed')
+             AND c.created_at >= datetime('now', '-7 days')`
+        ).all<{ id: number }>();
+        const ids = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);
+        const ranked = await this.h7RankIds(ids, null, null, null, 'mixed');
+        return this.hydrateCards(ranked.slice(0, Math.max(0, limit)));
     }
 
     /**
-     * Get live competitions
+     * Get live competitions — R3-D1 (h7-v1): eligibility live, order H7.
      */
     async getLiveCompetitions(limit: number = 20, offset: number = 0): Promise<SearchResult<Competition>> {
-        const countResult = await this.db.prepare(
-            `SELECT COUNT(*) as total FROM competitions WHERE status = 'live'`
-        ).first<{ total: number }>();
-        const total = countResult?.total || 0;
-
-        const query = `
-            SELECT 
-                c.*,
-                u.username as creator_username,
-                u.display_name as creator_display_name,
-                u.avatar_url as creator_avatar,
-                cat.name_ar as category_name_ar,
-                cat.name_en as category_name_en,
-                cat.slug as category_slug
-            FROM competitions c
-            LEFT JOIN users u ON c.creator_id = u.id
-            LEFT JOIN categories cat ON c.category_id = cat.id
-            WHERE c.status = 'live'
-            ORDER BY c.started_at DESC
-            LIMIT ? OFFSET ?
-        `;
-
-        const result = await this.db.prepare(query).bind(limit, offset).all<Competition>();
+        const idRows = await this.db.prepare(
+            `SELECT c.id as id FROM competitions c WHERE c.status = 'live'`
+        ).all<{ id: number }>();
+        const ids = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);
+        const ranked = await this.h7RankIds(ids, null, null, null, 'live');
+        const total = ranked.length;
+        const page = ranked.slice(Math.max(0, offset), Math.max(0, offset) + Math.max(0, limit));
         return {
-            items: result.results || [],
+            items: await this.hydrateCards(page),
             total,
             hasMore: offset + limit < total
         };
     }
 
     /**
-     * Get competitions waiting for opponent
+     * Get competitions waiting for opponent — R3-D1 (h7-v1).
      */
     async getPendingCompetitions(limit: number = 20, offset: number = 0): Promise<SearchResult<Competition>> {
-        const countResult = await this.db.prepare(
-            `SELECT COUNT(*) as total FROM competitions WHERE status = 'pending' AND opponent_id IS NULL`
-        ).first<{ total: number }>();
-        const total = countResult?.total || 0;
-
-        const query = `
-            SELECT 
-                c.*,
-                u.username as creator_username,
-                u.display_name as creator_display_name,
-                u.avatar_url as creator_avatar,
-                cat.name_ar as category_name_ar,
-                cat.name_en as category_name_en,
-                cat.slug as category_slug
-            FROM competitions c
-            LEFT JOIN users u ON c.creator_id = u.id
-            LEFT JOIN categories cat ON c.category_id = cat.id
-            WHERE c.status = 'pending' AND c.opponent_id IS NULL
-            ORDER BY c.created_at DESC
-            LIMIT ? OFFSET ?
-        `;
-
-        const result = await this.db.prepare(query).bind(limit, offset).all<Competition>();
+        const idRows = await this.db.prepare(
+            `SELECT c.id as id FROM competitions c WHERE c.status = 'pending' AND c.opponent_id IS NULL`
+        ).all<{ id: number }>();
+        const ids = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);
+        const ranked = await this.h7RankIds(ids, null, null, null, 'upcoming');
+        const total = ranked.length;
+        const page = ranked.slice(Math.max(0, offset), Math.max(0, offset) + Math.max(0, limit));
         return {
-            items: result.results || [],
+            items: await this.hydrateCards(page),
             total,
             hasMore: offset + limit < total
         };

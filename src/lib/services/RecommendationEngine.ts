@@ -49,8 +49,11 @@ export class RecommendationEngine {
     constructor(private db: D1Database) { }
 
     /**
-     * Get recommended competitions for a user with graceful degradation
-     * Returns results progressively less relevant so infinite scroll never stalls
+     * Get recommended competitions for a user — R3-D1 (h7-v1).
+     * Eligibility first (public set minus own/blocks/hidden), then H7
+     * mixed-status ordering. Full set ranked, sliced by limit/offset so
+     * every eligible card stays reachable; frozen sessions remain the
+     * stable paging path.
      */
     async getRecommendations(
         userId: number,
@@ -63,28 +66,90 @@ export class RecommendationEngine {
 
         if (!user) return { results: [], hasMore: false, totalAvailable: 0 };
 
-        const favCategories = await this.getUserFavoriteCategories(userId);
-        const followedIds = await this.getFollowedUserIds(userId);
-        const watchedIds = await this.getWatchedCompetitionIds(userId);
-        const hiddenIds = await this.getHiddenCompetitionIds(userId);
         const blockedUserIds = await this.getBlockedUserIds(userId);
-
-        const allResults = await this.queryWithDegradation({
-            user,
-            userId,
-            favCategories,
-            followedIds,
-            watchedIds,
-            hiddenIds,
-            blockedUserIds,
-            limit: limit + offset
+        const hiddenIds = await this.getHiddenCompetitionIds(userId);
+        const params: any[] = [userId];
+        let extra = ` AND c.creator_id != ?`;
+        if (blockedUserIds.length > 0) {
+            extra += ` AND c.creator_id NOT IN (${blockedUserIds.map(() => '?').join(',')})`;
+            params.push(...blockedUserIds);
+        }
+        if (hiddenIds.length > 0) {
+            extra += ` AND c.id NOT IN (${hiddenIds.map(() => '?').join(',')})`;
+            params.push(...hiddenIds);
+        }
+        const idRows = await this.db.prepare(
+            `SELECT c.id as id FROM competitions c
+             WHERE (c.status IN ('pending', 'accepted', 'live')
+                OR (c.status = 'completed' AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL)))
+             ${extra}`
+        ).bind(...params).all<{ id: number }>();
+        const eligible = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);
+        if (eligible.length === 0) return { results: [], hasMore: false, totalAvailable: 0 };
+        const { H7SignalsModel } = await import('../../models/H7SignalsModel');
+        const ranking = await import('./H7RankingService');
+        const policy = await import('./H7RankingPolicy');
+        const signalsModel = new H7SignalsModel(this.db);
+        const rows = await signalsModel.loadCompetitions(eligible);
+        const ctx = await signalsModel.loadViewerContext(this.db, userId, user?.language ?? 'ar', user?.country ?? null);
+        const uids: number[] = [];
+        for (const r of rows) {
+            uids.push(r.creator_id);
+            if (r.opponent_id !== null) uids.push(r.opponent_id);
+        }
+        const profiles = await signalsModel.loadProfiles(uids);
+        const nowMs = Date.now();
+        const scored = rows.map((r) => {
+            const { score } = ranking.h7ScoreCard({ ...r, nowMs }, ctx, 'user', 'mixed', profiles);
+            return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), row: r };
         });
-
-        const totalAvailable = allResults.length;
-        const paged = allResults.slice(offset, offset + limit);
+        const ordered = ranking.h7OrderScored(scored);
+        const diverse = ranking.h7ApplyDiscoveryDiversity(
+            ordered.map((s) => ({
+                id: s.id,
+                creator_id: s.row.creator_id,
+                opponent_id: s.row.opponent_id,
+                created_at: s.row.created_at,
+                total_views: s.row.total_views,
+            })),
+            nowMs
+        );
+        const rank = new Map(diverse.map((d, i) => [d.id, i] as [number, number]));
+        const finalIds = diverse.map((d) => d.id).sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+        const totalAvailable = finalIds.length;
+        const pageIds = finalIds.slice(offset, offset + limit);
+        if (pageIds.length === 0) {
+            return { results: [], hasMore: offset < totalAvailable, totalAvailable };
+        }
+        const placeholders = pageIds.map(() => '?').join(',');
+        const cardRows = await this.db.prepare(
+            `SELECT c.*,
+                u1.username as creator_username,
+                u1.display_name as creator_display_name,
+                u1.avatar_url as creator_avatar,
+                u2.username as opponent_username,
+                u2.display_name as opponent_display_name,
+                u2.avatar_url as opponent_avatar,
+                cat.name_ar as category_name_ar,
+                cat.name_en as category_name_en,
+                cat.icon as category_icon,
+                cat.color as category_color
+             FROM competitions c
+             JOIN users u1 ON c.creator_id = u1.id
+             LEFT JOIN users u2 ON c.opponent_id = u2.id
+             LEFT JOIN categories cat ON c.category_id = cat.id
+             WHERE c.id IN (${placeholders})`
+        ).bind(...pageIds).all<any>();
+        const byId = new Map<number, any>();
+        for (const r of ((cardRows.results ?? []) as any[])) byId.set(r.id, r);
+        const scoreById = new Map(ordered.map((s) => [s.id, s.score] as [number, number]));
+        const results: RecommendationResult[] = pageIds
+            .map((id) => byId.get(id))
+            .filter(Boolean)
+            .map((row: any) => ({ ...row, score: scoreById.get(row.id) ?? 0, match_phase: 1 }));
 
         return {
-            results: paged,
+            results,
             hasMore: offset + limit < totalAvailable,
             totalAvailable
         };

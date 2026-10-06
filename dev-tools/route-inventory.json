@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-06T00:42:00.691Z",
-  "total": 221,
+  "generatedAt": "2026-10-06T12:23:59.777Z",
+  "total": 225,
   "routes": [
     {
       "method": "GET",
@@ -830,6 +830,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/competitions/:id/similar-sessions",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/competitions/:id/similar-sessions/:sid/page",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/competitions/routes.ts"
+    },
+    {
+      "method": "POST",
       "path": "/api/competitions/:id/start",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
@@ -1230,6 +1244,20 @@
     {
       "method": "PUT",
       "path": "/api/settings",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/favorites",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/settings/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/settings/favorites",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/settings/routes.ts"

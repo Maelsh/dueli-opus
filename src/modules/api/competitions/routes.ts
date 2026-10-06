@@ -40,6 +40,18 @@ competitionsRoutes.post('/explore-sessions', (c) => controller.createExploreSess
 competitionsRoutes.get('/explore-sessions/:id/page', (c) => controller.readExploreSessionPage(c));
 
 /**
+ * R3-D1 (h7-v1): freeze one similar-competitions session.
+ * POST /api/competitions/:id/similar-sessions
+ */
+competitionsRoutes.post('/:id/similar-sessions', (c) => controller.createSimilarSession(c));
+
+/**
+ * R3-D1 (h7-v1): read one page of a frozen similar session.
+ * GET /api/competitions/:id/similar-sessions/:sid/page
+ */
+competitionsRoutes.get('/:id/similar-sessions/:sid/page', (c) => controller.readSimilarSessionPage(c));
+
+/**
  * Get single competition with details
  * GET /api/competitions/:id
  */

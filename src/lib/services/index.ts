@@ -36,4 +36,6 @@ export {
     EXPLORE_MAX_PAGE_LIMIT,
     EXPLORE_MAX_SCAN_PER_PAGE,
 } from './ExploreSessionService';
+export { H7_POLICY_VERSION } from './H7RankingPolicy';
+export type { H7Identity, H7StatusBucket } from './H7RankingPolicy';
 

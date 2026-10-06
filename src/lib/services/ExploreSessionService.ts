@@ -125,22 +125,33 @@ export interface ResultSessionProvider {
 }
 
 /**
- * The B7 Explore provider: same eligible set as the listing, one frozen
- * Fisher–Yates pass standing in for the current ORDER BY RANDOM() semantics.
+ * The Explore provider (R3-D1 h7-v1): same eligible set as the listing,
+ * ordered with the approved weights and frozen once at T0.
+ * - No search: Guest/User × status watch weights (§2); mixed-status views
+ *   score each card with its own status weights on the same 0–100 scale.
+ * - With search: text layers exact → prefix/whole-word → partial/description
+ *   first (§4); in-layer order is the H7 search score (text 60, topic 15,
+ *   Q 10, lang 5, country 5, recency 5). Empty search falls back to the
+ *   watch browsing above. Fame never buries a higher textual layer.
  */
 export class ExploreResultProvider implements ResultSessionProvider {
     readonly surface = EXPLORE_SURFACE;
     private readonly canonical: ExploreCanonicalFilters;
+    private readonly userId: number | null;
 
-    constructor(rawFilters: { search?: unknown; category?: unknown; subcategory?: unknown; status?: unknown }) {
+    constructor(rawFilters: { search?: unknown; category?: unknown; subcategory?: unknown; status?: unknown }, userId?: number | null) {
         this.canonical = ExploreSessionService.canonicalizeFilters(rawFilters);
+        this.userId = typeof userId === 'number' && Number.isInteger(userId) && userId > 0 ? userId : null;
     }
 
     contextKey(): string {
         return ExploreSessionService.canonicalKey(this.canonical);
     }
 
-    async buildOrderedIds(db: D1Database): Promise<number[]> {
+    async buildOrderedIds(db: D1Database, lang: string): Promise<number[]> {
+        const { H7SignalsModel } = await import('../../models/H7SignalsModel');
+        const ranking = await import('./H7RankingService');
+        const policy = await import('./H7RankingPolicy');
         const modelFilters: CompetitionFilters = {};
         if (this.canonical.status !== '') {
             modelFilters.status = this.canonical.status as CompetitionFilters['status'];
@@ -153,7 +164,82 @@ export class ExploreResultProvider implements ResultSessionProvider {
         if (this.canonical.status === 'recorded') modelFilters.playableRecording = true;
         // The FULL eligible set — no LIMIT, no total cap, one correlated read.
         const eligible = await new CompetitionModel(db).findEligibleIds(modelFilters);
-        return ExploreSessionService.freezeShuffle(eligible);
+        if (eligible.length === 0) return [];
+        const signalsModel = new H7SignalsModel(db);
+        const rows = await signalsModel.loadCompetitions(eligible);
+        const ctx = await signalsModel.loadViewerContext(db, this.userId, lang, null);
+        const nowMs = Date.now();
+        if (this.canonical.search !== '') {
+            const q = this.canonical.search;
+            const layered = rows.map((r) => ({
+                row: r,
+                layer: policy.h7SearchLayer(r.title || '', r.description ?? null, q),
+            }));
+            const byLayer = new Map<number, typeof layered>();
+            for (const item of layered) {
+                const arr = byLayer.get(item.layer) ?? [];
+                arr.push(item);
+                byLayer.set(item.layer, arr);
+            }
+            const out: number[] = [];
+            for (const layer of [0, 1, 2, 3]) {
+                const group = byLayer.get(layer) ?? [];
+                if (group.length === 0) continue;
+                const scored = group.map(({ row }) => ({
+                    id: row.id,
+                    score: ranking.h7SearchScore(
+                        { ...row, nowMs },
+                        ctx,
+                        ranking.h7TopicRelevance(row, this.canonical.category, this.canonical.subcategory, ctx)
+                    ),
+                    recency: policy.h7RecencyOf({ ...row }, nowMs),
+                    row,
+                }));
+                const ordered = ranking.h7OrderScored(scored);
+                const diverse = ranking.h7ApplyDiscoveryDiversity(
+                    ordered.map((s) => ({
+                        id: s.id,
+                        creator_id: s.row.creator_id,
+                        opponent_id: s.row.opponent_id,
+                        created_at: s.row.created_at,
+                        total_views: s.row.total_views,
+                    })),
+                    nowMs
+                );
+                // Diverse sequence is authoritative within the layer.
+                const rank = new Map(diverse.map((d, i) => [d.id, i] as [number, number]));
+                const layerIds = diverse.map((d) => d.id).sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+                out.push(...layerIds);
+            }
+            return out;
+        }
+        const uids: number[] = [];
+        for (const r of rows) {
+            uids.push(r.creator_id);
+            if (r.opponent_id !== null) uids.push(r.opponent_id);
+        }
+        const profiles = await signalsModel.loadProfiles(uids);
+        const identity = this.userId === null ? 'guest' : 'user';
+        const bucket = this.canonical.status === 'live' || this.canonical.status === 'recorded' || this.canonical.status === 'upcoming'
+            ? this.canonical.status
+            : 'mixed';
+        const scored = rows.map((r) => {
+            const { score } = ranking.h7ScoreCard({ ...r, nowMs }, ctx, identity, bucket, profiles);
+            return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), row: r };
+        });
+        const ordered = ranking.h7OrderScored(scored);
+        const diverse = ranking.h7ApplyDiscoveryDiversity(
+            ordered.map((s) => ({
+                id: s.id,
+                creator_id: s.row.creator_id,
+                opponent_id: s.row.opponent_id,
+                created_at: s.row.created_at,
+                total_views: s.row.total_views,
+            })),
+            nowMs
+        );
+        const rank = new Map(diverse.map((d, i) => [d.id, i] as [number, number]));
+        return diverse.map((d) => d.id).sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
     }
 
     isEligible(row: CompetitionWithDetails): boolean {
@@ -351,7 +437,11 @@ export class ExploreSessionService {
             if (row.subcategory_slug !== filters.subcategory) return false;
         }
         if (filters.search !== '') {
-            if (!row.title.toLowerCase().includes(filters.search.toLowerCase())) return false;
+            const q = filters.search.toLowerCase();
+            const inTitle = row.title.toLowerCase().includes(q);
+            const record = row as CompetitionWithDetails & { description?: string | null };
+            const inDesc = (record.description || '').toLowerCase().includes(q);
+            if (!inTitle && !inDesc) return false;
         }
         return true;
     }

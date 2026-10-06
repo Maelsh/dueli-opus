@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-06T00:42:00.691Z
+> تاريخ التوليد: 2026-10-06T12:23:59.777Z
 
-## الإجمالي: 221 مسار
+## الإجمالي: 225 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 114 |
+| PUBLIC(auth-optional, in-handler check required) | 118 |
 | AUTHENTICATED | 61 |
 | UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -142,6 +142,8 @@
 | DELETE | `/api/competitions/:id/request` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/request` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | GET | `/api/competitions/:id/requests` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| POST | `/api/competitions/:id/similar-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
+| GET | `/api/competitions/:id/similar-sessions/:sid/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/start` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/update-vod` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
 | POST | `/api/competitions/:id/watch` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/competitions/routes.ts` |
@@ -200,6 +202,8 @@
 | GET | `/api/search/users` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/search/routes.ts` |
 | GET | `/api/settings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
 | PUT | `/api/settings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
+| GET | `/api/settings/favorites` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
+| PUT | `/api/settings/favorites` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
 | GET | `/api/settings/feed` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
 | POST | `/api/settings/posts` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |
 | DELETE | `/api/settings/posts/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/settings/routes.ts` |

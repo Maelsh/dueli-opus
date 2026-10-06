@@ -1,6 +1,13 @@
 
 
 
+## R3-D1 H7 approved ranking (h7-v1) · فرع `feat/r3-d1-ranking` (من `17d6dd7` = origin/main بعد دمج R2-F #95)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/خدمات مدفوعة/ترحيل جديد (routes ‏221←225: similar-sessions ×2 + settings/favorites ×2).
+- العقد: H7-v1 حرفياً من 11 (الأوزان/الصيغ/الأنصاف/التوزيع/الاكتشاف/التنوع) بمصدر مركزي واحد؛ الأهلية أولاً ثم الترتيب على بنية الجلسات القائمة؛ Guest يرى upcoming؛ طبقات البحث قبل الشهرة؛ المشابهات بأوزان 11 بلا embeddings؛ الإشارات الحقيقية فقط (H2/نجوم فعالة/Like-Dislike/follows/history) + فجوة المفضلات أُغلقت داخل D1 (namespaced user_keywords + Settings).
+- **الأدلة**: T جديد `r3-d1-h7-ranking` ‏21/21 + تحديث التثبيتات المتجاوَزة إلى H7 (`recommendations-ranking` ‏8/8، ‏`b7-explore-pagination-ordering` ‏3/3، ‏`guest-suggested-continuation` ‏9/9)؛ الحراس المتأثرة (§10: explore/home/search/ratings/likes/schema/settings/csp ‏126/126 + ‏UI ‏62/62) خضراء؛ الكاملة ‏1300/1316 (الـ16 بيئية Windows مسبقة على BASE: ‏6 jq + ‏10 readiness-CRLF بلا مساس migrations)؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏churn رُجع)؛ ‏G2 ‏+0 ‏any.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE. D2 خارج النطاق (Profile UI/history، user-search ranking، opponent matchmaking).
+
 ## R2-F remaining journeys (notifications/profile/deletion/social/donations/advertiser/moderation) · فرع `feat/r2-f-journeys` (من `2497bda` = origin/main بعد دمج R2-P #94)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل جديد/مسارات جديدة (routes ‏221←221). R1 والمالية/ELO/L1/V/L2/A/M/P وH7/D1/D2 مغلقة ولم تُمس خارج العقد.
