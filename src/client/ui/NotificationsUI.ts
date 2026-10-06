@@ -146,6 +146,8 @@ export class NotificationsUI {
             'request_declined': 'fa-times-circle',
             'new_follower': 'fa-heart',
             'new_message': 'fa-envelope',
+            'message': 'fa-envelope',
+            'admin_message': 'fa-shield-alt',
             'competition_started': 'fa-play-circle',
             'competition_ended': 'fa-flag-checkered',
             'competition_reminder': 'fa-clock',
@@ -170,6 +172,7 @@ export class NotificationsUI {
             'invitation_accepted': 'bg-green-100 dark:bg-green-900/40 text-green-600',
             'request_declined': 'bg-red-100 dark:bg-red-900/40 text-red-600',
             'new_follower': 'bg-pink-100 dark:bg-pink-900/40 text-pink-600',
+            'admin_message': 'bg-amber-100 dark:bg-amber-900/40 text-amber-600',
             'warning': 'bg-amber-100 dark:bg-amber-900/40 text-amber-600',
             'earnings': 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600',
             'report': 'bg-orange-100 dark:bg-orange-900/40 text-orange-600',
@@ -198,7 +201,9 @@ export class NotificationsUI {
 
     /**
      * T2.2: Handle clicking a notification — mark read + navigate to target
-     * (invitation/request notifications go directly to the competition page)
+     * (invitation/request notifications go directly to the competition page;
+     * R2-M: personal message → its conversation, official admin reply → its
+     * admin thread — same server link shape the notifications page uses).
      */
     static handleNotificationClick(id: number): void {
         const notification = this.notifications.find(n => n.id === id);
@@ -211,6 +216,10 @@ export class NotificationsUI {
         const refId = notification?.reference_id ?? notification?.data?.reference_id;
         if ((refType === 'competition' || notification?.type === 'invitation') && refId) {
             window.location.href = `/competition/${refId}?lang=${State.lang}`;
+        } else if (refType === 'conversation' && refId) {
+            window.location.href = `/messages?conversation=${refId}&lang=${State.lang}`;
+        } else if (refType === 'support_thread' && refId) {
+            window.location.href = `/messages?tab=admin&thread=${refId}&lang=${State.lang}`;
         } else {
             this.renderList();
         }

@@ -146,6 +146,40 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
                 <div id="adminDocPreview" class="hidden mt-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700"></div>
             </div>
 
+            <!-- R2-M (H6): support inbox — agents read and reply officially.
+                 Independent system (admin API + support_* tables); official
+                 replies render under the Dueli identity, never a personal link. -->
+            <div class="mt-6 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <i class="fas fa-headset text-amber-500"></i>
+                        ${tr.support?.admin_inbox || 'Support inbox'}
+                        <span id="inboxUnreadCount" class="ml-2 bg-amber-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+                    </h2>
+                    <select id="inboxFilterStatus" data-csp-on="change" data-csp-fn="loadInboxThreads" data-csp-args='[]' class="px-3 py-1.5 text-sm rounded-lg border dark:border-gray-600 bg-transparent">
+                        <option value="open" selected>Open</option>
+                        <option value="closed">Closed</option>
+                        <option value="">All</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div id="inboxThreadsList" class="space-y-2 max-h-96 overflow-y-auto"></div>
+                    <div>
+                        <div id="inboxThreadView" class="hidden">
+                            <p id="inboxThreadSubject" class="font-bold"></p>
+                            <p id="inboxThreadUser" class="text-xs text-gray-500 mb-2"></p>
+                            <div id="inboxMessagesArea" class="space-y-2 max-h-64 overflow-y-auto p-2 rounded-xl bg-gray-50 dark:bg-gray-900 mb-2"></div>
+                            <form data-csp-on="submit" data-csp-fn="sendInboxReply" data-csp-args='["@event"]' class="flex gap-2">
+                                <input type="text" id="inboxReplyInput" placeholder="${tr.messages?.type_message || 'Type a message...'}" class="flex-1 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-700 border-none text-sm">
+                                <button type="submit" class="px-4 py-2 bg-amber-500 text-white rounded-xl text-sm font-bold">${tr.support?.reply_label || 'Reply'}</button>
+                            </form>
+                            <button data-csp-on="click" data-csp-fn="setInboxThreadStatus" data-csp-args='[]' id="inboxStatusBtn" class="mt-2 px-4 py-1.5 text-xs rounded-lg bg-gray-200 dark:bg-gray-700 font-bold"></button>
+                        </div>
+                        <p id="inboxThreadEmpty" class="text-center text-gray-400 py-8 text-sm">—</p>
+                    </div>
+                </div>
+            </div>
+
             <div id="grantRoleForm" class="hidden mt-6 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                 <h3 class="text-lg font-bold mb-4">${tt('grant_role')}</h3>
                 <form data-csp-on="submit" data-csp-fn="grantRole" data-csp-args='["@event"]' class="flex gap-4 items-end">
@@ -568,9 +602,92 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
             box.setAttribute('dir', adminDocPreviewLang === 'ar' ? 'rtl' : 'ltr');
         }
 
+        // ============================
+        // R2-M (H6): support inbox
+        // ============================
+        let inboxThreadsCache = [];
+        let inboxCurrentThreadId = null;
+        async function loadInboxThreads() {
+            const status = document.getElementById('inboxFilterStatus').value;
+            const url = '/api/admin/support/threads' + (status ? '?status=' + status : '');
+            const res = await fetch(url, { headers: adminHeaders() });
+            const data = await res.json().catch(() => ({}));
+            if (!data.success) return;
+            inboxThreadsCache = data.data?.threads || [];
+            const box = document.getElementById('inboxThreadsList');
+            box.innerHTML = inboxThreadsCache.length === 0
+                ? '<p class="text-center text-gray-400 py-4 text-sm">—</p>'
+                : inboxThreadsCache.map(t => '<button data-csp-on="click" data-csp-fn="openInboxThread" data-csp-args="[' + t.id + ']" ' +
+                    'class="w-full p-3 text-start bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700">' +
+                    '<p class="font-bold text-sm truncate">' + escapeAdminHtml(t.subject || ('#' + t.id)) + '</p>' +
+                    '<p class="text-xs text-gray-500">' + escapeAdminHtml(t.display_name || t.username || '') + ' · ' + t.status +
+                    (t.unread_admin > 0 ? ' · <span class="text-amber-600 font-bold">' + t.unread_admin + ' new</span>' : '') + '</p></button>').join('');
+            loadAdminSupportUnread();
+        }
+        async function loadAdminSupportUnread() {
+            const res = await fetch('/api/admin/support/unread', { headers: adminHeaders() });
+            const data = await res.json().catch(() => ({}));
+            if (data.success) document.getElementById('inboxUnreadCount').textContent = data.data?.unread || 0;
+        }
+        async function openInboxThread(id) {
+            inboxCurrentThreadId = id;
+            const res = await fetch('/api/admin/support/threads/' + id, { headers: adminHeaders() });
+            const data = await res.json().catch(() => ({}));
+            if (!data.success) return;
+            const thread = data.data.thread;
+            const messages = data.data.messages || [];
+            document.getElementById('inboxThreadView').classList.remove('hidden');
+            document.getElementById('inboxThreadEmpty').classList.add('hidden');
+            document.getElementById('inboxThreadSubject').textContent = thread.subject || ('#' + thread.id);
+            document.getElementById('inboxThreadUser').textContent = (thread.display_name || thread.username || '') + ' · ' + thread.status;
+            const statusBtn = document.getElementById('inboxStatusBtn');
+            statusBtn.textContent = thread.status === 'open' ? 'Close thread' : 'Reopen thread';
+            statusBtn.dataset.nextStatus = thread.status === 'open' ? 'closed' : 'open';
+            document.getElementById('inboxMessagesArea').innerHTML = messages.map(m => {
+                const official = m.sender_kind === 'admin';
+                return '<div class="flex ' + (official ? 'justify-start' : 'justify-end') + '">' +
+                    '<div class="max-w-[85%] px-3 py-1.5 rounded-xl text-sm ' + (official ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-gray-200 dark:bg-gray-700') + '">' +
+                    (official ? '<p class="text-[11px] font-bold text-amber-600 mb-0.5"><i class="fas fa-shield-alt me-1"></i>Official</p>' : '') +
+                    '<p>' + escapeAdminHtml(m.content) + '</p></div></div>';
+            }).join('');
+            loadInboxThreads();
+        }
+        async function sendInboxReply(e) {
+            e.preventDefault();
+            if (!inboxCurrentThreadId) return;
+            const input = document.getElementById('inboxReplyInput');
+            const content = input.value.trim();
+            if (!content) return;
+            const res = await fetch('/api/admin/support/threads/' + inboxCurrentThreadId + '/reply', {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ content })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data.success) {
+                input.value = '';
+                openInboxThread(inboxCurrentThreadId);
+            } else {
+                showAdminToast('Error: ' + (data.error || 'Unknown'), 'error');
+            }
+        }
+        async function setInboxThreadStatus() {
+            if (!inboxCurrentThreadId) return;
+            const next = document.getElementById('inboxStatusBtn').dataset.nextStatus || 'closed';
+            const res = await fetch('/api/admin/support/threads/' + inboxCurrentThreadId + '/status', {
+                method: 'PUT',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ status: next })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data.success) openInboxThread(inboxCurrentThreadId);
+            else showAdminToast('Error: ' + (data.error || 'Unknown'), 'error');
+        }
+
         loadAdminDashboard();
         loadWithdrawals();
         loadAdminDocs();
+        loadInboxThreads();
         // Paint the signed-in admin identity (refresh-safe: same session).
         fetch('/api/auth/session', { headers: adminHeaders() }).then(r => r.json()).then(d => {
             if (d && d.success && d.data && d.data.user) {

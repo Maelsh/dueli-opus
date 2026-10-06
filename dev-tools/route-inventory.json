@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-05T22:41:16.911Z",
-  "total": 211,
+  "generatedAt": "2026-10-06T00:42:00.691Z",
+  "total": 221,
   "routes": [
     {
       "method": "GET",
@@ -278,6 +278,41 @@
     {
       "method": "GET",
       "path": "/api/admin/stats",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/support/threads",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/support/threads/:id",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/support/threads/:id/reply",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/support/threads/:id/status",
+      "classification": "PUBLIC(auth-optional, in-handler check required)",
+      "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/support/unread",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/admin/routes.ts"
@@ -1331,6 +1366,41 @@
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/sse/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/support/threads",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/support/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/support/threads",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/support/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/support/threads/:id",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/support/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/support/threads/:id/messages",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/support/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/support/unread",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/support/routes.ts"
     },
     {
       "method": "GET",

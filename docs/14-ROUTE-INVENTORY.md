@@ -1,14 +1,14 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-05T22:41:16.911Z
+> تاريخ التوليد: 2026-10-06T00:42:00.691Z
 
-## الإجمالي: 211 مسار
+## الإجمالي: 221 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 109 |
-| AUTHENTICATED | 56 |
+| PUBLIC(auth-optional, in-handler check required) | 114 |
+| AUTHENTICATED | 61 |
 | UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
 
@@ -64,6 +64,11 @@
 | GET | `/api/admin/settings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | PUT | `/api/admin/settings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | GET | `/api/admin/stats` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| GET | `/api/admin/support/threads` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| GET | `/api/admin/support/threads/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| POST | `/api/admin/support/threads/:id/reply` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| PUT | `/api/admin/support/threads/:id/status` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| GET | `/api/admin/support/unread` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | GET | `/api/admin/users` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | PUT | `/api/admin/users/:id/ban` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | GET | `/api/admin/withdrawals` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
@@ -214,6 +219,11 @@
 | POST | `/api/signaling/verify` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | GET | `/api/signaling/viewer/poll` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/signaling/routes.ts` |
 | GET | `/api/sse` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/sse/routes.ts` |
+| GET | `/api/support/threads` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/support/routes.ts` |
+| POST | `/api/support/threads` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/support/routes.ts` |
+| GET | `/api/support/threads/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/support/routes.ts` |
+| POST | `/api/support/threads/:id/messages` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/support/routes.ts` |
+| GET | `/api/support/unread` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/support/routes.ts` |
 | GET | `/api/transparency` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
 | GET | `/api/transparency/audit` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
 | GET | `/api/transparency/daily` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/transparency/routes.ts` |
