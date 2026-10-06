@@ -43,15 +43,20 @@ function goodInput(m = manifest()) {
                     'status', 'visibility', 'version', 'is_seed',
                     'created_by', 'updated_by', 'created_at', 'updated_at',
                 ],
-                // Baseline-0037 surface: support_threads + support_messages (0037, R2-M only).
+                // Baseline-0038 surface: support_threads + support_messages (0037, R2-M only).
                 support_threads: [
                     'id', 'user_id', 'subject', 'status', 'created_at', 'updated_at',
                 ],
                 support_messages: [
                     'id', 'thread_id', 'sender_kind', 'sender_id', 'content', 'is_read', 'created_at',
                 ],
+                // Baseline-0038 surface: withdrawal_requests gains the payout
+                // link + immutable snapshot (0038, R2-P only).
+                withdrawal_requests: [
+                    'payout_method_id', 'payout_snapshot',
+                ],
             },
-            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread'],
+            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread', 'idx_withdrawal_requests_payout_method'],
         },
     };
 }
@@ -76,9 +81,9 @@ describe('release readiness gate', () => {
         expect(m.known_history).toContain(req.file);
     });
 
-    it('manifest baseline-0037 requires 0034 with a hash matching the repo file', () => {
+    it('manifest baseline-0038 requires 0034 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0037');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
         const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -91,9 +96,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_competition_views_day');
     });
 
-    it('manifest baseline-0037 requires 0035 with a hash matching the repo file', () => {
+    it('manifest baseline-0038 requires 0035 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0037');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
         const req = m.required_migrations.find((x) => x.file === '0035_comments_video_offset.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -103,9 +108,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.tables.comments).toEqual(expect.arrayContaining(['video_offset']));
     });
 
-    it('manifest baseline-0037 requires 0036 with a hash matching the repo file', () => {
+    it('manifest baseline-0038 requires 0036 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0037');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
         const req = m.required_migrations.find((x) => x.file === '0036_managed_documents.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -119,9 +124,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_managed_documents_status');
     });
 
-    it('manifest baseline-0037 requires 0037 with a hash matching the repo file', () => {
+    it('manifest baseline-0038 requires 0037 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0037');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
         const req = m.required_migrations.find((x) => x.file === '0037_support_messaging.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -138,17 +143,51 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_support_messages_thread');
     });
 
-    it('production state (0037 applied, no pending) passes the gate', () => {
-        // Mirrors production after a future authorized 0037 apply: the full
+    it('manifest baseline-0038 requires 0038 with a hash matching the repo file', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
+        const req = m.required_migrations.find((x) => x.file === '0038_withdrawal_payout_snapshot.sql');
+        expect(req).toBeTruthy();
+        const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
+        expect(actual.toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        // Minimum required-schema checks for the 0038 (R2-P) surface.
+        expect(m.required_schema.tables.withdrawal_requests).toEqual(
+            expect.arrayContaining(['payout_method_id', 'payout_snapshot'])
+        );
+        expect(m.required_schema.indexes).toContain('idx_withdrawal_requests_payout_method');
+    });
+
+    it('production state (0038 applied, no pending) passes the gate', () => {
+        // Mirrors production after a future authorized 0038 apply: the full
         // known history applied, empty pending, full required schema present.
         const r = evaluateReadiness(goodInput());
         expect(r.ok).toBe(true);
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
-        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0037');
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0038');
     });
 
-    it('production-shape 0036 + manifest 0037 => required-pending FAIL (0037 not yet applied)', () => {
+    it('production-shape 0037 + manifest 0038 => required-pending FAIL (0038 not yet applied)', () => {
+        // Production still on the 0037 shape while the manifest already
+        // requires 0038: applied history stops at 0037, the pending list
+        // names 0038, and the schema snapshot lacks the payout columns.
+        const input = goodInput();
+        input.applied = input.applied.filter((f) => f !== '0038_withdrawal_payout_snapshot.sql');
+        input.pendingText = 'Migrations to be applied:\n0038_withdrawal_payout_snapshot.sql\n';
+        delete input.schema.tables.withdrawal_requests;
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
+    });
+
+    it('production-shape 0038 + manifest 0038 => readiness PASS', () => {
+        const r = evaluateReadiness(goodInput());
+        expect(r.ok).toBe(true);
+        expect(r.checks.every((c) => c.ok)).toBe(true);
+    });
+
+    it('production-shape 0036 + manifest 0038 => required-pending FAIL (0037 not yet applied)', () => {
         // Production still on the 0036 shape while the manifest already
         // requires 0037: applied history stops at 0036, the pending list
         // names 0037, and the schema snapshot lacks the support tables.
@@ -162,13 +201,7 @@ describe('release readiness gate', () => {
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
     });
 
-    it('production-shape 0037 + manifest 0037 => readiness PASS', () => {
-        const r = evaluateReadiness(goodInput());
-        expect(r.ok).toBe(true);
-        expect(r.checks.every((c) => c.ok)).toBe(true);
-    });
-
-    it('production-shape 0035 + manifest 0037 => required-pending FAIL (0036/0037 not yet applied)', () => {
+    it('production-shape 0035 + manifest 0038 => required-pending FAIL (0036/0037 not yet applied)', () => {
         // Production still on the 0035 shape while the manifest already
         // requires 0037: applied history stops at 0035, the pending list
         // names 0036, and the schema snapshot lacks managed_documents.

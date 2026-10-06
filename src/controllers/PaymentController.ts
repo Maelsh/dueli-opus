@@ -56,17 +56,17 @@ export class PaymentController extends BaseController {
             }>(c);
 
             if (!body?.type || !['bank', 'paypal', 'wise'].includes(body.type)) {
-                return this.validationError(c, 'Valid type required: bank, paypal, or wise');
+                return this.validationError(c, this.t('payout.type_invalid', c));
             }
 
             // Validate based on type
             if (body.type === 'bank') {
                 if (!body.iban || !body.bank_name) {
-                    return this.validationError(c, 'IBAN and bank name are required for bank accounts');
+                    return this.validationError(c, this.t('payout.bank_fields_required', c));
                 }
             } else {
                 if (!body.email) {
-                    return this.validationError(c, 'Email is required for PayPal/Wise');
+                    return this.validationError(c, this.t('payout.email_required', c));
                 }
             }
 
@@ -99,7 +99,7 @@ export class PaymentController extends BaseController {
             const methodId = this.getParamInt(c, 'id');
 
             if (!methodId) {
-                return this.validationError(c, 'Invalid ID');
+                return this.validationError(c, this.t('errors.invalid_id', c));
             }
 
             const model = new PaymentMethodModel(c.env.DB);
@@ -109,12 +109,29 @@ export class PaymentController extends BaseController {
             }
 
             const body = await this.getBody<Partial<{
+                type: 'bank' | 'paypal' | 'wise';
                 bank_name: string;
                 iban: string;
                 swift_code: string;
                 account_holder: string;
                 email: string;
             }>>(c);
+
+            // R2-P: a type change re-validates the merged row (a bank row
+            // cannot become an email-less paypal row and vice versa).
+            if (body?.type !== undefined && !['bank', 'paypal', 'wise'].includes(body.type)) {
+                return this.validationError(c, this.t('payout.type_invalid', c));
+            }
+            const mergedType = body?.type ?? existing.type;
+            const mergedBankName = body?.bank_name ?? existing.bank_name;
+            const mergedIban = body?.iban ?? existing.iban;
+            const mergedEmail = body?.email ?? existing.email;
+            if (mergedType === 'bank' && (!mergedBankName || !mergedIban)) {
+                return this.validationError(c, this.t('payout.bank_fields_required', c));
+            }
+            if (mergedType !== 'bank' && !mergedEmail) {
+                return this.validationError(c, this.t('payout.email_required', c));
+            }
 
             const updated = await model.update(methodId, body || {});
             return this.success(c, { method: updated });
@@ -134,17 +151,17 @@ export class PaymentController extends BaseController {
             const methodId = this.getParamInt(c, 'id');
 
             if (!methodId) {
-                return this.validationError(c, 'Invalid ID');
+                return this.validationError(c, this.t('errors.invalid_id', c));
             }
 
             const model = new PaymentMethodModel(c.env.DB);
-            const deleted = await model.deleteMethod(user.id, methodId);
+            const { deleted, newDefaultId } = await model.deleteMethod(user.id, methodId);
 
             if (!deleted) {
                 return this.notFound(c);
             }
 
-            return this.success(c, { deleted: true });
+            return this.success(c, { deleted: true, new_default_id: newDefaultId });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
@@ -161,7 +178,7 @@ export class PaymentController extends BaseController {
             const methodId = this.getParamInt(c, 'id');
 
             if (!methodId) {
-                return this.validationError(c, 'Invalid ID');
+                return this.validationError(c, this.t('errors.invalid_id', c));
             }
 
             const model = new PaymentMethodModel(c.env.DB);

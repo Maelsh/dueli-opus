@@ -1,5 +1,5 @@
 {
-  "manifest_version": "R-RELEASE-1.baseline-0037",
+  "manifest_version": "R-RELEASE-1.baseline-0038",
   "target": {
     "pages_project": "project-8e7c178d",
     "database_name": "dueli-db"
@@ -24,6 +24,10 @@
     {
       "file": "0037_support_messaging.sql",
       "sha256": "046d22c31ee82ed621d444c0d2ddb2bb6ea0aeffe122ba229ce85fcf7f08d5a1"
+    },
+    {
+      "file": "0038_withdrawal_payout_snapshot.sql",
+      "sha256": "1e4997234905f55c6cd3d654d893b4d0664598fabf07ab1f1d0f619a41f944db"
     }
   ],
   "known_history": [
@@ -64,7 +68,8 @@
       "0034_competition_views.sql",
       "0035_comments_video_offset.sql",
       "0036_managed_documents.sql",
-      "0037_support_messaging.sql"
+      "0037_support_messaging.sql",
+      "0038_withdrawal_payout_snapshot.sql"
     ],
   "required_schema": {
     "tables": {
@@ -125,12 +130,16 @@
         "content",
         "is_read",
         "created_at"
+      ],
+      "withdrawal_requests": [
+        "payout_method_id",
+        "payout_snapshot"
       ]
     },
-    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread"]
+    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method"]
   },
   "notes": [
-    "Baseline R-RELEASE-1.baseline-0037 requires migrations 0033, 0034, 0035, 0036 and 0037 applied with the pinned sha256 each (no post-apply rewrite).",
+    "Baseline R-RELEASE-1.baseline-0038 requires migrations 0033, 0034, 0035, 0036, 0037 and 0038 applied with the pinned sha256 each (no post-apply rewrite).",
     "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
     "The gate never applies migrations. Unexpected pending is recorded and FAILS the gate; it is never auto-applied."
   ]

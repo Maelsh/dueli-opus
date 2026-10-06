@@ -18,6 +18,7 @@ import { D1Database } from '@cloudflare/workers-types';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
 import { WithdrawalRequestModel, WithdrawalRequestError } from '../models/WithdrawalRequestModel';
+import { PaymentMethodModel, buildPayoutSnapshot } from '../models/PaymentMethodModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
 import { LedgerService } from '../lib/services/LedgerService';
 import { EventPusher } from '../lib/services/EventPusher';
@@ -113,7 +114,10 @@ export class WithdrawalController extends BaseController {
      * POST /api/withdrawals
      * User submits a new withdrawal request (requested + ledger hold).
      *
-     * Body: { amount, payment_method, payment_details }
+     * Body: { amount, payment_method, payment_details } (legacy free-text)
+     *   or { amount, payout_method_id } (R2-P saved method — the method's
+     *   data is snapshotted into the request; later method edits/deletes
+     *   can never change it).
      */
     async createWithdrawal(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
         try {
@@ -124,21 +128,48 @@ export class WithdrawalController extends BaseController {
                 amount: number;
                 payment_method: string;
                 payment_details: string;
+                payout_method_id?: number;
             }>(c);
 
-            if (!body?.amount || !body?.payment_method || !body?.payment_details) {
+            if (!body?.amount) {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
             if (typeof body.amount !== 'number' || body.amount <= 0) {
                 return this.validationError(c, this.t('errors.invalid_request', c));
             }
 
+            // R2-P: saved-method path — the method must exist and belong to
+            // the caller (anything else is 404: no existence oracle, same
+            // convention as the methods endpoints). Display columns are
+            // derived so legacy readers keep working unchanged.
+            let payment_method = body.payment_method;
+            let payment_details = body.payment_details;
+            let payout_method_id: number | null = null;
+            let payout_snapshot = '{}';
+            if (body.payout_method_id !== undefined && body.payout_method_id !== null) {
+                const methodModel = new PaymentMethodModel(c.env.DB);
+                const method = await methodModel.findById(body.payout_method_id);
+                if (!method || method.user_id !== user.id) {
+                    return this.notFound(c, this.t('payout.method_not_found', c));
+                }
+                const built = buildPayoutSnapshot(method);
+                payment_method = built.payment_method;
+                payment_details = built.payment_details;
+                payout_method_id = method.id;
+                payout_snapshot = built.snapshot;
+            }
+            if (!payment_method || !payment_details) {
+                return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+
             const model  = new WithdrawalRequestModel(c.env.DB);
             const result = await model.requestWithdrawal({
                 user_id:         user.id,
                 amount:          body.amount,
-                payment_method:  body.payment_method,
-                payment_details: body.payment_details
+                payment_method,
+                payment_details,
+                payout_method_id,
+                payout_snapshot
             });
 
             if ('error' in result) {
