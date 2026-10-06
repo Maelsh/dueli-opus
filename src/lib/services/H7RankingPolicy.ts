@@ -133,6 +133,62 @@ export const H7_SEARCH_WEIGHTS = {
     recency: 5,
 } as const;
 
+/**
+ * R3-D2 (h7-v1 §4) — user + matchmaking tracks. Every table sums to 100.
+ * OWNER APPROVED in 11; copied literally here (no re-design, no new numbers).
+ * - User search: text 60, specialization 15, Profile 15, language 5, country 5.
+ * - Opponent (inside ONE layer): specialization depth 40, Profile 20,
+ *   category experience 15, recent presence 15, follow 10.
+ * - Follow suggestions: interest/specialization 25, language 20, country 10,
+ *   Profile 15, experience 10, activity 10, new-account opportunity 10.
+ * - Participation (user→competition, inside eligible seats only): topic 35,
+ *   creator history 20, creator activity 10, follow 10, recency 15,
+ *   schedule proximity 10.
+ */
+export const H7_USER_SEARCH_WEIGHTS = {
+    text: 60,
+    specialization: 15,
+    profile: 15,
+    language: 5,
+    country: 5,
+} as const;
+
+export const H7_OPPONENT_WEIGHTS = {
+    specialization: 40,
+    profile: 20,
+    experience: 15,
+    presence: 15,
+    follow: 10,
+} as const;
+
+export const H7_FOLLOW_WEIGHTS = {
+    interest: 25,
+    language: 20,
+    country: 10,
+    profile: 15,
+    experience: 10,
+    activity: 10,
+    newAccount: 10,
+} as const;
+
+export const H7_PARTICIPATION_WEIGHTS = {
+    topic: 35,
+    creatorHistory: 20,
+    creatorActivity: 10,
+    follow: 10,
+    recency: 15,
+    schedule: 10,
+} as const;
+
+/**
+ * R3-D2 opponent layers (§4, mandatory BEFORE score — fame/Profile must
+ * never bury a higher layer):
+ * 0 = same subcategory + language + country,
+ * 1 = same subcategory + language + other country,
+ * 2 = close specialization inside the main category + suitable language.
+ */
+export type H7OpponentLayer = 0 | 1 | 2 | 3;
+
 /** §5 — inner interest mix (of the interests block only). */
 export const H7_INTEREST_MIX = {
     explicit: 0.35,

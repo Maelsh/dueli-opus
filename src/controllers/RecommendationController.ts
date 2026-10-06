@@ -62,7 +62,16 @@ export class RecommendationController extends BaseController {
 
             const engine = new RecommendationEngine(c.env.DB);
             const stats = await engine.getCompetitorMiniStats(userId);
-            return this.success(c, stats);
+            // R3-D2 Profile SSOT (08/11): shared with search/opponent/follow
+            // ranking and the profile display — never a parallel formula.
+            const { UserSignalsModel } = await import('../models/UserSignalsModel');
+            const competitorProfile = await new UserSignalsModel(c.env.DB).getProfile(userId);
+            return this.success(c, {
+                ...stats,
+                profile_score: competitorProfile.profile,
+                profile_competitions: competitorProfile.competitions,
+                profile_stars: competitorProfile.starsSum,
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }

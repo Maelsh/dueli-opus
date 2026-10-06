@@ -7,9 +7,20 @@
 import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { SearchController } from '../../../controllers/SearchController';
+import { UserDiscoveryController } from '../../../controllers/UserDiscoveryController';
+import { authMiddleware } from '../../../middleware/auth';
 
 const searchRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new SearchController();
+const discovery = new UserDiscoveryController();
+
+// R3-D2: H7 user search + frozen sessions (auth-optional: guests browse,
+// logged-in viewers get self/block narrowing + personal signals).
+searchRoutes.use('/users', authMiddleware({ required: false }));
+searchRoutes.use('/users-sessions', authMiddleware({ required: false }));
+searchRoutes.use('/users-sessions/*', authMiddleware({ required: false }));
+searchRoutes.post('/users-sessions', (c) => discovery.createUserSearchSession(c));
+searchRoutes.get('/users-sessions/:id/page', (c) => discovery.readUserSearchSessionPage(c));
 
 /**
  * GET /api/search/competitions

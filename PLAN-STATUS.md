@@ -1,6 +1,13 @@
 
 
 
+## R3-D2 user discovery + matchmaking (h7-v1) · فرع `feat/r3-d2-user-discovery` (PR #98، من `f8c7add` = origin/main بعد دمج R3-D1-REM1 #97)
+
+- 🔧 ‏REMOTE REJECT ← إصلاح LOCAL مكتمل على نفس الفرع/PR، بانتظار re-REMOTE — ليست DONE. بلا PR جديد/دمج/نشر/كتابة إنتاجية/ترحيل (routes ‏225←235 ثابتة). D1+REM1 مغلقتان؛ H7-v1 بلا تغيير أوزان.
+- الرفض (3 ‏blockers) والإصلاح على نفس ‏HEAD: ‏(1) ‏actual participation أصبح ‏`started_at IS NOT NULL` المركزي ‏(`ACTUAL_PARTICIPATION_WHERE` — ‏startLive الكاتب الوحيد المثبت) بدل ‏opponent/status، وطُبق على ‏loadProfiles/loadSpecializations/partCats؛ ‏(2) بوابة لغة في ‏h7OpponentLayer: ‏wrong-language المعروفة تسقط إلى ‏fallback 3 ولا تسبق ‏L2 المناسبة؛ ‏(3) ‏creator Profile المفقود في المشاركة ‏0.5 ‏neutral عند توفر الإشارة للجلسة بدل إسقاط الوزن (الصفر المقاس يبقى ‏0).
+- **الأدلة**: T ‏`r3-d2-user-ranking` ‏16/16 (‏13 + مصفوفة ‏lifecycle الست + ‏wrong-language/ar/en + ‏neutrality الثلاثي) + ‏UI ‏`r3-d2-profile-display` ‏5/5؛ الحراس ‏220/220 (‏H7/D1/lifecycle/startLive/ratings/ELO/invite/follow/search/settings)؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏churn رُجع)؛ ‏G2 ‏+0 ‏any.
+- **المتبقي (blockers فقط)**: re-REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-D1-REM1 close 4 known follow-ups · فرع `fix/r3-d1-rem1-followups` (من `1c84bc4` = origin/main بعد دمج R3-D1 #96)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/مسارات جديدة (routes ‏225←225). النطاق: الملاحظات الأربع فقط (Unicode search، حماية `fav:`، invariant عدّ المشاهدات، تصحيح التعليق) — بلا توسع إلى D2.

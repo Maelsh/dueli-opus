@@ -215,6 +215,11 @@ export const ar = {
     total_views: 'المشاهدات',
     followers: 'المتابعون',
     following: 'يتابع',
+    // R3-D2 Profile (08/11): SUM النجوم ÷ عدد المنافسات الفعلية
+    profile_score: 'التقييم العام',
+    profile_hint: 'إجمالي النجوم ÷ عدد المنافسات',
+    profile_empty: 'لا توجد منافسات بعد',
+    profile_participations: 'منافسة',
 
     // الأخطاء
     error: 'خطأ',

@@ -67,10 +67,14 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
             } else {
                 const competitionModel = new CompetitionModel(DB);
                 const followModel = new FollowModel(DB);
-                const [followersCount, followingCount, userCompetitions] = await Promise.all([
-                    followModel.getFollowersCount(user.id as number),
-                    followModel.getFollowingCount(user.id as number),
-                    competitionModel.findByUser(Number(user.id), { limit: 10 }).catch(() => [] as unknown[])
+                const { UserSignalsModel } = await import('../../models/UserSignalsModel');
+                const uid = Number(user.id);
+                const [followersCount, followingCount, userCompetitions, competitorProfile] = await Promise.all([
+                    followModel.getFollowersCount(uid),
+                    followModel.getFollowingCount(uid),
+                    competitionModel.findByUser(uid, { limit: 10 }).catch(() => [] as unknown[]),
+                    // R3-D2 Profile SSOT (08/11) — same source as ranking.
+                    new UserSignalsModel(DB).getProfile(uid).catch(() => ({ userId: uid, starsSum: 0, competitions: 0, profile: null as number | null })),
                 ]);
                 competitions = Array.isArray(userCompetitions) ? userCompetitions : [];
                 stats = {
@@ -79,6 +83,11 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     following: followingCount,
                     wins: (user.total_wins as number) || (user.wins as number) || 0
                 };
+                // R3-D2: Profile display (may exceed 5 — never clamped; null
+                // means zero contested competitions — never divide by zero).
+                (user as Record<string, unknown>)['profile_score'] = competitorProfile.profile;
+                (user as Record<string, unknown>)['profile_competitions'] = competitorProfile.competitions;
+                (user as Record<string, unknown>)['profile_stars'] = competitorProfile.starsSum;
             }
         }
     } catch (err) {
@@ -119,6 +128,14 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                                 
                                 <!-- Stats -->
                                 <div class="flex ${rtl ? 'flex-row-reverse' : ''} gap-6 mt-4 justify-center md:justify-start">
+                                    <div class="text-center" title="${tr.profile_hint || ''}">
+                                        <span class="text-2xl font-bold" aria-label="${tr.profile_score || 'Profile'}">${
+                                            (user.profile_score as number | null) === null || (user.profile_score as number | null) === undefined
+                                                ? `<span class="text-base font-medium">${tr.profile_empty || 'No competitions yet'}</span>`
+                                                : Number(user.profile_score as number).toFixed(1)
+                                        }</span>
+                                        <p class="text-white/60 text-sm">${tr.profile_score || 'Overall Rating'} · ${user.profile_competitions ?? 0} ${tr.profile_participations || ''}</p>
+                                    </div>
                                     <div class="text-center">
                                         <span class="text-2xl font-bold">${stats.competitions}</span>
                                         <p class="text-white/60 text-sm">${tr.my_competitions || 'Competitions'}</p>

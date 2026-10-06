@@ -241,6 +241,11 @@ export const en = {
     total_views: 'Views',
     followers: 'Followers',
     following: 'Following',
+    // R3-D2 Profile (08/11): SUM stars ÷ contested competitions
+    profile_score: 'Overall Rating',
+    profile_hint: 'Total stars ÷ competitions contested',
+    profile_empty: 'No competitions yet',
+    profile_participations: 'competitions',
 
     // Errors
     error: 'Error',
