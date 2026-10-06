@@ -18,6 +18,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import app from '../../src/main';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { SyntheticRetirementService } from '../../src/lib/services/SyntheticRetirementService';
 
 type Env = Parameters<typeof app.request>[2];
 const env = (db: SqliteD1): Env => ({ DB: db }) as unknown as Env;
@@ -219,5 +220,30 @@ describe('R2-M independent admin messaging', () => {
         const msgs = await db.prepare(`SELECT COUNT(*) AS n FROM support_messages`).first<{ n: number }>();
         expect(threads?.n).toBe(1);
         expect(msgs?.n).toBe(3);
+    });
+
+    it('6. retirement skips users with support rows (no FK failure, no data loss)', async () => {
+        const svc = new SyntheticRetirementService(db as any);
+        // Dependency-free synthetic retires even with support tables present.
+        await db.prepare(
+            `INSERT INTO users (email, username, password_hash, display_name, is_verified, is_admin, is_fake)
+             VALUES ('synth1@r2m.local', 'synth_one', 'x', 'Synth One', 1, 0, 1)`,
+        ).run();
+        const retired = await svc.retireOneSyntheticUser();
+        expect(retired).toBeGreaterThan(0);
+
+        // Synthetic WITH a support thread is skipped (never auto-destroyed).
+        const synth = await db.prepare(
+            `INSERT INTO users (email, username, password_hash, display_name, is_verified, is_admin, is_fake)
+             VALUES ('synth2@r2m.local', 'synth_two', 'x', 'Synth Two', 1, 0, 1) RETURNING id`,
+        ).first<{ id: number }>();
+        await db.prepare(
+            `INSERT INTO support_threads (user_id, subject, status) VALUES (?, 's', 'open')`,
+        ).bind(synth!.id).run();
+        expect(await svc.retireOneSyntheticUser()).toBeNull();
+        const threadsAfter = await db.prepare(`SELECT COUNT(*) AS n FROM support_threads`).first<{ n: number }>();
+        expect(threadsAfter?.n).toBe(1);
+        const owner = await db.prepare(`SELECT user_id FROM support_threads LIMIT 1`).first<{ user_id: number }>();
+        expect(owner?.user_id).toBe(synth!.id);
     });
 });
