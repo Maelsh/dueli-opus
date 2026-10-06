@@ -71,6 +71,16 @@ export class AdminRoleModel extends BaseModel<AdminRole> {
         ).bind(userId).run();
         return result.meta.changes > 0;
     }
+
+    /**
+     * R2-A: how many holders a role has (last-SuperAdmin guard).
+     */
+    async countByRole(role: AdminRoleType): Promise<number> {
+        const row = await this.db.prepare(
+            `SELECT COUNT(*) AS n FROM ${this.tableName} WHERE role = ?`
+        ).bind(role).first<{ n: number }>();
+        return row?.n ?? 0;
+    }
 }
 
 export default AdminRoleModel;

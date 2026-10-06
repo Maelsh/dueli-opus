@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-05T16:28:19.814Z
+> تاريخ التوليد: 2026-10-05T22:41:16.911Z
 
-## الإجمالي: 202 مسار
+## الإجمالي: 211 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 100 |
+| PUBLIC(auth-optional, in-handler check required) | 109 |
 | AUTHENTICATED | 56 |
 | UNGUARDED ⚠ | 43 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -25,6 +25,9 @@
 | Method | Path | التصنيف | الحواجز | الملف |
 |---|---|---|---|---|
 | GET | `/api` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/schedule/routes.ts` |
+| PUT | `/api/account/email` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/account/routes.ts` |
+| PUT | `/api/account/password` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/account/routes.ts` |
+| PUT | `/api/account/username` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/account/routes.ts` |
 | GET | `/api/ad-blocks` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
 | POST | `/api/ad-blocks` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
 | DELETE | `/api/ad-blocks/:adId` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/ad-blocks/routes.ts` |
@@ -45,6 +48,11 @@
 | GET | `/api/admin/audit-logs` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | POST | `/api/admin/competitions/:id/restore` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | POST | `/api/admin/competitions/:id/suspend` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| GET | `/api/admin/documents` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| POST | `/api/admin/documents` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| DELETE | `/api/admin/documents/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| GET | `/api/admin/documents/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
+| PUT | `/api/admin/documents/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | GET | `/api/admin/enhanced-stats` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | GET | `/api/admin/live-finance/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
 | POST | `/api/admin/live-finance/:id/finalize` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/admin/routes.ts` |
@@ -144,6 +152,7 @@
 | GET | `/api/countries` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/countries/routes.ts` |
 | GET | `/api/countries/:code` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/countries/routes.ts` |
 | POST | `/api/cron/run` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/cron/routes.ts` |
+| GET | `/api/documents/:slug` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/documents/routes.ts` |
 | POST | `/api/donations` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |
 | GET | `/api/donations/my` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |
 | GET | `/api/donations/top-supporters` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |

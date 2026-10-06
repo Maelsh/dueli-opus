@@ -49,3 +49,7 @@ export type { WithdrawalRequest, WithdrawalRequestWithUser, CreateWithdrawalData
 // Task 9: SSE Event Log Model
 export { SseEventLogModel } from './SseEventLogModel';
 export type { SseEventLog, SseChannel, SseEventType } from './SseEventLogModel';
+
+// R2-A (H9): admin-managed documents/data
+export { ManagedDocumentModel } from './ManagedDocumentModel';
+export type { ManagedDocument, ManagedDocumentInput, ManagedDocumentStatus, ManagedDocumentVisibility } from './ManagedDocumentModel';

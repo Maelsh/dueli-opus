@@ -428,11 +428,24 @@ export class AdminController extends BaseController {
                 return this.validationError(c, this.t('errors.missing_fields', c));
             }
 
+            // R2-A: role allowlist enforced before the DB CHECK (422, not 500).
+            const ALLOWED_ROLES: AdminRoleType[] = ['SuperAdmin', 'Auditor', 'Moderator'];
+            if (!ALLOWED_ROLES.includes(body.role)) {
+                return this.validationError(c, this.t('admin.invalid_role', c));
+            }
+
             const adminRoleModel = new AdminRoleModel(c.env.DB);
             const grantorRole = await adminRoleModel.findByUserId(user.id);
 
             if (!grantorRole || grantorRole.role !== 'SuperAdmin') {
                 return this.forbidden(c);
+            }
+
+            // R2-A: no orphan role rows — the target must be a real user.
+            const userModel = new UserModel(c.env.DB);
+            const target = await userModel.findById(body.user_id);
+            if (!target) {
+                return this.notFound(c, this.t('user_errors.not_found', c));
             }
 
             const existingRole = await adminRoleModel.findByUserId(body.user_id);
@@ -445,6 +458,9 @@ export class AdminController extends BaseController {
                     granted_by: user.id
                 });
             }
+            // R2-A: keep the is_admin flag in sync with role membership so
+            // the is_admin===1 gates and the roles table never disagree.
+            await userModel.setAdminFlag(body.user_id, true);
 
             const auditLogModel = new AdminAuditLogModel(c.env.DB);
             await auditLogModel.log(user.id, 'grant_role', 'user', body.user_id, `Granted role: ${body.role}`);
@@ -470,7 +486,25 @@ export class AdminController extends BaseController {
                 return this.forbidden(c);
             }
 
+            const targetRole = await adminRoleModel.findByUserId(targetUserId);
+            if (!targetRole) {
+                return this.notFound(c, this.t('admin.role_not_found', c));
+            }
+
+            // R2-A: never remove the last SuperAdmin (would lock out role
+            // management entirely, including this endpoint).
+            if (targetRole.role === 'SuperAdmin') {
+                const remaining = await adminRoleModel.countByRole('SuperAdmin');
+                if (remaining <= 1) {
+                    return this.error(c, this.t('admin.last_superadmin', c), 409);
+                }
+            }
+
             await adminRoleModel.deleteByUserId(targetUserId);
+            // R2-A: clear the flag only when no role membership remains.
+            if (!await adminRoleModel.findByUserId(targetUserId)) {
+                await new UserModel(c.env.DB).setAdminFlag(targetUserId, false);
+            }
 
             const auditLogModel = new AdminAuditLogModel(c.env.DB);
             await auditLogModel.log(user.id, 'revoke_role', 'user', targetUserId, 'Revoked admin role');

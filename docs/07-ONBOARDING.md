@@ -41,9 +41,15 @@ Cloudflare Pages لديها **مجموعتا متغيرات منفصلتان**: 
    داشبورد Cloudflare → Pages → مشروعك → Settings → Environment variables
    → **اختر Preview وProduction معاً** ثم أعد النشر.
 
-## عادات يومية
+## حساب الإدارة للتطوير (R2-A / H8 — محلي فقط)
 
-- سجلات التصحيح: `localStorage.setItem('dueli_debug','1')` في DevTools —
+- الهوية المؤقتة للتطوير: `admin` / `admin` — **ليست اعتماد إنتاج دائم** ولا توجد في أي migration أو seed.
+- الإنشاء/المعاينة: `npm run admin:bootstrap` (يعرض SQL فقط، بلا كتابة) ثم `npm run admin:bootstrap -- --apply --local` للكتابة في D1 المحلية.
+- الدخول: `/login` ثم `/admin` (مدخل الإدارة يظهر في قائمة المستخدم للمشرفين فقط؛ الصفحة محروسة خادمياً والـAPI يرد 403 لغير المشرف).
+- منح الأدوار من لوحة الإدارة يتطلب `SuperAdmin`؛ إلغاء آخر `SuperAdmin` مرفوض (409).
+- **الإنتاج H8/owner-gated**: سكربت التهيئة يرفض أي مسار remote (خروج 2). إنشاء/ترقية مشرف إنتاجي لا يتم إلا بتفويض صريح من المالك وبأقل صلاحية (تطبيق يدوي موثّق مثل مسار `0035`) — لا اعتماد مؤقت في الإنتاج أبداً.
+
+## عادات يومية- سجلات التصحيح: `localStorage.setItem('dueli_debug','1')` في DevTools —
   كل `debugLog()` (البث، `VideoCompositor`، `ChunkUploader`، `P2PConnection`)
   يظهر فقط عندها. `console.error` للأخطاء الحقيقية دائماً.
 - POST خارج المتصفح (curl/SDK): أضف `-H "X-CSRF-Token: 1"` وإلا رُفض بـ 403

@@ -37,8 +37,14 @@ function goodInput(m = manifest()) {
                     'id', 'competition_id', 'user_id', 'content', 'parent_id', 'is_live',
                     'likes_count', 'created_at', 'user_anonymized', 'deleted_at', 'video_offset',
                 ],
+                // Baseline-0036 surface: managed_documents (0036, R2-A only).
+                managed_documents: [
+                    'id', 'slug', 'title_ar', 'title_en', 'body_ar', 'body_en',
+                    'status', 'visibility', 'version', 'is_seed',
+                    'created_by', 'updated_by', 'created_at', 'updated_at',
+                ],
             },
-            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day'],
+            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status'],
         },
     };
 }
@@ -63,9 +69,9 @@ describe('release readiness gate', () => {
         expect(m.known_history).toContain(req.file);
     });
 
-    it('manifest baseline-0035 requires 0034 with a hash matching the repo file', () => {
+    it('manifest baseline-0036 requires 0034 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0035');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0036');
         const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -78,9 +84,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_competition_views_day');
     });
 
-    it('manifest baseline-0035 requires 0035 with a hash matching the repo file', () => {
+    it('manifest baseline-0036 requires 0035 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0035');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0036');
         const req = m.required_migrations.find((x) => x.file === '0035_comments_video_offset.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -90,14 +96,49 @@ describe('release readiness gate', () => {
         expect(m.required_schema.tables.comments).toEqual(expect.arrayContaining(['video_offset']));
     });
 
-    it('production state (0035 applied, no pending) passes the gate', () => {
-        // Mirrors production after the authorized 0035 apply: the full known
-        // history applied, empty pending, full required schema present.
+    it('manifest baseline-0036 requires 0036 with a hash matching the repo file', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0036');
+        const req = m.required_migrations.find((x) => x.file === '0036_managed_documents.sql');
+        expect(req).toBeTruthy();
+        const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
+        expect(actual.toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        // Minimum required-schema checks for the 0036 (R2-A) surface.
+        expect(m.required_schema.tables.managed_documents).toEqual(
+            expect.arrayContaining(['id', 'slug', 'title_ar', 'title_en', 'status', 'visibility', 'version', 'is_seed'])
+        );
+        expect(m.required_schema.indexes).toContain('idx_managed_documents_slug');
+        expect(m.required_schema.indexes).toContain('idx_managed_documents_status');
+    });
+
+    it('production state (0036 applied, no pending) passes the gate', () => {
+        // Mirrors production after a future authorized 0036 apply: the full
+        // known history applied, empty pending, full required schema present.
         const r = evaluateReadiness(goodInput());
         expect(r.ok).toBe(true);
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
-        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0035');
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0036');
+    });
+
+    it('production-shape 0035 + manifest 0036 => required-pending FAIL (0036 not yet applied)', () => {
+        // Production still on the 0035 shape while the manifest already
+        // requires 0036: applied history stops at 0035, the pending list
+        // names 0036, and the schema snapshot lacks managed_documents.
+        const input = goodInput();
+        input.applied = input.applied.filter((f) => f !== '0036_managed_documents.sql');
+        input.pendingText = 'Migrations to be applied:\n0036_managed_documents.sql\n';
+        delete input.schema.tables.managed_documents;
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
+    });
+
+    it('production-shape 0036 + manifest 0036 => readiness PASS', () => {
+        const r = evaluateReadiness(goodInput());
+        expect(r.ok).toBe(true);
+        expect(r.checks.every((c) => c.ok)).toBe(true);
     });
 
     it('production-shape 0034 + manifest 0035 => required-pending FAIL (0035 not yet applied)', () => {
@@ -111,12 +152,6 @@ describe('release readiness gate', () => {
         const r = evaluateReadiness(input);
         expect(r.ok).toBe(false);
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
-    });
-
-    it('production-shape 0035 + manifest 0035 => readiness PASS', () => {
-        const r = evaluateReadiness(goodInput());
-        expect(r.ok).toBe(true);
-        expect(r.checks.every((c) => c.ok)).toBe(true);
     });
 
     it('Deploy #458 exact scenario: stale snapshot missing the 0034 index FAILS', () => {

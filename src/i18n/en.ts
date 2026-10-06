@@ -960,6 +960,43 @@ export const en = {
         action_update_setting: 'Update Setting',
         action_arbitration: 'Arbitration Action',
         action_finalize_payout: 'Finalize Payout',
+        role_not_found: 'Admin role not found',
+        last_superadmin: 'Cannot revoke the last SuperAdmin',
+        access_denied: 'Admin access required',
+        admin_panel: 'Admin Panel',
+        my_account: 'My Account',
+        documents_title: 'Documents & Data',
+        documents_empty: 'No documents yet',
+    },
+
+    // ── R2-A: self-service account settings ──────────────
+    account: {
+        username_updated: 'Username updated',
+        email_updated: 'Email updated — please verify the new address',
+        password_updated: 'Password updated — please log in again',
+        username_taken: 'Username is already taken',
+        username_invalid: 'Username must be 3-30 lowercase letters, digits, dots or underscores',
+        email_taken: 'Email is already in use',
+        email_invalid: 'Invalid email address',
+        current_password_incorrect: 'Current password is incorrect',
+    },
+
+    // ── R2-A (H9): managed documents/data ──────────────
+    documents: {
+        slug_invalid: 'Slug must be 2-80 lowercase letters, digits or dashes',
+        slug_taken: 'A document with this slug already exists',
+        status_invalid: 'Status must be draft or published',
+        visibility_invalid: 'Visibility must be private or public',
+        created: 'Document created',
+        updated: 'Document updated',
+        deleted: 'Document deleted',
+        draft: 'Draft',
+        published: 'Published',
+        private: 'Private',
+        public: 'Public',
+        preview: 'Preview',
+        save: 'Save',
+        seed_badge: 'Test seed data',
     },
 
     // ── Task 3: Arbitration & Complaints ──────────────────────

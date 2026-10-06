@@ -16,6 +16,7 @@
     "db:migrate:local": "wrangler d1 migrations apply dueli-db --local",
     "db:seed": "wrangler d1 execute dueli-db --local --file=./db/seed.sql",
     "db:reset": "node dev-tools/reset-d1.mjs && npm run db:migrate:local && npm run db:seed",
+    "admin:bootstrap": "node dev-tools/bootstrap-admin.mjs",
     "routes:inventory": "node dev-tools/route-inventory.mjs",
     "test": "vitest run",
     "test:integration": "vitest run -c vitest.integration.config.ts",
