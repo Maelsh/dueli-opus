@@ -66,7 +66,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal}</p>
                             </div>
 
-                            <!-- Payment Method -->
+                            <!-- Payment Method: saved methods first, manual fallback -->
                             <div>
                                 <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                     ${tr.payment_method}
@@ -78,6 +78,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                     <option value="wise">Wise</option>
                                     <option value="crypto_usdt">Crypto USDT (TRC-20)</option>
                                 </select>
+                                <p id="withdrawSavedHint" class="hidden text-xs text-gray-400 mt-1"></p>
                             </div>
 
                             <!-- Payment Details -->
@@ -343,6 +344,43 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             function openWithdrawalModal() {
                 document.getElementById('withdrawalModal').classList.remove('hidden');
                 document.getElementById('withdrawAmount').max = (currentEarnings.available || 0).toFixed(2);
+                loadSavedPayoutMethods();
+            }
+
+            // R2-P: offer saved payout methods first (snapshot semantics:
+            // the request freezes the method's data at creation).
+            function payoutMethodLabel(m) {
+                if (m.type === 'bank') return '🏦 ' + (m.bank_name || 'Bank') + ' ····' + String(m.iban || '').slice(-4);
+                return '✉️ ' + (m.email || m.type) + (m.is_default ? ' ★' : '');
+            }
+
+            async function loadSavedPayoutMethods() {
+                const select = document.getElementById('withdrawMethod');
+                const hint = document.getElementById('withdrawSavedHint');
+                // Rebuild from the static legacy options every open (no dupes).
+                select.innerHTML = ''
+                    + '<option value="bank_transfer">' + (tr.bank_transfer || 'Bank transfer') + '</option>'
+                    + '<option value="wise">Wise</option>'
+                    + '<option value="crypto_usdt">Crypto USDT (TRC-20)</option>';
+                if (hint) hint.classList.add('hidden');
+                try {
+                    const res = await fetch('/api/payment-methods', {
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('sessionId') }
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    const methods = (data.success && data.data?.methods) || [];
+                    methods.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = 'saved:' + m.id;
+                        opt.textContent = payoutMethodLabel(m);
+                        if (m.is_default) opt.selected = true;
+                        select.insertBefore(opt, select.firstChild);
+                    });
+                    if (methods.length > 0 && hint) {
+                        hint.textContent = tr.payout?.saved_methods || 'Saved payout methods';
+                        hint.classList.remove('hidden');
+                    }
+                } catch (e) { /* legacy manual options remain */ }
             }
 
             function closeWithdrawalModal() {
@@ -367,10 +405,24 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     errDiv.classList.remove('hidden');
                     return;
                 }
-                if (!details) {
-                    errDiv.textContent = tr.payment_details_required;
-                    errDiv.classList.remove('hidden');
-                    return;
+                // R2-P: saved:NN posts the method id (server snapshots it);
+                // manual entries keep the legacy free-text pair.
+                let payload;
+                if (method.indexOf('saved:') === 0) {
+                    const methodId = parseInt(method.slice(6), 10);
+                    if (!methodId) {
+                        errDiv.textContent = tr.payout?.method_not_found || 'Payout method not found';
+                        errDiv.classList.remove('hidden');
+                        return;
+                    }
+                    payload = { amount, payout_method_id: methodId };
+                } else {
+                    if (!details) {
+                        errDiv.textContent = tr.payment_details_required;
+                        errDiv.classList.remove('hidden');
+                        return;
+                    }
+                    payload = { amount, payment_method: method, payment_details: details };
                 }
 
                 btn.disabled = true;
@@ -385,7 +437,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             'Content-Type':  'application/json',
                             'Authorization': 'Bearer ' + sessionId
                         },
-                        body: JSON.stringify({ amount, payment_method: method, payment_details: details })
+                        body: JSON.stringify(payload)
                     });
                     const data = await res.json();
 

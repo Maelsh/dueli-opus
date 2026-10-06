@@ -68,6 +68,10 @@ const EXPECTED_MIGRATIONS = [
     '0032_cron_run_guard.sql',
     '0033_explore_result_sessions.sql',
     '0034_competition_views.sql',
+    '0035_comments_video_offset.sql',
+    '0036_managed_documents.sql',
+    '0037_support_messaging.sql',
+    '0038_withdrawal_payout_snapshot.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -96,6 +100,9 @@ const EXPECTED_TABLES = [
     'explore_result_sessions',
     'explore_result_chunks',
     'competition_views',
+    'managed_documents',
+    'support_threads',
+    'support_messages',
 ];
 
 let migrationOutput = '';
@@ -104,6 +111,7 @@ let messagesColumns: string[] = [];
 let advertisementsColumns: string[] = [];
 let userEarningsColumns: string[] = [];
 let chunkKeysColumns: string[] = [];
+let withdrawalColumns: string[] = [];
 let dedupIdentityIndexSql = '';
 let reportsDdl = '';
 let foreignKeyCheck: ForeignKeyCheckRow[] = [];
@@ -161,6 +169,7 @@ beforeAll(() => {
         queryD1('PRAGMA table_info(user_earnings)').filter(isTableInfoRow),
     );
     chunkKeysColumns = columnNames(queryD1('PRAGMA table_info(chunk_keys)').filter(isTableInfoRow));
+    withdrawalColumns = columnNames(queryD1('PRAGMA table_info(withdrawal_requests)').filter(isTableInfoRow));
     const dedupIndexRows = queryD1(
         "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type='index' AND name='idx_ad_impression_dedup_identity'",
     ).filter(isSqliteMasterRow);
@@ -180,8 +189,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 35 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(35);
+    it('has exactly 39 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(39);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -237,6 +246,11 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
     it('messages has the 0014 aligned columns: conversation_id and read_at (B1)', () => {
         expect(messagesColumns).toContain('conversation_id');
         expect(messagesColumns).toContain('read_at');
+    });
+
+    it('withdrawal_requests has the 0038 payout columns (R2-P)', () => {
+        expect(withdrawalColumns).toContain('payout_method_id');
+        expect(withdrawalColumns).toContain('payout_snapshot');
     });
 
     it('user_earnings table exists (0001_initial_schema.sql)', () => {

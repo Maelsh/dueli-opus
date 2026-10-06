@@ -721,6 +721,18 @@ export const en = {
         insufficient_balance: 'Your available balance does not cover the requested amount',
     },
 
+    // R2-P: saved payout methods + withdrawal snapshots
+    payout: {
+        type_invalid: 'Valid type required: bank, paypal, or wise',
+        bank_fields_required: 'IBAN and bank name are required for bank accounts',
+        email_required: 'Email is required for PayPal/Wise',
+        method_not_found: 'Payout method not found',
+        saved_methods: 'Saved payout methods',
+        use_saved_method: 'Use a saved method',
+        manual_entry: 'Enter details manually',
+        no_saved_methods: 'No saved payout methods yet',
+    },
+
     // Competitor donations (8.E) — $1 documented minimum, no Dueli-level maximum
     // 8.G-F3 — donations are non-refundable once completed (see docs/02-DATABASE.md)
     donations: {

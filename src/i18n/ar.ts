@@ -697,6 +697,18 @@ export const ar = {
         insufficient_balance: 'رصيدك المتاح لا يكفي مبلغ السحب المطلوب',
     },
 
+    // R2-P: طرق الدفع المحفوظة + لقطات السحب
+    payout: {
+        type_invalid: 'النوع الصالح مطلوب: bank أو paypal أو wise',
+        bank_fields_required: 'IBAN واسم البنك مطلوبان للحسابات البنكية',
+        email_required: 'البريد الإلكتروني مطلوب لـPayPal/Wise',
+        method_not_found: 'طريقة الدفع غير موجودة',
+        saved_methods: 'طرق الدفع المحفوظة',
+        use_saved_method: 'استخدام طريقة محفوظة',
+        manual_entry: 'إدخال التفاصيل يدوياً',
+        no_saved_methods: 'لا توجد طرق دفع محفوظة بعد',
+    },
+
     // التبرعات للمتنافسين (8.E) — الحد الأدنى $1 موثق، ولا حد أقصى على مستوى Dueli
     // 8.G-F3 — التبرعات غير قابلة للاسترداد بعد إتمامها (انظر docs/02-DATABASE.md)
     donations: {

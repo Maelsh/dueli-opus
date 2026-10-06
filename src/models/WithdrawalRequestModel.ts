@@ -60,6 +60,11 @@ export interface WithdrawalRequest {
     status: WithdrawalStatus;
     payment_method: string;
     payment_details: string;
+    // R2-P: saved-method link (NULL for legacy free-text requests; NULLed
+    // on method delete) + immutable execution snapshot (written once at
+    // creation, never updated — see update() allowlist below).
+    payout_method_id: number | null;
+    payout_snapshot: string;
     created_at: string;
     processed_at: string | null;
     transaction_id: string | null;
@@ -79,6 +84,8 @@ export interface CreateWithdrawalData {
     amount: number;
     payment_method: string;
     payment_details: string;
+    payout_method_id?: number | null;
+    payout_snapshot?: string;
 }
 
 export interface WithdrawalFilters {
@@ -107,8 +114,8 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
         const result = await this.db.prepare(`
             INSERT INTO ${this.tableName}
                 (user_id, amount, amount_cents, fee_cents, status, payment_method,
-                 payment_details, hold_tx_id, created_at)
-            VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, datetime('now'))
+                 payment_details, payout_method_id, payout_snapshot, hold_tx_id, created_at)
+            VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, datetime('now'))
         `).bind(
             data.user_id,
             data.amount,
@@ -116,6 +123,8 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
             data.fee_cents ?? WITHDRAWAL_FEE_CENTS,
             data.payment_method,
             data.payment_details,
+            data.payout_method_id ?? null,
+            data.payout_snapshot ?? '{}',
             data.hold_tx_id ?? null
         ).run();
 
@@ -125,7 +134,13 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
         throw new Error('Failed to create withdrawal request');
     }
 
-    /** Required by BaseModel – partial update */
+    /**
+     * Required by BaseController – partial update.
+     *
+     * R2-P: payout_method_id/payout_snapshot are deliberately NOT updatable
+     * here — the execution snapshot is frozen at creation so later method
+     * edits/deletes can never rewrite an old request.
+     */
     async update(id: number, data: Partial<WithdrawalRequest>): Promise<WithdrawalRequest | null> {
         const sets: string[] = [];
         const vals: any[] = [];
@@ -176,6 +191,8 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
             fee_cents:      WITHDRAWAL_FEE_CENTS,
             payment_method: data.payment_method,
             payment_details: data.payment_details,
+            payout_method_id: data.payout_method_id ?? null,
+            payout_snapshot: data.payout_snapshot ?? '{}',
             hold_tx_id:     null
         });
         const holdTxId = `${HOLD_TX_PREFIX}${request.id}`;
