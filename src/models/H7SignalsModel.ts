@@ -9,8 +9,15 @@
  * Signal integrity (§11 + task SIGNAL INTEGRITY):
  * - S: SUM of effective ratings rows per competition (one effective row
  *   per (competition,user,competitor) via RatingModel.rateLiveAtomic).
- * - V: competitions.total_views (incremented ONLY when a new H2 day-row
- *   is created in WatchService.recordWatchIntent; GET/polling never write).
+ * - V: competitions.total_views under the H2 invariant — exactly one
+ *   writer: WatchService.recordWatchIntent, and only when a new
+ *   (competition, identity, UTC-day) row is created in
+ *   `competition_views` (CompetitionModel.incrementViews is its private
+ *   counter step, never called elsewhere). `POST /api/analytics/view`
+ *   is a thin compat alias delegating to the same SSOT (idempotent,
+ *   counted-once); the dead `RecommendationEngine.recordView` bypass was
+ *   deleted in R3-D1-REM1. GET/polling/presence never write; no IP
+ *   fingerprint; guests use first-party tokens only.
  * - Likes/Dislikes: effective rows in likes/dislikes + cached counters
  *   competitions.likes_count/dislikes_count (same-transaction recompute).
  * - Follows: follows table. Preferences: namespaced user_keywords favs
@@ -18,10 +25,11 @@
  *   grain is NOT history (guest/day grain must not define unwatched).
  * - Explicit favs storage (DOCUMENTED routine detail, no new migration):
  *   user_keywords rows with keyword LIKE 'fav:%' hold taxonomy slugs
- *   chosen in Settings (parent or subcategory slug, lowercase). Title-word
- *   extraction never writes the 'fav:' prefix, and search recording never
- *   does either, so the namespace isolates explicit choice from derived
- *   signals without a new table/migration.
+ *   chosen in Settings (parent or subcategory slug, lowercase). The
+ *   `fav:` namespace is reserved for H7SignalsModel.setFavoriteSlugs:
+ *   title-word extraction skips colon words and search recording drops
+ *   `fav:`-prefixed input, so generic writers can never mint explicit
+ *   favorites (R3-D1-REM1).
  */
 
 import { BaseModel } from './base/BaseModel';
