@@ -29,7 +29,9 @@ describe('F-5B FollowModel', () => {
         expect(await model.getFollowersCount(2)).toBe(0);
         expect(await model.getFollowingCount(1)).toBe(0);
         expect(await model.follow(1, 2)).toBe(true);
-        expect(await model.follow(1, 2)).toBe(true);
+        // R2-F: repeat follow is idempotent — no new row, returns false so
+        // callers skip duplicate side-effects (follow notification).
+        expect(await model.follow(1, 2)).toBe(false);
         expect(await model.follow(3, 2)).toBe(true);
         expect(await model.follow(2, 1)).toBe(true);
         expect(await model.isFollowing(1, 2)).toBe(true);

@@ -140,6 +140,18 @@ export class NotificationModel extends BaseModel<Notification> {
     }
 
     /**
+     * R2-F: ownership-scoped mark-as-read — only the recipient's own row is
+     * ever touched. Returns false when the row is missing or belongs to
+     * another user (caller maps to 404, never leaks cross-user state).
+     */
+    async markAsReadForUser(id: number, userId: number): Promise<boolean> {
+        const result = await this.db.prepare(
+            'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?'
+        ).bind(id, userId).run();
+        return result.meta.changes > 0;
+    }
+
+    /**
      * Mark all as read for user
      */
     async markAllAsRead(userId: number): Promise<number> {

@@ -1,6 +1,13 @@
 
 
 
+## R2-F remaining journeys (notifications/profile/deletion/social/donations/advertiser/moderation) · فرع `feat/r2-f-journeys` (من `2497bda` = origin/main بعد دمج R2-P #94)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل جديد/مسارات جديدة (routes ‏221←221). R1 والمالية/ELO/L1/V/L2/A/M/P وH7/D1/D2 مغلقة ولم تُمس خارج العقد.
+- العقد: إشعارات (قراءة بملكية ‏404 لصف الغير)؛ شكاوى (تتبع بملكية ‏404 + مدخلا nav للمعلن/شكاوى)؛ متابعة (تكرار idempotent بإشعار واحد + hydration بعد refresh + زر إبلاغ في profile)؛ ‏reports الحالية ‏target_type/target_id/reason (القديمة ‏422 دائماً)؛ تبرعات (قسم ‏My Donations + ‏GET /my) بلا مساس المالية؛ معلن (إصلاح SyntaxError + مفتاح الجلسة الموحد)؛ حذف حساب ذري ‏batch واحد (إخفاء أولاً، أطفال-قبل-الأب لسلامة ‏FK، مسح ‏PII البنكية/السجل مع بقاء صفوف الدفتر، ‏verify بـ‏CryptoUtils).
+- **الأدلة**: T جديد `r2-f-journeys` ‏7/7 + UI جديد `r2-f-journey-pages` ‏7/7 (‏SqliteD1 بالترحيلات الحقيقية: ملكية الإشعار/الشكوى ‏404، إشعار متابعة واحد، ‏verify ‏PBKDF2/legacy، حذف شامل ذري، عقد ‏reports، ‏my) + تحديث تثبيتات قديمة لعقد idempotent (‏follow-extraction/model)؛ الحراس المتأثرة (مال/تبرع/دفتر/stripe/sحب/شفافية + مخطط + ‏readiness + جيران ‏R2-A/M/P/J) خضراء؛ ‏`tsc` ✅؛ ‏`build` ✅ (‏churn رُجع)؛ ‏G2 ‏+0 ‏any؛ routes ‏221←221.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R2-P saved payout methods + withdrawal snapshots · فرع `feat/r2-p-payout-methods` (من `ec27f72` = origin/main بعد دمج R2-M #93)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/تحويل فعلي (لا بنك/KYC/provider — مؤجل R0/H). ترحيل واحد مضاف (`0038_withdrawal_payout_snapshot`: عمودا `payout_method_id` ‏FK→payment_methods ‏SET NULL + `payout_snapshot` ‏NOT NULL ‏`'{}'` + فهرس) + بيان `baseline-0038` في نفس الفرع. R2-A/J/L1/V/L2 والمالية/ELO مغلقة ولم تُمس خارج العقد.

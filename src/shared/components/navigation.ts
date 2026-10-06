@@ -163,6 +163,14 @@ export function getNavigation(lang: Language): string {
                   <i class="fas fa-heart text-gray-500"></i>
                   <span>${tr.donate || 'Support'}</span>
                 </a>
+                <a href="/advertiser?lang=${lang}" class="user-menu-item" title="${tr.advertiser?.portal_title || 'Advertiser Portal'}">
+                  <i class="fas fa-bullhorn text-gray-500"></i>
+                  <span>${tr.advertiser?.portal_title || 'Advertiser Portal'}</span>
+                </a>
+                <a href="/complaints?lang=${lang}" class="user-menu-item" title="${tr.arbitration?.my_complaints || 'My Complaints'}">
+                  <i class="fas fa-gavel text-gray-500"></i>
+                  <span>${tr.arbitration?.my_complaints || 'My Complaints'}</span>
+                </a>
                 <div class="border-t border-gray-200 dark:border-gray-700 my-1"></div>
                 <!-- R2-A: admin entry — hidden unless the signed-in user is an admin (unhidden client-side from the session DTO). -->
                 <a href="/admin?lang=${lang}" id="adminMenuItem" class="user-menu-item hidden" title="${tr.admin?.admin_panel || 'Admin Panel'}">

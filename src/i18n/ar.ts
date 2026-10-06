@@ -484,6 +484,10 @@ export const ar = {
         title: 'إبلاغ',
         reason: 'السبب',
         select_reason: 'اختر سبباً',
+        target_type: 'نوع الهدف',
+        select_target_type: 'اختر نوع الهدف',
+        target_id: 'معرّف الهدف',
+        target_id_placeholder: 'رقم المستخدم أو المنافسة أو التعليق',
         description: 'تفاصيل إضافية',
         description_placeholder: 'قدم مزيداً من التفاصيل...',
         submit: 'إرسال البلاغ',
@@ -724,6 +728,9 @@ export const ar = {
         amount_confirm: 'أؤكد مبلغ هذا التبرع',
         amount_confirm_required: 'يجب تأكيد مبلغ التبرع',
         be_first: 'كن أول الداعمين!',
+        my_donations: 'تبرعاتي',
+        my_donations_empty: 'لم تتبرع بعد',
+        my_donations_error: 'تعذر تحميل تبرعاتك',
     },
 
     // صفحة الشكاوى

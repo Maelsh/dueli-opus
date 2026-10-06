@@ -263,18 +263,55 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                             <i class="fas fa-envelope \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.send_message || 'Message'}
                         </a>
+                        <a href="/reports?target_type=user&target_id=\${profileUserId}&lang=\${lang}"
+                            class="px-6 py-2.5 bg-white/20 hover:bg-white/30 rounded-full font-semibold transition-colors">
+                            <i class="fas fa-flag \${isRTL ? 'ml-2' : 'mr-2'}"></i>
+                            \${(tr.report && tr.report.title) || tr.submit_report || 'Report'}
+                        </a>
                         <button data-csp-on="click" data-csp-fn="toggleBlock" data-csp-args='[]' id="blockBtn"
                             class="px-6 py-2.5 bg-white/20 hover:bg-white/30 rounded-full font-semibold transition-colors">
                             <i class="fas fa-ban \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.block || 'Block'}
                         </button>
                     \`;
+                    refreshFollowState();
                     refreshBlockState();
                 }
             }
 
             // Block state comes from the existing blocks contract (GET /api/blocks,
             // auth required — same contract the toggle below writes through).
+            // R2-F: follow state hydrates from GET /api/users/:username
+            // (is_following for the current user) so a refresh shows
+            // Following instead of resetting to Follow.
+            async function refreshFollowState() {
+                const btn = document.getElementById('followBtn');
+                if (!btn || !window.currentUser || !profileUsername) return;
+                try {
+                    const res = await fetch('/api/users/' + encodeURIComponent(profileUsername), {
+                        headers: { 'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')) }
+                    });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data && data.success && data.data && data.data.is_following) {
+                        paintFollowButton(btn, true);
+                    }
+                } catch (err) {
+                    console.error('Follow state error:', err);
+                }
+            }
+
+            function paintFollowButton(btn, following) {
+                if (following) {
+                    btn.classList.add('following', 'bg-purple-100');
+                    btn.classList.remove('bg-white');
+                    btn.innerHTML = \`<i class="fas fa-user-check \${isRTL ? 'ml-2' : 'mr-2'}"></i>\${tr.following || 'Following'}\`;
+                } else {
+                    btn.classList.remove('following', 'bg-purple-100', 'text-purple-600');
+                    btn.classList.add('bg-white', 'text-purple-600');
+                    btn.innerHTML = \`<i class="fas fa-user-plus \${isRTL ? 'ml-2' : 'mr-2'}"></i>\${tr.follow || 'Follow'}\`;
+                }
+            }
             async function refreshBlockState() {
                 const btn = document.getElementById('blockBtn');
                 if (!btn || !window.currentUser) return;
@@ -339,15 +376,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     });
                     
                     if (res.ok) {
-                        if (isFollowing) {
-                            btn.classList.remove('following', 'bg-purple-100', 'text-purple-600');
-                            btn.classList.add('bg-white', 'text-purple-600');
-                            btn.innerHTML = \`<i class="fas fa-user-plus \${isRTL ? 'ml-2' : 'mr-2'}"></i>\${tr.follow || 'Follow'}\`;
-                        } else {
-                            btn.classList.add('following', 'bg-purple-100');
-                            btn.classList.remove('bg-white');
-                            btn.innerHTML = \`<i class="fas fa-user-check \${isRTL ? 'ml-2' : 'mr-2'}"></i>\${tr.following || 'Following'}\`;
-                        }
+                        paintFollowButton(btn, !isFollowing);
                     }
                 } catch (err) {
                     console.error('Follow error:', err);

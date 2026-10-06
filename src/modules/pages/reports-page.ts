@@ -99,90 +99,97 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
             }
             
             function renderReportForm() {
+                const params = new URLSearchParams(window.location.search);
+                const presetType = params.get('target_type') || '';
+                const presetId = params.get('target_id') || '';
+                const targetTypes = ['user', 'competition', 'comment', 'message', 'ad'];
                 document.getElementById('reportsContent').innerHTML = \`
                     <form data-csp-on="submit" data-csp-fn="submitReport" data-csp-args='["@event"]' class="space-y-6">
-                        <!-- Report Type -->
+                        <!-- Target -->
                         <div class="\${CARD}">
                             <h2 class="\${SECTION_TITLE}">
-                                <i class="fas fa-list \${isRTL ? 'ml-2' : 'mr-2'} text-purple-500"></i>
-                                \${tr.report_type || 'Report Type'}
+                                <i class="fas fa-crosshairs \${isRTL ? 'ml-2' : 'mr-2'} text-purple-500"></i>
+                                \${(tr.report && tr.report.target_type) || 'Report about'}
                             </h2>
-                            
-                            <div class="space-y-3">
-                                <label class="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                    <input type="radio" name="reportType" value="inappropriate" class="w-5 h-5 accent-purple-600">
-                                    <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">\${tr.report_inappropriate || 'Inappropriate Content'}</p>
-                                        <p class="text-sm text-gray-500">\${tr.report_inappropriate_desc || 'Offensive or harmful content'}</p>
-                                    </div>
-                                </label>
-                                
-                                <label class="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                    <input type="radio" name="reportType" value="spam" class="w-5 h-5 accent-purple-600">
-                                    <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">\${tr.report_spam || 'Spam or Misleading'}</p>
-                                        <p class="text-sm text-gray-500">\${tr.report_spam_desc || 'Fake or deceptive content'}</p>
-                                    </div>
-                                </label>
-                                
-                                <label class="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                    <input type="radio" name="reportType" value="harassment" class="w-5 h-5 accent-purple-600">
-                                    <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">\${tr.report_harassment || 'Harassment or Bullying'}</p>
-                                        <p class="text-sm text-gray-500">\${tr.report_harassment_desc || 'Targeting or attacking others'}</p>
-                                    </div>
-                                </label>
-                                
-                                <label class="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                                    <input type="radio" name="reportType" value="other" class="w-5 h-5 accent-purple-600">
-                                    <div>
-                                        <p class="font-medium text-gray-900 dark:text-white">\${tr.other || 'Other'}</p>
-                                        <p class="text-sm text-gray-500">\${tr.other_desc || 'Something else'}</p>
-                                    </div>
-                                </label>
+                            <div class="grid md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">\${(tr.report && tr.report.target_type) || 'Report about'}</label>
+                                    <select id="reportTargetType" required class="\${INPUT}">
+                                        <option value="">\${(tr.report && tr.report.select_target_type) || 'Select what to report'}</option>
+                                        \${targetTypes.map(tt => \`<option value="\${tt}" \${presetType === tt ? 'selected' : ''}>\${tt}</option>\`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">\${(tr.report && tr.report.target_id) || 'Target ID'}</label>
+                                    <input type="number" id="reportTargetId" min="1" step="1" required value="\${presetId.replace(/[^0-9]/g, '')}"
+                                        class="\${INPUT}"
+                                        placeholder="\${(tr.report && tr.report.target_id_placeholder) || ''}">
+                                </div>
                             </div>
                         </div>
-                        
-                        <!-- Subject -->
+
+                        <!-- Reason -->
                         <div class="\${CARD}">
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">\${tr.subject || 'Subject'}</label>
-                            <input type="text" id="reportSubject" required
-                                class="\${INPUT}"
-                                placeholder="\${tr.enter_subject || 'Enter subject'}">
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">\${(tr.report && tr.report.reason) || 'Reason'}</label>
+                            <select id="reportReason" required class="\${INPUT}">
+                                <option value="">\${(tr.report && tr.report.select_reason) || 'Select a reason'}</option>
+                            </select>
                         </div>
-                        
+
                         <!-- Description -->
                         <div class="\${CARD}">
-                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">\${tr.description}</label>
-                            <textarea id="reportDescription" rows="5" required
+                            <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">\${(tr.report && tr.report.description) || tr.description}</label>
+                            <textarea id="reportDescription" rows="5"
                                 class="\${INPUT} resize-none"
-                                placeholder="\${tr.describe_issue || 'Please describe the issue in detail'}"></textarea>
+                                placeholder="\${(tr.report && tr.report.description_placeholder) || tr.describe_issue || ''}"></textarea>
                         </div>
-                        
+
                         <!-- Submit Button -->
                         <button type="submit" class="w-full py-4 \${GRADIENT} text-white rounded-xl font-bold hover:opacity-90 transition-opacity shadow-lg shadow-purple-500/20">
                             <i class="fas fa-paper-plane \${isRTL ? 'ml-2' : 'mr-2'}"></i>
-                            \${tr.submit || 'Submit Report'}
+                            \${(tr.report && tr.report.submit) || tr.submit || 'Submit Report'}
                         </button>
                     </form>
                 \`;
+                loadReportReasons(presetType);
+                document.getElementById('reportTargetType').addEventListener('change', (e) => {
+                    loadReportReasons(e.target.value);
+                });
             }
-            
+
+            async function loadReportReasons(targetType) {
+                const sel = document.getElementById('reportReason');
+                if (!sel) return;
+                try {
+                    const res = await fetch('/api/reports/reasons');
+                    const data = await res.json();
+                    const reasons = (data.success && data.data && data.data.reasons && data.data.reasons[targetType]) || [];
+                    const label = (r) => ((tr.report && tr.report['reason_' + r]) || r);
+                    sel.innerHTML = \`<option value="">\${(tr.report && tr.report.select_reason) || 'Select a reason'}</option>\` +
+                        reasons.map(r => \`<option value="\${r}">\${label(r)}</option>\`).join('');
+                } catch (err) {
+                    console.error('Failed to load report reasons:', err);
+                }
+            }
+
             async function submitReport(e) {
                 e.preventDefault();
-                
-                const reportType = document.querySelector('input[name="reportType"]:checked')?.value;
-                if (!reportType) {
-                    window.dueli?.toast?.error?.(\`\${tr.select_reason || 'Please select a report type'}\`);
+
+                const targetType = document.getElementById('reportTargetType')?.value;
+                const targetId = parseInt(document.getElementById('reportTargetId')?.value, 10);
+                const reason = document.getElementById('reportReason')?.value;
+                if (!targetType || !Number.isInteger(targetId) || targetId <= 0 || !reason) {
+                    window.dueli?.toast?.error?.(\`\${(tr.report && tr.report.select_reason) || tr.select_reason || 'Please select a report type'}\`);
                     return;
                 }
-                
+
                 const report = {
-                    type: reportType,
-                    subject: document.getElementById('reportSubject').value,
-                    description: document.getElementById('reportDescription').value
+                    target_type: targetType,
+                    target_id: targetId,
+                    reason,
+                    description: document.getElementById('reportDescription').value || undefined
                 };
-                
+
                 try {
                     const res = await fetch('/api/reports', {
                         method: 'POST',
@@ -192,13 +199,17 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
                         },
                         body: JSON.stringify(report)
                     });
-                    
+
                     if (res.ok) {
-                        window.dueli?.toast?.success?.(\`\${tr.report_submitted || 'Report submitted successfully!'}\`);
-                        document.getElementById('reportSubject').value = '';
+                        window.dueli?.toast?.success?.(\`\${(tr.report && tr.report.submitted) || tr.report_submitted || 'Report submitted successfully!'}\`);
+                        document.getElementById('reportTargetId').value = '';
                         document.getElementById('reportDescription').value = '';
                     } else {
-                        window.dueli?.toast?.error?.(\`\${tr.error_occurred || 'Failed to submit report'}\`);
+                        const data = await res.json().catch(() => null);
+                        const msg = (data && data.error && data.error.message)
+                            || (res.status === 400 && (tr.report && tr.report.already_reported))
+                            || \`\${tr.error_occurred || 'Failed to submit report'}\`;
+                        window.dueli?.toast?.error?.(msg);
                     }
                 } catch (err) {
                     console.error('Failed to submit report:', err);

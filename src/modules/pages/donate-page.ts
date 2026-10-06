@@ -91,6 +91,17 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     </label>
                 </div>
                 
+                <!-- R2-F: My Donations (GET /api/donations/my, auth-aware) -->
+                <div class="${DUELI_CARD} mb-8" id="myDonationsCard" hidden>
+                    <h2 class="${DUELI_SECTION_TITLE} text-center">
+                        <i class="fas fa-receipt ${rtl ? 'ml-2' : 'mr-2'} text-purple-500"></i>
+                        ${tr.donations?.my_donations || 'My Donations'}
+                    </h2>
+                    <div id="myDonationsList" class="space-y-3">
+                        <p class="text-center text-gray-400 text-sm py-4">${tr.loading || 'Loading...'}</p>
+                    </div>
+                </div>
+
                 <!-- Top Supporters -->
                 <div class="mt-12">
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6 text-center">
@@ -115,6 +126,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             document.addEventListener('DOMContentLoaded', () => {
                 loadSupporters();
                 showPaymentOutcome();
+                loadMyDonations();
             });
             
             function selectAmount(amount) {
@@ -214,6 +226,44 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 } catch (err) {
                     console.error(err);
                     alert(tr.payment_failed);
+                }
+            }
+
+            // R2-F: donation history for the signed-in donor. Hidden for
+            // guests (no session) — loading / empty / error states only.
+            async function loadMyDonations() {
+                const card = document.getElementById('myDonationsCard');
+                const list = document.getElementById('myDonationsList');
+                const token = (window.sessionId || localStorage.getItem('sessionId') || localStorage.getItem('session_id') || '');
+                if (!token || !card || !list) return;
+                card.hidden = false;
+                try {
+                    const res = await fetch('/api/donations/my?lang=' + (window.lang || 'ar'), {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.status === 401) { card.hidden = true; return; }
+                    if (!res.ok) throw new Error('my donations failed');
+                    const data = await res.json();
+                    const items = (data.success && Array.isArray(data.data)) ? data.data : [];
+                    if (!items.length) {
+                        list.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">' + (tr.donations?.my_donations_empty || 'No donations yet') + '</p>';
+                        return;
+                    }
+                    list.innerHTML = items.map((d) => \`
+                        <div class="flex items-center justify-between gap-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-800">
+                            <div class="flex items-center gap-3">
+                                <span class="w-9 h-9 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center"><i class="fas fa-heart text-xs"></i></span>
+                                <div>
+                                    <p class="font-bold text-gray-900 dark:text-white">$\${d.amount} \${d.currency || ''}</p>
+                                    <p class="text-xs text-gray-400">\${d.created_at ? new Date(d.created_at).toLocaleDateString() : ''}</p>
+                                </div>
+                            </div>
+                            <span class="text-xs font-bold text-green-600 dark:text-green-400">\${d.payment_status || ''}</span>
+                        </div>
+                    \`).join('');
+                } catch (e) {
+                    console.error(e);
+                    list.innerHTML = '<p class="text-center text-gray-400 text-sm py-4">' + (tr.donations?.my_donations_error || 'Could not load donations') + '</p>';
                 }
             }
 
