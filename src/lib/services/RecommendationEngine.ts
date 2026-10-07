@@ -66,18 +66,23 @@ export class RecommendationEngine {
 
         if (!user) return { results: [], hasMore: false, totalAvailable: 0 };
 
-        const blockedUserIds = await this.getBlockedUserIds(userId);
-        const hiddenIds = await this.getHiddenCompetitionIds(userId);
+        // D1 hotfix: exclusions enforced with NOT EXISTS anti-joins instead of
+        // expanding the unbounded blocked/hidden lists into bound placeholders
+        // (old form: 1 + B + H binds, rail/endpoint 500 past 100). The
+        // anti-joins read the same source rows, so NO exclusion is dropped at
+        // any list size. Total binds: 4 regardless of exclusion volume.
         const params: any[] = [userId];
-        let extra = ` AND c.creator_id != ?`;
-        if (blockedUserIds.length > 0) {
-            extra += ` AND c.creator_id NOT IN (${blockedUserIds.map(() => '?').join(',')})`;
-            params.push(...blockedUserIds);
-        }
-        if (hiddenIds.length > 0) {
-            extra += ` AND c.id NOT IN (${hiddenIds.map(() => '?').join(',')})`;
-            params.push(...hiddenIds);
-        }
+        let extra = ` AND c.creator_id != ?
+            AND NOT EXISTS (
+                SELECT 1 FROM user_blocks b
+                 WHERE (b.blocker_id = ? AND b.blocked_id = c.creator_id)
+                    OR (b.blocked_id = ? AND b.blocker_id = c.creator_id)
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM user_hidden_competitions h
+                 WHERE h.user_id = ? AND h.competition_id = c.id
+            )`;
+        params.push(userId, userId, userId);
         const idRows = await this.db.prepare(
             `SELECT c.id as id FROM competitions c
              WHERE (c.status IN ('pending', 'accepted', 'live')
@@ -121,27 +126,33 @@ export class RecommendationEngine {
         if (pageIds.length === 0) {
             return { results: [], hasMore: offset < totalAvailable, totalAvailable };
         }
-        const placeholders = pageIds.map(() => '?').join(',');
-        const cardRows = await this.db.prepare(
-            `SELECT c.*,
-                u1.username as creator_username,
-                u1.display_name as creator_display_name,
-                u1.avatar_url as creator_avatar,
-                u2.username as opponent_username,
-                u2.display_name as opponent_display_name,
-                u2.avatar_url as opponent_avatar,
-                cat.name_ar as category_name_ar,
-                cat.name_en as category_name_en,
-                cat.icon as category_icon,
-                cat.color as category_color
-             FROM competitions c
-             JOIN users u1 ON c.creator_id = u1.id
-             LEFT JOIN users u2 ON c.opponent_id = u2.id
-             LEFT JOIN categories cat ON c.category_id = cat.id
-             WHERE c.id IN (${placeholders})`
-        ).bind(...pageIds).all<any>();
+        // D1 hotfix: hydrate in 80-id chunks so a large client limit can never
+        // push one statement past D1's 100-bind hard limit. Order is restored
+        // from pageIds via byId below, so chunking is transparent.
         const byId = new Map<number, any>();
-        for (const r of ((cardRows.results ?? []) as any[])) byId.set(r.id, r);
+        for (let i = 0; i < pageIds.length; i += 80) {
+            const batch = pageIds.slice(i, i + 80);
+            const placeholders = batch.map(() => '?').join(',');
+            const cardRows = await this.db.prepare(
+                `SELECT c.*,
+                    u1.username as creator_username,
+                    u1.display_name as creator_display_name,
+                    u1.avatar_url as creator_avatar,
+                    u2.username as opponent_username,
+                    u2.display_name as opponent_display_name,
+                    u2.avatar_url as opponent_avatar,
+                    cat.name_ar as category_name_ar,
+                    cat.name_en as category_name_en,
+                    cat.icon as category_icon,
+                    cat.color as category_color
+                 FROM competitions c
+                 JOIN users u1 ON c.creator_id = u1.id
+                 LEFT JOIN users u2 ON c.opponent_id = u2.id
+                 LEFT JOIN categories cat ON c.category_id = cat.id
+                 WHERE c.id IN (${placeholders})`
+            ).bind(...batch).all<any>();
+            for (const r of ((cardRows.results ?? []) as any[])) byId.set(r.id, r);
+        }
         const scoreById = new Map(ordered.map((s) => [s.id, s.score] as [number, number]));
         const results: RecommendationResult[] = pageIds
             .map((id) => byId.get(id))
@@ -169,12 +180,11 @@ export class RecommendationEngine {
         followedIds: number[];
         watchedIds: number[];
         hiddenIds: number[];
-        blockedUserIds: number[];
         limit: number;
     }): Promise<RecommendationResult[]> {
         const {
             user, userId, favCategories, followedIds,
-            watchedIds, hiddenIds, blockedUserIds, limit
+            watchedIds, hiddenIds, limit
         } = params;
 
         const collected = new Map<number, RecommendationResult>();
@@ -197,7 +207,6 @@ export class RecommendationEngine {
             user, userId, favCategories, followedIds,
             excludeWatched: true,
             excludeHidden: true,
-            blockedUserIds,
             requireLanguage: true,
             requireCountry: true,
             phase: 1,
@@ -211,7 +220,6 @@ export class RecommendationEngine {
                 user, userId, favCategories, followedIds,
                 excludeWatched: true,
                 excludeHidden: true,
-                blockedUserIds,
                 requireLanguage: true,
                 requireCountry: false,
                 phase: 2,
@@ -226,7 +234,6 @@ export class RecommendationEngine {
                 user, userId, favCategories, followedIds,
                 excludeWatched: true,
                 excludeHidden: true,
-                blockedUserIds,
                 requireLanguage: false,
                 requireCountry: false,
                 phase: 3,
@@ -241,7 +248,6 @@ export class RecommendationEngine {
                 user, userId, favCategories, followedIds,
                 excludeWatched: false,
                 excludeHidden: true,
-                blockedUserIds,
                 requireLanguage: false,
                 requireCountry: false,
                 phase: 4,
@@ -269,7 +275,6 @@ export class RecommendationEngine {
         followedIds: number[];
         excludeWatched: boolean;
         excludeHidden: boolean;
-        blockedUserIds: number[];
         requireLanguage: boolean;
         requireCountry: boolean;
         phase: number;
@@ -277,7 +282,7 @@ export class RecommendationEngine {
     }): Promise<any[]> {
         const {
             user, userId, favCategories, followedIds,
-            excludeWatched, excludeHidden, blockedUserIds,
+            excludeWatched, excludeHidden,
             requireLanguage, requireCountry, limit
         } = params;
 
@@ -307,10 +312,19 @@ export class RecommendationEngine {
             bindings.push(userId);
         }
 
-        if (blockedUserIds.length > 0) {
-            whereClause += ` AND c.creator_id NOT IN (${blockedUserIds.map(() => '?').join(',')})`;
-            bindings.push(...blockedUserIds);
-        }
+        // D1 hotfix: block narrowing as a NOT EXISTS anti-join (both
+        // directions) instead of expanding the unbounded block list into
+        // bound placeholders (old form 500'd past 100 binds). Same rows
+        // excluded at any list size. NOTE: this query is currently only
+        // reachable from queryWithDegradation, which itself has no callers
+        // (the routed endpoint uses the H7 getRecommendations path above) —
+        // fixed anyway so a future revival cannot reintroduce the class.
+        whereClause += ` AND NOT EXISTS (
+            SELECT 1 FROM user_blocks b
+             WHERE (b.blocker_id = ? AND b.blocked_id = c.creator_id)
+                OR (b.blocked_id = ? AND b.blocker_id = c.creator_id)
+        )`;
+        bindings.push(userId, userId);
 
         const followedClause = followedIds.length > 0
             ? followedIds.join(',')

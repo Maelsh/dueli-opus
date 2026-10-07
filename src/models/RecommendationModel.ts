@@ -211,23 +211,29 @@ export class RecommendationModel {
         const { ids, scores } = await this.h7OrderIds(eligible, lang, null, 'mixed');
         const pageIds = ids.slice(Math.max(0, offset), Math.max(0, offset) + Math.max(0, limit));
         if (pageIds.length === 0) return [];
-        const placeholders = pageIds.map(() => '?').join(',');
-        const result = await this.db.prepare(`
-            SELECT c.*,
-                   cat.${column} as category_name,
-                   cat.slug as category_slug,
-                   cat.icon as category_icon,
-                   cat.color as category_color,
-                   u.username as creator_username,
-                   u.display_name as creator_name,
-                   u.avatar_url as creator_avatar
-            FROM competitions c
-            JOIN categories cat ON c.category_id = cat.id
-            JOIN users u ON c.creator_id = u.id
-            WHERE c.id IN (${placeholders})
-        `).bind(...pageIds).all<GuestSuggestedRow>();
+        // D1 hotfix: hydrate in 80-id chunks so a large client limit can never
+        // push one statement past D1's 100-bind hard limit. Order is restored
+        // from pageIds via byId, so chunking is transparent.
         const byId = new Map<number, GuestSuggestedRow>();
-        for (const row of (result.results || []) as GuestSuggestedRow[]) byId.set(row.id, row);
+        for (let i = 0; i < pageIds.length; i += 80) {
+            const batch = pageIds.slice(i, i + 80);
+            const placeholders = batch.map(() => '?').join(',');
+            const result = await this.db.prepare(`
+                SELECT c.*,
+                       cat.${column} as category_name,
+                       cat.slug as category_slug,
+                       cat.icon as category_icon,
+                       cat.color as category_color,
+                       u.username as creator_username,
+                       u.display_name as creator_name,
+                       u.avatar_url as creator_avatar
+                FROM competitions c
+                JOIN categories cat ON c.category_id = cat.id
+                JOIN users u ON c.creator_id = u.id
+                WHERE c.id IN (${placeholders})
+            `).bind(...batch).all<GuestSuggestedRow>();
+            for (const row of (result.results || []) as GuestSuggestedRow[]) byId.set(row.id, row);
+        }
         return pageIds
             .map((id) => byId.get(id))
             .filter((r): r is GuestSuggestedRow => !!r)
@@ -255,8 +261,16 @@ export class RecommendationModel {
      * R3-D1 (h7-v1): full ordered id set for the logged-in Suggested rail.
      * Same H7 arithmetic as the guest rail; the user identity only NARROWS
      * the set (own, blocks, hidden) and ADDS personal signals (interests,
-     * follows, history) via the viewer context. Exclusion lists are loaded
-     * by the caller so build-time and read-time re-checks share one source.
+     * follows, history) via the viewer context.
+     *
+     * D1 hotfix: exclusions are enforced with NOT EXISTS anti-joins against
+     * the source tables (user_blocks both directions, user_hidden_competitions)
+     * instead of expanding the caller-loaded arrays into bound placeholders —
+     * blocks/hides are unbounded user-controlled lists and the old NOT IN
+     * form exceeded D1's 100-bind hard limit (rail 500). The anti-joins read
+     * the same rows the loader reads, so NO exclusion is dropped at any list
+     * size; the passed arrays remain the read-time re-check source in the
+     * provider. Total binds: 4 regardless of exclusion volume.
      */
     async findUserSuggestedIdsForStatus(
         lang: string,
@@ -267,19 +281,21 @@ export class RecommendationModel {
         const params: Array<string | number> = [];
         let extra = '';
         const own = exclusions.excludeOwnId;
-        const creators = [...new Set(exclusions.excludeCreatorIds.filter((id) => Number.isInteger(id) && id > 0))];
-        const competitions = [...new Set(exclusions.excludeCompetitionIds.filter((id) => Number.isInteger(id) && id > 0))];
-        if (typeof own === 'number' && Number.isInteger(own) && own > 0) {
+        const hasIdentity = typeof own === 'number' && Number.isInteger(own) && own > 0;
+        if (hasIdentity) {
             extra += ` AND c.creator_id != ?`;
             params.push(own);
-        }
-        if (creators.length > 0) {
-            extra += ` AND c.creator_id NOT IN (${creators.map(() => '?').join(',')})`;
-            params.push(...creators);
-        }
-        if (competitions.length > 0) {
-            extra += ` AND c.id NOT IN (${competitions.map(() => '?').join(',')})`;
-            params.push(...competitions);
+            extra += ` AND NOT EXISTS (
+                SELECT 1 FROM user_blocks b
+                 WHERE (b.blocker_id = ? AND b.blocked_id = c.creator_id)
+                    OR (b.blocked_id = ? AND b.blocker_id = c.creator_id)
+            )`;
+            params.push(own, own);
+            extra += ` AND NOT EXISTS (
+                SELECT 1 FROM user_hidden_competitions h
+                 WHERE h.user_id = ? AND h.competition_id = c.id
+            )`;
+            params.push(own);
         }
         const result = await this.db.prepare(`
             SELECT c.id as id

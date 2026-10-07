@@ -302,27 +302,34 @@ export class SearchModel {
 
     /**
      * H7 card hydration in ranked order (shared by the slices below).
+     * D1 hotfix: hydrated in 80-id chunks — several callers pass a client
+     * controlled limit with no upper cap, so one statement could exceed D1's
+     * 100-bind hard limit. Order is restored from ids via byId, so chunking
+     * is transparent.
      */
     private async hydrateCards(ids: number[]): Promise<Competition[]> {
         if (ids.length === 0) return [];
-        const placeholders = ids.map(() => '?').join(',');
-        const q = `
-            SELECT
-                c.*,
-                u.username as creator_username,
-                u.display_name as creator_display_name,
-                u.avatar_url as creator_avatar,
-                cat.name_ar as category_name_ar,
-                cat.name_en as category_name_en,
-                cat.slug as category_slug
-            FROM competitions c
-            LEFT JOIN users u ON c.creator_id = u.id
-            LEFT JOIN categories cat ON c.category_id = cat.id
-            WHERE c.id IN (${placeholders})
-        `;
-        const res = await this.db.prepare(q).bind(...ids).all<Competition>();
         const byId = new Map<number, Competition>();
-        for (const item of (res.results || [])) byId.set((item as Competition & { id: number }).id, item);
+        for (let i = 0; i < ids.length; i += 80) {
+            const batch = ids.slice(i, i + 80);
+            const placeholders = batch.map(() => '?').join(',');
+            const q = `
+                SELECT
+                    c.*,
+                    u.username as creator_username,
+                    u.display_name as creator_display_name,
+                    u.avatar_url as creator_avatar,
+                    cat.name_ar as category_name_ar,
+                    cat.name_en as category_name_en,
+                    cat.slug as category_slug
+                FROM competitions c
+                LEFT JOIN users u ON c.creator_id = u.id
+                LEFT JOIN categories cat ON c.category_id = cat.id
+                WHERE c.id IN (${placeholders})
+            `;
+            const res = await this.db.prepare(q).bind(...batch).all<Competition>();
+            for (const item of (res.results || [])) byId.set((item as Competition & { id: number }).id, item);
+        }
         return ids.map((id) => byId.get(id)).filter((r): r is Competition => !!r);
     }
 

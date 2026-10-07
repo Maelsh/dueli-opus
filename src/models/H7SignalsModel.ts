@@ -303,19 +303,37 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
                  GROUP BY r.competitor_id`,
                 ...batch
             );
-            const counts = await this.query<{ uid: number; n: number }>(
-                `SELECT u AS uid, COUNT(*) AS n FROM (
-                     SELECT creator_id AS u FROM competitions WHERE creator_id IN (${placeholders}) AND ${ACTUAL_PARTICIPATION_WHERE}
-                     UNION ALL
-                     SELECT opponent_id AS u FROM competitions WHERE opponent_id IN (${placeholders}) AND ${ACTUAL_PARTICIPATION_WHERE}
-                 ) WHERE u IS NOT NULL GROUP BY u`,
-                ...batch,
+            // D1 hotfix: the old single UNION ALL query bound the batch TWICE
+            // (creator side + opponent side => up to 160 params > D1's 100
+            // hard limit; 51+ ids => production 500). Two single-bind queries
+            // can never exceed the 80-id chunk, and merging in JS preserves
+            // the exact UNION ALL + GROUP BY + IS NOT NULL semantics
+            // (a user on both sides of one row counts twice, as before).
+            const countBy = new Map<number, number>();
+            const addCounts = (rows: Array<{ uid: number | null; n: number }>) => {
+                for (const r of rows) {
+                    if (typeof r.uid !== 'number' || r.uid === null) continue;
+                    countBy.set(r.uid, (countBy.get(r.uid) ?? 0) + (Number(r.n) || 0));
+                }
+            };
+            const creatorCounts = await this.query<{ uid: number; n: number }>(
+                `SELECT creator_id AS uid, COUNT(*) AS n FROM competitions
+                  WHERE creator_id IN (${placeholders}) AND ${ACTUAL_PARTICIPATION_WHERE}
+                  GROUP BY creator_id`,
                 ...batch
             );
+            addCounts(creatorCounts);
+            const opponentCounts = await this.query<{ uid: number; n: number }>(
+                `SELECT opponent_id AS uid, COUNT(*) AS n FROM competitions
+                  WHERE opponent_id IN (${placeholders}) AND ${ACTUAL_PARTICIPATION_WHERE}
+                  GROUP BY opponent_id`,
+                ...batch
+            );
+            addCounts(opponentCounts);
             const sumBy = new Map<number, number>();
             for (const r of sums) sumBy.set(r.competitor_id, Number(r.s) || 0);
-            for (const r of counts) {
-                out.set(r.uid, { sum: sumBy.get(r.uid) ?? 0, count: Number(r.n) || 0 });
+            for (const [uid, n] of countBy) {
+                out.set(uid, { sum: sumBy.get(uid) ?? 0, count: n });
             }
             for (const id of batch) {
                 if (!out.has(id)) out.set(id, { sum: sumBy.get(id) ?? 0, count: 0 });

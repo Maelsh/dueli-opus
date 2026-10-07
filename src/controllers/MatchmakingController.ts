@@ -160,16 +160,23 @@ export class MatchmakingController extends BaseController {
             const pageIds = orderedIds.slice(Math.max(0, offset), Math.max(0, offset) + Math.max(1, limit));
             let users: unknown[] = [];
             if (pageIds.length > 0) {
-                const placeholders = pageIds.map(() => '?').join(',');
-                const pageRes = await db.prepare(
-                    `SELECT u.id, u.username, u.display_name, u.avatar_url, u.country,
-                            u.language, u.is_online, u.last_seen_at, u.is_busy,
-                            u.is_verified, u.is_fake, u.average_rating,
-                            u.total_competitions, u.total_wins
-                       FROM users u WHERE u.id IN (${placeholders})`
-                ).bind(...pageIds).all();
+                // D1 hotfix: hydrate in 80-id chunks — `limit` is client
+                // controlled with no upper cap, so one statement could exceed
+                // D1's 100-bind hard limit. Order is restored from pageIds
+                // via byId, so chunking is transparent.
                 const byId = new Map<number, unknown>();
-                for (const item of (pageRes.results || [])) byId.set((item as { id: number }).id, item);
+                for (let i = 0; i < pageIds.length; i += 80) {
+                    const batch = pageIds.slice(i, i + 80);
+                    const placeholders = batch.map(() => '?').join(',');
+                    const pageRes = await db.prepare(
+                        `SELECT u.id, u.username, u.display_name, u.avatar_url, u.country,
+                                u.language, u.is_online, u.last_seen_at, u.is_busy,
+                                u.is_verified, u.is_fake, u.average_rating,
+                                u.total_competitions, u.total_wins
+                           FROM users u WHERE u.id IN (${placeholders})`
+                    ).bind(...batch).all();
+                    for (const item of (pageRes.results || [])) byId.set((item as { id: number }).id, item);
+                }
                 users = pageIds.map((id) => byId.get(id)).filter((r): r is unknown => !!r);
             }
 
