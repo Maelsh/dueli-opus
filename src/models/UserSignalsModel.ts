@@ -136,23 +136,19 @@ export class UserSignalsModel {
         for (let i = 0; i < unique.length; i += 80) {
             const batch = unique.slice(i, i + 80);
             const placeholders = batch.map(() => '?').join(',');
-            const rows = await this.db.prepare(
-                `SELECT c.creator_id AS creator_id, c.opponent_id AS opponent_id,
-                        cat.slug AS cat_slug, subcat.slug AS sub_slug
-                   FROM competitions c
-                   JOIN categories cat ON c.category_id = cat.id
-                   LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
-                  WHERE c.${ACTUAL_PARTICIPATION_WHERE}
-                    AND (c.creator_id IN (${placeholders}) OR c.opponent_id IN (${placeholders}))`
-            ).bind(...batch, ...batch).all<{
-                creator_id: number; opponent_id: number | null; cat_slug: string; sub_slug: string | null;
-            }>();
+            // D1 hotfix: the old single query bound the batch TWICE
+            // (creator IN + opponent IN => up to 160 params > D1's 100 hard
+            // limit). Two single-bind queries can never exceed the 80-id
+            // chunk. Each result set is attributed ONLY to its own side, so a
+            // row with both sides in the batch still credits each side exactly
+            // once (creator row + opponent row), matching the old OR query;
+            // NULL opponents stay skipped.
             const batchSet = new Set(batch);
-            for (const r of (rows.results ?? []) as Array<{
+            const attrib = (rows: Array<{
                 creator_id: number; opponent_id: number | null; cat_slug: string; sub_slug: string | null;
-            }>) {
-                const sides = [r.creator_id, r.opponent_id];
-                for (const uid of sides) {
+            }>, side: 'creator' | 'opponent') => {
+                for (const r of rows) {
+                    const uid = side === 'creator' ? r.creator_id : r.opponent_id;
                     if (typeof uid !== 'number' || !batchSet.has(uid)) continue;
                     const spec = out.get(uid);
                     if (!spec) continue;
@@ -162,7 +158,35 @@ export class UserSignalsModel {
                     const sub = String(r.sub_slug || '').toLowerCase();
                     if (sub !== '') spec.subcategoryCounts.set(sub, (spec.subcategoryCounts.get(sub) ?? 0) + 1);
                 }
-            }
+            };
+            const creatorRows = await this.db.prepare(
+                `SELECT c.creator_id AS creator_id, c.opponent_id AS opponent_id,
+                        cat.slug AS cat_slug, subcat.slug AS sub_slug
+                   FROM competitions c
+                   JOIN categories cat ON c.category_id = cat.id
+                   LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
+                  WHERE c.${ACTUAL_PARTICIPATION_WHERE}
+                    AND c.creator_id IN (${placeholders})`
+            ).bind(...batch).all<{
+                creator_id: number; opponent_id: number | null; cat_slug: string; sub_slug: string | null;
+            }>();
+            attrib((creatorRows.results ?? []) as Array<{
+                creator_id: number; opponent_id: number | null; cat_slug: string; sub_slug: string | null;
+            }>, 'creator');
+            const opponentRows = await this.db.prepare(
+                `SELECT c.creator_id AS creator_id, c.opponent_id AS opponent_id,
+                        cat.slug AS cat_slug, subcat.slug AS sub_slug
+                   FROM competitions c
+                   JOIN categories cat ON c.category_id = cat.id
+                   LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
+                  WHERE c.${ACTUAL_PARTICIPATION_WHERE}
+                    AND c.opponent_id IN (${placeholders})`
+            ).bind(...batch).all<{
+                creator_id: number; opponent_id: number | null; cat_slug: string; sub_slug: string | null;
+            }>();
+            attrib((opponentRows.results ?? []) as Array<{
+                creator_id: number; opponent_id: number | null; cat_slug: string; sub_slug: string | null;
+            }>, 'opponent');
             const favs = await this.db.prepare(
                 `SELECT user_id, keyword FROM user_keywords
                   WHERE user_id IN (${placeholders}) AND lower(keyword) LIKE 'fav:%'`

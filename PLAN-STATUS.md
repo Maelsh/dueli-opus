@@ -1,6 +1,14 @@
 
 
 
+## HOTFIX D1 100-param limit / home-rails 500 · فرع `fix/d1-param-limit-home-rails` (من `d5233f4` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/إعدادات (routes ‏235←235). PR #99 لم تُمس (HOLD محترم). H7/D1/D2 بلا إعادة تصميم أوزان.
+- السبب الجذري: حد D1 الصلب 100 معامل مربوط/استعلام. ‏`loadProfiles` كانت تربط الدفعة (حتى 80) مرتين (‏UNION ALL صانع+خصم ⇒ حتى 160؛ ‏51+ معرّف ⇒ ‏500 إنتاجي) و`loadSpecializations` بنفس النمط الكامن. الإصلاح: تقسيم كل استعلام ثنائي إلى استعلامين أحاديي الربط (≤80) مع الدمج في ‏JS بنفس الدلالة الدقيقة (‏UNION ALL/GROUP BY/استبعاد ‏NULL/ائتمان كل جهة مرة). حارس ‏shim جديد في ‏`sqlite-d1.ts` يرمي خطأ D1 الإنتاجي عند ‏>100 (اختباري فقط).
+- **الأدلة**: T جديد ‏`d1-param-limit-hotfix` ‏9/9 (حارس ‏101/100؛ ‏loadProfiles ‏60 معرّفاً بمجاميع/أعداد دقيقة + استبعاد المعلق؛ ‏loadSpecializations ‏60 بائتمان صحيح؛ مسارات ‏home-rails الحقيقية ‏suggested/live وupcoming وcategory/live ‏201 بمجاميع >50 وقراءات 200 + ضابط 3 صفوف) — ‏RED مثبت (5 تفشل بخطأ الإنتاج ‏`binds 120 parameters` بلا الإصلاح)؛ الجيران (‏home-rails-continuation ‏13/13، ‏r3-d2 ‏16/16، ‏r3-d1 ‏21/21)؛ الكاملة ‏1348 + ‏16 بيئية ‏Windows مسبقة على ‏BASE (‏6 ‏jq + ‏10 ‏readiness — بلا مساس)؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏295 ≤ ‏310.
+
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-D2 user discovery + matchmaking (h7-v1) · فرع `feat/r3-d2-user-discovery` (PR #98، من `f8c7add` = origin/main بعد دمج R3-D1-REM1 #97)
 
 - 🔧 ‏REMOTE REJECT ← إصلاح LOCAL مكتمل على نفس الفرع/PR، بانتظار re-REMOTE — ليست DONE. بلا PR جديد/دمج/نشر/كتابة إنتاجية/ترحيل (routes ‏225←235 ثابتة). D1+REM1 مغلقتان؛ H7-v1 بلا تغيير أوزان.
