@@ -1,3 +1,11 @@
+## R3-C3 synthetic-retirement future design · فرع feat/r3-c3-retirement-design (من 88461f6a = origin/main)
+
+- 🔧 تصميم/توثيق LOCAL مكتمل، بانتظار REMOTE — ليست DONE. وثيقة فقط بلا حذف/ترحيل/جدولة/endpoint تدميري (‏KEEP NOW سارية). ‏C1/C2 مغلقان ولم يُمسا.
+- forensic: الواقع الحالي (‏is_fake الافتراضي، 3 مواقع حذف وحيد best-effort بعد إنشاء حقيقي، قوائم تبعية مثبتة بـPRAGMA) مقابل غير الموجود (مسح عمري/دفعي/dry-run/زر/‏cron/استرجاع).
+- أضيف: ‏docs/20-SYNTHETIC-RETIREMENT-DESIGN.md (تصنيف/عتبة مقترحة قابلة للضبط/تفويض صريح/حمايات ‏FK ومالية/تدقيقية/dry-run إلزامي/‏fail-closed/مراقبة واسترداد/قرارات مفتوحة للمالك).
+- **الأدلة**: T جديد ‏r3-c3-retirement-design ‏3/3 (الوثيقة بأقسامها الثمانية؛ لا مسار حذف خارج المواقع الثلاثة المثبتة؛ صدق عدم-الادعاء) + الحراس القائمة خضراء (19/19 مع ‏SyntheticRetirement وIsFakeCreation)؛ الكاملة ‏1387 + ‏16 بيئية ‏Windows مسبقة؛ ‏tsc ✅؛ ‏build ✅؛ ‏any ‏295 (+0).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-C2 admin-managed documents/data · فرع feat/r3-c2-docs-data (من d7021ae = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/اعتمادية جديدة (routes API ‏235←236: ‏GET /api/documents فقط؛ الصفحتان ‏/docs و/docs/:slug ليستا API). ‏R2-A مغلق ولم يُعَد بناؤه.
