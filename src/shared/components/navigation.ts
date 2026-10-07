@@ -195,6 +195,11 @@ export function getNavigation(lang: Language): string {
         </div>
       </div>
     </nav>
+    <!-- R3-C1: universal skip-link target. Every HTML surface renders this
+      navigation exactly once, so every page (including the 404 handler) has
+      exactly one #main-content target for the layout skip link — no per-page
+      ids, no duplicates. tabindex makes the jump focusable for keyboards. -->
+    <span id="main-content" tabindex="-1" class="block h-0 outline-none"></span>
   `;
 }
 

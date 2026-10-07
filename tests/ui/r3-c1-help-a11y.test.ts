@@ -17,6 +17,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import app from '../../src/main';
+import { FakeD1 } from '../helpers/fake-d1';
 import { ar } from '../../src/i18n/ar';
 import { en } from '../../src/i18n/en';
 
@@ -76,7 +78,11 @@ describe('R3-C1 help page + routes', () => {
         ]) {
             expect(ids, `section #${id}`).toContain(id);
         }
-        expect(HELP).toContain('<main id="main-content"');
+        // Forensic R3-C1: the skip target is universal (one span in the shared
+        // navigation), so the help <main> carries no id — duplicates are what
+        // broke the old per-page scheme.
+        expect(HELP).toContain('<main class="container');
+        expect(HELP).not.toContain('id="main-content"');
         expect(HELP).toContain('<nav aria-label=');
         expect(HELP).toContain('<details');
         expect(HELP).toContain('<summary');
@@ -176,13 +182,19 @@ describe('R3-C1 i18n parity (ar/en)', () => {
 });
 
 describe('R3-C1 accessibility on touched surfaces', () => {
-    it('11. viewport allows pinch zoom; skip link targets a real main', () => {
+    it('11. viewport allows pinch zoom; exactly one skip target per surface', () => {
         expect(LAYOUT).toContain('name="viewport"');
         expect(LAYOUT).not.toContain('maximum-scale');
         expect(LAYOUT).not.toContain('user-scalable=no');
         expect(LAYOUT).toContain('href="#main-content"');
-        expect(HELP).toContain('id="main-content"');
-        expect(MAIN).toContain('id="main-content"');
+        // Universal target lives in the shared navigation (rendered once on
+        // every HTML surface, including the 404 handler), so per-page mains
+        // must NOT repeat the id.
+        expect(NAV).toContain('id="main-content"');
+        expect(NAV).toContain('tabindex="-1"');
+        expect(HELP).not.toContain('id="main-content"');
+        expect(MAIN).toContain('id="home-content"');
+        expect(SRC('modules/pages/about-page.ts')).not.toContain('id="main-content"');
     });
 
     it('12. toast is announced; form errors use role=alert', () => {
@@ -241,10 +253,17 @@ describe('R3-C1 accessibility on touched surfaces', () => {
         expect(NAV).toContain('aria-label="${tr.login');
     });
 
-    it('16. rating stars form a labelled radiogroup per competitor', () => {
-        expect(COMP).toContain('role="radiogroup"');
-        expect(COMP).toContain('role="radio"');
-        expect(COMP).toContain('aria-checked="false"');
+    it('16. rating stars are honest native buttons, never fake radios', () => {
+        // Forensic R3-C1: submitRating never manages aria-checked and the star
+        // rows have no arrow-key roving behavior, so radiogroup/radio roles
+        // would lie to assistive tech (first rule of ARIA). The stars stay
+        // natively operable <button>s with names that identify the competitor
+        // and the value — that naming is the real, testable contract.
+        expect(COMP).not.toContain('role="radiogroup"');
+        expect(COMP).not.toContain('role="radio"');
+        expect(COMP).not.toContain('aria-checked');
+        expect(COMP).toContain('comp.creator_name} \\${v}/5');
+        expect(COMP).toContain('comp.opponent_name} \\${v}/5');
     });
 
     it('17. RTL/LTR + dark variants preserved on new and touched markup', () => {
@@ -253,5 +272,55 @@ describe('R3-C1 accessibility on touched surfaces', () => {
         expect(CREATE).toContain('dark:');
         expect(LAYOUT).toContain('dir="${dir}"');
         expect(HELP).toContain('?lang=${lang}');
+    });
+});
+
+describe('R3-C1 rendered help output (real HTTP, not source strings)', () => {
+    const env = { DB: new FakeD1() } as never;
+    const render = async (path: string) => {
+        const res = await app.request(path, {}, env);
+        expect(res.status).toBe(200);
+        return res.text();
+    };
+    const idsOf = (html: string) => [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+
+    it('18. /help renders every section with exactly one skip target and no duplicate ids', async () => {
+        const html = await render('/help?lang=en');
+        for (const id of [
+            'main-content', 'overview', 'roles', 'role-creator', 'role-opponent',
+            'role-viewer', 'topics', 'topic-create', 'topic-invite', 'topic-live',
+            'topic-recording', 'topic-ratings', 'topic-reactions', 'topic-comments',
+            'topic-discover', 'topic-payout', 'topic-support', 'faq', 'access',
+        ]) {
+            expect(html, `rendered #${id}`).toContain(`id="${id}"`);
+        }
+        const ids = idsOf(html);
+        expect(ids.filter((i) => i === 'main-content')).toHaveLength(1);
+        expect(new Set(ids).size, 'duplicate ids').toBe(ids.length);
+        expect(html).toContain('href="#main-content"');
+        expect(html).toContain('Help & guides');
+    });
+
+    it('19. /faq serves the same guide in Arabic with RTL and distinct strings', async () => {
+        const html = await render('/faq?lang=ar');
+        expect(html).toContain('dir="rtl"');
+        expect(html).toContain('id="topic-ratings"');
+        expect(html).toContain('المساعدة والأدلة');
+        expect(html).not.toContain('Help & guides');
+    });
+
+    it('20. rendered help links are well-formed (no double query markers)', async () => {
+        const html = await render('/help?lang=en');
+        const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+        expect(hrefs.length).toBeGreaterThan(10);
+        for (const h of hrefs) {
+            if (!h.startsWith('/')) continue;
+            const path = h.split('#')[0];
+            expect((path.match(/\?/g) || []).length, `malformed href ${h}`).toBeLessThanOrEqual(1);
+        }
+        // The support card target already carries its own query string, so the
+        // language must be joined with '&' — this exact URL was malformed ('?..?..')
+        // before the forensic fix.
+        expect(html).toContain('/messages?tab=admin&lang=en');
     });
 });

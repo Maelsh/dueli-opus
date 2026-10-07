@@ -282,7 +282,7 @@ app.get('/', (c) => {
       </div>
 
       <!-- Main Content -->
-      <main class="container mx-auto px-4 pb-24 space-y-10" id="main-content">
+      <main class="container mx-auto px-4 pb-24 space-y-10" id="home-content">
         <div class="flex flex-col items-center justify-center py-16">
           <i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i>
           <p class="text-gray-500">${tr.loading}</p>

@@ -19,7 +19,7 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
     ${getLoginModal(lang)}
     
     <div class="min-h-screen bg-white dark:bg-[#0f0f0f] animate-fade-in">
-      <main id="main-content" class="container mx-auto px-4 py-12">
+      <main class="container mx-auto px-4 py-12">
         <!-- Hero Section -->
         <div class="text-center mb-16 max-w-4xl mx-auto">
           <div class="inline-block p-3 rounded-2xl bg-gradient-to-br from-purple-500/10 to-amber-500/10 mb-6">

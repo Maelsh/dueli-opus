@@ -17,7 +17,13 @@ export function helpPage(c: Context<{ Bindings: Bindings; Variables: Variables }
   const lang = c.get('lang');
   const tr = translations[getUILanguage(lang)];
   const rtl = isRTL(lang);
-  const hg = (tr as any).help_guide;
+  const hg = tr.help_guide;
+
+  // R3-C1 forensic fix: some help targets already carry a query string
+  // (e.g. '/messages?tab=admin'). Appending '?lang=' unconditionally would
+  // produce a malformed '?..?..' URL, so pick the separator honestly.
+  const withLang = (href: string) =>
+    href.includes('?') ? `${href}&lang=${lang}` : `${href}?lang=${lang}`;
 
   const topic = (
     id: string,
@@ -29,7 +35,7 @@ export function helpPage(c: Context<{ Bindings: Bindings; Variables: Variables }
       <h3 id="${id}-t" class="text-lg font-bold text-gray-900 dark:text-white mb-2">${hg[titleKey]}</h3>
       <p class="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mb-3">${hg[bodyKey]}</p>
       <div class="flex flex-wrap gap-2">
-        ${links.map((l) => `<a href="${l.href}?lang=${lang}" class="text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline">${l.label}</a>`).join('')}
+        ${links.map((l) => `<a href="${withLang(l.href)}" class="text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline">${l.label}</a>`).join('')}
       </div>
     </section>
   `;
@@ -53,7 +59,7 @@ export function helpPage(c: Context<{ Bindings: Bindings; Variables: Variables }
           </li>
         `).join('')}
       </ol>
-      <a href="${cta.href}?lang=${lang}" class="inline-block mt-4 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-sm font-bold hover:opacity-90 transition-opacity">${cta.label}</a>
+      <a href="${withLang(cta.href)}" class="inline-block mt-4 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-sm font-bold hover:opacity-90 transition-opacity">${cta.label}</a>
     </section>
   `;
 
@@ -72,7 +78,7 @@ export function helpPage(c: Context<{ Bindings: Bindings; Variables: Variables }
     ${getLoginModal(lang)}
 
     <div class="min-h-screen bg-white dark:bg-[#0f0f0f] animate-fade-in">
-      <main id="main-content" class="container mx-auto px-4 py-12 max-w-4xl">
+      <main class="container mx-auto px-4 py-12 max-w-4xl">
         <div class="text-center mb-10">
           <div class="inline-flex p-3 rounded-2xl bg-gradient-to-br from-purple-500/10 to-amber-500/10 mb-4">
             <i aria-hidden="true" class="far fa-question-circle text-4xl text-purple-500"></i>
@@ -103,17 +109,17 @@ export function helpPage(c: Context<{ Bindings: Bindings; Variables: Variables }
               { t: 'creator_s1t', d: 'creator_s1d' },
               { t: 'creator_s2t', d: 'creator_s2d' },
               { t: 'creator_s3t', d: 'creator_s3d' },
-            ], { href: '/create', label: (tr as any).create_competition || 'Create' })}
+            ], { href: '/create', label: tr.create_competition || 'Create' })}
             ${roleCard('role-opponent', 'opponent_t', [
               { t: 'opponent_s1t', d: 'opponent_s1d' },
               { t: 'opponent_s2t', d: 'opponent_s2d' },
               { t: 'opponent_s3t', d: 'opponent_s3d' },
-            ], { href: '/explore', label: (tr as any).explore || 'Explore' })}
+            ], { href: '/explore', label: tr.explore || 'Explore' })}
             ${roleCard('role-viewer', 'viewer_t', [
               { t: 'viewer_s1t', d: 'viewer_s1d' },
               { t: 'viewer_s2t', d: 'viewer_s2d' },
               { t: 'viewer_s3t', d: 'viewer_s3d' },
-            ], { href: '/explore', label: (tr as any).explore || 'Explore' })}
+            ], { href: '/explore', label: tr.explore || 'Explore' })}
           </div>
         </section>
 
@@ -121,40 +127,40 @@ export function helpPage(c: Context<{ Bindings: Bindings; Variables: Variables }
           <h2 id="topics-t" class="text-2xl font-black text-center text-gray-900 dark:text-white mb-6">${hg.topics_t}</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             ${topic('topic-create', 'topic_create_t', 'topic_create_d', [
-              { href: '/create', label: (tr as any).create_competition || 'Create' },
+              { href: '/create', label: tr.create_competition || 'Create' },
             ])}
             ${topic('topic-invite', 'topic_invite_t', 'topic_invite_d', [
-              { href: '/my-requests', label: (tr as any).my_requests || 'Requests' },
-              { href: '/my-competitions', label: (tr as any).my_competitions || 'Competitions' },
+              { href: '/my-requests', label: tr.my_requests || 'Requests' },
+              { href: '/my-competitions', label: tr.my_competitions || 'Competitions' },
             ])}
             ${topic('topic-live', 'topic_live_t', 'topic_live_d', [
-              { href: '/explore', label: (tr as any).explore || 'Explore' },
+              { href: '/explore', label: tr.explore || 'Explore' },
             ])}
             ${topic('topic-recording', 'topic_recording_t', 'topic_recording_d', [
-              { href: '/explore', label: (tr as any).explore || 'Explore' },
+              { href: '/explore', label: tr.explore || 'Explore' },
             ])}
             ${topic('topic-ratings', 'topic_ratings_t', 'topic_ratings_d', [
-              { href: '/explore', label: (tr as any).explore || 'Explore' },
+              { href: '/explore', label: tr.explore || 'Explore' },
             ])}
             ${topic('topic-reactions', 'topic_reactions_t', 'topic_reactions_d', [
-              { href: '/explore', label: (tr as any).explore || 'Explore' },
+              { href: '/explore', label: tr.explore || 'Explore' },
             ])}
             ${topic('topic-comments', 'topic_comments_t', 'topic_comments_d', [
-              { href: '/explore', label: (tr as any).explore || 'Explore' },
+              { href: '/explore', label: tr.explore || 'Explore' },
             ])}
             ${topic('topic-discover', 'topic_discover_t', 'topic_discover_d', [
-              { href: '/explore', label: (tr as any).explore || 'Explore' },
-              { href: '/settings', label: (tr as any).settings || 'Settings' },
+              { href: '/explore', label: tr.explore || 'Explore' },
+              { href: '/settings', label: tr.settings || 'Settings' },
             ])}
             ${topic('topic-payout', 'topic_payout_t', 'topic_payout_d', [
-              { href: '/earnings', label: (tr as any).earnings_nav || 'Earnings' },
-              { href: '/donate', label: (tr as any).donate || 'Donate' },
-              { href: '/transparency', label: (tr as any).transparency || 'Transparency' },
+              { href: '/earnings', label: tr.earnings_nav || 'Earnings' },
+              { href: '/donate', label: tr.donate || 'Donate' },
+              { href: '/transparency', label: tr.transparency || 'Transparency' },
             ])}
             ${topic('topic-support', 'topic_support_t', 'topic_support_d', [
-              { href: '/messages?tab=admin', label: (tr as any).contact_admin || 'Contact' },
-              { href: '/reports', label: (tr as any).submit_report || 'Report' },
-              { href: '/complaints', label: (tr as any).arbitration?.my_complaints || 'Complaints' },
+              { href: '/messages?tab=admin', label: tr.contact_admin || 'Contact' },
+              { href: '/reports', label: tr.submit_report || 'Report' },
+              { href: '/complaints', label: tr.arbitration?.my_complaints || 'Complaints' },
             ])}
           </div>
         </section>

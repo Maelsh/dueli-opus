@@ -435,11 +435,16 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           })}
                           <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.creator_name}</span>
                         </div>
-                        <div class="flex gap-1" dir="ltr" role="radiogroup" aria-label="\${comp.creator_name}">
+                        <!-- R3-C1 forensic: plain natively-operable buttons with honest
+                          names (competitor + value). A radio pattern would
+                          require managed checked state + arrow-key roving
+                          behavior that submitRating does not implement, so the
+                          roles were removed rather than kept as decoration. -->
+                        <div class="flex gap-1" dir="ltr" aria-label="\${comp.creator_name}">
                           \${[1,2,3,4,5].map(v => \`
                             <button data-csp-on="click" data-csp-fn="submitRating" data-csp-args='[\${comp.creator_id},\${v},"@this"]' data-val="\${v}"
                               class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
-                              role="radio" aria-checked="false" aria-label="\${comp.creator_name} \${v}/5"><i class="fas fa-star" aria-hidden="true"></i></button>
+                              aria-label="\${comp.creator_name} \${v}/5"><i class="fas fa-star" aria-hidden="true"></i></button>
                           \`).join('')}
                         </div>
                       </div>
@@ -456,11 +461,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           })}
                           <span class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">\${comp.opponent_name}</span>
                         </div>
-                        <div class="flex gap-1" dir="ltr" role="radiogroup" aria-label="\${comp.opponent_name}">
+                        <div class="flex gap-1" dir="ltr" aria-label="\${comp.opponent_name}">
                           \${[1,2,3,4,5].map(v => \`
                             <button data-csp-on="click" data-csp-fn="submitRating" data-csp-args='[\${comp.opponent_id},\${v},"@this"]' data-val="\${v}"
                               class="rate-star text-2xl text-gray-300 dark:text-gray-600 hover:text-amber-400 transition-colors"
-                              role="radio" aria-checked="false" aria-label="\${comp.opponent_name} \${v}/5"><i class="fas fa-star" aria-hidden="true"></i></button>
+                              aria-label="\${comp.opponent_name} \${v}/5"><i class="fas fa-star" aria-hidden="true"></i></button>
                           \`).join('')}
                         </div>
                       </div>

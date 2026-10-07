@@ -91,7 +91,7 @@ export class HomePage {
     }
 
     static async loadCompetitions() {
-        const container = document.getElementById('main-content');
+        const container = document.getElementById('home-content');
         if (!container) return;
 
         const lang = State.lang;
