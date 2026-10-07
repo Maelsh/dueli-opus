@@ -4,6 +4,7 @@
  */
 
 export { aboutPage } from './about-page';
+export { helpPage } from './help-page';
 export { verifyPage } from './verify-page';
 export { competitionPage } from './competition-page';
 export { createPage } from './create-page';

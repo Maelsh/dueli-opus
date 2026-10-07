@@ -256,7 +256,7 @@ export class InvitePanel {
         overlay.style.backdropFilter = 'blur(4px)';
 
         overlay.innerHTML = `
-            <div id="invitePanel" class="relative w-full max-w-lg max-h-[85vh] bg-white dark:bg-[#1a1a2e] rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-200/20 dark:border-purple-900/30 overflow-hidden flex flex-col transform transition-all duration-300 animate-slide-up" dir="${isRtl ? 'rtl' : 'ltr'}">
+            <div id="invitePanel" role="dialog" aria-modal="true" aria-label="${t('matchmaking.panel_title', State.lang)}" class="relative w-full max-w-lg max-h-[85vh] bg-white dark:bg-[#1a1a2e] rounded-t-3xl sm:rounded-3xl shadow-2xl border border-gray-200/20 dark:border-purple-900/30 overflow-hidden flex flex-col transform transition-all duration-300 animate-slide-up" dir="${isRtl ? 'rtl' : 'ltr'}">
                 <!-- Header -->
                 <div class="bg-gradient-to-r from-purple-600 to-indigo-600 p-5 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-3 min-w-0">
@@ -269,11 +269,11 @@ export class InvitePanel {
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                        <button data-csp-on="click" data-csp-fn="window._invitePanelRefresh" data-csp-args='[]' class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.refresh', State.lang)}">
-                            <i class="fas fa-sync-alt text-sm"></i>
+                        <button data-csp-on="click" data-csp-fn="window._invitePanelRefresh" data-csp-args='[]' aria-label="${t('matchmaking.refresh', State.lang)}" class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.refresh', State.lang)}">
+                            <i class="fas fa-sync-alt text-sm" aria-hidden="true"></i>
                         </button>
-                        <button data-csp-on="click" data-csp-fn="window._invitePanelClose" data-csp-args='[]' class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.close_panel', State.lang)}">
-                            <i class="fas fa-times text-sm"></i>
+                        <button data-csp-on="click" data-csp-fn="window._invitePanelClose" data-csp-args='[]' aria-label="${t('matchmaking.close_panel', State.lang)}" class="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-all" title="${t('matchmaking.close_panel', State.lang)}">
+                            <i class="fas fa-times text-sm" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>
@@ -284,6 +284,7 @@ export class InvitePanel {
                         <input 
                             type="text" 
                             id="invitePanelSearch"
+                            aria-label="${t('matchmaking.search_users', State.lang)}"
                             placeholder="${t('matchmaking.search_users', State.lang)}"
                             class="w-full bg-gray-100 dark:bg-gray-800 rounded-xl py-2.5 ${isRtl ? 'pr-10 pl-4' : 'pl-10 pr-4'} text-sm text-gray-900 dark:text-white placeholder-gray-400 border-0 focus:ring-2 focus:ring-purple-400 transition-all outline-none"
                             data-csp-on="input" data-csp-fn="window._invitePanelSearch" data-csp-args='["@this.value"]'
@@ -314,6 +315,11 @@ export class InvitePanel {
             if (e.target === overlay) {
                 InvitePanel.close();
             }
+        });
+        // R3-C1: Escape closes the panel.
+        overlay.setAttribute('tabindex', '-1');
+        overlay.addEventListener('keydown', (e) => {
+            if ((e as KeyboardEvent).key === 'Escape') InvitePanel.close();
         });
 
         document.body.appendChild(overlay);

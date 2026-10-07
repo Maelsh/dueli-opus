@@ -80,6 +80,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                 <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-5 shadow mt-6">
                     <p class="text-sm font-bold text-amber-800 dark:text-amber-200 mb-4" role="note">
                         <i class="fas fa-exclamation-triangle ${rtl ? 'ml-2' : 'mr-2'}"></i>${tr.donations?.non_refundable || 'Donations are non-refundable once completed'}
+                        <a href="/help?lang=${lang}#topic-payout" class="underline font-semibold">${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a>
                     </p>
                     <label class="flex items-start gap-3 mb-3 cursor-pointer">
                         <input type="checkbox" id="nonRefundableAccept" class="mt-1 w-5 h-5 accent-pink-600" aria-label="${tr.donations?.non_refundable_accept || 'Accept non-refundable policy'}">

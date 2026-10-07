@@ -52,21 +52,24 @@ export class SettingsUI {
         const modal = document.createElement('div');
         modal.id = 'settings-modal';
         modal.className = 'fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', t('settings_page.title', State.lang));
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden">
                 <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                         <i class="fas fa-cog mr-2"></i>${t('settings_page.title', State.lang)}
                     </h2>
-                    <button data-csp-on="click" data-csp-fn="SettingsUI.close" data-csp-args='[]' class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
-                        <i class="fas fa-times"></i>
+                    <button data-csp-on="click" data-csp-fn="SettingsUI.close" data-csp-args='[]' aria-label="${t('close', State.lang)}" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl">
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
                 
                 <form id="settings-form" data-csp-on="submit" data-csp-fn="SettingsUI.save" data-csp-args='["@event"]' class="p-5 space-y-5">
                     <!-- Language -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label for="setting-language" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             ${t('settings_page.language', State.lang)}
                         </label>
                         <select 
@@ -83,7 +86,7 @@ export class SettingsUI {
 
                     <!-- Country -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label for="setting-country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             ${t('settings_page.country', State.lang)}
                         </label>
                         <select 
@@ -100,7 +103,7 @@ export class SettingsUI {
 
                     <!-- Privacy -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label for="setting-privacy" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             ${t('settings_page.privacy', State.lang)}
                         </label>
                         <select 
@@ -150,6 +153,12 @@ export class SettingsUI {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) this.close();
         });
+        // R3-C1: Escape dismisses; focus starts on the dialog itself.
+        modal.setAttribute('tabindex', '-1');
+        modal.addEventListener('keydown', (e) => {
+            if ((e as KeyboardEvent).key === 'Escape') this.close();
+        });
+        modal.focus?.();
     }
 
     /**

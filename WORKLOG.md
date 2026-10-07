@@ -1,3 +1,10 @@
+## 2026-10-07 — R3-C1 PR #99 main integration (merge 3fac1e3, no redesign)
+
+- **Merge**: feat/r3-c1-help-a11y (77dca79) + origin/main 3fac1e3 (#100 deployed). Conflicts: PLAN-STATUS.md + WORKLOG.md only (both prepends — kept both entries, byte-verified); zero src conflicts. Delta overlap check d5233f4..3fac1e3 vs C1 diff: no shared src files/functions (main touched models/services, C1 touched pages/i18n/nav).
+- **Preserved**: all #100 D1 fixes (anti-joins, chunking, shim — spot-verified in merged tree) and all approved C1 behavior (/help+/faq, guides, skip target, zoom, labels, native rating buttons, RTL).
+- **Gates on merged tree**: r3-c1-help-a11y 20/20 + d1-param-limit-hotfix 16/16; csp/home-rails/r3-d1/r3-d2/recommendations 69/69; tsc ✅; build ✅ (churn reverted); any 295 ≤ 310.
+- **State**: LOCAL VERIFIED / awaiting REMOTE. Not DONE/DEPLOYED.
+
 ## 2026-10-07 — HOTFIX REMEDIATION on PR #100 (REMOTE #2 blockers A1–A4 + audit)
 
 - **REMOTE split**: #1 APPROVE/MERGE-SAFE YES (loadProfiles + loadSpecializations + shim + RED→GREEN all PASS — left untouched). #2 REJECT: same D1 >100 class proven in 4 more sites. All verified independently on HEAD `035699b` before editing (reachability + unbounded lists + worst-case binds).
@@ -19,6 +26,23 @@
 - **Tests**: new `tests/api/d1-param-limit-hotfix` 9/9 (shim 101-throws/100-passes; loadProfiles 60 ids exact SUM/count + pending-excluded; loadSpecializations 60 ids each-side-once; real POST /api/home-rails/sessions suggested/live + suggested/upcoming + category/live (201, totals >50/>0, page reads 200 dup-free) + 3-row control with exact total). RED-proven: with the src fix stashed, 5 fail carrying the exact production `binds 120 parameters` error through the route 500 path. Affected: home-rails-continuation 13/13, r3-d2-user-ranking 16/16, r3-d1-h7-ranking 21/21. Full `npm test`: 1348 passed, 16 failed = the known pre-existing Windows-env set (6 missing-`jq` + 10 readiness CRLF/hash), identical on BASE, zero shim-related. `tsc` ✅; `build` ✅ (CSS churn reverted); `any` 295 ≤ 310.
 - **State**: LOCAL VERIFIED / awaiting REMOTE. Not DONE/DEPLOYED.
 - **ROLLBACK (G8)**: revert branch (no migration/data/flags).
+
+## 2026-10-07 — R3-C1 FORENSIC TAKEOVER (PR #99, branch `feat/r3-c1-help-a11y`)
+
+- **BASE الموثوق**: `d5233f4` (merge #98). **OLD UNTRUSTED HEAD**: `a20a8bf` (≈31 ملف، +802/−119، بلا migration/dependency). الفشل الرسمي المثبت: Quality Gate #254 ‏FAILURE على `any-count ratchet (baseline 310)` ← Deploy Preview #483 ‏SKIPPED. تقرير الوكيل السابق (17/17، ‏G2 +0، ‏ready for REMOTE) غير موثوق.
+- **الفحص الجنائي (BASE→HEAD)**: العقد صحيح ومحتوى `help_guide` دقيق مقابل الكود المغلق (انتهاء الدعوات ‏24h مثبت `+24 hours` في `CompetitionInvitation/RequestModel`، أهلية ‏300s، ‏H3، ‏provisional/final، تفاعل فعال واحد، تعليقات موقوتة، لقطة السحب، تبرعات غير قابلة للاسترداد، هوية Dueli الإدارية — بلا وعود Inbox/KYC/بنك). الـKEEP: المسارات/الأدلة/الـi18n/المداخل/الزوم/الـlabels/الـdialogs/أسماء الأيقونات. الـFIX: (1) ~20 `(tr as any)` زائدة في `help-page.ts` (السبب الجذري: ‏`tr: any` أصلاً) → حُذفت كلها، العدّ الآن ‏295 ≤ ‏310؛ (2) رابط `/messages?tab=admin?lang=` معطوب (‏`?` مزدوجة) → `withLang()`؛ (3) هدف الـskip في 3 أسطح فقط → هدف شامل واحد عبر `getNavigation` (يُصيَّر في كل HTML بما فيه 404) مع إزالة الـids المكررة وإعادة تسمية حاوية الرئيسية `home-content`؛ (4) أدوار `radiogroup`/`radio` زائفة على النجوم (لا `aria-checked` مُدار ولا أسهم) → أزرار أصلية بأسماء صادقة. المُثبت كسلوك حقيقي لا زخرفة: زر `role=button` المصغّر يعمل بلوحة المفاتيح عبر مسار B6 في `csp-delegate.ts` (‏Enter/Space → ‏click) فبقي. بلا تغيير منطق مغلق (‏`submitRating` وكل العقود كما هي).
+- **الأدلة**: T ‏`r3-c1-help-a11y` ‏20/20 (‏17 مصححة + 3 إخراج مُصيَّر: ‏`/help` en كاملة بلا `id` مكررة، ‏`/faq` ar بـRTL، كل الـhrefs سليمة)؛ الجيران (`csp-hardening` ‏11/11، ‏`modal-accessibility` + ‏`b2-language` ‏18/18، ‏`b1-my-competitions-auth` + ‏`live-room-ui` ‏13/13)؛ `tsc` ✅؛ `build` ✅ (‏churn الـCSS رُجع)؛ ‏`any` ‏295 ≤ ‏310؛ routes API ‏235←235 (‏`/help`+`/faq` صفحات فقط).
+- **State**: LOCAL VERIFIED / awaiting REMOTE. Not DONE/DEPLOYED.
+- **ROLLBACK (G8)**: revert branch commits (no migration/data/flags).
+
+## 2026-10-07 — R3-C1 contextual help + FAQ/role guides + i18n/a11y (branch `feat/r3-c1-help-a11y`, PR pending)
+
+- **BASE**: `d5233f4` = origin/main. PLAN: `05-PRODUCT-COMPLETION-ADDENDUM.md` §R3-C1 guidance + forensics on current product (no help/faq surface existed; `helpIcon` → `/about`, guest-only, `auth-hidden`; no `/help`/`/faq` route). Forensic audit: no `*help*`/`*faq*`/`*guide*` pages/routes; nav icon pointed at about-page; 404 lacked a help link.
+- **Closed gate**: R2, D0, D1, D2, H7 — untouched. Explicit non-goals: no full help-platform redesign; no CSP/Cron/SEC rewrites; no `t()` rewrite; no H7/rating/finance/auth/lifecycle/TURN/formula/schema changes; no new deps; no production writes.
+- **Done**: (1) `src/modules/pages/help-page.ts` + export (`index.ts`) serving `GET /help` + `GET /faq` (`main.ts`); (2) i18n `help_guide` (ar≠en): 10 topics × (title+3 paras+Q+A+limitations), 3 role guides × 6 paras, 10 FAQ Q+A + limitations, access note, `skip_to_content`; (3) contextual help links ("Learn more" → `/help?lang=<lang>#topic-*`) in create/competition/live-room/earnings/donate/messages (support), 404 handler; `Modal.showHelp()` routes instead of alerting a missing key; (4) entry points: nav help icon `/help?lang=` visible to all (removed `auth-hidden`), user-menu + footer "Contact Admin"/"مساعدة" links; (5) a11y: zoomable viewport, skip-to-content → `#main-content` (unified id in `main.ts`/`HomePage.ts`/`about-page.ts`/`help-page.ts` and all `mainContent` references); toast `role="status"` + `aria-live="polite"`; error regions `role="alert"` (login/reset/withdrawal); real `for`/`id` associations (login/register/reset/create/withdraw); dialogs `settings`/`schedule`/`report`/`invite`: `role="dialog"`/`aria-modal`/`aria-label` + Escape; accessible names on icon-only controls (camera/mic/local-screen/switch/connect/disconnect/pause-play/prev-next); rating stars `role="radiogroup"`/`aria-checked` with competitor name.
+- **Evidence**: T new `tests/ui/r3-c1-help-a11y.test.ts` 17/17; `tsc --noEmit` ✅; `npm run build` ✅ (`dist/_worker.js` 1,389.92 kB, `dist/static/app.js` 350.0 kB, CSS regenerated); full `npm test` 1356/1372 — the 16 failing are pre-existing Windows-env (6 missing `jq` in `quality-gate-poll`, 10 in `release-readiness`) confirmed on BASE, no regressions. Routes unchanged: 235. G2 +0 new.
+- **State**: LOCAL VERIFIED / awaiting REMOTE. Not DONE/DEPLOYED.
+- **ROLLBACK (G8)**: revert branch commits (no migration/data/flags).
 
 ## 2026-10-06 — R3-D2 LOCAL FIX on PR #98 (REMOTE REJECT → same branch, no new PR)
 

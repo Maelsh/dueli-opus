@@ -45,16 +45,16 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                     ${tr.request_withdrawal}
                                 </h3>
                             <button data-csp-on="click" data-csp-fn="closeWithdrawalModal" data-csp-args='[]'
-                                    id="closeWithdrawalBtn"
+                                    id="closeWithdrawalBtn" aria-label="${tr.close || 'Close'}"
                                     class="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
-                                <i class="fas fa-times text-xl"></i>
+                                <i class="fas fa-times text-xl" aria-hidden="true"></i>
                             </button>
                         </div>
 
                         <form id="withdrawalForm" data-csp-on="submit" data-csp-fn="submitWithdrawal" data-csp-args='["@event"]' class="space-y-5">
                             <!-- Amount -->
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                <label for="withdrawAmount" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                     ${tr.amount} (USD)
                                 </label>
                                 <div class="relative">
@@ -63,12 +63,12 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                            placeholder="50.00" required
                                            class="w-full ${rtl ? 'pr-8 pl-4' : 'pl-8 pr-4'} py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" />
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal}</p>
+                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal} <a href="/help?lang=${lang}#topic-payout" class="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a></p>
                             </div>
 
                             <!-- Payment Method: saved methods first, manual fallback -->
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                <label for="withdrawMethod" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                     ${tr.payment_method}
                                 </label>
                                 <select id="withdrawMethod" required
@@ -83,7 +83,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
 
                             <!-- Payment Details -->
                             <div>
-                                <label class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                <label for="withdrawDetails" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
                                     ${tr.payment_details}
                                 </label>
                                 <textarea id="withdrawDetails" rows="3" required
@@ -92,7 +92,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             </div>
 
                             <!-- Error -->
-                            <div id="withdrawError" class="hidden p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm"></div>
+                            <div id="withdrawError" role="alert" class="hidden p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm"></div>
 
                             <!-- Submit -->
                             <button type="submit" id="withdrawSubmitBtn"

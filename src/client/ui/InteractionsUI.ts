@@ -75,14 +75,17 @@ export class InteractionsUI {
         const modal = document.createElement('div');
         modal.id = 'report-modal';
         modal.className = 'fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-label', t('report.title', State.lang));
         modal.innerHTML = `
             <div class="bg-white dark:bg-gray-900 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
                 <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <h2 class="text-xl font-bold text-gray-900 dark:text-white">
                         <i class="fas fa-flag mr-2 text-red-500"></i>${t('report.title', State.lang)}
                     </h2>
-                    <button data-csp-on="click" data-csp-fn="__byIdRemove" data-csp-args='["report-modal"]' class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                        <i class="fas fa-times"></i>
+                    <button data-csp-on="click" data-csp-fn="__byIdRemove" data-csp-args='["report-modal"]' aria-label="${t('close', State.lang)}" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
                 
@@ -91,7 +94,7 @@ export class InteractionsUI {
                     <input type="hidden" id="report-target-id" value="${targetId}">
                     
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label for="report-reason" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             ${t('report.reason', State.lang)}
                         </label>
                         <select 
@@ -107,7 +110,7 @@ export class InteractionsUI {
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        <label for="report-description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             ${t('report.description', State.lang)}
                         </label>
                         <textarea 
@@ -133,6 +136,12 @@ export class InteractionsUI {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.remove();
         });
+        // R3-C1: Escape dismisses; focus starts on the dialog itself.
+        modal.setAttribute('tabindex', '-1');
+        modal.addEventListener('keydown', (e) => {
+            if ((e as KeyboardEvent).key === 'Escape') modal.remove();
+        });
+        modal.focus?.();
     }
 
     /**
@@ -231,8 +240,10 @@ export class InteractionsUI {
             <button 
                 data-csp-on="click" data-csp-fn="InteractionsUI.toggleLike" data-csp-args='[${competitionId},"@this"]'
                 class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                aria-pressed="${liked}"
+                aria-label="${t('like.title', State.lang)}"
             >
-                <i class="${liked ? 'fas text-red-500' : 'far'} fa-heart"></i>
+                <i class="${liked ? 'fas text-red-500' : 'far'} fa-heart" aria-hidden="true"></i>
                 <span>${likeCount}</span>
             </button>
         `;
@@ -246,9 +257,10 @@ export class InteractionsUI {
             <button 
                 data-csp-on="click" data-csp-fn="InteractionsUI.showReportModal" data-csp-args='[${JSON.stringify((targetType))},${targetId}]'
                 class="text-gray-400 hover:text-red-500 transition"
+                aria-label="${t('report.title', State.lang)}"
                 title="${t('report.title', State.lang)}"
             >
-                <i class="fas fa-flag"></i>
+                <i class="fas fa-flag" aria-hidden="true"></i>
             </button>
         `;
     }

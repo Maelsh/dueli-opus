@@ -67,11 +67,11 @@ export class RecommendationCarousel {
                         <h3 class="text-sm font-bold text-gray-900 dark:text-white">${t('recommendations.carousel_title', lang)}</h3>
                     </div>
                     <div class="flex items-center gap-1">
-                        <button data-csp-on="click" data-csp-fn="window._recCarouselScroll" data-csp-args='[${JSON.stringify((this.containerId))},-1]' class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
-                            <i class="fas fa-chevron-${isRtl ? 'right' : 'left'} text-xs text-gray-600 dark:text-gray-400"></i>
+                        <button data-csp-on="click" data-csp-fn="window._recCarouselScroll" data-csp-args='[${JSON.stringify((this.containerId))},-1]' aria-label="${t('previous', lang)}" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
+                            <i class="fas fa-chevron-${isRtl ? 'right' : 'left'} text-xs text-gray-600 dark:text-gray-400" aria-hidden="true"></i>
                         </button>
-                        <button data-csp-on="click" data-csp-fn="window._recCarouselScroll" data-csp-args='[${JSON.stringify((this.containerId))},1]' class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
-                            <i class="fas fa-chevron-${isRtl ? 'left' : 'right'} text-xs text-gray-600 dark:text-gray-400"></i>
+                        <button data-csp-on="click" data-csp-fn="window._recCarouselScroll" data-csp-args='[${JSON.stringify((this.containerId))},1]' aria-label="${t('next', lang)}" class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all">
+                            <i class="fas fa-chevron-${isRtl ? 'left' : 'right'} text-xs text-gray-600 dark:text-gray-400" aria-hidden="true"></i>
                         </button>
                         <button data-csp-on="click" data-csp-fn="window._recCarouselRefresh" data-csp-args='[${JSON.stringify((this.containerId))}]' class="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-purple-100 dark:hover:bg-purple-900/30 flex items-center justify-center transition-all" title="${t('matchmaking.refresh', lang)}">
                             <i class="fas fa-sync-alt text-xs text-gray-600 dark:text-gray-400"></i>

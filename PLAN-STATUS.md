@@ -10,6 +10,22 @@
 
 - **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
 
+
+
+
+## R3-C1 contextual help + FAQ/role guides + i18n/a11y · فرع `feat/r3-c1-help-a11y` (من `d5233f4` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل بعد استلام جنائي (takeover)، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل جديد (routes API ‏235←235؛ ‏`/help` + `/faq` مسارا صفحة فقط، لا API ولا جرد).
+- العقد: (مطابق للأصل)
+  (1) صفحة Help & Guides `GET /help` + `/faq` → `helpPage`: نظرة عامة، أدوار صانع/منافس/مشاهد (3 أدلة)، 10 مواضيع منظمة (إنشاء / دعوة / بث / تسجيل / تقييم / تفاعل / تعليقات / اكتشاف / تسوية / دعم) بحدود/أسئلة شائعة، و قسم الوصول، كل ‏#anchor قابل للوصول عبر روابط "تعرف على المزيد" السياقية في (إنشاء / منافسة / بث / أرباح / تبرع / رسائل/الدعم الإداري / 404).
+  (2) i18n `help_guide` (ar≠en): 10 مواضيع × عنوان + 3 فقرات + سؤال + إجابة + حدود + 3 أدوار × 6 فقررات + FAQ 10×(سؤال+إجابة+حدود) + ملاحظة وصول + `skip_to_content`.
+  (3) مدخلات مساعدة: أيقونة مساعدة في الناف بار للجميع (`/help?lang=...` + `aria-label`)، رابط في قائمة المستخدم، روابط "اتصل بالمسؤول" و "مساعدة" في الفوتر، رابط /help في الـ 404، `Modal.showHelp()` يوجه بدل `alert()` مفتاح مفقود.
+  (4) وصول: زوم قابل للتمكين (`initial-scale=1.0`، إزالة `maximum-scale`/`user-scalable=no`) + رابط تخطي إلى `#main-content` بهدف شامل واحد في الـnavigation المشترك (يُصيَّر مرة واحدة في كل سطح HTML بما فيه 404؛ أُزيلت الـids المكررة من `main.ts`/`about`/`help` وأُعيدت تسمية حاوية الرئيسية إلى `home-content` مع تحديث `HomePage.ts`)؛ `Toast` كمنطقة معرَّفة `role="status"` + `aria-live="polite"`؛ نصوص خطأ `role="alert"` (تسجيل/استرداد/سحب)؛ ارتباط حقول/عناوين بصري حقيقي (`for`/`id`) في (تسجيل/تسجيل جديد/إعادة تعيين / إنشاء / سحب); نوافذ مخصصة (`settings`/`schedule`/`report`/`invite`) `role="dialog"` + `aria-modal` + زر إغلاق مع `aria-label` + إغلاق `Escape`؛ أسماء وصول للأزرار وحيدة الأيقونة؛ نجوم التقييم أزرار أصلية بأسماء صادقة (اسم المنافس + القيمة) بعد إزالة `radiogroup`/`radio` الزائفة (لا `aria-checked` مُدار ولا تنقل أسهم — الدور كان يكذب على التقنيات المساعدة).
+- **استلام جنائي (BASE ‏d5233f4 → ‏a20a8bf)**: الـHEAD السابق فشل رسمياً (Quality #254 على `any-count ratchet baseline 310` ثم Deploy #483 skipped). السبب الجذري المثبت: `help-page.ts` أضاف ~20 `(tr as any)` (‏`tr` من نوع `any` أصلاً عبر `Record<string, any>` فالـcasts زائدة وتحسب في العداد) → ‏~315 > ‏310. إصلاحات الاستلام: (1) حذف كل `as any` المضافة (العدد الآن ‏295 ≤ ‏310)؛ (2) إصلاح رابط معطوب حقيقي: بطاقة الدعم كانت تبني `/messages?tab=admin?lang=` (‏`?` مزدوجة) عبر `withLang()`؛ (3) هدف الـskip كان موجوداً في 3 أسطح فقط من ~24 — أصبح شاملاً عبر الـnavigation؛ (4) إزالة أدوار الراديو الزائفة. كل ما عداها KEEP (المحتوى دقيق مقابل R2/D1/D2: ‏300s/H3/‏provisional/‏single-effective/‏timed-comments/‏snapshot/‏non-refundable/هوية Dueli الإدارية). بلا revert واسع، بلا تغيير منطق مغلق، بلا migration/dependency.
+- **الأدلة**: T ‏`r3-c1-help-a11y` ‏20/20 (‏17 ثابتة مصححة + 3 إخراج مُصيَّر حقيقي عبر `app.request`: ‏`/help` en بكل الأقسام + هدف واحد + صفر `id` مكررة، ‏`/faq` ar بـRTL ونصوص مميزة، كل الـhrefs سليمة الشكل)؛ الجيران (`csp-hardening` ‏11/11، ‏`modal-accessibility` + ‏`b2-language` ‏18/18، ‏`b1-my-competitions-auth` + ‏`live-room-ui` ‏13/13)؛ `tsc --noEmit` ✅؛ `npm run build` ✅ (‏churn الـCSS رُجع)؛ عدّ `any` ‏295 ≤ ‏310.
+
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-D2 user discovery + matchmaking (h7-v1) · فرع `feat/r3-d2-user-discovery` (PR #98، من `f8c7add` = origin/main بعد دمج R3-D1-REM1 #97)
 
 - 🔧 ‏REMOTE REJECT ← إصلاح LOCAL مكتمل على نفس الفرع/PR، بانتظار re-REMOTE — ليست DONE. بلا PR جديد/دمج/نشر/كتابة إنتاجية/ترحيل (routes ‏225←235 ثابتة). D1+REM1 مغلقتان؛ H7-v1 بلا تغيير أوزان.

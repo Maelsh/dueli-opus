@@ -352,12 +352,13 @@ export class Modal {
     }
 
     /**
-     * Show help modal
+     * Open the Help & guides page (R3-C1). The legacy alert-based help
+     * referenced a help-content key that never existed, so it rendered
+     * a raw key — route to /help instead, preserving language.
      */
     static showHelp(): void {
-        const title = t('general.app_title', State.lang);
-        const content = t('client.help.content', State.lang);
-        alert(`${title}\n\n${content}`);
+        const lang = State.lang || 'ar';
+        window.location.href = `/help?lang=${lang}`;
     }
 }
 
