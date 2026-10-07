@@ -1,3 +1,11 @@
+## R3-C2 admin-managed documents/data · فرع feat/r3-c2-docs-data (من d7021ae = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/اعتمادية جديدة (routes API ‏235←236: ‏GET /api/documents فقط؛ الصفحتان ‏/docs و/docs/:slug ليستا API). ‏R2-A مغلق ولم يُعَد بناؤه.
+- forensic: الموجود ‏ALREADY DONE (نموذج/‏CRUD/بوابة مشرف/قراءة عامة/واجهة لوحة/بذور موسومة)؛ الناقص الحقيقي (1) فهرس/صفحات قراءة عامة (2) محتوى فئات ‏C2 (رسالة المشروع/المنتج/الهندسة/المصدر المفتوح/مساهمات ‏AI/مسودة قانونية موسومة بلا ادعاء).
+- نفذ: ‏listPublishedPublic + ‏listPublished (بيانات وصفية فقط)؛ صفحتا ‏/docs (فهرس) و/docs/:slug (قارئ) بختم ‏HTML ومناطق آمنة وبلا ‏JS (لا سطح ‏CSP جديد؛ المسودات/الخاصة ← ‏404)؛ مدخل الفوتر + مفاتيح ‏ar/en؛ ‏6 بذور ‏C2 مسودة/خاصة موسومة بلغة عدم-ادعاء صريحة.
+- **الأدلة**: T جديد ‏r3-c2-docs-data ‏6/6 + ‏UI ‏r3-c2-docs-pages ‏3/3 (كتابة المشرف/‏CRUD/الإصدارات/الفهرس/‏404/التدقيق/البذور/‏XSS/‏RTL)؛ الجيران (‏r2-a-admin + ‏r2-a-admin-ui + ‏csp-hardening ‏30/30)؛ الكاملة ‏1384 + ‏16 بيئية ‏Windows مسبقة على ‏BASE؛ ‏tsc ✅؛ ‏build ✅؛ ‏G2 ‏295 = ‏BASE (+0).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 
 
 

@@ -652,4 +652,14 @@ INSERT INTO competitions (id, title, description, rules, category_id, subcategor
 DELETE FROM managed_documents;
 INSERT INTO managed_documents (slug, title_ar, title_en, body_ar, body_en, status, visibility, version, is_seed, created_by, updated_by) VALUES
 ('seed-welcome', '[SEED] مرحباً', '[SEED] Welcome', 'نص تجريبي موسوم للمعاينة فقط.', 'Tagged sample text for preview only.', 'published', 'public', 1, 1, NULL, NULL),
-('seed-internal-note', '[SEED] ملاحظة داخلية', '[SEED] Internal note', 'مسودة خاصة موسومة.', 'Tagged private draft.', 'draft', 'private', 1, 1, NULL, NULL);
+('seed-internal-note', '[SEED] ملاحظة داخلية', '[SEED] Internal note', 'مسودة خاصة موسومة.', 'Tagged private draft.', 'draft', 'private', 1, 1, NULL, NULL),
+-- R3-C2: category placeholders for the admin-managed docs surface. All are
+-- draft/private tagged samples: the owner supplies the real content after
+-- launch. None of these claims any legal entity, banking, KYC, provider
+-- approval, or launch approval is complete.
+('seed-project-message', '[SEED] رسالة المشروع', '[SEED] Project message', 'عنصر نائب تجريبي: يدخل المالك رسالة المشروع الحقيقية بعد الإطلاق. لا يدّعي أي كيان قانوني أو موافقة.', 'Tagged placeholder: the owner enters the real project message after launch. Claims no legal entity or approval.', 'draft', 'private', 1, 1, NULL, NULL),
+('seed-product-overview', '[SEED] نظرة على المنتج', '[SEED] Product overview', 'عنصر نائب تجريبي: وصف المنتج الحقيقي بيد المدير بعد الإطلاق.', 'Tagged placeholder: the real product description is entered by the admin after launch.', 'draft', 'private', 1, 1, NULL, NULL),
+('seed-engineering-notes', '[SEED] ملاحظات هندسية', '[SEED] Engineering notes', 'عنصر نائب تجريبي: الوثائق التقنية الحقيقية بيد الفريق بعد الإطلاق.', 'Tagged placeholder: the real engineering docs are entered by the team after launch.', 'draft', 'private', 1, 1, NULL, NULL),
+('seed-open-source', '[SEED] المصدر المفتوح', '[SEED] Open source', 'عنصر نائب تجريبي: معلومات المصدر المفتوح والتراخيص بيد المالك بعد الإطلاق.', 'Tagged placeholder: open-source and license info is entered by the owner after launch.', 'draft', 'private', 1, 1, NULL, NULL),
+('seed-ai-credits', '[SEED] مساهمات الذكاء الاصطناعي', '[SEED] AI contributions', 'عنصر نائب تجريبي: credits مساهمات الذكاء الاصطناعي يحددها المالك بعد الإطلاق.', 'Tagged placeholder: AI contribution credits are determined by the owner after launch.', 'draft', 'private', 1, 1, NULL, NULL),
+('seed-legal-terms-draft', '[SEED] مسودة شروط — ليست وثيقة قانونية', '[SEED] Terms draft — NOT a legal document', 'مسودة تجريبية فقط وليست وثيقة قانونية ولا تثبت أي كيان أو تحقق هوية أو تعاقد بنكي. النص القانوني الحقيقي بيد مختص يحدده المالك لاحقاً.', 'Sample draft only — not a legal document; proves no entity, KYC, or banking arrangement. Real legal text comes from a specialist later.', 'draft', 'private', 1, 1, NULL, NULL);
