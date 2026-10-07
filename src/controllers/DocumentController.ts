@@ -221,6 +221,30 @@ export class DocumentController extends BaseController {
     }
 
     /**
+     * Public: list published+public documents (index metadata only).
+     * GET /api/documents — anonymous allowed; drafts/private never appear.
+     * R3-C2: powers the public /docs index page.
+     */
+    async listPublished(c: AppContext) {
+        try {
+            const model = new ManagedDocumentModel(c.env.DB);
+            const docs = await model.listPublishedPublic(50, 0);
+            return this.success(c, {
+                documents: docs.map((d) => ({
+                    id: d.id,
+                    slug: d.slug,
+                    title_ar: d.title_ar,
+                    title_en: d.title_en,
+                    updated_at: d.updated_at,
+                    version: d.version,
+                })),
+            });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
      * Public: read one published+public document by slug.
      * GET /api/documents/:slug — anonymous allowed; anything else is 404.
      */

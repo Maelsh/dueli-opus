@@ -126,6 +126,21 @@ export class ManagedDocumentModel extends BaseModel<ManagedDocument> {
     }
 
     /**
+     * Public index: published + public only (slug + titles, no bodies —
+     * bodies come from findPublishedPublic per document). Anything else is
+     * invisible (caller maps empties naturally — no existence oracle).
+     * R3-C2: powers GET /api/documents + the public /docs index page.
+     */
+    async listPublishedPublic(limit: number = 50, offset: number = 0): Promise<Pick<ManagedDocument, 'id' | 'slug' | 'title_ar' | 'title_en' | 'updated_at' | 'version'>[]> {
+        return this.query(
+            `SELECT id, slug, title_ar, title_en, updated_at, version FROM ${this.tableName}
+             WHERE status = 'published' AND visibility = 'public'
+             ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`,
+            limit, offset
+        );
+    }
+
+    /**
      * Public read: published + public only. Anything else is invisible
      * (caller maps to 404 — no existence oracle for drafts/private docs).
      */

@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-06T18:49:26.871Z
+> تاريخ التوليد: 2026-10-07T16:07:41.511Z
 
-## الإجمالي: 235 مسار
+## الإجمالي: 236 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 127 |
+| PUBLIC(auth-optional, in-handler check required) | 128 |
 | AUTHENTICATED | 63 |
 | UNGUARDED ⚠ | 42 |
 | SERVICE(origin-only ⚠) | 3 |
@@ -163,6 +163,7 @@
 | GET | `/api/countries` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/countries/routes.ts` |
 | GET | `/api/countries/:code` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/countries/routes.ts` |
 | POST | `/api/cron/run` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/cron/routes.ts` |
+| GET | `/api/documents` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/documents/routes.ts` |
 | GET | `/api/documents/:slug` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/documents/routes.ts` |
 | POST | `/api/donations` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |
 | GET | `/api/donations/my` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |

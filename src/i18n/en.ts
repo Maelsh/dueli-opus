@@ -30,6 +30,10 @@ export const en = {
     all: 'All',
     help: 'Help',
     skip_to_content: 'Skip to main content',
+    docs: 'Documents',
+    docs_tagline: 'Project, product and engineering notes published by the Dueli team.',
+    docs_empty: 'No published documents yet.',
+    docs_back: 'Back to documents',
     help_guide: {
         title: 'Help & guides',
         subtitle: 'How to create, compete, and watch on Dueli — plus answers to common questions.',
