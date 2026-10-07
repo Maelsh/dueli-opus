@@ -1,3 +1,11 @@
+## R4 centralized <title> escaping · فرع feat/r4-title-escaping (من 2e3d368 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/مسارات جديدة (routes ‏236←236). كل المغلق (R3-C3 وما قبلها + ‏D1 bind #100) لم يُمس.
+- forensic: ‏ALREADY DONE (رحلات DEPLOYED ببوابات ما بعد الدمج؛ أجسام ‏docs مهربة عند العرض؛ ‏i18n بلا كيانات)؛ الفجوة الحقيقية (1): ‏generateHTML كان يحقن ‏title الخام في ‏<title> وتصله عناوين يتحكم بها المستخدم (عنوان المنافسة/الاسم المعروض/‏username/عناوين الوثائق) — قابلية كسر ‏‎</title>‎ مثبتة. ليست فجوة: ترقيم ‏‎/docs‎ (النموذج يدعم ‏limit/offset والفهرس ~6 صفوف — يبقى non-blocking).
+- نفّذ: تهريب مركزي واحد في ‏generateHTML عبر ‏Sanitize.escapeHtml (المنادون يمررون خاماً كما قبل — بلا تهريب مزدوج)؛ أسطر ‏‎<title>‎ الثابتة (‏oauth/static/email) لم تُمس.
+- **الأدلة**: T جديد ‏r4-title-escaping ‏4/4 (‏RED ‏4/4 بلا الإصلاح) + الجيران (‏csp/object-title/docs ‏27/27)؛ ‏tsc ✅؛ ‏build ✅؛ ‏any ‏283 = ‏BASE (‏+0، السقف ‏310).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R3-C3 synthetic-retirement future design · فرع feat/r3-c3-retirement-design (من 88461f6a = origin/main)
 
 - 🔧 تصميم/توثيق LOCAL مكتمل، بانتظار REMOTE — ليست DONE. وثيقة فقط بلا حذف/ترحيل/جدولة/endpoint تدميري (‏KEEP NOW سارية). ‏C1/C2 مغلقان ولم يُمسا.
