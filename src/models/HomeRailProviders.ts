@@ -369,6 +369,9 @@ export class CategoryRailProvider implements ResultSessionProvider {
             category: this.category,
             subcategory: this.subcategory,
             excludeCreatorIds: this.excludedCreatorIds,
+            // D1 hotfix: identity-bound anti-join narrowing (no placeholder
+            // growth); the array stays as the read-time re-check source.
+            excludeUserId: this.userId,
         });
         if (eligible.length === 0) return [];
         const bucket: H7StatusBucket = this.status;

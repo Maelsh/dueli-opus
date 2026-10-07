@@ -273,6 +273,17 @@ export class CompetitionModel extends BaseModel<Competition> {
         category?: string;
         subcategory?: string;
         excludeCreatorIds?: number[];
+        /**
+         * D1 hotfix: when the rail identity is known, block narrowing uses a
+         * NOT EXISTS anti-join on user_blocks (both directions) instead of
+         * expanding excludeCreatorIds into bound placeholders — the block list
+         * is unbounded and the old NOT IN form exceeded D1's 100-bind hard
+         * limit (rail 500). The anti-join reads the same rows, so NO blocked
+         * creator becomes eligible at any list size. The array path below is
+         * kept only for callers without an identity (guests always pass []);
+         * identity callers must pass excludeUserId.
+         */
+        excludeUserId?: number | null;
     }): Promise<number[]> {
         const filters: CompetitionFilters = {};
         if (options.status !== '') {
@@ -291,7 +302,15 @@ export class CompetitionModel extends BaseModel<Competition> {
             extra += ` AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL)`;
         }
         const excluded = [...new Set((options.excludeCreatorIds ?? []).filter((id) => Number.isInteger(id) && id > 0))];
-        if (excluded.length > 0) {
+        const excludeUserId = options.excludeUserId;
+        if (typeof excludeUserId === 'number' && Number.isInteger(excludeUserId) && excludeUserId > 0) {
+            extra += ` AND NOT EXISTS (
+                SELECT 1 FROM user_blocks b
+                 WHERE (b.blocker_id = ? AND b.blocked_id = c.creator_id)
+                    OR (b.blocked_id = ? AND b.blocker_id = c.creator_id)
+            )`;
+            extraParams.push(excludeUserId, excludeUserId);
+        } else if (excluded.length > 0) {
             extra += ` AND c.creator_id NOT IN (${excluded.map(() => '?').join(',')})`;
             extraParams.push(...excluded);
         }
