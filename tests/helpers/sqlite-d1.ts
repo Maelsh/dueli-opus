@@ -34,6 +34,20 @@ class SqliteStatement {
     ) { }
 
     bind(...params: unknown[]): SqliteStatement {
+        // Faithful D1 platform limit (hotfix for the home-rails 500s):
+        // Cloudflare D1 rejects any statement binding more than 100
+        // parameters (`D1_ERROR: variable number must be between ?1 and
+        // ?100`). node:sqlite allows far more, so without this guard tests
+        // pass locally while production 500s. Fail loudly here so the suite
+        // enforces the same hard limit. TEST SHIM ONLY — no production or
+        // runtime code is touched.
+        if (params.length > 100) {
+            const head = this.sql.replace(/\s+/g, ' ').trim().slice(0, 160);
+            throw new Error(
+                `D1_ERROR: variable number must be between ?1 and ?100 ` +
+                `(statement binds ${params.length} parameters): ${head}`
+            );
+        }
         return new SqliteStatement(this.raw, this.sql, params);
     }
 

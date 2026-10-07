@@ -1,6 +1,18 @@
 
 
 
+## HOTFIX D1 100-param limit / home-rails 500 · فرع `fix/d1-param-limit-home-rails` (من `d5233f4` = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل (يشمل معالجة REMOTE #2: ‏A1–A4 مضادة-ربط + ‏3 ترحيل ترقيم + تدقيق نهائي شامل)، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/إعدادات (routes ‏235←235). PR #99 لم تُمس (HOLD محترم). H7/D1/D2 بلا إعادة تصميم أوزان.
+- السبب الجذري: حد D1 الصلب 100 معامل مربوط/استعلام. ‏`loadProfiles` كانت تربط الدفعة (حتى 80) مرتين (‏UNION ALL صانع+خصم ⇒ حتى 160؛ ‏51+ معرّف ⇒ ‏500 إنتاجي) و`loadSpecializations` بنفس النمط الكامن. الإصلاح: تقسيم كل استعلام ثنائي إلى استعلامين أحاديي الربط (≤80) مع الدمج في ‏JS بنفس الدلالة الدقيقة (‏UNION ALL/GROUP BY/استبعاد ‏NULL/ائتمان كل جهة مرة). حارس ‏shim جديد في ‏`sqlite-d1.ts` يرمي خطأ D1 الإنتاجي عند ‏>100 (اختباري فقط).
+- **الأدلة**: T ‏`d1-param-limit-hotfix` ‏16/16 (الأصل ‏9: حارس ‏101/100؛ ‏loadProfiles/loadSpecializations بـ60؛ مسارات ‏home-rails الثلاثة + ضابط صغير — ‏RED مثبت بخطأ ‏`binds 120 parameters`؛ الجديد ‏7: ‏A1 ‏suggested/live+upcoming و‏A2 ‏category/live بهوية موثقة مع ‏120 حظر (باتجاهين) + ‏120 إخفاء وكل استبعاد مفروض، ‏A3 ‏GET /api/recommendations مع ضابط مستخدم نظيف، ومسارات الترحيل ‏guest/search/matchmaking بحد ‏150 — ‏RED مثبت بأخطاء ‏241/124/150/152 عبر ‏500 حقيقية)؛ الجيران (‏recommendations-ranking/lang، ‏home-rails-continuation ‏13/13، ‏r3-d2 ‏16/16، ‏r3-d1 ‏21/21، ‏home-rails ‏UI، ‏b1-my-competitions)؛ الكاملة ‏1355 + ‏16 بيئية ‏Windows مسبقة على ‏BASE (‏6 ‏jq + ‏10 ‏readiness — بلا مساس)؛ ‏`tsc` ✅؛ ‏`build` ✅؛ ‏G2 ‏295 ≤ ‏310.
+- **REMOTE**: ‏#1 ‏APPROVE/MERGE-SAFE YES (الإصلاحات الأصلية كما هي)؛ ‏#2 ‏REJECT أُغلق هنا (‏A1–A4 + ‏3 ترحيل إضافي + تدقيق نهائي: لا مسار إنتاجي معروف يتجاوز 100 بعد ‏#100).
+
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـ`expected_head_sha` ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
+
+
+
 ## R3-C1 contextual help + FAQ/role guides + i18n/a11y · فرع `feat/r3-c1-help-a11y` (من `d5233f4` = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل بعد استلام جنائي (takeover)، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل جديد (routes API ‏235←235؛ ‏`/help` + `/faq` مسارا صفحة فقط، لا API ولا جرد).
