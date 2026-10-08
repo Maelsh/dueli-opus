@@ -152,6 +152,25 @@ export class NotificationModel extends BaseModel<Notification> {
     }
 
     /**
+     * R4-EVENTS-NOTIFY-1 (N-05): ownership-scoped star toggle — persists
+     * `is_starred` (migrations/0001) for the recipient's own row only.
+     * Returns null when the row is missing or belongs to another user
+     * (caller maps to 404, never leaks cross-user state).
+     */
+    async setStarredForUser(id: number, userId: number, starred: boolean): Promise<boolean | null> {
+        const existing = await this.queryOne<{ user_id: number }>(
+            'SELECT user_id FROM notifications WHERE id = ?',
+            id
+        );
+        if (!existing) return null;
+        if (existing.user_id !== userId) return null;
+        await this.db.prepare(
+            'UPDATE notifications SET is_starred = ? WHERE id = ? AND user_id = ?'
+        ).bind(starred ? 1 : 0, id, userId).run();
+        return starred;
+    }
+
+    /**
      * Mark all as read for user
      */
     async markAllAsRead(userId: number): Promise<number> {

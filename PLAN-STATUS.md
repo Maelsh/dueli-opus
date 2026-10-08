@@ -1,3 +1,11 @@
+## R4-EVENTS-NOTIFY-1 notifications/events · فرع feat/r4-events-notify-1 (من 5a74310 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر ذاتي/كتابة إنتاجية/ترحيل (routes ‏236←237: ‏POST /:id/star فقط). R1/R2/R3 مغلقة ولم تُمس خارج العقد.
+- نفّذ: (‏N-01) حفظ ‏receiver في ‏CSP delegate (‏handleNotificationClick/toggleStar وكل ‏dotted handlers — ‏CSP/allowlist محفوظان)؛ (‏N-02/M-4) انتظار ‏read POST قبل التنقل + ‏badge من تأكيد الخادم + ‏single-flight للـGET؛ (‏replay) منع تكرار ‏toast ببصمة الحدث مع بقاء التحديث من الخادم؛ (‏N-05) مسار ‏star حقيقي بملكية ‏404 على عمود ‏is_starred القائم؛ (‏N-03) طلب الانضمام الجديد → ‏‎/my-requests‎ (الدعوات والإيصالات بلا مساس)؛ (‏N-07) حذف المنافسة عبر ‏deleteCascade مع حفظ سجل الإشعارات؛ (‏M-5) ‏loading/empty منفصلان بمفاتيح قائمة + ‏star/unstar بـar/en.
+- **الأدلة**: T جديد ‏r4-events-notify-1 ‏10/10 + ‏UI جديد ‏r4-events-notify-ui ‏9/9 (‏RED ‏13/19 على ‏BASE ‏— منها ‏FK-abort حي)؛ تحديث تثبيتين متجاوَزين (‏notification-types/notification-page)؛ الجيران ‏125/125؛ الكاملة ‏1434 + نفس ‏18 البيئية المسبقة المثبتة على ‏BASE؛ ‏tsc ✅؛ ‏build ✅؛ ‏any ‏+0.
+- **التنظيف (لم يُنفَّذ — بانتظار القائد)**: ‏dev-tools/r4-events-notify-cleanup.sql (‏cutoff ثابت ‏2026-10-08T03:31:39Z ‏UTC؛ ‏SELECT قبل + ‏UPDATE محروس + ‏SELECT بعد + ‏idempotency؛ بلا ‏DELETE/رسائل/دعوات/أدوار/سياسة دائمة). ‏UPDATE الإنتاج ممنوع قبل إقرار القائد للأمر المحدد. منطق الأمر مثبت محلياً فقط.
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## RELEASE COLLECTOR HOTFIX (Deploy #37771438709) · فرع fix/release-collector-indexes (من 30baed3 = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر ذاتي/إعادة تطبيق ‏0039/‏H7/‏SearchModel/readiness (سطر جامع واحد + مثبت + ملف اختبار).

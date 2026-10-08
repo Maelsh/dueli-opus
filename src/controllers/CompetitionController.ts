@@ -522,7 +522,12 @@ export class CompetitionController extends BaseController {
                 return this.forbidden(c);
             }
 
-            await model.delete(id);
+            // R4-EVENTS-NOTIFY-1 (N-07): the plain row delete left pending
+            // invites/requests orphaned (or FK-aborted on non-CASCADE
+            // children). deleteCascade removes requests + invitations +
+            // ratings + chunk keys first, then the competition — the
+            // notification rows stay as history (never deleted here).
+            await model.deleteCascade(id);
             return this.success(c, { deleted: true });
         } catch (error) {
             return this.serverError(c, error as Error);

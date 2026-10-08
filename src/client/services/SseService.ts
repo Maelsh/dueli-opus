@@ -156,7 +156,11 @@ export class SseService {
                         if (msg.type === 'connected') Toast.info('⚡ Realtime');
                         return;
                     }
-                    this.handleEvent(msg.event, typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data ?? {}));
+                    const wireId: unknown = msg.id;
+                    const eventId = typeof wireId === 'string' || typeof wireId === 'number'
+                        ? `ws:${msg.event}:${wireId}`
+                        : `ws:${msg.event}:${typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data ?? {})}`;
+                    this.handleEvent(msg.event, typeof msg.data === 'string' ? msg.data : JSON.stringify(msg.data ?? {}), eventId);
                 } catch { /* ignore malformed */ }
             };
 
@@ -182,6 +186,29 @@ export class SseService {
     }
 
     private static wsRetryCount: number = 0;
+
+    /**
+     * R4-EVENTS-NOTIFY-1 (replay): ids of realtime events already surfaced.
+     * EventSource redelivers missed events with the same Last-Event-Id after
+     * a reconnect (and the WS path may repeat a payload) — without this, an
+     * old invite toast pops again on every replay. Toasts fire only for
+     * first-seen events; the inbox refresh below still runs so the badge is
+     * always rebuilt from trusted server state (M-4), never from the event.
+     * Bounded so a long-lived tab cannot grow it without limit.
+     */
+    private static seenEventIds = new Set<string>();
+    private static readonly SEEN_EVENT_CAP = 500;
+
+    private static isRepeatEvent(eventId: string): boolean {
+        if (!eventId) return false;
+        if (this.seenEventIds.has(eventId)) return true;
+        this.seenEventIds.add(eventId);
+        if (this.seenEventIds.size > this.SEEN_EVENT_CAP) {
+            const oldest = this.seenEventIds.values().next().value;
+            if (oldest !== undefined) this.seenEventIds.delete(oldest);
+        }
+        return false;
+    }
 
     /**
      * القناة الأصلية: SSE عبر تطبيق Pages.
@@ -216,7 +243,9 @@ export class SseService {
             // T5.1: موزع واحد يخدم SSE وWebSocket معاً
             for (const eventName of ['invite_sent', 'invite_accepted', 'invite_declined', 'notification', 'withdrawal_status']) {
                 this.source.addEventListener(eventName, (e: MessageEvent) => {
-                    this.handleEvent(eventName, e.data);
+                    // SSE redelivers with the same Last-Event-Id after reconnect.
+                    const eventId = e.lastEventId ? `sse:${eventName}:${e.lastEventId}` : '';
+                    this.handleEvent(eventName, e.data, eventId || `sse:${eventName}:${e.data}`);
                 });
             }
 
@@ -229,16 +258,22 @@ export class SseService {
     }
 
     /**
-     * T5.1: الموزع الموحد للأحداث من أي قناة
+     * T5.1: الموزع الموحد للأحداث من أي قناة.
+     *
+     * R4-EVENTS-NOTIFY-1: `eventId` identifies this delivery (SSE
+     * Last-Event-Id or the WS log id). A redelivered event skips its toast
+     * but still refreshes the inbox from the server, so replay can never
+     * duplicate a toast nor leave the badge stale.
      */
-    private static handleEvent(event: string, rawData: string): void {
+    private static handleEvent(event: string, rawData: string, eventId: string = ''): void {
         let payload: any = {};
         try { payload = typeof rawData === 'string' ? JSON.parse(rawData) : (rawData || {}); } catch { payload = {}; }
+        const repeat = eventId ? this.isRepeatEvent(eventId) : false;
 
         switch (event) {
             case 'invite_sent': {
                 const who = payload.inviter_username || '';
-                Toast.info(`${who} — ${t('sse.new_invite', State.lang)}`);
+                if (!repeat) Toast.info(`${who} — ${t('sse.new_invite', State.lang)}`);
                 NotificationsUI.init();
                 break;
             }
@@ -247,7 +282,7 @@ export class SseService {
                 const accepted = event === 'invite_accepted';
                 const key = accepted ? 'sse.invite_accepted' : 'sse.invite_declined';
                 const who = payload.invitee_username || '';
-                Toast.show(`${who} — ${t(key, State.lang)}`, accepted ? 'success' : 'info');
+                if (!repeat) Toast.show(`${who} — ${t(key, State.lang)}`, accepted ? 'success' : 'info');
                 NotificationsUI.init();
                 break;
             }

@@ -289,6 +289,8 @@ export interface Notification extends TimestampedEntity {
   reference_type?: string;
   reference_id?: number;
   is_read: boolean;
+  /** R4-EVENTS-NOTIFY-1 (N-05): persisted star flag (migrations/0001 `is_starred`). */
+  is_starred?: number;
 }
 
 /**

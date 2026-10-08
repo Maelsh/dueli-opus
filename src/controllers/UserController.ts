@@ -306,6 +306,41 @@ export class UserController extends BaseController {
     }
 
     /**
+     * Star / unstar a notification
+     * POST /api/notifications/:id/star { starred: boolean }
+     *
+     * R4-EVENTS-NOTIFY-1 (N-05): the dropdown star control posted here but
+     * the route never existed (404, state kept in memory only). Persists
+     * `is_starred` ownership-scoped — another user's row is 404, never
+     * touched. No new migration: the column exists since migrations/0001.
+     */
+    async toggleNotificationStar(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const currentUser = this.getCurrentUser(c);
+
+            const { DB } = c.env;
+            const notificationId = this.getParamInt(c, 'id');
+            const body = await this.getBody<{ starred?: unknown }>(c);
+            if (typeof body?.starred !== 'boolean') {
+                return this.validationError(c, this.t('errors.missing_fields', c));
+            }
+
+            const notificationModel = new NotificationModel(DB);
+            const starred = await notificationModel.setStarredForUser(
+                notificationId, currentUser.id, body.starred
+            );
+            if (starred === null) {
+                return this.notFound(c, this.t('not_found', c));
+            }
+
+            return this.success(c, { starred });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
      * Mark all notifications as read
      * POST /api/notifications/read-all
      */

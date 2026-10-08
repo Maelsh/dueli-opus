@@ -529,6 +529,9 @@ export const en = {
         new_rating_body: '{actor} rated the competition',
         system_notice: 'System notice',
         generic: 'You have a new notification',
+        // R4-EVENTS-NOTIFY-1 (N-05/M-5): dropdown star control labels.
+        star: 'Star',
+        unstar: 'Unstar',
         // F-7: Competition lifecycle notifications — every user-facing string via i18n
         comp_deleted_title: 'Competition Deleted',
         comp_deleted: 'Your instant competition was deleted because no opponent joined within 1 hour.',

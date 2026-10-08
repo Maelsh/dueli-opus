@@ -29,6 +29,12 @@ notificationsRoutes.get('/', (c) => controller.getNotifications(c));
 notificationsRoutes.post('/:id/read', (c) => controller.markNotificationRead(c));
 
 /**
+ * R4-EVENTS-NOTIFY-1 (N-05): star / unstar a notification
+ * POST /api/notifications/:id/star { starred: boolean }
+ */
+notificationsRoutes.post('/:id/star', (c) => controller.toggleNotificationStar(c));
+
+/**
  * Mark all notifications as read
  * POST /api/notifications/read-all
  */
