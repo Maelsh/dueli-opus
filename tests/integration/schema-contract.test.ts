@@ -72,6 +72,7 @@ const EXPECTED_MIGRATIONS = [
     '0036_managed_documents.sql',
     '0037_support_messaging.sql',
     '0038_withdrawal_payout_snapshot.sql',
+    '0039_r4_db_opt1_indexes.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -189,8 +190,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 39 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(39);
+    it('has exactly 40 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(40);
     });
 
     it('matches the full expected migration file name list', () => {
