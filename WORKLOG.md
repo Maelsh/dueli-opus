@@ -1,3 +1,28 @@
+## 2026-10-08 — 0039 PRODUCTION APPLY (owner §9) + PR104 rebase onto 9cbb93c (branch feat/r4-db-opt-1)
+
+- **GATES (PR103 post-merge, verified before any write)**: ‏PR103 MERGED ‏9cbb93c (+ دمج القائد)؛ ‏Quality Gate ‏run 37760838270 ‏success + ‏Deploy ‏run 37760838240 ‏success على ‏merge SHA نفسه — الشرط (§1) أخضر فمُضي قُدماً.
+- **PRECHECK (read-only)**: الهدف ‏remote dueli-db؛ السجل ‏39/39 (‏0001–0038 بلا فجوات)؛ ‏pending الوحيدة ‏0039؛ ‏SHA256 ‏blob ‏0039 ‏ddf4ac98… يطابق التفويض حرفياً (قياس أول باطل بسبب ترميز ‏PowerShell ‏UTF-16 أُعيد ببايتات نظيفة). الأساس: ‏users ‏561 / ‏competitions ‏1542 / ‏tables ‏67 / ‏indexes ‏107.
+- **APPLY**: ‏`wrangler d1 migrations apply dueli-db --remote` ⇒ ‏0039 وحدها ‏✅ (‏7 عبارات: 6 فهارس + قيد). بلا ‏‎--local/reset/force‎، بلا هجرات أخرى، بلا مساس بيانات.
+- **POSTCHECK (read-only)**: ‏pending فارغ؛ السجل ‏40 صفاً؛ ‏users ‏561 / ‏competitions ‏1542 / ‏tables ‏67 (بلا تغيير)؛ ‏indexes ‏107←113 (+6 بالضبط) والستة موجودة بالاسم. ‏size ‏2797568←2879488 (نمو الفهارس فقط).
+- **REBASE**: دمج ‏origin/main ‏9cbb93c في الفرع (تعارض نصي فقط في ‏WORKLOG/PLAN-STATUS — حُل بلا فقدان: سجلا ‏PR103+PR104 كاملان أدناه). بلا تغيير ‏SearchModel/0039/H7. ‏manifest/hash والاختبارات المركزة و‏tsc/build أُعيد التحقق منها بعد الدمج ثم دُفع ‏HEAD الجديد. بلا دمج ‏PR104 وبلا نشر ذاتي.
+
+## 2026-10-08 — R4-DB-OPT-1 REM1: Codex-P1 release-manifest registration for 0039 (same branch feat/r4-db-opt-1, no new PR)
+
+- **FORENSIC (Codex P1 on PR104, CONFIRMED)**: manifest بقي ‏baseline-0038 بينما الفرع يحمل ‏0039 — الإنتاج بعد الدمج سيبلغ ‏0039 pending‏/applied مجهولة ⇒ ‏unexpected-pending/applied ⇒ البوابة ‏FAIL دائماً والنشر محظور. الإصلاح coordination لا bypass: تسجيل ‏0039 في ‏manifest + ‏hash + فهارس + ‏known_history، والتطبيق الإنتاجي يبقى ‏owner-gated قبل الدمج (§9).
+- **IMPLEMENTED**: ‏manifest → ‏baseline-0039 (‏0039 + ‏sha256 ‏ddf4ac98… (‏LF-blob، يطابق ‏CI) + ‏6 فهارس في ‏required_schema + ‏known_history + ملاحظة ‏0033–0039)؛ ‏readiness test ‏24←27 (تثبيت ‏0039 + ‏prod-shape-0038 FAIL مغلق + لقطة ناقصة فهرس ‏FAIL على طريقة ‏#458؛ أسماء/نسخ الأسطح القديمة حُدّثت لـ0039).
+- **Tests**: ‏readiness ‏27/27 على بايتات ‏LF (مثبت بتشغيل موثق بعد تطبيع مؤقت ثم استعادة ‏CRLF — ‏git config أُعيد ‏true والشجرة مُتحقَّق منها)؛ محلياً (‏CRLF) ‏15 ✅ + ‏12 فشل بايتات فقط (‏10 مسبقة + تثبيت ‏0039 + سطر ‏goodInput الختامي — نفس الطبيعة، ‏CI سيراها ‏27/27)؛ سلوكا ‏FAIL المغلق الجديدان يمران حتى مع ‏CRLF. ‏r4-db-opt-1 ‏14/14 و‏schema-contract ‏24/24 بلا مساس (أُعيد تشغيل الأول: أخضر). ‏tsc ✅. بلا تطبيق إنتاجي/فوترة/H7/ELO.
+- **State**: LOCAL VERIFIED / awaiting re-REMOTE on PR104. Not DONE/DEPLOYED.
+- **ROLLBACK (G8)**: revert commits الفرع (manifest+test فقط لهذه الدفعة).
+
+## 2026-10-08 — R4-DB-OPT-1 smallest proven D1 read reduction (branch feat/r4-db-opt-1, from 2e3d368 = origin/main)
+
+- **FORENSIC (R4-DB-DIAG-1, no guessing)**: (1) `SearchModel.searchUsers` (:287) و`getSuggestedUsers` (:483) أعادا `getProfiles(pageIds)` الكاملة (3 عبارات D1) لصفوف موجودة أصلاً في خريطة الترتيب — هدر مثبت لا تخمين. (2) EXPLAIN محلي على الترحيلات الحقيقية أثبت SCAN في E1 (فهرس بعمود قائد خاطئ) وE2/E2b (بلا فهرس) وE7 (OR بلا فهرسَي طرفين) وE8 (بلا فهرس) وE9-معاكس (بلا فهرس) وفرز TEMP B-TREE في E4 كل poll. (3) سلوك التعطل B13 مثبت مسبقاً (500 + generic i18n + بلا تسريب) لمسارات leaderboard/search/live — غطيت المسار الملموس (search/users) فقط. NOT in scope: أوزان H7، مشاركة فعلية، استبعادات، عزل، ترتيب، نفاد، binds (كلها محفوظة ومثبتة).
+- **IMPLEMENTED**: (S1) إعادة استعمال خريطة `profiles` في الموقعين (تعليق R4-DB-OPT-1؛ نفس القيم، صفر قراءات جديدة). (S2) `migrations/0039_r4_db_opt1_indexes.sql` — 6 فهارس IF NOT EXISTS فقط (بلا جداول/أعمدة/حذف) + تحديث `schema-contract` (‏39←40 ملفاً). ال migration ضمن PR باختبارات محلية ولم تُطبَّق على production (owner-gated §5/§9). (S3) بلا كود retry جديد: النماذج تحاول مرة واحدة (مثبت بالعدّ) وإعادة المحاولة زر صريح للمستخدم (rails retry + explore retry + SSE MAX_POLLS=1500 مع try/catch).
+- **Tests**: جديد `tests/api/r4-db-opt-1` ‏14/14 (عدّ العبارات: ‏9 بدل ‏12 و‏15 بدل ‏18 — RED مثبت ‏12/18 مع stash الإصلاح؛ قيم Profile مطابقة SSOT المباشر؛ الفهارس الست موجودة وكل EXPLAIN بلا SCAN؛ تعطل D1 المحقون: رفض من أول عبارة + ‏500/generic/بلا تسريب على المسار؛ T0 ‏13 عبارة مقابل continuation ‏5 — عدّ محلي لا rowsRead إنتاجية). الجيران (‏H7/D1/D2/home-rails/explore/discovery/hotfix ‏126/126)؛ الكاملة ‏1401 + نفس ‏16 البيئية المسبقة على ‏BASE (‏6 jq + ‏10 readiness-CRLF بلا علاقة)؛ ‏schema-contract (integration عبر Wrangler حقيقي) ‏24/24؛ ‏tsc ✅؛ ‏build ✅ (‏churn رُجع)؛ ‏any ‏+0 في الملف الملموس.
+- **State**: LOCAL VERIFIED / awaiting REMOTE. Not DONE/DEPLOYED. No production migration/index/billing/load-test. PR #103 وملفا ELO المتسخان لم يُمسا. PLAN SHA ‏cb4e2ea غير متاح محلياً (‏plan-ro عند ‏2973634 بلا R4-DB) — النطاق من نص المهمة + DIAG + ‏11-H7.
+- **ROLLBACK (G8)**: revert الفرع (تغييران src سطران + migration + ملفا اختبار؛ لا بيانات/flags).
+- **SUPERSEDED (post-apply note)**: ‏0039 طُبّقت إنتاجياً بتفويض المالك (§9) وسُجّلت أعلاه — سطرا ‏«لم تُطبَّق/بلا تطبيق إنتاجي» أدناه يصفان حالة ما قبل التطبيق فقط.
+
 ## 2026-10-08 — R4-REM1 Codex-P2 double-escape fix on the live-room path (same branch feat/r4-title-escaping, no new PR)
 
 - **FORENSIC (Codex P2 on PR103, CONFIRMED via real path)**: عناوين المنافسات تُخزن مهرّبة (`cleanTitle` في `create` — بنية ‏T1.4 ‏store-escaped التي تعتمد عليها كل المصارف الأخرى: ‏h1 الغرفة يُصيَّر خاماً وهو صحيح)، بينما ‏generateHTML (‏R4) يهرّب مركزياً ⇒ ‏`A&B` المخزنة ‏`A&amp;B` تُعرض ‏`A&amp;amp;B` في التبويب. المصارف الأخرى سليمة بالدليل: ‏profile يمرر ‏username/display_name خامين، والوثائق تُخزن خاماً وتُهرَّب عند العرض، والباقي ‏i18n ثابتة — لا مصدر مهرّب-مخزن آخر يصل ‏generateHTML.

@@ -1,5 +1,5 @@
 {
-  "manifest_version": "R-RELEASE-1.baseline-0038",
+  "manifest_version": "R-RELEASE-1.baseline-0039",
   "target": {
     "pages_project": "project-8e7c178d",
     "database_name": "dueli-db"
@@ -28,6 +28,10 @@
     {
       "file": "0038_withdrawal_payout_snapshot.sql",
       "sha256": "1e4997234905f55c6cd3d654d893b4d0664598fabf07ab1f1d0f619a41f944db"
+    },
+    {
+      "file": "0039_r4_db_opt1_indexes.sql",
+      "sha256": "ddf4ac98cc2ebf2bd9ad987e65d1c30239ed1570e6487bb8af39755112f58ca9"
     }
   ],
   "known_history": [
@@ -69,7 +73,8 @@
       "0035_comments_video_offset.sql",
       "0036_managed_documents.sql",
       "0037_support_messaging.sql",
-      "0038_withdrawal_payout_snapshot.sql"
+      "0038_withdrawal_payout_snapshot.sql",
+      "0039_r4_db_opt1_indexes.sql"
     ],
   "required_schema": {
     "tables": {
@@ -136,10 +141,10 @@
         "payout_snapshot"
       ]
     },
-    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method"]
+    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method", "idx_ratings_competitor", "idx_competitions_creator", "idx_competitions_opponent", "idx_users_active", "idx_user_blocks_blocked", "idx_sse_channel_id"]
   },
   "notes": [
-    "Baseline R-RELEASE-1.baseline-0038 requires migrations 0033, 0034, 0035, 0036, 0037 and 0038 applied with the pinned sha256 each (no post-apply rewrite).",
+    "Baseline R-RELEASE-1.baseline-0039 requires migrations 0033, 0034, 0035, 0036, 0037, 0038 and 0039 applied with the pinned sha256 each (no post-apply rewrite).",
     "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
     "The gate never applies migrations. Unexpected pending is recorded and FAILS the gate; it is never auto-applied."
   ]

@@ -56,7 +56,7 @@ function goodInput(m = manifest()) {
                     'payout_method_id', 'payout_snapshot',
                 ],
             },
-            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread', 'idx_withdrawal_requests_payout_method'],
+            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread', 'idx_withdrawal_requests_payout_method', 'idx_ratings_competitor', 'idx_competitions_creator', 'idx_competitions_opponent', 'idx_users_active', 'idx_user_blocks_blocked', 'idx_sse_channel_id'],
         },
     };
 }
@@ -81,9 +81,9 @@ describe('release readiness gate', () => {
         expect(m.known_history).toContain(req.file);
     });
 
-    it('manifest baseline-0038 requires 0034 with a hash matching the repo file', () => {
+    it('manifest baseline-0039 requires 0034 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0039');
         const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -96,9 +96,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_competition_views_day');
     });
 
-    it('manifest baseline-0038 requires 0035 with a hash matching the repo file', () => {
+    it('manifest baseline-0039 requires 0035 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0039');
         const req = m.required_migrations.find((x) => x.file === '0035_comments_video_offset.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -108,9 +108,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.tables.comments).toEqual(expect.arrayContaining(['video_offset']));
     });
 
-    it('manifest baseline-0038 requires 0036 with a hash matching the repo file', () => {
+    it('manifest baseline-0039 requires 0036 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0039');
         const req = m.required_migrations.find((x) => x.file === '0036_managed_documents.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -124,9 +124,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_managed_documents_status');
     });
 
-    it('manifest baseline-0038 requires 0037 with a hash matching the repo file', () => {
+    it('manifest baseline-0039 requires 0037 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0039');
         const req = m.required_migrations.find((x) => x.file === '0037_support_messaging.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -143,9 +143,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_support_messages_thread');
     });
 
-    it('manifest baseline-0038 requires 0038 with a hash matching the repo file', () => {
+    it('manifest baseline-0039 requires 0038 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0038');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0039');
         const req = m.required_migrations.find((x) => x.file === '0038_withdrawal_payout_snapshot.sql');
         expect(req).toBeTruthy();
         const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
@@ -158,17 +158,39 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_withdrawal_requests_payout_method');
     });
 
-    it('production state (0038 applied, no pending) passes the gate', () => {
+    it('manifest baseline-0039 requires 0039 with a hash matching the repo file', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0039');
+        const req = m.required_migrations.find((x) => x.file === '0039_r4_db_opt1_indexes.sql');
+        expect(req).toBeTruthy();
+        const actual = createHash('sha256').update(readFileSync(resolve('migrations', req.file))).digest('hex');
+        expect(actual.toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        // Minimum required-schema checks for the 0039 (R4-DB-OPT-1) surface:
+        // indexes only — no new tables or columns.
+        for (const idx of [
+            'idx_ratings_competitor',
+            'idx_competitions_creator',
+            'idx_competitions_opponent',
+            'idx_users_active',
+            'idx_user_blocks_blocked',
+            'idx_sse_channel_id',
+        ]) {
+            expect(m.required_schema.indexes).toContain(idx);
+        }
+    });
+
+    it('production state (0039 applied, no pending) passes the gate', () => {
         // Mirrors production after a future authorized 0038 apply: the full
         // known history applied, empty pending, full required schema present.
         const r = evaluateReadiness(goodInput());
         expect(r.ok).toBe(true);
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
-        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0038');
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0039');
     });
 
-    it('production-shape 0037 + manifest 0038 => required-pending FAIL (0038 not yet applied)', () => {
+    it('production-shape 0037 + manifest 0039 => required-pending FAIL (0038 not yet applied)', () => {
         // Production still on the 0037 shape while the manifest already
         // requires 0038: applied history stops at 0037, the pending list
         // names 0038, and the schema snapshot lacks the payout columns.
@@ -181,13 +203,48 @@ describe('release readiness gate', () => {
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
     });
 
-    it('production-shape 0038 + manifest 0038 => readiness PASS', () => {
+    it('production-shape 0039 + manifest 0039 => readiness PASS', () => {
         const r = evaluateReadiness(goodInput());
         expect(r.ok).toBe(true);
         expect(r.checks.every((c) => c.ok)).toBe(true);
     });
 
-    it('production-shape 0036 + manifest 0038 => required-pending FAIL (0037 not yet applied)', () => {
+    it('production-shape 0038 + manifest 0039 => required-pending FAIL (0039 not yet applied)', () => {
+        // Production still on the 0038 shape while the manifest already
+        // requires 0039: applied history stops at 0038, the pending list
+        // names 0039, and the schema snapshot lacks the six OPT-1 indexes.
+        // This is the exact Codex-P1 block on PR104: the coordinated
+        // owner-gated 0039 apply must precede any deploy, never a bypass.
+        const input = goodInput();
+        input.applied = input.applied.filter((f) => f !== '0039_r4_db_opt1_indexes.sql');
+        input.pendingText = 'Migrations to be applied:\n0039_r4_db_opt1_indexes.sql\n';
+        const opt1 = [
+            'idx_ratings_competitor',
+            'idx_competitions_creator',
+            'idx_competitions_opponent',
+            'idx_users_active',
+            'idx_user_blocks_blocked',
+            'idx_sse_channel_id',
+        ];
+        input.schema.indexes = input.schema.indexes.filter((i) => !opt1.includes(i));
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
+    });
+
+    it('0039 applied but index missing from snapshot => required-schema FAIL (no silent pass)', () => {
+        // Mirrors the Deploy #458 class for the new surface: 0039 applied
+        // (journal + pending clean) yet the collector snapshot omits one of
+        // the six indexes — the gate must refuse the stale snapshot.
+        const stale = goodInput();
+        stale.schema.indexes = stale.schema.indexes.filter((i) => i !== 'idx_sse_channel_id');
+        const r = evaluateReadiness(stale);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok && c.name === 'required-schema').length).toBeGreaterThan(0);
+        expect(evaluateReadiness(goodInput()).ok).toBe(true);
+    });
+
+    it('production-shape 0036 + manifest 0039 => required-pending FAIL (0037 not yet applied)', () => {
         // Production still on the 0036 shape while the manifest already
         // requires 0037: applied history stops at 0036, the pending list
         // names 0037, and the schema snapshot lacks the support tables.
@@ -201,7 +258,7 @@ describe('release readiness gate', () => {
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
     });
 
-    it('production-shape 0035 + manifest 0038 => required-pending FAIL (0036/0037 not yet applied)', () => {
+    it('production-shape 0035 + manifest 0039 => required-pending FAIL (0036/0037 not yet applied)', () => {
         // Production still on the 0035 shape while the manifest already
         // requires 0037: applied history stops at 0035, the pending list
         // names 0036, and the schema snapshot lacks managed_documents.
@@ -214,7 +271,7 @@ describe('release readiness gate', () => {
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
     });
 
-    it('production-shape 0034 + manifest 0035 => required-pending FAIL (0035 not yet applied)', () => {
+    it('production-shape 0034 + manifest 0039 => required-pending FAIL (0035 not yet applied)', () => {
         // Production still on the 0034 shape while the manifest already
         // requires 0035: applied history stops at 0034, the pending list
         // names 0035, and the schema snapshot lacks comments.video_offset.

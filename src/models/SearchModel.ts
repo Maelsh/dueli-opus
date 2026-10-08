@@ -284,9 +284,12 @@ export class SearchModel {
         for (const item of (itemsResult.results || [])) byId.set((item as User & { id: number }).id, item);
         const items = pageIds.map((id) => byId.get(id)).filter((r): r is User => !!r);
         // Attach Profile SSOT (display shares the ranking source; may exceed 5, never clamped).
-        const profMap = await signals.getProfiles(pageIds);
+        // R4-DB-OPT-1: reuse the ranking-time `profiles` map (pageIds ⊆ ids by
+        // construction above) instead of a second getProfiles(pageIds), which
+        // would re-issue the 3 loadProfiles statements for rows already read.
+        // Same map, same values, zero new reads; ordering/exhaustion untouched.
         for (const item of items) {
-            const p = profMap.get((item as User & { id: number }).id);
+            const p = profiles.get((item as User & { id: number }).id);
             const rec = item as unknown as Record<string, unknown>;
             rec['profile_score'] = p?.profile ?? null;
             rec['profile_competitions'] = p?.competitions ?? 0;
@@ -480,9 +483,12 @@ export class SearchModel {
         const byId = new Map<number, User>();
         for (const item of (result.results || [])) byId.set((item as User & { id: number }).id, item);
         const items = ordered.map((id) => byId.get(id)).filter((r): r is User => !!r);
-        const profMap = await signals.getProfiles(ordered);
+        // R4-DB-OPT-1: reuse the ranking-time `profiles` map (ordered ⊆ ids by
+        // construction above) instead of a second getProfiles(ordered), which
+        // would re-issue the 3 loadProfiles statements for rows already read.
+        // Same map, same values, zero new reads; ordering/exhaustion untouched.
         for (const item of items) {
-            const p = profMap.get((item as User & { id: number }).id);
+            const p = profiles.get((item as User & { id: number }).id);
             const rec = item as unknown as Record<string, unknown>;
             rec['profile_score'] = p?.profile ?? null;
             rec['profile_competitions'] = p?.competitions ?? 0;
