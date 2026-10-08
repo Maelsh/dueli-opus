@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-07T16:07:41.511Z",
-  "total": 236,
+  "generatedAt": "2026-10-08T13:17:54.959Z",
+  "total": 237,
   "routes": [
     {
       "method": "GET",
@@ -1132,6 +1132,13 @@
     {
       "method": "POST",
       "path": "/api/notifications/:id/read",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/notifications/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/:id/star",
       "classification": "AUTHENTICATED",
       "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/notifications/routes.ts"

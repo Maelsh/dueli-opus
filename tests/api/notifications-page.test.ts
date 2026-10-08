@@ -12,7 +12,9 @@
  * 2. Existing API contract untouched: 401 without a session; an
  *    authenticated inbox lists presented notifications with unread state;
  *    POST /:id/read marks one; POST /read-all marks all.
- * 3. Only supported actions exist (no invented star/purge endpoints).
+ * 3. Only supported actions exist (no invented purge endpoint; the star
+ *    route is real since R4-EVENTS-NOTIFY-1 N-05 — 404 only when the row is
+ *    missing, ownership-scoped).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../../src/main';
@@ -127,15 +129,18 @@ describe('post-R1: /notifications page + inbox contract', () => {
         expect(afterAll.data.unreadCount).toBe(0);
     });
 
-    it('3. no invented notification actions exist', async () => {
-        for (const path of [
-            `/api/notifications/1/star`,
-            `/api/notifications/purge`,
-        ]) {
-            const res = await app.request(`${path}?lang=en`, {
-                method: 'POST', headers: auth(SESS),
-            }, env(db));
-            expect(res.status, path).toBe(404);
-        }
+    it('3. no invented notification actions exist (star is real since R4-EVENTS-NOTIFY-1)', async () => {
+        // purge was never a route and still is not.
+        const purge = await app.request('/api/notifications/purge?lang=en', {
+            method: 'POST', headers: auth(SESS),
+        }, env(db));
+        expect(purge.status, '/api/notifications/purge').toBe(404);
+
+        // The star route exists now (N-05): a missing row is 404, not "no route".
+        const missing = await app.request('/api/notifications/99991/star?lang=en', {
+            method: 'POST', headers: { ...auth(SESS), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ starred: true }),
+        }, env(db));
+        expect(missing.status, '/api/notifications/:id/star on a missing row').toBe(404);
     });
 });

@@ -505,6 +505,9 @@ export const ar = {
         new_rating_body: '{actor} قيّم المنافسة',
         system_notice: 'إشعار من النظام',
         generic: 'لديك إشعار جديد',
+        // R4-EVENTS-NOTIFY-1 (N-05/M-5): تسميتا زر النجمة في القائمة.
+        star: 'تمييز بنجمة',
+        unstar: 'إلغاء التمييز',
         // F-7: إشعارات دورة حياة المنافسات — كل النصوص user-facing عبر i18n
         comp_deleted_title: 'تم حذف المنافسة',
         comp_deleted: 'تم حذف المنافسة الفورية لأنه لم ينضم منافس خلال ساعة.',

@@ -20,6 +20,10 @@ interface Notification {
     data?: any;
     reference_type?: string;
     reference_id?: number;
+    /** Server-rendered deep link (NotificationPresenter.linkFor). Preferred over reconstruction. */
+    link?: string | null;
+    /** Server-persisted star (notifications.is_starred). `data.starred` is the legacy in-memory shape. */
+    starred?: boolean;
 }
 
 /**
@@ -29,6 +33,24 @@ interface Notification {
 export class NotificationsUI {
     private static notifications: Notification[] = [];
     private static unreadCount: number = 0;
+    /**
+     * R4-EVENTS-NOTIFY-1 (N-06) + REMEDIATION (P2): demand-driven loader.
+     * Every caller marks demand; concurrent callers join the in-flight fetch
+     * instead of racing duplicates, and demand raised DURING a fetch runs
+     * exactly one follow-up fetch after it — an SSE event that lands mid-GET
+     * is covered by a fetch that starts AFTER it, so its update is never
+     * swallowed by the stale in-flight response. A burst therefore costs at
+     * most one extra fetch, never one per caller. Updates are never disabled:
+     * every caller still observes a post-demand result.
+     */
+    private static loaderPromise: Promise<void> | null = null;
+    private static refreshQueued = false;
+    /**
+     * R4-EVENTS-NOTIFY-1 (M-5): true after the first successful load. The
+     * dropdown renders a loading state before that, the empty state only
+     * after — `no_notifications` must never flash while fetching.
+     */
+    private static loaded = false;
 
     /**
      * Initialize notifications
@@ -40,16 +62,47 @@ export class NotificationsUI {
     }
 
     /**
-     * Load notifications from API
+     * Load notifications from API (demand-driven — see loader fields above;
+     * the badge always reflects the server's unreadCount).
      */
     static async loadNotifications(): Promise<void> {
+        // Mark-then-claim is synchronous, so exactly one caller becomes the
+        // worker while the rest join its fetch.
+        this.refreshQueued = true;
+        if (this.loaderPromise) {
+            await this.loaderPromise;
+            return;
+        }
+        while (this.refreshQueued) {
+            this.refreshQueued = false;
+            this.loaderPromise = this.fetchNotifications();
+            try {
+                await this.loaderPromise;
+            } finally {
+                this.loaderPromise = null;
+            }
+        }
+    }
+
+    private static async fetchNotifications(): Promise<void> {
         try {
             const response = await ApiClient.get('/api/notifications');
             if (response.success && response.data) {
                 // API returns { notifications: [], unreadCount: number }
                 this.notifications = response.data.notifications || [];
                 this.unreadCount = response.data.unreadCount || 0;
+                this.loaded = true;
                 this.updateBadge();
+                // REMEDIATION (P2): a dropdown opened BEFORE the fetch
+                // completed is still showing the spinner — repaint it now
+                // that trusted state arrived. Closed dropdowns repaint on
+                // open (toggle → renderList), so they are left untouched.
+                const dropdown = typeof document !== 'undefined'
+                    ? document.getElementById('notificationsDropdown')
+                    : null;
+                if (dropdown && !dropdown.classList.contains('hidden')) {
+                    this.renderList();
+                }
             }
         } catch (error) {
             console.error('Failed to load notifications:', error);
@@ -99,17 +152,35 @@ export class NotificationsUI {
         const container = document.getElementById('notificationsList');
         if (!container) return;
 
-        if (this.notifications.length === 0) {
+        // M-5: loading and empty are distinct states with their own labels.
+        if (!this.loaded) {
             container.innerHTML = `
                 <div class="p-8 text-center text-gray-400">
-                    <i class="fas fa-bell-slash text-3xl mb-2"></i>
-                    <p class="text-sm">${t('notification.no_notifications', State.lang) || 'No notifications'}</p>
+                    <i class="fas fa-spinner fa-spin text-3xl mb-2"></i>
+                    <p class="text-sm">${t('loading', State.lang) || 'Loading...'}</p>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = this.notifications.slice(0, 10).map(notification => `
+        if (this.notifications.length === 0) {
+            container.innerHTML = `
+                <div class="p-8 text-center text-gray-400">
+                    <i class="fas fa-bell-slash text-3xl mb-2"></i>
+                    <p class="text-sm">${t('no_notifications', State.lang) || 'No notifications'}</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = this.notifications.slice(0, 10).map(notification => {
+            // N-05: `starred` is the server-persisted flag (is_starred);
+            // `data.starred` is the legacy in-memory shape, kept as fallback.
+            const starred = notification.starred ?? notification.data?.starred ?? false;
+            const starLabel = starred
+                ? (t('notification.unstar', State.lang) || 'Unstar')
+                : (t('notification.star', State.lang) || 'Star');
+            return `
             <div class="p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors ${!notification.is_read ? 'bg-purple-50 dark:bg-purple-900/20' : ''}"
                  data-csp-on="click" data-csp-fn="NotificationsUI.handleNotificationClick" data-csp-args='[${notification.id}]'>
                 <div class="flex items-start gap-3">
@@ -121,16 +192,16 @@ export class NotificationsUI {
                         <p class="text-xs text-gray-400 mt-1">${this.formatTime(notification.created_at)}</p>
                     </div>
                     <div class="flex items-center gap-1">
-                        <button data-csp-stop="1" data-csp-on="click" data-csp-fn="NotificationsUI.toggleStar" data-csp-args='[${notification.id}]' 
-                                class="p-1 hover:text-amber-500 ${notification.data?.starred ? 'text-amber-500' : 'text-gray-400'}" 
-                                title="Star">
+                        <button data-csp-stop="1" data-csp-on="click" data-csp-fn="NotificationsUI.toggleStar" data-csp-args='[${notification.id}]'
+                                class="p-1 hover:text-amber-500 ${starred ? 'text-amber-500' : 'text-gray-400'}"
+                                title="${starLabel}" aria-label="${starLabel}">
                             <i class="fas fa-star text-xs"></i>
                         </button>
                         ${!notification.is_read ? '<span class="w-2 h-2 rounded-full bg-purple-600"></span>' : ''}
                     </div>
                 </div>
             </div>
-        `).join('');
+        `;}).join('');
     }
 
     /**
@@ -200,18 +271,31 @@ export class NotificationsUI {
     }
 
     /**
-     * T2.2: Handle clicking a notification — mark read + navigate to target
-     * (invitation/request notifications go directly to the competition page;
-     * R2-M: personal message → its conversation, official admin reply → its
-     * admin thread — same server link shape the notifications page uses).
+     * T2.2: Handle clicking a notification — mark read + navigate to target.
+     *
+     * R4-EVENTS-NOTIFY-1 (N-02): the read POST is awaited (bounded) BEFORE
+     * navigating. The old fire-and-forget + immediate location.href let the
+     * browser cancel the POST, so opening a notification never persisted
+     * is_read. Navigation still happens if the POST fails or times out — a
+     * failed mark correctly leaves the row unread for the next load.
+     *
+     * N-03: the server-provided `link` (NotificationPresenter.linkFor) wins —
+     * new join-request notifications land on the /my-requests decision
+     * surface, everything else keeps its existing target. Reconstruction from
+     * reference_type is the fallback for rows without a link.
      */
-    static handleNotificationClick(id: number): void {
+    static async handleNotificationClick(id: number): Promise<void> {
         const notification = this.notifications.find(n => n.id === id);
-        // Mark as read (fire and forget)
+        // Mark as read (awaited — see above)
         if (notification && !notification.is_read) {
-            this.markAsRead(id);
+            await this.markAsRead(id);
         }
-        // Navigate to the referenced competition when applicable
+        // Navigate to the referenced target when applicable
+        const serverLink = typeof notification?.link === 'string' ? notification.link : null;
+        if (serverLink) {
+            window.location.href = serverLink;
+            return;
+        }
         const refType = notification?.reference_type || notification?.data?.reference_type;
         const refId = notification?.reference_id ?? notification?.data?.reference_id;
         if ((refType === 'competition' || notification?.type === 'invitation') && refId) {
@@ -226,11 +310,18 @@ export class NotificationsUI {
     }
 
     /**
-     * Mark notification as read
+     * Mark notification as read.
+     *
+     * Returns true only when the server confirmed the write — the badge and
+     * the local row are updated from that trusted confirmation, never
+     * optimistically (N-02/M-4).
      */
-    static async markAsRead(id: number): Promise<void> {
+    static async markAsRead(id: number): Promise<boolean> {
         try {
-            await ApiClient.post(`/api/notifications/${id}/read`);
+            const attempt = ApiClient.post<{ success?: boolean }>(`/api/notifications/${id}/read`);
+            const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
+            const response = await Promise.race([attempt, timeout]);
+            if (!response || response.success === false) return false;
             const notification = this.notifications.find(n => n.id === id);
             if (notification && !notification.is_read) {
                 notification.is_read = true;
@@ -238,8 +329,10 @@ export class NotificationsUI {
                 this.updateBadge();
                 this.renderList();
             }
+            return true;
         } catch (error) {
             console.error('Failed to mark notification as read:', error);
+            return false;
         }
     }
 
@@ -259,15 +352,25 @@ export class NotificationsUI {
     }
 
     /**
-     * Toggle star/favorite on notification
+     * Toggle star/favorite on notification.
+     *
+     * R4-EVENTS-NOTIFY-1 (N-05): persisted server-side (notifications
+     * .is_starred via POST /api/notifications/:id/star). Local state changes
+     * only after the server confirms — a failed POST leaves the row as-is
+     * instead of a star that vanishes on reload.
      */
     static async toggleStar(id: number): Promise<void> {
         try {
             const notification = this.notifications.find(n => n.id === id);
             if (notification) {
-                const isStarred = !notification.data?.starred;
-                await ApiClient.post(`/api/notifications/${id}/star`, { starred: isStarred });
-                notification.data = { ...notification.data, starred: isStarred };
+                const starred = notification.starred ?? notification.data?.starred ?? false;
+                const next = !starred;
+                const response = await ApiClient.post<{ success?: boolean }>(
+                    `/api/notifications/${id}/star`, { starred: next }
+                );
+                if (!response || response.success === false) return;
+                notification.starred = next;
+                notification.data = { ...notification.data, starred: next };
                 this.renderList();
             }
         } catch (error) {

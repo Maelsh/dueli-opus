@@ -33,14 +33,32 @@ function resolveArg(arg: unknown, target: EventTarget | null, event: Event): unk
 }
 
 function resolveFn(name: string): AnyFn | null {
+    return resolveAction(name)?.fn ?? null;
+}
+
+/**
+ * R4-EVENTS-NOTIFY-1 (N-01): resolve a handler WITH its receiver.
+ *
+ * `resolveFn` above returned the bare function, so `runHandler` invoked
+ * `NotificationsUI.handleNotificationClick` / `toggleStar` (and every other
+ * dotted `ClassName.method` handler) with `this === undefined`. Those static
+ * methods read `this.notifications`, threw, and the dropdown click silently
+ * died inside the dispatcher's try/catch. The receiver is the object owning
+ * the last path segment (`window.NotificationsUI`); plain global names keep
+ * `window` as the receiver, builtins keep `undefined`. The allowlist is
+ * untouched — unknown names still resolve to null.
+ */
+function resolveAction(name: string): { fn: AnyFn; receiver: unknown } | null {
     if (!ACTION_ALLOWLIST.has(name)) return null;
     const parts = name.split('.');
     let current: unknown = window as unknown;
-    for (const part of parts) {
+    for (let i = 0; i < parts.length - 1; i++) {
         if (current === null || current === undefined) return null;
-        current = (current as Record<string, unknown>)[part];
+        current = (current as Record<string, unknown>)[parts[i]];
     }
-    return typeof current === 'function' ? (current as AnyFn) : null;
+    if (current === null || current === undefined) return null;
+    const fn = (current as Record<string, unknown>)[parts[parts.length - 1]];
+    return typeof fn === 'function' ? { fn: fn as AnyFn, receiver: current } : null;
 }
 
 /** Built-in declarative actions (no page function needed). */
@@ -354,12 +372,20 @@ function runHandler(el: HTMLElement, event: Event, args: unknown[]): void {
     // handler, on both the click and the keyboard path.
     if (el.hasAttribute('data-csp-stop')) event.stopPropagation();
     const fnName = el.getAttribute('data-csp-fn') || '';
-    const fn: AnyFn | null = fnName.startsWith('__') && !fnName.includes('.') && fnName in BUILTINS
-        ? BUILTINS[fnName] as AnyFn
-        : resolveFn(fnName);
-    if (!fn) return;
+    if (fnName.startsWith('__') && !fnName.includes('.') && fnName in BUILTINS) {
+        try {
+            (BUILTINS[fnName] as AnyFn)(...args.map((a) => resolveArg(a, el, event)));
+        } catch (err) {
+            console.error('[csp-delegate] handler failed:', fnName, err);
+        }
+        return;
+    }
+    // N-01: invoke with the owning object as receiver so `this` inside
+    // `ClassName.method` handlers is the class, not undefined.
+    const action = resolveAction(fnName);
+    if (!action) return;
     try {
-        fn(...args.map((a) => resolveArg(a, el, event)));
+        action.fn.apply(action.receiver, args.map((a) => resolveArg(a, el, event)));
     } catch (err) {
         console.error('[csp-delegate] handler failed:', fnName, err);
     }

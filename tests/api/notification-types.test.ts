@@ -263,7 +263,10 @@ describe('B9: notification types + render-time localization', () => {
         expect(linkById.get(910003)).toBe('/profile/b9_sender?tab=posts&lang=ar');
         expect(linkById.get(910004)).toBe(`/competition/${COMP_ID}?lang=ar`);
         expect(linkById.get(910005)).toBe(`/competition/${COMP_ID}?lang=ar`);
-        expect(linkById.get(910006)).toBe(`/competition/${COMP_ID}?lang=ar`);
+        // R4-EVENTS-NOTIFY-1 (N-03): a NEW join request routes the creator to
+        // the /my-requests decision surface (the competition page shows the
+        // creator no Accept/Decline); receipts keep the competition link.
+        expect(linkById.get(910006)).toBe('/my-requests?lang=ar');
         // Types without a routable target must not invent a dead link.
         expect(linkById.get(910007)).toBeNull();
         expect(linkById.get(910008)).toBeNull();

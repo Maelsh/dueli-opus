@@ -83,6 +83,8 @@ export interface PresentedNotification extends Notification {
     link: string | null;
     /** Parsed payload when the row stores one. */
     payload: NotificationPayload | null;
+    /** R4-EVENTS-NOTIFY-1 (N-05): persisted star flag (is_starred). */
+    starred: boolean;
 }
 
 /**
@@ -160,17 +162,52 @@ export class NotificationPresenter {
             i18n_key: key,
             link: NotificationPresenter.linkFor(row, lang),
             payload,
+            starred: Number((row as { is_starred?: unknown }).is_starred) === 1,
         };
     }
 
 
 
+    /**
+     * R4-EVENTS-NOTIFY-1 (N-03): true only for a NEW join request awaiting
+     * the creator's decision — never for accept receipts (which inform the
+     * requester and correctly keep the competition link).
+     *
+     * New rows store the exact key `notification.new_join_request`; legacy
+     * rows (requestJoin) store its pre-translated text in the sender's
+     * language, matched in ar/en. Anything unrecognized is NOT a new
+     * request, so an unknown row can never be misrouted by this rule.
+     */
+    static isNewJoinRequest(row: Notification): boolean {
+        const effective = NotificationPresenter.effectiveType(row.type, row.reference_type ?? null);
+        if (effective !== 'request') return false;
+        if ((row.reference_type ?? null) !== 'competition') return false;
+        const storedTitle = typeof row.title === 'string' ? row.title.trim() : '';
+        if (NotificationPresenter.isI18nKey(storedTitle)) {
+            return storedTitle === 'notification.new_join_request';
+        }
+        return storedTitle === t('notification.new_join_request', 'ar')
+            || storedTitle === t('notification.new_join_request', 'en');
+    }
+
     /** Deep link for the notification target — null when there is no route. */
     static linkFor(row: Notification, lang: Language): string | null {
         const id = Number(row.reference_id);
+        const suffix = `lang=${encodeURIComponent(lang)}`;
+
+        // R4-EVENTS-NOTIFY-1 (N-03): a NEW join request is decided by the
+        // competition creator on /my-requests (received tab) — the
+        // competition page shows the creator no Accept/Decline. Route the
+        // creator straight to the decision surface instead of a page where
+        // the notification's action does not exist. Invitations, receipts
+        // and everything else keep their existing competition link, so no
+        // working path changes.
+        if (NotificationPresenter.isNewJoinRequest(row)) {
+            return `/my-requests?${suffix}`;
+        }
+
         if (!Number.isFinite(id) || id <= 0) return null;
 
-        const suffix = `lang=${encodeURIComponent(lang)}`;
         switch (row.reference_type) {
             case 'competition':
                 return `/competition/${id}?${suffix}`;
