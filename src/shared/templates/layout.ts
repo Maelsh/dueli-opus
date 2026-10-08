@@ -5,6 +5,7 @@
 
 import type { Language } from '../../config/types';
 import { translations, getUILanguage, getDir, isRTL } from '../../i18n';
+import { Sanitize } from '../../lib/services/Sanitize';
 
 // Font mapping per language
 const fontMap: Record<string, string> = {
@@ -29,7 +30,7 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Dueli">
-    <title>${title} - ${tr.app_title}</title>
+    <title>${Sanitize.escapeHtml(title)} - ${Sanitize.escapeHtml(tr.app_title)}</title>
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
