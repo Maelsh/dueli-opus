@@ -1,3 +1,11 @@
+## 2026-10-08 — R4-REM1 Codex-P2 double-escape fix on the live-room path (same branch feat/r4-title-escaping, no new PR)
+
+- **FORENSIC (Codex P2 on PR103, CONFIRMED via real path)**: عناوين المنافسات تُخزن مهرّبة (`cleanTitle` في `create` — بنية ‏T1.4 ‏store-escaped التي تعتمد عليها كل المصارف الأخرى: ‏h1 الغرفة يُصيَّر خاماً وهو صحيح)، بينما ‏generateHTML (‏R4) يهرّب مركزياً ⇒ ‏`A&B` المخزنة ‏`A&amp;B` تُعرض ‏`A&amp;amp;B` في التبويب. المصارف الأخرى سليمة بالدليل: ‏profile يمرر ‏username/display_name خامين، والوثائق تُخزن خاماً وتُهرَّب عند العرض، والباقي ‏i18n ثابتة — لا مصدر مهرّب-مخزن آخر يصل ‏generateHTML.
+- **IMPLEMENTED**: ‏`Sanitize.unescapeHtml` (معكوس ‏escapeHtml الدقيق، ‏`&amp;` أخيراً — للحدود فقط، ممنوع على مدخلات خام) + فك ترميز واحد عند حد ‏live-room (:1114) فيبقى التهريب المركزي هو التعقيم الوحيد (‏XSS مغلق). بلا مساس ‏T1.4/التخزين/‏H7/ELO.
+- **Tests**: ‏r4-title-escaping ‏4←8 (‏RED مثبت ‏`A&amp;amp;B` عبر المسار الحقيقي قبل الإصلاح؛ ‏A&B أحادي التهريب + ‏‎<tag>‎ حرفي + ‏‎</title><script>‎ مُحيَّد عبر ‏POST/create→DB→live-room + ‏round-trip المعكوس + حافة ‏‎&amp;‎ الحرفية). الجيران (‏live-room/object-title/csp/docs/profile ‏43/43)؛ ‏tsc ✅؛ ‏build ✅ (‏churn رُجع)؛ ‏any ‏+0.
+- **State**: LOCAL VERIFIED / awaiting re-REMOTE on PR103. Not DONE/DEPLOYED.
+- **ROLLBACK (G8)**: revert commits الفرع (سطرا حد + 4 اختبارات؛ لا migration/بيانات).
+
 ## 2026-10-07 — R4 quality: centralized <title> escaping in generateHTML (branch feat/r4-title-escaping, from 2e3d368 = origin/main)
 
 - **FORENSIC (R4 first unit)**: R4 per 01/03/04/05/08/10 = journey acceptance via existing T/B evidence + deferred quality notes; no R4 sub-ID further decomposes it. ALREADY DONE — all R3 (incl. C1/C2/C3) + D1-bind #100 closed per plan tracker; journeys DEPLOYED with post-merge Quality/Deploy SUCCESS; /docs bodies already escaped at render; i18n carries no entities (double-escape safe). GAPS (1 genuine) — `generateHTML` interpolated `title` + `tr.app_title` raw into `<title>`; user-controlled titles reach it (live-room `competition.title`, profile `display_name`/URL `username`, admin-authored doc titles) so `</title><script>` would break out. NOT a gap — /docs pagination: model already supports limit/offset, catalog is ~6 seeds, no scale/acceptance trigger (carried as non-blocking).
