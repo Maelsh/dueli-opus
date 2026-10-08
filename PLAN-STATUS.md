@@ -1,3 +1,10 @@
+## RELEASE COLLECTOR HOTFIX (Deploy #37771438709) · فرع fix/release-collector-indexes (من 30baed3 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر ذاتي/إعادة تطبيق ‏0039/‏H7/‏SearchModel/readiness (سطر جامع واحد + مثبت + ملف اختبار).
+- نفّذ: لقطة الفهارس بلا قيد ‏tbl_name (الفاحص ‏subset — الزائد آمن والناقص ‏FAIL مغلق)؛ السبب: جداول ‏0039 خارج ‏required_schema.tables فالقائمة المشتقة أسقطتها والبوابة رفضت إنتاجاً سليماً.
+- **الأدلة**: ‏release-collector ‏5/5 + ‏deploy-workflow ‏9/9 (‏RED ‏4 على الجامع القديم)؛ ‏tsc/build ✅؛ ‏any ‏+0 (بلا ‏src منطقي).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit (يعيد تشغيل ‏Deploy الفاشل) ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-DB-OPT-1 smallest proven D1 read reduction · فرع feat/r4-db-opt-1 (محدَّث على main ‏9cbb93c بعد دمج ‏PR103)
 
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار re-REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر ذاتي/فوترة/حمل إنتاجي (‏routes بلا تغيير؛ ‏manifest ‏baseline-0039؛ ‏0039 مطبَّقة إنتاجياً بتفويض المالك §9 ومثبتة أدناه). PR #103 مدموجة ومحفوظة أدناه؛ ملفا ‏ELO المتسخان لم يُمسا.

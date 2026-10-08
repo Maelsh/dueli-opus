@@ -138,12 +138,16 @@ jobs:
           npx wrangler d1 migrations list dueli-db --remote > /tmp/readiness-list.txt
           npx wrangler d1 execute dueli-db --remote --json --command "SELECT name FROM d1_migrations ORDER BY rowid;" > /tmp/readiness-applied.json
           TABLES=$(node -e "console.log(Object.keys(require('./dev-tools/release-schema-manifest.json').required_schema.tables).join(' '))")
-          # Index snapshot covers every required_schema table, derived from the
-          # same manifest as the column loop above. A hardcoded table list here
-          # silently dropped baseline-0034's competition_views from the snapshot
-          # (Deploy #458: existing idx_competition_views_day never reached the
-          # checker); deriving it keeps collector and manifest in sync forever.
-          INDEX_TABLES=$(node -e "console.log(Object.keys(require('./dev-tools/release-schema-manifest.json').required_schema.tables).map(t=>\"'\"+t+\"'\").join(','))")
+          # Index snapshot lists EVERY index in the database, with no tbl_name
+          # restriction. History: a hardcoded table list silently dropped
+          # baseline-0034's competition_views (Deploy #458); then a
+          # manifest-derived table list silently dropped all six baseline-0039
+          # indexes, whose tables (ratings/competitions/users/user_blocks/
+          # sse_event_log) are outside required_schema.tables (Deploy
+          # #37771438709: gate failed a healthy production). The checker does
+          # subset matching, so extra names are harmless but a missing one
+          # fails closed — an unrestricted snapshot is the only form that
+          # cannot rot on the next baseline bump.
           {
             echo '{"tables": {'
             FIRST=1
@@ -153,7 +157,7 @@ jobs:
               printf '"%s": %s' "$T" "$COLS"
             done
             echo '}, "indexes": '
-            npx wrangler d1 execute dueli-db --remote --json --command "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name IN (${INDEX_TABLES});" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(JSON.stringify(j[0].results.map(r=>r.name)))})"
+            npx wrangler d1 execute dueli-db --remote --json --command "SELECT name FROM sqlite_master WHERE type='index';" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);console.log(JSON.stringify(j[0].results.map(r=>r.name)))})"
             echo '}'
           } > /tmp/readiness-schema.json
         env:
