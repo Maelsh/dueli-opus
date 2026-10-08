@@ -3,7 +3,8 @@
 - 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/فوترة/حمل إنتاجي (routes ‏236←236؛ manifest البوابة يبقى ‏baseline-0038 لأن ‏0039 غير مُصدَرة). PR #103 وملفا ‏ELO المتسخان لم يُمسا.
 - نفّذ: (‏S1) حذف قراءتي ‏Profile الزائدتين في ‏SearchModel (نفس الخريطة/القيم — ‏H7-v1 والمشاركة والحجب والعزل والترتيب والنفاد و‏≤100 binds محفوظة)؛ (‏S2) ترحيل ‏0039 (‏6 فهارس فقط، ‏IF NOT EXISTS، بلا حذف) ضمن ‏PR بلا تطبيق إنتاجي (‏owner-gated)؛ (‏S3) إثبات التعطل: محاولة واحدة + ‏500 عامة بلا تسريب على المسار الملموس (‏B13 قائم للبقية).
 - **الأدلة**: T جديد ‏r4-db-opt-1 ‏14/14 (‏RED ‏12/18 قبل الإصلاح؛ ‏EXPLAIN السبع بلا ‏SCAN بعد ‏0039؛ ‏T0 ‏13 مقابل continuation ‏5 عبارات — عدّ محلي، لا يدَّعى ‏rowsRead إنتاجي)؛ الجيران ‏126/126؛ الكاملة ‏1401 + نفس ‏16 البيئية المسبقة؛ ‏schema-contract ‏24/24 عبر ‏Wrangler؛ ‏tsc ✅؛ ‏build ✅؛ ‏any ‏+0.
-- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. تطبيق ‏0039 إنتاجياً يبقى ‏owner-gated بعد الدمج (‏target/hash/baseline إثبات قبلي، ‏0039 وحدها ‏pending وإلا ‏STOP). أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+- **REM1 (Codex-P1، نفس الفرع)**: سُجّلت ‏0039 في ‏manifest (‏baseline-0039 + ‏sha256 + ‏6 فهارس + ‏known_history) + ‏readiness ‏24←27 (تثبيت ‏0039 + ‏FAILان مغلقان جديدان). ‏27/27 مثبتة على بايتات ‏LF (حالة ‏CI)؛ محلياً ‏15 ✅ والباقي انحراف ‏CRLF موثق. بلا تطبيق إنتاجي.
+- **المتبقي (blockers فقط)**: re-REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. تطبيق ‏0039 إنتاجياً يبقى ‏owner-gated قبل الدمج (§9: ‏target/hash/baseline إثبات قبلي، ‏0039 وحدها ‏pending وإلا ‏STOP). أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
 
 ## R3-C3 synthetic-retirement future design · فرع feat/r3-c3-retirement-design (من 88461f6a = origin/main)
 

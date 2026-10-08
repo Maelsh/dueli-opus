@@ -1,3 +1,11 @@
+## 2026-10-08 — R4-DB-OPT-1 REM1: Codex-P1 release-manifest registration for 0039 (same branch feat/r4-db-opt-1, no new PR)
+
+- **FORENSIC (Codex P1 on PR104, CONFIRMED)**: manifest بقي ‏baseline-0038 بينما الفرع يحمل ‏0039 — الإنتاج بعد الدمج سيبلغ ‏0039 pending‏/applied مجهولة ⇒ ‏unexpected-pending/applied ⇒ البوابة ‏FAIL دائماً والنشر محظور. الإصلاح coordination لا bypass: تسجيل ‏0039 في ‏manifest + ‏hash + فهارس + ‏known_history، والتطبيق الإنتاجي يبقى ‏owner-gated قبل الدمج (§9).
+- **IMPLEMENTED**: ‏manifest → ‏baseline-0039 (‏0039 + ‏sha256 ‏ddf4ac98… (‏LF-blob، يطابق ‏CI) + ‏6 فهارس في ‏required_schema + ‏known_history + ملاحظة ‏0033–0039)؛ ‏readiness test ‏24←27 (تثبيت ‏0039 + ‏prod-shape-0038 FAIL مغلق + لقطة ناقصة فهرس ‏FAIL على طريقة ‏#458؛ أسماء/نسخ الأسطح القديمة حُدّثت لـ0039).
+- **Tests**: ‏readiness ‏27/27 على بايتات ‏LF (مثبت بتشغيل موثق بعد تطبيع مؤقت ثم استعادة ‏CRLF — ‏git config أُعيد ‏true والشجرة مُتحقَّق منها)؛ محلياً (‏CRLF) ‏15 ✅ + ‏12 فشل بايتات فقط (‏10 مسبقة + تثبيت ‏0039 + سطر ‏goodInput الختامي — نفس الطبيعة، ‏CI سيراها ‏27/27)؛ سلوكا ‏FAIL المغلق الجديدان يمران حتى مع ‏CRLF. ‏r4-db-opt-1 ‏14/14 و‏schema-contract ‏24/24 بلا مساس (أُعيد تشغيل الأول: أخضر). ‏tsc ✅. بلا تطبيق إنتاجي/فوترة/H7/ELO.
+- **State**: LOCAL VERIFIED / awaiting re-REMOTE on PR104. Not DONE/DEPLOYED.
+- **ROLLBACK (G8)**: revert commits الفرع (manifest+test فقط لهذه الدفعة).
+
 ## 2026-10-08 — R4-DB-OPT-1 smallest proven D1 read reduction (branch feat/r4-db-opt-1, from 2e3d368 = origin/main)
 
 - **FORENSIC (R4-DB-DIAG-1, no guessing)**: (1) `SearchModel.searchUsers` (:287) و`getSuggestedUsers` (:483) أعادا `getProfiles(pageIds)` الكاملة (3 عبارات D1) لصفوف موجودة أصلاً في خريطة الترتيب — هدر مثبت لا تخمين. (2) EXPLAIN محلي على الترحيلات الحقيقية أثبت SCAN في E1 (فهرس بعمود قائد خاطئ) وE2/E2b (بلا فهرس) وE7 (OR بلا فهرسَي طرفين) وE8 (بلا فهرس) وE9-معاكس (بلا فهرس) وفرز TEMP B-TREE في E4 كل poll. (3) سلوك التعطل B13 مثبت مسبقاً (500 + generic i18n + بلا تسريب) لمسارات leaderboard/search/live — غطيت المسار الملموس (search/users) فقط. NOT in scope: أوزان H7، مشاركة فعلية، استبعادات، عزل، ترتيب، نفاد، binds (كلها محفوظة ومثبتة).
