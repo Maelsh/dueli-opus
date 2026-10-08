@@ -97,7 +97,8 @@ function installStubs(): void {
     const ui = NotificationsUI as any;
     ui.notifications = [];
     ui.unreadCount = 0;
-    ui.pendingLoad = null;
+    ui.loaderPromise = null;
+    ui.refreshQueued = false;
     ui.loaded = false;
 }
 
@@ -226,7 +227,7 @@ describe('R4-EVENTS-NOTIFY-1 — dropdown load/read/badge (N-02/N-06/M-4/M-5)', 
     beforeEach(installStubs);
     afterEach(removeStubs);
 
-    it('concurrent loads share ONE GET (N-06)', async () => {
+    it('concurrent burst costs one follow-up, never one GET per caller (N-06/P2)', async () => {
         let gets = 0;
         fetchImpl = async (url) => {
             if (url === '/api/notifications') {
@@ -242,8 +243,83 @@ describe('R4-EVENTS-NOTIFY-1 — dropdown load/read/badge (N-02/N-06/M-4/M-5)', 
             NotificationsUI.loadNotifications(),
             NotificationsUI.loadNotifications(),
         ]);
-        expect(gets).toBe(1);
+        // Initial fetch + exactly one follow-up covering the whole burst
+        // (demand raised mid-flight must not be swallowed by a stale reply).
+        expect(gets).toBe(2);
         expect((NotificationsUI as any).loaded).toBe(true);
+    });
+
+    it('SSE demand raised mid-GET is covered by a later fetch (no lost update)', async () => {
+        const starts: string[] = [];
+        let releaseFirst!: (body: any) => void;
+        const bodies = [
+            { notifications: [{ id: 1, type: 'system', message: 'old', is_read: false, created_at: new Date().toISOString() }], unreadCount: 1 },
+            { notifications: [{ id: 2, type: 'system', message: 'new', is_read: false, created_at: new Date().toISOString() }], unreadCount: 1 },
+        ];
+        fetchImpl = (url) => {
+            if (url !== '/api/notifications') return Promise.resolve(ok());
+            const n = starts.length;
+            starts.push(`fetch${n}`);
+            if (n === 0) {
+                return new Promise((resolve) => {
+                    releaseFirst = (body: any) => resolve(ok(body));
+                });
+            }
+            return Promise.resolve(ok(bodies[1]));
+        };
+        const first = NotificationsUI.loadNotifications();
+        await new Promise((r) => setTimeout(r, 10)); // fetch#1 in flight
+        const second = NotificationsUI.loadNotifications(); // SSE-equivalent demand mid-GET
+        releaseFirst(bodies[0]); // stale reply lands
+        await Promise.all([first, second]);
+        // Drain the follow-up fetch it must have triggered.
+        for (let i = 0; i < 50 && starts.length < 2; i++) {
+            await new Promise((r) => setTimeout(r, 10));
+        }
+        expect(starts).toEqual(['fetch0', 'fetch1']);
+        expect((NotificationsUI as any).notifications.map((n: any) => n.id)).toEqual([2]);
+    });
+
+    it('open dropdown repaints when the fetch completes (no stuck spinner)', async () => {
+        // Dropdown open (no `hidden`), list never loaded yet.
+        NotificationsUI.renderList();
+        expect(els['notificationsList'].innerHTML).toContain(t('loading', 'en'));
+        fetchImpl = async () => ok({
+            notifications: [{ id: 3, type: 'system', message: 'hello', is_read: false, created_at: new Date().toISOString() }],
+            unreadCount: 1,
+        });
+        await NotificationsUI.loadNotifications();
+        const html = els['notificationsList'].innerHTML;
+        expect(html).toContain('hello');
+        expect(html).not.toContain('fa-spin');
+    });
+
+    it('closed dropdown is left untouched by background refresh', async () => {
+        els['notificationsDropdown'].classList.add('hidden');
+        els['notificationsList'].innerHTML = 'MARKER';
+        fetchImpl = async () => ok({ notifications: [], unreadCount: 0 });
+        await NotificationsUI.loadNotifications();
+        // No repaint while closed; next open repaints via toggle → renderList.
+        expect(els['notificationsList'].innerHTML).toBe('MARKER');
+        expect((NotificationsUI as any).loaded).toBe(true);
+        NotificationsUI.renderList();
+        expect(els['notificationsList'].innerHTML).toContain(t('no_notifications', 'en'));
+    });
+
+    it('failed fetch never clobbers the previous list', async () => {
+        const ui = NotificationsUI as any;
+        ui.loaded = true;
+        ui.notifications = [
+            { id: 4, type: 'system', message: 'kept', is_read: true, created_at: new Date().toISOString() },
+        ];
+        NotificationsUI.renderList();
+        expect(els['notificationsList'].innerHTML).toContain('kept');
+        fetchImpl = async () => {
+            throw new Error('down');
+        };
+        await NotificationsUI.loadNotifications();
+        expect(els['notificationsList'].innerHTML).toContain('kept');
+        expect(ui.notifications.map((n: any) => n.id)).toEqual([4]);
     });
 
     it('loading vs empty are distinct and honest in ar/en (M-5)', async () => {

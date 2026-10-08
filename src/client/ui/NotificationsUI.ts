@@ -34,12 +34,17 @@ export class NotificationsUI {
     private static notifications: Notification[] = [];
     private static unreadCount: number = 0;
     /**
-     * R4-EVENTS-NOTIFY-1 (N-06): single-flight for the inbox fetch. Auth
-     * refresh, SSE bursts and page syncs all call init()/loadNotifications
-     * concurrently on load — they share ONE GET instead of racing duplicates.
-     * Updates are never disabled: every caller still awaits the same result.
+     * R4-EVENTS-NOTIFY-1 (N-06) + REMEDIATION (P2): demand-driven loader.
+     * Every caller marks demand; concurrent callers join the in-flight fetch
+     * instead of racing duplicates, and demand raised DURING a fetch runs
+     * exactly one follow-up fetch after it — an SSE event that lands mid-GET
+     * is covered by a fetch that starts AFTER it, so its update is never
+     * swallowed by the stale in-flight response. A burst therefore costs at
+     * most one extra fetch, never one per caller. Updates are never disabled:
+     * every caller still observes a post-demand result.
      */
-    private static pendingLoad: Promise<void> | null = null;
+    private static loaderPromise: Promise<void> | null = null;
+    private static refreshQueued = false;
     /**
      * R4-EVENTS-NOTIFY-1 (M-5): true after the first successful load. The
      * dropdown renders a loading state before that, the empty state only
@@ -57,19 +62,25 @@ export class NotificationsUI {
     }
 
     /**
-     * Load notifications from API (single-flight — concurrent callers share
-     * one request; the badge always reflects the server's unreadCount).
+     * Load notifications from API (demand-driven — see loader fields above;
+     * the badge always reflects the server's unreadCount).
      */
     static async loadNotifications(): Promise<void> {
-        if (this.pendingLoad) {
-            await this.pendingLoad;
+        // Mark-then-claim is synchronous, so exactly one caller becomes the
+        // worker while the rest join its fetch.
+        this.refreshQueued = true;
+        if (this.loaderPromise) {
+            await this.loaderPromise;
             return;
         }
-        this.pendingLoad = this.fetchNotifications();
-        try {
-            await this.pendingLoad;
-        } finally {
-            this.pendingLoad = null;
+        while (this.refreshQueued) {
+            this.refreshQueued = false;
+            this.loaderPromise = this.fetchNotifications();
+            try {
+                await this.loaderPromise;
+            } finally {
+                this.loaderPromise = null;
+            }
         }
     }
 
@@ -82,6 +93,16 @@ export class NotificationsUI {
                 this.unreadCount = response.data.unreadCount || 0;
                 this.loaded = true;
                 this.updateBadge();
+                // REMEDIATION (P2): a dropdown opened BEFORE the fetch
+                // completed is still showing the spinner — repaint it now
+                // that trusted state arrived. Closed dropdowns repaint on
+                // open (toggle → renderList), so they are left untouched.
+                const dropdown = typeof document !== 'undefined'
+                    ? document.getElementById('notificationsDropdown')
+                    : null;
+                if (dropdown && !dropdown.classList.contains('hidden')) {
+                    this.renderList();
+                }
             }
         } catch (error) {
             console.error('Failed to load notifications:', error);

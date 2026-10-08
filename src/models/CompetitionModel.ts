@@ -705,14 +705,37 @@ export class CompetitionModel extends BaseModel<Competition> {
 
     /**
      * Delete a competition and its dependent rows (moderation cascade).
-     * Order matters: dependents first, then the competition row itself.
+     *
+     * R4-EVENTS-NOTIFY-1 REMEDIATION (P1): full dependent survey + atomicity.
+     * Dependent map (migrations/0001–0007, FK ON):
+     *   - deleted here (no ON DELETE action, competition-owned): requests,
+     *     invitations, legacy invites (defensive — no writers left), ratings,
+     *     comments, chunk_keys, scheduled_tasks, scheduled_competitions,
+     *     suspensions, hidden flags. Order: dependents first, competition last.
+     *   - deleted by the DB itself (ON DELETE CASCADE — no code): likes,
+     *     dislikes, reminders, watch_history, watch_later, views,
+     *     heartbeats, revenue logs. SET NULL likewise (donations,
+     *     users.current_competition_id, financial logs).
+     *   - NEVER deleted here (history, no FK): notifications, reports.
+     * All statements run in ONE db.batch() — a single serialized write
+     * transaction — so the delete either fully applies or fully rolls back;
+     * a mid-delete failure can never leave a partially-deleted competition.
      */
     async deleteCascade(competitionId: number): Promise<boolean> {
-        await this.db.prepare('DELETE FROM competition_requests WHERE competition_id = ?').bind(competitionId).run();
-        await this.db.prepare('DELETE FROM competition_invitations WHERE competition_id = ?').bind(competitionId).run();
-        await this.db.prepare('DELETE FROM ratings WHERE competition_id = ?').bind(competitionId).run();
-        await this.db.prepare('DELETE FROM chunk_keys WHERE competition_id = ?').bind(competitionId).run();
-        await this.db.prepare('DELETE FROM competitions WHERE id = ?').bind(competitionId).run();
+        const statements = [
+            'DELETE FROM competition_requests WHERE competition_id = ?',
+            'DELETE FROM competition_invitations WHERE competition_id = ?',
+            'DELETE FROM competition_invites WHERE competition_id = ?',
+            'DELETE FROM ratings WHERE competition_id = ?',
+            'DELETE FROM comments WHERE competition_id = ?',
+            'DELETE FROM chunk_keys WHERE competition_id = ?',
+            'DELETE FROM competition_scheduled_tasks WHERE competition_id = ?',
+            'DELETE FROM scheduled_competitions WHERE competition_id = ?',
+            'DELETE FROM competition_suspensions WHERE competition_id = ?',
+            'DELETE FROM user_hidden_competitions WHERE competition_id = ?',
+            'DELETE FROM competitions WHERE id = ?',
+        ].map((sql) => this.db.prepare(sql).bind(competitionId));
+        await this.db.batch(statements);
         return true;
     }
 }

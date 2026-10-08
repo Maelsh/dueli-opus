@@ -15,7 +15,7 @@
  * closed=read policy (unapproved), production cleanup execution (leader-gated,
  * runbook in dev-tools/r4-events-notify-cleanup.sql).
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { D1Database } from '@cloudflare/workers-types';
@@ -331,6 +331,121 @@ describe('R4-EVENTS-NOTIFY-1 — one-time cleanup SQL (local proof, NOT producti
         const rerun = await guardedUpdate();
         expect(rerun).toBe(0);
         expect(await scalar('SELECT COUNT(*) FROM notifications')).toBe(5);
+    });
+});
+
+describe('R4-EVENTS-NOTIFY-1 REMEDIATION P1 — full cascade + atomicity', () => {
+    const COMP = 8401;
+
+    /** Every competition-owned dependent with a real FK, plus history that must survive. */
+    function seedFull(): void {
+        seedBase();
+        insertCompetition(COMP);
+        db.exec(`
+            INSERT INTO competition_requests (competition_id, requester_id, status, message, created_at)
+                VALUES (${COMP}, ${REQUESTER}, 'pending', 'hi', datetime('now'));
+            INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, status, message, created_at)
+                VALUES (${COMP}, ${CREATOR}, ${INVITEE}, 'pending', 'yo', datetime('now'));
+            INSERT INTO ratings (competition_id, user_id, competitor_id, rating)
+                VALUES (${COMP}, ${REQUESTER}, ${CREATOR}, 5);
+            INSERT INTO comments (competition_id, user_id, content)
+                VALUES (${COMP}, ${REQUESTER}, 'nice');
+            INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key)
+                VALUES (${COMP}, 0, 'r4n-key-8401');
+            INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status)
+                VALUES (${COMP}, 'finalize_payouts', datetime('now', '+1 hour'), 'pending');
+            INSERT INTO scheduled_competitions (user_id, competition_id, scheduled_at)
+                VALUES (${CREATOR}, ${COMP}, datetime('now', '+1 hour'));
+            INSERT INTO competition_suspensions (competition_id, admin_id, reason)
+                VALUES (${COMP}, ${CREATOR}, 'r4n review');
+            INSERT INTO user_hidden_competitions (user_id, competition_id)
+                VALUES (${REQUESTER}, ${COMP});
+            INSERT INTO likes (user_id, competition_id) VALUES (${REQUESTER}, ${COMP});
+            INSERT INTO competition_views (competition_id, identity_kind, identity_key, view_day)
+                VALUES (${COMP}, 'user', 'u:${REQUESTER}', date('now'));
+            INSERT INTO watch_history (user_id, competition_id) VALUES (${REQUESTER}, ${COMP});
+            INSERT INTO donations (user_id, amount, payment_method, competition_id)
+                VALUES (${REQUESTER}, 5.0, 'card', ${COMP});
+            INSERT INTO reports (reporter_id, target_type, target_id, reason)
+                VALUES (${REQUESTER}, 'competition', ${COMP}, 'spam');
+        `);
+        db.exec(`UPDATE users SET current_competition_id = ${COMP} WHERE id = ${CREATOR}`);
+    }
+
+    async function count(table: string): Promise<unknown> {
+        return scalar(`SELECT COUNT(*) FROM ${table} WHERE ${table === 'competitions' ? 'id' : 'competition_id'} = ${COMP}`);
+    }
+
+    it('delete with a live scheduled task removes every owned dependent in ONE batch; history survives', async () => {
+        seedFull();
+        const notes = new NotificationModel(db as unknown as D1Database);
+        await notes.createForType({
+            user_id: CREATOR, type: 'invitation_accepted', payload: { actor: 'R4N Invitee' },
+            reference_type: 'competition', reference_id: COMP,
+        });
+        const batchSpy = vi.spyOn(db, 'batch');
+
+        const del = await call('DELETE', `/api/competitions/${COMP}`, CREATOR_SESSION);
+        expect(del.status).toBe(200);
+
+        // One serialized write transaction — never statement-by-statement.
+        expect(batchSpy).toHaveBeenCalledTimes(1);
+        batchSpy.mockRestore();
+
+        // Explicitly-deleted owned dependents (no ON DELETE action).
+        for (const table of [
+            'competitions', 'competition_requests', 'competition_invitations',
+            'ratings', 'comments', 'chunk_keys', 'competition_scheduled_tasks',
+            'scheduled_competitions', 'competition_suspensions', 'user_hidden_competitions',
+        ]) {
+            expect(await count(table), `${table} gone`).toBe(0);
+        }
+        // DB-cascaded dependents go with the parent automatically.
+        for (const table of ['likes', 'competition_views', 'watch_history']) {
+            expect(await count(table), `${table} cascaded`).toBe(0);
+        }
+        // History and money are preserved, never deleted here.
+        expect(await scalar('SELECT COUNT(*) FROM notifications WHERE reference_type = ? AND reference_id = ?', 'competition', COMP)).toBe(1);
+        expect(await scalar('SELECT COUNT(*) FROM reports WHERE target_type = ? AND target_id = ?', 'competition', COMP)).toBe(1);
+        // SET NULL relations are nulled by the DB, rows kept.
+        expect(await scalar('SELECT competition_id FROM donations WHERE user_id = ?', REQUESTER)).toBeNull();
+        expect(await scalar('SELECT current_competition_id FROM users WHERE id = ?', CREATOR)).toBeNull();
+    });
+
+    it('injected batch failure ⇒ 500 with NOTHING partially deleted', async () => {
+        seedBase();
+        insertCompetition(COMP);
+        db.exec(`
+            INSERT INTO competition_requests (competition_id, requester_id, status, created_at)
+                VALUES (${COMP}, ${REQUESTER}, 'pending', datetime('now'));
+            INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, status, created_at)
+                VALUES (${COMP}, ${CREATOR}, ${INVITEE}, 'pending', datetime('now'));
+        `);
+        const batchSpy = vi.spyOn(db, 'batch').mockRejectedValueOnce(new Error('r4n-boom'));
+        const del = await call('DELETE', `/api/competitions/${COMP}`, CREATOR_SESSION);
+        expect(del.status).toBe(500);
+        batchSpy.mockRestore();
+
+        expect(await count('competitions')).toBe(1);
+        expect(await count('competition_requests')).toBe(1);
+        expect(await count('competition_invitations')).toBe(1);
+    });
+
+    it('batch rollback semantics: a mid-batch failure undoes earlier statements', async () => {
+        seedBase();
+        insertCompetition(COMP);
+        db.exec(`
+            INSERT INTO competition_requests (competition_id, requester_id, status, created_at)
+                VALUES (${COMP}, ${REQUESTER}, 'pending', datetime('now'));
+        `);
+        await expect(
+            db.batch([
+                db.prepare('DELETE FROM competition_requests WHERE competition_id = ?').bind(COMP),
+                db.prepare('DELETE FROM no_such_table_xyz WHERE id = ?').bind(1),
+            ])
+        ).rejects.toThrow();
+        // The first DELETE was rolled back with the failed batch.
+        expect(await count('competition_requests')).toBe(1);
     });
 });
 
