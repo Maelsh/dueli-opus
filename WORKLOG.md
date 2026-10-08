@@ -1,3 +1,11 @@
+## 2026-10-08 — RELEASE COLLECTOR HOTFIX for Deploy #37771438709 (branch fix/release-collector-indexes, from 30baed3 = origin/main)
+
+- **FORENSIC (deploy log, CONFIRMED)**: البوابة رفضت إنتاجاً سليماً على الستة ‏0039 فقط (‏`missing index` ×6 ولا فشل آخر). الجامع (`deploy.yml:156`) حصر اللقطة بـ‏`tbl_name IN (required_schema.tables)` وجداول ‏0039 الخمسة خارجها — نفس عائلة ‏#458 بشكل جديد (القائمة المشتقة تتعفن أيضاً).
+- **IMPLEMENTED (minimal)**: اللقطة بلا قيد ‏`SELECT name FROM sqlite_master WHERE type='index'` (الفاحص مطابقة subset فالزائد آمن والناقص ‏FAIL مغلق — ‏fail-closed بلا مساس) + تعليق يوثق ‏#458/#37771438709. بلا إعادة تطبيق ‏0039/‏H7/‏SearchModel/readiness.
+- **Tests**: جديد ‏release-collector ‏5/5 (نص الاستعلام المستخرج من ‏deploy بلا ‏tbl_name؛ فرضية الفخ؛ الستة ظاهرة على الترحيلات الحقيقية؛ الصيغة القديمة تفقد الستة بالضبط — ‏bug reproduced؛ المسقط يُفقد ‏FAIL لاحقاً) + ‏deploy-workflow ‏9/9 (المثبت حُدّث للحظر بدل الاشتقاق). ‏RED مثبت: ‏4 تفشل على الجامع القديم. ‏tsc ✅؛ ‏build ✅ (‏churn رُجع). بلا إعادة اختبار مراحل مغلقة.
+- **State**: LOCAL VERIFIED / awaiting REMOTE. Not DONE/DEPLOYED.
+- **ROLLBACK (G8)**: revert الفرع (سطر جامع + مثبت + ملف اختبار؛ لا migration/بيانات).
+
 ## 2026-10-08 — 0039 PRODUCTION APPLY (owner §9) + PR104 rebase onto 9cbb93c (branch feat/r4-db-opt-1)
 
 - **GATES (PR103 post-merge, verified before any write)**: ‏PR103 MERGED ‏9cbb93c (+ دمج القائد)؛ ‏Quality Gate ‏run 37760838270 ‏success + ‏Deploy ‏run 37760838240 ‏success على ‏merge SHA نفسه — الشرط (§1) أخضر فمُضي قُدماً.

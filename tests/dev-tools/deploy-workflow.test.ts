@@ -85,20 +85,24 @@ describe('deploy workflow release wiring', () => {
         expect(GATE).not.toContain('migrations apply');
     });
 
-    it('readiness index snapshot derives its tables from the manifest (no hardcoded list)', () => {
+    it('readiness index snapshot is unrestricted (no tbl_name filter that rots)', () => {
         // Deploy #458 root cause: the sqlite_master snapshot hardcoded
         // ('explore_result_sessions','explore_result_chunks'), so the existing
         // idx_competition_views_day never reached the checker and the gate
-        // failed a healthy production. The table list must be derived from the
-        // same manifest the column loop uses — never a literal that rots on
-        // the next baseline bump.
+        // failed a healthy production. The first fix derived the table list
+        // from the manifest — and Deploy #37771438709 proved THAT rots too:
+        // baseline-0039 put all six indexes on tables outside
+        // required_schema.tables, so the gate failed a healthy production
+        // again. The snapshot must list every index with no tbl_name filter;
+        // the checker does subset matching, so extra names are harmless but
+        // a missing one fails closed.
         const snapshotLines = DEPLOY.split('\n').filter((l) => l.includes('sqlite_master'));
         expect(snapshotLines.length).toBeGreaterThan(0);
         for (const line of snapshotLines) {
-            expect(line).not.toMatch(/IN \('[^']+','[^']*'\)/);
-            expect(line).toContain('INDEX_TABLES');
+            expect(line).toContain("type='index'");
+            expect(line).not.toContain('tbl_name');
         }
-        expect(DEPLOY).toContain('required_schema.tables');
+        expect(DEPLOY).not.toContain('INDEX_TABLES');
     });
 
     it('quality gate still runs the AST SEC-06 checker', () => {
