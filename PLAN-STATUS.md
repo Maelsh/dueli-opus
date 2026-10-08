@@ -1,10 +1,20 @@
-## R4-DB-OPT-1 smallest proven D1 read reduction · فرع feat/r4-db-opt-1 (من 2e3d368 = origin/main)
+## R4-DB-OPT-1 smallest proven D1 read reduction · فرع feat/r4-db-opt-1 (محدَّث على main ‏9cbb93c بعد دمج ‏PR103)
 
-- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/فوترة/حمل إنتاجي (routes ‏236←236؛ manifest البوابة يبقى ‏baseline-0038 لأن ‏0039 غير مُصدَرة). PR #103 وملفا ‏ELO المتسخان لم يُمسا.
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار re-REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر ذاتي/فوترة/حمل إنتاجي (‏routes بلا تغيير؛ ‏manifest ‏baseline-0039؛ ‏0039 مطبَّقة إنتاجياً بتفويض المالك §9 ومثبتة أدناه). PR #103 مدموجة ومحفوظة أدناه؛ ملفا ‏ELO المتسخان لم يُمسا.
 - نفّذ: (‏S1) حذف قراءتي ‏Profile الزائدتين في ‏SearchModel (نفس الخريطة/القيم — ‏H7-v1 والمشاركة والحجب والعزل والترتيب والنفاد و‏≤100 binds محفوظة)؛ (‏S2) ترحيل ‏0039 (‏6 فهارس فقط، ‏IF NOT EXISTS، بلا حذف) ضمن ‏PR بلا تطبيق إنتاجي (‏owner-gated)؛ (‏S3) إثبات التعطل: محاولة واحدة + ‏500 عامة بلا تسريب على المسار الملموس (‏B13 قائم للبقية).
 - **الأدلة**: T جديد ‏r4-db-opt-1 ‏14/14 (‏RED ‏12/18 قبل الإصلاح؛ ‏EXPLAIN السبع بلا ‏SCAN بعد ‏0039؛ ‏T0 ‏13 مقابل continuation ‏5 عبارات — عدّ محلي، لا يدَّعى ‏rowsRead إنتاجي)؛ الجيران ‏126/126؛ الكاملة ‏1401 + نفس ‏16 البيئية المسبقة؛ ‏schema-contract ‏24/24 عبر ‏Wrangler؛ ‏tsc ✅؛ ‏build ✅؛ ‏any ‏+0.
 - **REM1 (Codex-P1، نفس الفرع)**: سُجّلت ‏0039 في ‏manifest (‏baseline-0039 + ‏sha256 + ‏6 فهارس + ‏known_history) + ‏readiness ‏24←27 (تثبيت ‏0039 + ‏FAILان مغلقان جديدان). ‏27/27 مثبتة على بايتات ‏LF (حالة ‏CI)؛ محلياً ‏15 ✅ والباقي انحراف ‏CRLF موثق. بلا تطبيق إنتاجي.
-- **المتبقي (blockers فقط)**: re-REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. تطبيق ‏0039 إنتاجياً يبقى ‏owner-gated قبل الدمج (§9: ‏target/hash/baseline إثبات قبلي، ‏0039 وحدها ‏pending وإلا ‏STOP). أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+- **المتبقي (blockers فقط)**: re-REMOTE مستقلة على ‏HEAD الجديد ← دمج القائد بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. ‏0039 مطبَّقة إنتاجياً ومثبتة (سجل ‏d1_migrations ‏40، ‏pending فارغ، ‏indexes ‏107←113، ‏users/competitions/tables بلا تغيير) — لا تطبيق ثانٍ. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+- **PROD-APPLY (owner §9، تم)**: ‏PR103 ‏post-merge أخضر (‏Quality ‏37760838270 + ‏Deploy ‏37760838240 على ‏9cbb93c) قبل أي كتابة؛ ‏precheck (سجل ‏39/39 + ‏pending ‏0039 وحدها + ‏SHA256 مطابق)؛ ‏apply ‏0039 وحدها ‏✅؛ ‏postcheck ‏read-only أخضر. التفاصيل في ‏WORKLOG.
+## R4 centralized <title> escaping · فرع feat/r4-title-escaping (من 2e3d368 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر/كتابة إنتاجية/ترحيل/مسارات جديدة (routes ‏236←236). كل المغلق (R3-C3 وما قبلها + ‏D1 bind #100) لم يُمس.
+- forensic: ‏ALREADY DONE (رحلات DEPLOYED ببوابات ما بعد الدمج؛ أجسام ‏docs مهربة عند العرض؛ ‏i18n بلا كيانات)؛ الفجوة الحقيقية (1): ‏generateHTML كان يحقن ‏title الخام في ‏<title> وتصله عناوين يتحكم بها المستخدم (عنوان المنافسة/الاسم المعروض/‏username/عناوين الوثائق) — قابلية كسر ‏‎</title>‎ مثبتة. ليست فجوة: ترقيم ‏‎/docs‎ (النموذج يدعم ‏limit/offset والفهرس ~6 صفوف — يبقى non-blocking).
+- نفّذ: تهريب مركزي واحد في ‏generateHTML عبر ‏Sanitize.escapeHtml (المنادون يمررون خاماً كما قبل — بلا تهريب مزدوج)؛ أسطر ‏‎<title>‎ الثابتة (‏oauth/static/email) لم تُمس.
+- **الأدلة**: T جديد ‏r4-title-escaping ‏4/4 (‏RED ‏4/4 بلا الإصلاح) + الجيران (‏csp/object-title/docs ‏27/27)؛ ‏tsc ✅؛ ‏build ✅؛ ‏any ‏283 = ‏BASE (‏+0، السقف ‏310).
+- **REM1 (Codex-P2، نفس الفرع)**: عناوين المنافسات مهرّبة-مخزنة (‏T1.4) فالتهريب المركزي كان يضاعفها (‏RED مثبت ‏`A&amp;amp;B` عبر ‏create→DB→live-room) — فك ترميز واحد عند حد ‏live-room فقط (‏unescapeHtml المعكوس الدقيق) والتهريب المركزي يبقى وحيداً (‏XSS مغلق). T ‏4←8 (‏A&B + ‏‎<tag>‎ + ‏‎</title><script>‎ عبر المسار الحقيقي + ‏round-trip)؛ الجيران ‏43/43؛ ‏tsc/build ✅؛ ‏any ‏+0. المصارف الأخرى مثبتة السليمة (‏profile/docs/i18n).
+- **المتبقي (blockers فقط)**: re-REMOTE مستقلة ← دمج بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+- **POST-MERGE (مدموجة ‏9cbb93c)**: ‏PR103 ‏MERGED والقائد أكمل البوابات؛ هذا القسم أرشيف للفرع المدموج — لا re-REMOTE عليه.
 
 ## R3-C3 synthetic-retirement future design · فرع feat/r3-c3-retirement-design (من 88461f6a = origin/main)
 

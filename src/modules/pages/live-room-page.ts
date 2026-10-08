@@ -10,6 +10,7 @@ import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
+import { Sanitize } from '../../lib/services/Sanitize';
 
 /**
  * Live Room Page Handler
@@ -1111,7 +1112,17 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
         ` : ''}
     `;
 
-    return c.html(generateHTML(content, lang, competition?.title || 'Live Room', (c.get('cspNonce') as string) ?? ''));
+    // R4-REM1 (Codex P2): competition titles are store-escaped at write
+    // (Sanitize.cleanTitle in CompetitionController.create — the T1.4
+    // stored-XSS architecture every other sink relies on), while
+    // generateHTML escapes centrally at render. Passing the stored value
+    // straight through would double-escape (A&B showing as A&amp;B), so the
+    // boundary decodes exactly once here; the central escape stays the
+    // single neutralization point (XSS stays closed). No other caller passes
+    // store-escaped text (profile passes raw username/display_name, docs
+    // pass raw admin titles, the rest pass fixed i18n strings).
+    const roomTitle = competition?.title ? Sanitize.unescapeHtml(competition.title) : 'Live Room';
+    return c.html(generateHTML(content, lang, roomTitle, (c.get('cspNonce') as string) ?? ''));
 };
 
 export default liveRoomPage;

@@ -22,6 +22,25 @@ export class Sanitize {
     }
 
     /**
+     * Exact inverse of escapeHtml (reverse order, &amp; decoded LAST).
+     *
+     * Boundary use ONLY: decoding a value that escapeHtml/cleanTitle
+     * produced, immediately before a sink that escapes again (e.g. the
+     * live-room <title>, where generateHTML escapes centrally). Never apply
+     * to untrusted raw input — that would un-neutralize an attack string.
+     * unescapeHtml(escapeHtml(x)) === x for every x.
+     */
+    static unescapeHtml(input: string | undefined | null): string {
+        if (!input) return '';
+        return String(input)
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/g, '"')
+            .replace(/&gt;/g, '>')
+            .replace(/&lt;/g, '<')
+            .replace(/&amp;/g, '&');
+    }
+
+    /**
      * Escape then trim — the standard treatment for user text fields
      */
     static cleanText(input: string | undefined | null): string {
