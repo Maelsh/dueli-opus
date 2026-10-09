@@ -1,3 +1,10 @@
+## R4-LIVE-INT-1 signaling integration recovery · فرع feat/r4-live-int-1-signaling-recovery (من 375bd18 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل، بانتظار REMOTE والدمج وبوابات ما بعد الدمج — ليست DONE. بلا دمج/نشر ذاتي/كتابة إنتاجية/ترحيل/تغيير عقد خادم (3 ملفات معدلة + ملف اختبار واحد فقط). H7 والمراحل المغلقة وCOMP-UNIFIED-1 لم تُمس.
+- نفّذ: نقل عميل الإنتاج (`P2PConnection` المجمّعة + `live-room-page`) من العقد الميت (`room_id` + `room/join` + `signal` + `room/leave` + `room/:id/status` → 404) إلى العقد الحالي (`competition_id` + `offer/answer/ice/poll` + `session join/leave` + `reconnect` المحدود + `ice-servers` بمصادقة Bearer) — نفس عقد `SignalingManager` الصحيح في صفحات الاختبار (مرجع بلا نسخ، وصفحات الاختبار والتشخيص بلا مساس). إصلاح `room/create` بمصادقة المضيف، و`session/leave` عند الإنهاء، ومراقب خصم قابل لإعادة التسليح بعد الاستئناف المحدود. الانقطاع/التحديث يستأنفان نفس الجلسة؛ `started_at` والمقاطع والمنافسة بلا مساس (الإنهاء قرار خادم فقط).
+- **الأدلة**: T جديد `live-signaling-integration` ‏12/12 (مسار سعيد + مصفوفة أدوار + انتحال + ‏401/403/409 + انحدار العقد القديم ‏404 + عقد المصدر + تطابق حدود إعادة الاتصال مع ‏SSOT)؛ ‏RED ‏4 على كود ‏BASE (عقد المصدر)؛ الجيران (إشارات/غرفة) خضراء؛ الكاملة ‏1453 + نفس ‏18 البيئية المسبقة المثبتة على ‏BASE؛ ‏tsc ✅؛ ‏build ✅؛ ‏any ‏+0 (السقف ‏310). الوسائط: ‏BLOCKED DEVICE (بلا ‏PASS وهمي)؛ استقبال الجمهور/VOD خارج هذه الوحدة (‏CHUNK-PLAY-1).
+- **المتبقي (blockers فقط)**: مراجعة REMOTE مستقلة ← دمج القائد بـexpected_head_sha ← انتظار Quality Gate على merge-commit ← ثم إعلان الحالة. أي فشل هناك = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-EVENTS-NOTIFY-1 REMEDIATION (P1 cascade/atomicity + P2 spinner/mid-GET) · نفس فرع PR106 (من 557604a)
 
 - 🔧 تنفيذ LOCAL مكتمل (‏P1+P2)، بانتظار re-REMOTE على ‏PR106 — ليست DONE. بلا ‏PR جديد/دمج/نشر/كتابة إنتاجية/ترحيل (4 ملفات معدلة فقط، بلا ملفات جديدة). R1/R2/R3/H7 مغلقة ولم تُمس.

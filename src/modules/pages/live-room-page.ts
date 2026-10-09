@@ -452,15 +452,17 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const roomId = 'comp_' + competitionId;
                 log('Starting competitor mode. Room: ' + roomId + ', Role: ' + userRole, 'info');
                 
-                // Create room if host
+                // Create room if host (platform gate: host-only, session Bearer auth)
                 if (userRole === 'host') {
                     log('Creating signaling room...', 'info');
                     const createRes = await fetch('/api/signaling/room/create', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
+                        },
                         body: JSON.stringify({
-                            competition_id: competitionId,
-                            user_id: window.currentUser.id
+                            competition_id: competitionId
                         })
                     });
                     const createData = await createRes.json();
@@ -493,6 +495,15 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     onError: (error) => {
                         log('P2P Error: ' + error.message, 'error');
                         showMessage(error.message, 'error');
+                    },
+                    // Bounded session recovery landed in P2PConnection: after
+                    // it re-announces presence, the host re-offers when the
+                    // opponent is present (existing offer flow, no rebuild).
+                    onReconnectNeeded: () => {
+                        if (userRole === 'host') {
+                            log('Session resumed — watching for opponent to re-offer...', 'info');
+                            watchForOpponent();
+                        }
                     }
                 });
                 
@@ -541,14 +552,19 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 }
             }
             
-            // Watch for opponent to join (host only)
+            // Watch for opponent to join (host only; restartable so a bounded
+            // session reconnect can re-arm the offer without rebuilding P2P)
+            let opponentWatcher = null;
             function watchForOpponent() {
-                const interval = setInterval(async () => {
+                if (opponentWatcher) clearInterval(opponentWatcher);
+                opponentWatcher = setInterval(async () => {
+                    if (!p2p) return;
                     const status = await p2p.getRoomStatus();
                     if (status && status.opponent_joined && !p2p.isP2PConnected()) {
                         console.log('[LiveRoom] Opponent joined, creating offer');
                         await p2p.createOffer();
-                        clearInterval(interval);
+                        if (opponentWatcher) clearInterval(opponentWatcher);
+                        opponentWatcher = null;
                     }
                 }, 2000);
             }
@@ -959,15 +975,18 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         body: JSON.stringify({ vod_url: vodUrl })
                     });
                     
-                    // Leave signaling room
-                    log('Leaving signaling room...', 'info');
-                    await fetch('/api/signaling/room/leave', {
+                    // Withdraw session presence (platform contract — the session
+                    // lifecycle ends with the competition, never with a host
+                    // interruption, and leave never touches started_at/chunks)
+                    log('Leaving live session...', 'info');
+                    await fetch('/api/signaling/session/leave', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
+                        },
                         body: JSON.stringify({
-                            room_id: 'comp_' + competitionId,
-                            user_id: window.currentUser?.id,
-                            role: userRole
+                            competition_id: Number(competitionId)
                         })
                     });
                     
