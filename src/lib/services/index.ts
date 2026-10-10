@@ -18,6 +18,8 @@ export { RecommendationEngine } from './RecommendationEngine';
 export { SignalingAuthService } from './SignalingAuthService';
 export { SignalingSessionService } from './SignalingSessionService';
 export { SignalingReconnectService } from './SignalingReconnectService';
+// R4-LIVE-INT-1: pure retry policy, single SSOT shared with the browser client.
+export { SignalingReconnectPolicy } from './SignalingReconnectPolicy';
 export { TurnCredentialService, TurnCredentialError, DEFAULT_STUN_SERVERS } from './TurnCredentialService';
 export type { TurnResolution, TurnIceServer, TurnServiceEnv } from './TurnCredentialService';
 export { LedgerService, LedgerError } from './LedgerService';

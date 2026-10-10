@@ -163,13 +163,18 @@ describe('7.A signaling auth + offer/answer/ICE', () => {
     it('real client path uses platform endpoints (no external worker fetch)', async () => {
         const { readFileSync } = await import('node:fs');
         const { join } = await import('node:path');
+        // R4-LIVE-INT-1: ONE signaling implementation lives in the shared
+        // bundle module; the test pages consume it (no inline duplicate).
+        const manager = readFileSync(join(process.cwd(), 'src/client/services/SignalingManager.ts'), 'utf8');
+        expect(manager).not.toMatch(/this\.signalingUrl\s*\+\s*['"`]\/api\/signaling/);
+        expect(manager).toContain('/api/signaling/verify');
+        expect(manager).toContain('/api/signaling/offer');
+        expect(manager).toContain('/api/signaling/answer');
+        expect(manager).toContain('/api/signaling/ice');
+        expect(manager).toContain('/api/signaling/poll');
         const shared = readFileSync(join(process.cwd(), 'src/modules/pages/live/scripts/client/shared.ts'), 'utf8');
-        expect(shared).not.toMatch(/this\.signalingUrl\s*\+\s*['"`]\/api\/signaling/);
-        expect(shared).toContain('/api/signaling/verify');
-        expect(shared).toContain('/api/signaling/offer');
-        expect(shared).toContain('/api/signaling/answer');
-        expect(shared).toContain('/api/signaling/ice');
-        expect(shared).toContain('/api/signaling/poll');
+        expect(shared).not.toMatch(/class SignalingManager/);
+        expect(shared).toContain('window.SignalingManager');
         const host = readFileSync(join(process.cwd(), 'src/modules/pages/live/scripts/client/host.ts'), 'utf8');
         expect(host).not.toMatch(/streamServerUrl\s*\+\s*['"`]\/api\/signaling/);
         expect(host).toContain("fetch('/api/signaling/room/create'");

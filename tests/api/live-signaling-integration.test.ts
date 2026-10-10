@@ -204,24 +204,26 @@ describe('R4-LIVE-INT-1 production signaling integration', () => {
         });
     });
 
-    describe('D. production-client source contract', () => {
+    describe('D. production-client source contract (single implementation)', () => {
+        const manager = readFileSync(join(process.cwd(), 'src/client/services/SignalingManager.ts'), 'utf8');
         const p2p = readFileSync(join(process.cwd(), 'src/client/services/P2PConnection.ts'), 'utf8');
         const room = readFileSync(join(process.cwd(), 'src/modules/pages/live-room-page.ts'), 'utf8');
 
-        it('9. shipped P2PConnection never calls the dead contract', () => {
-            expect(p2p).not.toMatch(/\/api\/signaling\/room\/join/);
-            expect(p2p).not.toMatch(/\/api\/signaling\/signal/);
-            expect(p2p).not.toMatch(/\/api\/signaling\/room\/leave/);
-            expect(p2p).not.toMatch(/\/api\/signaling\/room\//);
-            expect(p2p).not.toMatch(/from_role/);
-            expect(p2p).not.toMatch(/signal_type/);
-            expect(p2p).not.toMatch(/signal_data/);
+        it('9. no shipped client calls the dead contract', () => {
+            for (const src of [manager, p2p]) {
+                expect(src).not.toMatch(/\/api\/signaling\/room\/join/);
+                expect(src).not.toMatch(/\/api\/signaling\/signal/);
+                expect(src).not.toMatch(/\/api\/signaling\/room\/leave/);
+                expect(src).not.toMatch(/\/api\/signaling\/room\//);
+                expect(src).not.toMatch(/from_role/);
+                expect(src).not.toMatch(/signal_type/);
+                expect(src).not.toMatch(/signal_data/);
+            }
         });
 
-        it('10. shipped P2PConnection uses the current contract with Bearer auth', () => {
+        it('10. the shared transport uses the current contract with Bearer auth', () => {
             for (const ep of [
                 '/api/signaling/session/join',
-                '/api/signaling/session/leave',
                 '/api/signaling/offer',
                 '/api/signaling/answer',
                 '/api/signaling/ice',
@@ -229,12 +231,19 @@ describe('R4-LIVE-INT-1 production signaling integration', () => {
                 '/api/signaling/reconnect',
                 '/api/signaling/ice-servers',
             ]) {
-                expect(p2p, `missing ${ep}`).toContain(ep);
+                expect(manager, `missing ${ep}`).toContain(ep);
             }
-            expect(p2p).toContain('competition_id');
-            expect(p2p).toContain("'Bearer '");
+            // join + leave share one presence path (announcePresence).
+            expect(manager).toContain("'/api/signaling/session/'");
+            expect(manager).toContain("announcePresence('leave')");
+            expect(manager).toContain('competition_id');
+            expect(manager).toContain("'Bearer '");
             // No secret in the URL: no fetch() builds a query string carrying a token.
-            expect(p2p).not.toMatch(/fetch\([^;]*\?(.*&)?token=/);
+            expect(manager).not.toMatch(/fetchJsonWithTimeout\([^;]*\?(.*&)?token=/);
+            expect(manager).not.toMatch(/\?(.*&)?token=/);
+            // The production adapter reaches the platform ONLY through the
+            // shared transport — it never reimplements endpoints.
+            expect(p2p).toContain('SignalingManager');
         });
 
         it('11. production live room page uses session leave + authed room/create', () => {
@@ -248,10 +257,14 @@ describe('R4-LIVE-INT-1 production signaling integration', () => {
             expect(createCall![0]).toMatch(/Authorization/);
         });
 
-        it('12. client reconnect bounds match the server SSOT policy', () => {
+        it('12. retry bounds are a single SSOT shared by server and browser', () => {
             expect(new SignalingReconnectPolicy().schedule()).toEqual([1000, 2000, 4000, 8000, 15000]);
-            expect(p2p).toMatch(/attempt <= 5/);
-            expect(p2p).toContain('15000');
+            // The browser module imports the SAME policy file as the server —
+            // no baked/embedded copy of the bounds anywhere near the client.
+            expect(manager).toContain("from '../../lib/services/SignalingReconnectPolicy'");
+            const shared = readFileSync(join(process.cwd(), 'src/modules/pages/live/scripts/client/shared.ts'), 'utf8');
+            expect(shared).not.toMatch(/RECONNECT_POLICY_JSON/);
+            expect(shared).not.toMatch(/class SignalingManager/);
         });
     });
 });

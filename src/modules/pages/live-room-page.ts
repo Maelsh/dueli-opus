@@ -451,22 +451,50 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function initCompetitorMode() {
                 const roomId = 'comp_' + competitionId;
                 log('Starting competitor mode. Room: ' + roomId + ', Role: ' + userRole, 'info');
-                
+
+                // Bounded retry for transient signaling failures (5xx/hangs —
+                // the client fails them fast via timeouts). Auth/eligibility
+                // rejections resolve false immediately and simply exhaust the
+                // loop; attempts and backoff stay capped (5, max 8s).
+                async function withSignalingRetry(label, fn) {
+                    for (let attempt = 1; attempt <= 5; attempt++) {
+                        try {
+                            const res = await fn();
+                            if (res !== false && res !== null && res !== undefined) return res;
+                        } catch (err) {
+                            log(label + ' attempt ' + attempt + ' failed: ' + (err && err.message ? err.message : err), 'error');
+                        }
+                        if (attempt < 5) {
+                            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+                            log(label + ': retrying in ' + delay + 'ms...', 'info');
+                            await new Promise(function(r) { setTimeout(r, delay); });
+                        }
+                    }
+                    return false;
+                }
+
                 // Create room if host (platform gate: host-only, session Bearer auth)
                 if (userRole === 'host') {
                     log('Creating signaling room...', 'info');
-                    const createRes = await fetch('/api/signaling/room/create', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
-                        },
-                        body: JSON.stringify({
-                            competition_id: competitionId
-                        })
+                    const created = await withSignalingRetry('room/create', async () => {
+                        const createRes = await fetch('/api/signaling/room/create', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
+                            },
+                            body: JSON.stringify({
+                                competition_id: competitionId
+                            })
+                        });
+                        const createData = await createRes.json().catch(function() { return null; });
+                        log('Room create response: ' + JSON.stringify(createData), createRes.ok && createData && createData.success ? 'success' : 'error');
+                        return createRes.ok && createData && createData.success ? createData : false;
                     });
-                    const createData = await createRes.json();
-                    log('Room create response: ' + JSON.stringify(createData), createRes.ok ? 'success' : 'error');
+                    if (created === false) {
+                        showMessage('Failed to create signaling room. Please reload and retry.', 'error');
+                        return;
+                    }
                 }
                 
                 // Initialize P2P connection
@@ -510,7 +538,11 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('Calling p2p.initialize()...', 'info');
                 await p2p.initialize();
                 log('P2P initialized. Joining room...', 'info');
-                await p2p.joinRoom();
+                const joined = await withSignalingRetry('session/join', function() { return p2p.joinRoom(); });
+                if (joined === false) {
+                    showMessage('Failed to join the live session. Please reload and retry.', 'error');
+                    return;
+                }
                 log('Joined room successfully', 'success');
                 
                 // Get local media
