@@ -451,20 +451,50 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function initCompetitorMode() {
                 const roomId = 'comp_' + competitionId;
                 log('Starting competitor mode. Room: ' + roomId + ', Role: ' + userRole, 'info');
-                
-                // Create room if host
+
+                // Bounded retry for transient signaling failures (5xx/hangs —
+                // the client fails them fast via timeouts). Auth/eligibility
+                // rejections resolve false immediately and simply exhaust the
+                // loop; attempts and backoff stay capped (5, max 8s).
+                async function withSignalingRetry(label, fn) {
+                    for (let attempt = 1; attempt <= 5; attempt++) {
+                        try {
+                            const res = await fn();
+                            if (res !== false && res !== null && res !== undefined) return res;
+                        } catch (err) {
+                            log(label + ' attempt ' + attempt + ' failed: ' + (err && err.message ? err.message : err), 'error');
+                        }
+                        if (attempt < 5) {
+                            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+                            log(label + ': retrying in ' + delay + 'ms...', 'info');
+                            await new Promise(function(r) { setTimeout(r, delay); });
+                        }
+                    }
+                    return false;
+                }
+
+                // Create room if host (platform gate: host-only, session Bearer auth)
                 if (userRole === 'host') {
                     log('Creating signaling room...', 'info');
-                    const createRes = await fetch('/api/signaling/room/create', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            competition_id: competitionId,
-                            user_id: window.currentUser.id
-                        })
+                    const created = await withSignalingRetry('room/create', async () => {
+                        const createRes = await fetch('/api/signaling/room/create', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
+                            },
+                            body: JSON.stringify({
+                                competition_id: competitionId
+                            })
+                        });
+                        const createData = await createRes.json().catch(function() { return null; });
+                        log('Room create response: ' + JSON.stringify(createData), createRes.ok && createData && createData.success ? 'success' : 'error');
+                        return createRes.ok && createData && createData.success ? createData : false;
                     });
-                    const createData = await createRes.json();
-                    log('Room create response: ' + JSON.stringify(createData), createRes.ok ? 'success' : 'error');
+                    if (created === false) {
+                        showMessage(tr.live_signaling.room_create_failed, 'error');
+                        return;
+                    }
                 }
                 
                 // Initialize P2P connection
@@ -493,13 +523,26 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     onError: (error) => {
                         log('P2P Error: ' + error.message, 'error');
                         showMessage(error.message, 'error');
+                    },
+                    // Bounded session recovery landed in P2PConnection: after
+                    // it re-announces presence, the host re-offers when the
+                    // opponent is present (existing offer flow, no rebuild).
+                    onReconnectNeeded: () => {
+                        if (userRole === 'host') {
+                            log('Session resumed — watching for opponent to re-offer...', 'info');
+                            watchForOpponent();
+                        }
                     }
                 });
                 
                 log('Calling p2p.initialize()...', 'info');
                 await p2p.initialize();
                 log('P2P initialized. Joining room...', 'info');
-                await p2p.joinRoom();
+                const joined = await withSignalingRetry('session/join', function() { return p2p.joinRoom(); });
+                if (joined === false) {
+                    showMessage(tr.live_signaling.session_join_failed, 'error');
+                    return;
+                }
                 log('Joined room successfully', 'success');
                 
                 // Get local media
@@ -541,14 +584,19 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 }
             }
             
-            // Watch for opponent to join (host only)
+            // Watch for opponent to join (host only; restartable so a bounded
+            // session reconnect can re-arm the offer without rebuilding P2P)
+            let opponentWatcher = null;
             function watchForOpponent() {
-                const interval = setInterval(async () => {
+                if (opponentWatcher) clearInterval(opponentWatcher);
+                opponentWatcher = setInterval(async () => {
+                    if (!p2p) return;
                     const status = await p2p.getRoomStatus();
                     if (status && status.opponent_joined && !p2p.isP2PConnected()) {
                         console.log('[LiveRoom] Opponent joined, creating offer');
                         await p2p.createOffer();
-                        clearInterval(interval);
+                        if (opponentWatcher) clearInterval(opponentWatcher);
+                        opponentWatcher = null;
                     }
                 }, 2000);
             }
@@ -959,15 +1007,18 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         body: JSON.stringify({ vod_url: vodUrl })
                     });
                     
-                    // Leave signaling room
-                    log('Leaving signaling room...', 'info');
-                    await fetch('/api/signaling/room/leave', {
+                    // Withdraw session presence (platform contract — the session
+                    // lifecycle ends with the competition, never with a host
+                    // interruption, and leave never touches started_at/chunks)
+                    log('Leaving live session...', 'info');
+                    await fetch('/api/signaling/session/leave', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
+                        },
                         body: JSON.stringify({
-                            room_id: 'comp_' + competitionId,
-                            user_id: window.currentUser?.id,
-                            role: userRole
+                            competition_id: Number(competitionId)
                         })
                     });
                     

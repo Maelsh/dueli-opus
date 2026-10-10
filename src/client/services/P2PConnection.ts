@@ -1,20 +1,44 @@
 /**
- * P2P Connection Service
+ * P2P Connection Service (production live room adapter)
  * خدمة اتصال نظير لنظير
- * 
+ *
  * Handles WebRTC P2P connection between host and opponent
  * يتعامل مع اتصال WebRTC بين المضيف والخصم
+ *
+ * R4-LIVE-INT-1: this class is a THIN adapter. All signaling transport
+ * (session verify/join, offer/answer/ice/request-offer, poll/viewer-poll,
+ * 15s heartbeat, bounded reconnect, self/role filtering) lives in the ONE
+ * shared implementation, src/client/services/SignalingManager.ts — the
+ * faithful extraction of the proven live-test-pages client. This adapter
+ * owns only the RTCPeerConnection lifecycle and local/remote media tracks,
+ * exactly like the proven test host/guest flows do at page level.
+ *
+ * The legacy room contract (room_id + room/join + signal + room/leave +
+ * room/:id/status) no longer exists server-side (404) and must never be
+ * reintroduced here — no aliases, no fallback to it.
  */
+
+import {
+    SignalingManager,
+    fetchPlatformIceServers,
+    fetchJsonWithTimeout,
+    type SignalWhen,
+} from './SignalingManager';
 
 export type SignalingRole = 'host' | 'opponent' | 'viewer';
 
 export interface P2PConnectionConfig {
+    /** Legacy 'comp_<id>' room label — kept for callers; the competition id is derived from it. */
     roomId: string;
+    /** Preferred: explicit competition id (takes precedence over roomId parsing). */
+    competitionId?: number | string;
     role: SignalingRole;
     userId: number;
     onRemoteStream?: (stream: MediaStream) => void;
     onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
     onError?: (error: Error) => void;
+    /** Fired after a bounded session reconnect succeeds (e.g. host re-offers). */
+    onReconnectNeeded?: () => void;
 }
 
 export interface RoomStatus {
@@ -23,25 +47,16 @@ export interface RoomStatus {
     viewer_count: number;
 }
 
-// API Response types
-interface ApiResponse<T = unknown> {
-    success: boolean;
-    data?: T;
-    error?: string;
-}
+/** Cap for ICE candidates queued before a remote description exists. */
+const MAX_PENDING_ICE = 100;
 
-interface IceServersData {
-    iceServers: RTCIceServer[];
-}
-
-interface PollData {
-    signals: Array<{ type: string; data: unknown }>;
-    room_status: RoomStatus;
+interface PendingIce {
+    generation: number;
+    candidate: RTCIceCandidateInit;
 }
 
 /**
- * Conditional debug logger (same pattern as
- * src/modules/pages/live/scripts/client/shared.ts:42).
+ * Conditional debug logger (same pattern as the shared signaling manager).
  * Enable in devtools: localStorage.setItem('dueli_debug', '1').
  * console.error stays for real errors; everything else goes through here
  * so production consoles stay clean.
@@ -59,45 +74,68 @@ export class P2PConnection {
     private pc: RTCPeerConnection | null = null;
     private localStream: MediaStream | null = null;
     private remoteStream: MediaStream | null = null;
-    private pollingInterval: number | null = null;
     private isConnected: boolean = false;
     private iceServers: RTCIceServer[] = [];
+    /** Numeric competition id — the only session key the platform understands. */
+    private competitionId: number;
+    /** Shared transport (the single signaling implementation). */
+    private signaling: SignalingManager | null = null;
+    /** B2: ICE candidates that arrived before a remote description existed. */
+    private pendingIce: PendingIce[] = [];
+    private hasRemoteDescription = false;
+    /**
+     * Bumped on every initialize()/disconnect() so queued candidates can
+     * never leak across sessions or connection attempts.
+     */
+    private sessionGeneration = 0;
 
     constructor(config: P2PConnectionConfig) {
         this.config = config;
+        const fromRoom = Number(String(config.roomId).replace('comp_', ''));
+        const explicit = Number(config.competitionId);
+        this.competitionId = Number.isFinite(explicit) && explicit > 0 ? explicit
+            : Number.isFinite(fromRoom) && fromRoom > 0 ? fromRoom : NaN;
     }
 
     /**
-     * Initialize the connection
+     * Session token for Bearer auth (never ?token=, SEC-11).
+     * Reads the canonical session id exposed by app.js (window.sessionId).
+     */
+    private sessionToken(): string | null {
+        try {
+            // window.sessionId is declared on Window by src/client/index.ts.
+            const sess = (typeof window !== 'undefined' && window.sessionId)
+                || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId'));
+            return sess || null;
+        } catch {
+            return null;
+        }
+    }
+
+    private authHeaders(): Record<string, string> {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        const sess = this.sessionToken();
+        if (sess) headers['Authorization'] = 'Bearer ' + sess;
+        return headers;
+    }
+
+    /**
+     * Initialize the connection (ICE + peer connection; signaling transport
+     * starts on joinRoom, mirroring the proven test flows).
      */
     async initialize(): Promise<void> {
-        // Get ICE servers from signaling server
-        await this.fetchIceServers();
+        // New connection attempt: fresh ICE generation so no candidate from a
+        // previous attempt can ever be applied to this peer connection.
+        this.sessionGeneration++;
+        this.pendingIce = [];
+        this.hasRemoteDescription = false;
+
+        // Authenticated ICE (short-lived per-session TURN, STUN fallback).
+        const ice = await fetchPlatformIceServers(this.sessionToken());
+        this.iceServers = ice.iceServers;
 
         // Create peer connection
         this.createPeerConnection();
-
-        // Start polling for signals
-        this.startPolling();
-    }
-
-    /**
-     * Fetch ICE servers from signaling server
-     */
-    private async fetchIceServers(): Promise<void> {
-        try {
-            const response = await fetch('/api/signaling/ice-servers');
-            const result: ApiResponse<IceServersData> = await response.json();
-            if (result.success && result.data) {
-                this.iceServers = result.data.iceServers;
-            }
-        } catch (error) {
-            debugLog('Failed to fetch ICE servers, using defaults');
-            this.iceServers = [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ];
-        }
     }
 
     /**
@@ -111,7 +149,7 @@ export class P2PConnection {
         // Handle ICE candidates
         this.pc.onicecandidate = (event) => {
             if (event.candidate) {
-                this.sendSignal('ice-candidate', event.candidate);
+                void this.sendSignal('ice', event.candidate);
             }
         };
 
@@ -131,31 +169,56 @@ export class P2PConnection {
 
             if (state === 'failed' || state === 'disconnected') {
                 this.config.onError?.(new Error(`Connection ${state}`));
+                // Bounded session recovery lives in the shared transport:
+                // 'disconnected' → one controlled ICE restart (re-offer or a
+                // fresh request, per role); 'failed'/'closed' → bounded
+                // signaling reconnect. No unbounded retry here.
+                void this.signaling?.handlePeerState(state);
             }
         };
     }
 
     /**
-     * Join the signaling room
+     * Join the live session through the shared transport (verify + presence
+     * join + poll + heartbeat, all with server-derived role/peer).
+     * Idempotent: re-joining after a refresh/reconnect resumes the same
+     * session and re-arms a single heartbeat (never doubled).
      */
     async joinRoom(): Promise<boolean> {
-        try {
-            const response = await fetch('/api/signaling/room/join', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    room_id: this.config.roomId,
-                    user_id: this.config.userId,
-                    role: this.config.role
-                })
-            });
-
-            const result: ApiResponse = await response.json();
-            return result.success === true;
-        } catch (error) {
-            console.error('Failed to join room:', error);
-            return false;
+        if (this.signaling) {
+            try { await this.signaling.disconnect(); } catch { /* best effort */ }
+            this.signaling = null;
         }
+        const manager = new SignalingManager({
+            roomId: this.config.roomId,
+            role: this.config.role,
+            token: this.sessionToken(),
+            mode: this.config.role === 'viewer' ? 'viewer' : 'participant',
+            logger: (msg, type = 'info') => debugLog('[signaling]', type, msg),
+            onSignal: (data) => this.handleIncoming(data),
+            onError: (error) => this.config.onError?.(error),
+            onIceRestartNeeded: () => {
+                // Proven recovery mapping: the host re-offers (no rebuild);
+                // guest/viewer ask the host for a fresh offer instead —
+                // answering is driven by offers, and a guest can never offer.
+                if (manager.effectiveRole() === 'host') {
+                    void this.createOffer();
+                } else {
+                    void manager.requestOffer();
+                }
+            },
+            onRecovered: () => {
+                try { this.config.onReconnectNeeded?.(); } catch { /* hook must never break recovery */ }
+            },
+            onReconnectFailed: (info) => {
+                const reason = info && typeof info === 'object' && 'reason' in info
+                    ? String((info as { reason: unknown }).reason) : 'reconnect_failed';
+                this.config.onError?.(new Error(`Signaling reconnect failed: ${reason}`));
+            },
+        });
+        this.signaling = manager;
+        await manager.connect();
+        return manager.snapshot().isConnected;
     }
 
     /**
@@ -211,7 +274,8 @@ export class P2PConnection {
     }
 
     /**
-     * Create and send offer (host only)
+     * Create and send offer (host only — the transport drops offers published
+     * by any other role, and the server rejects them).
      */
     async createOffer(): Promise<void> {
         if (!this.pc) return;
@@ -227,13 +291,45 @@ export class P2PConnection {
     }
 
     /**
-     * Handle incoming offer and create answer (opponent only)
+     * Dispatch an incoming platform signal to the RTC layer. Transport-level
+     * filtering (self-echo, role-impossible, peer-scoped) already happened in
+     * the shared manager — this layer applies WebRTC semantics only.
+     */
+    private async handleIncoming(data: SignalWhen): Promise<void> {
+        switch (data.signalType) {
+            case 'offer':
+                await this.handleOffer(data.signalData as RTCSessionDescriptionInit);
+                break;
+            case 'answer':
+                await this.handleAnswer(data.signalData as RTCSessionDescriptionInit);
+                break;
+            case 'ice':
+                await this.handleIceCandidate(data.signalData as RTCIceCandidateInit);
+                break;
+            case 'request_offer':
+                // Late-join hint: the host re-offers without rebuilding the
+                // link (mirrors the proven test host). Non-hosts ignore it.
+                if (this.signaling && this.signaling.effectiveRole() === 'host') {
+                    await this.createOffer();
+                }
+                break;
+        }
+    }
+
+    /**
+     * Handle incoming offer and create answer.
      */
     private async handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
         if (!this.pc) return;
+        const generation = this.sessionGeneration;
 
         try {
             await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
+            if (!this.pc || generation !== this.sessionGeneration) return; // stale attempt
+            this.hasRemoteDescription = true;
+            // Apply queued candidates in arrival order before answering.
+            await this.drainIceQueue(generation);
+            if (!this.pc || generation !== this.sessionGeneration) return; // stale attempt
             const answer = await this.pc.createAnswer();
             await this.pc.setLocalDescription(answer);
             await this.sendSignal('answer', answer);
@@ -244,13 +340,18 @@ export class P2PConnection {
     }
 
     /**
-     * Handle incoming answer (host only)
+     * Handle incoming answer.
      */
     private async handleAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
         if (!this.pc) return;
+        const generation = this.sessionGeneration;
 
         try {
             await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
+            if (!this.pc || generation !== this.sessionGeneration) return; // stale attempt
+            this.hasRemoteDescription = true;
+            // The host may have gathered candidates before the answer.
+            await this.drainIceQueue(generation);
         } catch (error) {
             console.error('Failed to handle answer:', error);
             this.config.onError?.(error as Error);
@@ -258,98 +359,107 @@ export class P2PConnection {
     }
 
     /**
-     * Handle incoming ICE candidate
+     * Drain queued ICE candidates FIFO. Failures are logged with context
+     * and reported once — the drain never aborts early (one bad candidate
+     * must not silently discard the rest) and never crosses a session
+     * generation (stale attempts are dropped, never leaked).
+     */
+    private async drainIceQueue(generation: number): Promise<void> {
+        let failures = 0;
+        while (this.pendingIce.length > 0) {
+            if (!this.pc || generation !== this.sessionGeneration) {
+                this.pendingIce = [];
+                return;
+            }
+            const next = this.pendingIce.shift();
+            if (!next || next.generation !== generation) continue;
+            try {
+                await this.pc.addIceCandidate(new RTCIceCandidate(next.candidate));
+            } catch (error) {
+                failures++;
+                console.error('Failed to add queued ICE candidate:', error);
+            }
+        }
+        if (failures > 0) {
+            this.config.onError?.(new Error(`${failures} queued ICE candidate(s) failed`));
+        }
+    }
+
+    /**
+     * Handle incoming ICE candidate (ordered via the queue until a remote
+     * description exists; never applied without a peer connection).
      */
     private async handleIceCandidate(candidate: RTCIceCandidateInit): Promise<void> {
-        if (!this.pc) return;
+        if (!this.pc) {
+            debugLog('Dropping ICE candidate: no peer connection');
+            return;
+        }
+
+        if (!this.hasRemoteDescription) {
+            if (this.pendingIce.length >= MAX_PENDING_ICE) {
+                this.pendingIce.shift();
+                debugLog('ICE queue full: dropping oldest candidate');
+            }
+            this.pendingIce.push({ generation: this.sessionGeneration, candidate });
+            return;
+        }
 
         try {
             await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
         } catch (error) {
             console.error('Failed to add ICE candidate:', error);
+            this.config.onError?.(error as Error);
         }
     }
 
     /**
-     * Send signal to signaling server
+     * Publish a signal through the shared transport.
      */
-    private async sendSignal(type: string, data: any): Promise<void> {
+    private async sendSignal(type: 'offer' | 'answer' | 'ice' | 'request_offer', data: unknown, target?: string | null): Promise<void> {
         try {
-            await fetch('/api/signaling/signal', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    room_id: this.config.roomId,
-                    from_role: this.config.role,
-                    signal_type: type,
-                    signal_data: data
-                })
-            });
+            await this.signaling?.sendSignal(type, data, target ?? undefined);
         } catch (error) {
             console.error('Failed to send signal:', error);
         }
     }
 
     /**
-     * Start polling for signals
-     */
-    private startPolling(): void {
-        this.pollingInterval = window.setInterval(async () => {
-            await this.pollSignals();
-        }, 1000); // Poll every second
-    }
-
-    /**
-     * Poll for pending signals
-     */
-    private async pollSignals(): Promise<void> {
-        try {
-            const response = await fetch(
-                `/api/signaling/poll?room_id=${this.config.roomId}&role=${this.config.role}`
-            );
-            const result: ApiResponse<PollData> = await response.json();
-
-            if (result.success && result.data?.signals) {
-                for (const signal of result.data.signals) {
-                    await this.handleSignal(signal);
-                }
-            }
-        } catch (error) {
-            console.error('Polling error:', error);
-        }
-    }
-
-    /**
-     * Handle incoming signal
-     */
-    private async handleSignal(signal: { type: string; data: any }): Promise<void> {
-        switch (signal.type) {
-            case 'offer':
-                await this.handleOffer(signal.data);
-                break;
-            case 'answer':
-                await this.handleAnswer(signal.data);
-                break;
-            case 'ice-candidate':
-                await this.handleIceCandidate(signal.data);
-                break;
-        }
-    }
-
-    /**
-     * Check room status
+     * Check session presence (host/guest/viewers) — read-only, derived
+     * server-side from the live session. Keeps the page's existing
+     * host_joined/opponent_joined contract without any room endpoint.
      */
     async getRoomStatus(): Promise<RoomStatus | null> {
         try {
-            const response = await fetch(
-                `/api/signaling/room/${this.config.roomId}/status`
+            const response = await fetchJsonWithTimeout(
+                `/api/signaling/session?competition_id=${this.competitionId}`,
+                { headers: this.authHeaders() }
             );
-            const result: ApiResponse<RoomStatus> = await response.json();
-            return result.success && result.data ? result.data : null;
+            if (!response.ok) return null;
+            const result = (await response.json().catch(() => null)) as {
+                success?: boolean;
+                data?: { presence?: { host?: unknown; guest?: unknown; viewer_count?: unknown } | null } | null;
+            } | null;
+            const presence = result?.data?.presence;
+            if (!result || !result.success || !presence) return null;
+            return {
+                host_joined: !!presence.host,
+                opponent_joined: !!presence.guest,
+                viewer_count: typeof presence.viewer_count === 'number' ? presence.viewer_count : 0
+            };
         } catch (error) {
-            console.error('Failed to get room status:', error);
+            console.error('Failed to get session presence:', error);
             return null;
         }
+    }
+
+    /**
+     * Bounded session recovery through the shared transport (presence
+     * re-announce + single heartbeat + cursor-preserving catch-up poll).
+     */
+    async reconnect(): Promise<boolean> {
+        if (!this.signaling) return false;
+        const state = await this.signaling.reconnectAfterInterruption();
+        return state !== null;
     }
 
     /**
@@ -363,11 +473,19 @@ export class P2PConnection {
      * Disconnect and cleanup
      */
     async disconnect(): Promise<void> {
-        // Stop polling
-        if (this.pollingInterval) {
-            clearInterval(this.pollingInterval);
-            this.pollingInterval = null;
+        // Withdraw presence first so other peers see the session state update.
+        // Platform signals live in the SSE log; the session lifecycle ends
+        // with the competition — never with a host interruption.
+        if (this.signaling) {
+            try { await this.signaling.disconnect(); } catch { /* best effort */ }
+            this.signaling = null;
         }
+
+        // Invalidate any queued candidates — a later session must never
+        // inherit them.
+        this.sessionGeneration++;
+        this.pendingIce = [];
+        this.hasRemoteDescription = false;
 
         // Stop local tracks
         if (this.localStream) {
@@ -379,21 +497,6 @@ export class P2PConnection {
         if (this.pc) {
             this.pc.close();
             this.pc = null;
-        }
-
-        // Leave room
-        try {
-            await fetch('/api/signaling/room/leave', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    room_id: this.config.roomId,
-                    user_id: this.config.userId,
-                    role: this.config.role
-                })
-            });
-        } catch (error) {
-            console.error('Failed to leave room:', error);
         }
 
         this.isConnected = false;

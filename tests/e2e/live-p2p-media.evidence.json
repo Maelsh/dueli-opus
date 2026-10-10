@@ -1,0 +1,52 @@
+{
+  "tag": "livemedia-mv1rg71t",
+  "baseURL": "http://127.0.0.1:4173",
+  "startedAt": "2026-10-10T02:13:53.969Z",
+  "project": "en",
+  "hostUserId": 21,
+  "guestUserId": 22,
+  "competitionId": 360,
+  "sdp": {
+    "offer": {
+      "from": "host",
+      "bytes": 5397
+    },
+    "answer": {
+      "from": "guest",
+      "bytes": 5104
+    }
+  },
+  "hostMedia": {
+    "hasStream": true,
+    "videoTracks": 1,
+    "audioTracks": 1,
+    "readyState": 4,
+    "videoWidth": 640,
+    "videoHeight": 480,
+    "totalVideoFrames": 181,
+    "droppedVideoFrames": 5,
+    "audioPeak": 1
+  },
+  "guestMedia": {
+    "hasStream": true,
+    "videoTracks": 1,
+    "audioTracks": 1,
+    "readyState": 4,
+    "videoWidth": 640,
+    "videoHeight": 480,
+    "totalVideoFrames": 223,
+    "droppedVideoFrames": 5,
+    "audioPeak": 1
+  },
+  "holdSeconds": 50,
+  "presenceAfterHold": {
+    "host": true,
+    "guest": true,
+    "viewer_count": 0
+  },
+  "competitionAfter": {
+    "status": "live",
+    "started_at": "2026-10-10 02:14:06"
+  },
+  "verdict": "PASS"
+}

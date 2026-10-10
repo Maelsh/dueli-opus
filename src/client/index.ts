@@ -20,6 +20,7 @@ import { ThemeService } from './services/ThemeService';
 
 // Streaming Services
 import { P2PConnection } from './services/P2PConnection';
+import { SignalingManager } from './services/SignalingManager';
 import { VideoCompositor } from './services/VideoCompositor';
 import { ChunkUploader } from './services/ChunkUploader';
 
@@ -229,6 +230,8 @@ declare global {
 
         // Streaming Services (for live room page)
         P2PConnection: typeof P2PConnection;
+        // Single shared signaling transport (test pages + production adapter)
+        SignalingManager: typeof SignalingManager;
         VideoCompositor: typeof VideoCompositor;
         ChunkUploader: typeof ChunkUploader;
 
@@ -344,6 +347,9 @@ if (typeof window !== 'undefined') {
 
     // Bind Streaming Services (for live room page)
     window.P2PConnection = P2PConnection;
+    // R4-LIVE-INT-1: the single shared signaling transport — consumed by the
+    // live test pages (host/guest) and by the production P2PConnection adapter.
+    window.SignalingManager = SignalingManager;
     window.VideoCompositor = VideoCompositor;
     window.ChunkUploader = ChunkUploader;
 

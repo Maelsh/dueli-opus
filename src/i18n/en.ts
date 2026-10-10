@@ -17,6 +17,9 @@ export const en = {
         // 7.D: restricted networks / TURN
         network_restricted: 'Your network may be restricted — trying to connect through a relay server',
         turn_unavailable: 'TURN relay is unavailable right now — please retry or switch networks',
+        // R4-LIVE-INT-1: production live-room join failures (toast, not console)
+        room_create_failed: 'Failed to create signaling room. Please reload and retry.',
+        session_join_failed: 'Failed to join the live session. Please reload and retry.',
     },
     recorded: 'Recorded',
     upcoming: 'Upcoming',

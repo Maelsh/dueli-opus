@@ -16,8 +16,11 @@
 
 /**
  * Default signaling/streaming server URL.
- * Used for: WebRTC signaling (HTTP-polling room/create/join/signal/poll/leave —
- * see src/modules/api/signaling/routes.ts and scripts/client/shared.ts SignalingManager).
+ * Used for: legacy room/create forward target only. The CURRENT platform
+ * signaling contract is competition_id + offer/answer/ice/poll +
+ * session join/leave/reconnect (see src/modules/api/signaling/routes.ts,
+ * scripts/client/shared.ts SignalingManager, and src/client/services/
+ * P2PConnection.ts) — the old room/join + signal + leave contract is gone.
  *
  * Migrated 2026-09-05 from the old Node signaling server (stream.maelshpro.com) to a
  * Cloudflare Worker + Durable Object (source: D:\projects\opus-dueli\signaling-server,

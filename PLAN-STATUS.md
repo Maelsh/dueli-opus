@@ -1,3 +1,10 @@
+## R4-LIVE-INT-1 signaling integration recovery · فرع feat/r4-live-int-1-signaling-recovery (من 375bd18 = origin/main)
+
+- 🔧 REMOTE جزئي على `a0d0caf`: FUNCTIONAL ‏APPROVE (الوكيلان)؛ ARCHITECTURE ‏APPROVE/REJECT — المانع: نصّان إنجليزيان ثابتان في تنبيهات غرفة الإنتاج ← REMEDIATED / REMOTE PENDING (تحقق مستهدف) — ليست DONE. نفس الفرع وPR #107، بلا دمج/نشر/ترحيل/تغيير سلوكي (مفتاحا `live_signaling.room_create_failed/session_join_failed` في ar/en + مرجعهما في الصفحة + اختبار ‏4/4). ملاحظة ‏429 للصفين ‏25/26 مسجلة للقائد (بلا تغيير rate limits هنا، وبلا NEXT منافس).
+- نفّذ (بتوجيه المالك: الملفات المجربة أصل الحل): استخراج `SignalingManager` المجرّب إلى وحدة bundle مشتركة واحدة (نفس العقد والتدفقات) + فلتر B1 ومهلة صارمة؛ `P2PConnection` أصبح محوّل RTC رفيع فوقها (سطح الصفحة بلا تغيير)؛ `shared.ts` بلا كلاس مكرر (التشخيص باقٍ) وصفحات host/guest/viewer بلا تغيير وتعمل عبر `window.SignalingManager`؛ سياسة إعادة المحاولة SSOT واحدة؛ الصفحة تعيد الانضمام المحدود عند العبور. الانقطاع/التحديث يستأنفان نفس الجلسة؛ `started_at` والمقاطع والمنافسة بلا مساس.
+- **الأدلة**: سلوكية ‏19/19 (مدير ‏12 + محوّل ‏7)؛ ‏RED ‏13/13 على رأس الرفض + ‏6/6 بالطفرة؛ عقد الخادم ‏12/12 + ‏404 القديم؛ وسائط حقيقية ‏PASS بأدلة (`live-p2p-media.evidence.json`: SDP both-ways، صوت+صورة، ‏181/223 إطارًا، ثبات ‏50s مع الحضور وlive وstarted_at)؛ الجيران خضراء؛ الكاملة ‏1472 + نفس ‏18 البيئية على ‏BASE؛ ‏schema-contract ‏24/24؛ ‏tsc/build ✅؛ ‏any ‏289 (‏BASE ‏291، ‏−2؛ تصحيح B5).
+- **المتبقي (blockers فقط)**: re-REMOTE مستقلة على ‏HEAD الجديد ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-EVENTS-NOTIFY-1 REMEDIATION (P1 cascade/atomicity + P2 spinner/mid-GET) · نفس فرع PR106 (من 557604a)
 
 - 🔧 تنفيذ LOCAL مكتمل (‏P1+P2)، بانتظار re-REMOTE على ‏PR106 — ليست DONE. بلا ‏PR جديد/دمج/نشر/كتابة إنتاجية/ترحيل (4 ملفات معدلة فقط، بلا ملفات جديدة). R1/R2/R3/H7 مغلقة ولم تُمس.
