@@ -492,7 +492,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         return createRes.ok && createData && createData.success ? createData : false;
                     });
                     if (created === false) {
-                        showMessage('Failed to create signaling room. Please reload and retry.', 'error');
+                        showMessage(tr.live_signaling.room_create_failed, 'error');
                         return;
                     }
                 }
@@ -540,7 +540,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 log('P2P initialized. Joining room...', 'info');
                 const joined = await withSignalingRetry('session/join', function() { return p2p.joinRoom(); });
                 if (joined === false) {
-                    showMessage('Failed to join the live session. Please reload and retry.', 'error');
+                    showMessage(tr.live_signaling.session_join_failed, 'error');
                     return;
                 }
                 log('Joined room successfully', 'success');
