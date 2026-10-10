@@ -408,95 +408,129 @@ window.UploadQueue = UploadQueue;
 
 /**
  * ChunkManager - إدارة القطع للمشاهد
+ *
+ * R4-CHUNK-PLAY-1: playlist-driven. The single CORS-safe proxy read
+ * (/api/chunks/playlist/:id, normalized server-side: validated, deduped,
+ * index-sorted) replaces per-chunk CORS-blocked HEAD probes against the
+ * external ffmpeg host — those could never succeed cross-origin, so live
+ * playback stalled before the first chunk. Entry indices come from the
+ * playlist (gaps tolerated, see waitForNextChunk); the constructed URL is
+ * only a fallback for legacy list shapes without absolute URLs.
  */
 class ChunkManager {
     constructor(competitionId, extension = 'webm') {
-        this.currentIndex = -1;  // -1 so waitForNextChunk() finds chunk_0001 (index 0) first
+        this.currentIndex = -1;  // -1 so waitForNextChunk() finds the first chunk first
         this.misses = 0;
         this.competitionId = competitionId;
         this.extension = extension;
-        // T1.3 FIX: host may record webm OR mp4 depending on browser support.
-        // Try candidates in order and lock onto whichever actually exists,
-        // otherwise viewers request chunk_0001.mp4 while the host uploads .webm (endless 404).
-        if (extension === 'mp4') {
-            this.candidates = ['mp4', 'webm'];
-        } else {
-            this.candidates = ['webm', 'mp4'];
-        }
+        // Normalized playlist entries {index, url, duration?, size?}.
+        this.entries = [];
+        // Consecutive missing indices tolerated while the server already
+        // lists LATER chunks (a deep hole means a broken stream, not a gap).
+        this.MAX_GAP_SKIP = 50;
         this.basePath = '${FFMPEG_URL}/stream.php?path=live/match_' + competitionId;
     }
 
+    async refreshPlaylist() {
+        try {
+            const res = await fetch('/api/chunks/playlist/' + this.competitionId);
+            // 429/5xx from our own edge (rate limit) → transient miss, never
+            // fatal: the caller backs off and retries within its bounds.
+            if (!res.ok) return false;
+            const data = await res.json();
+            if (!data || !Array.isArray(data.chunks)) return false;
+            this.entries = data.chunks;
+            if (typeof data.extension === 'string' && data.extension && data.extension !== this.extension) {
+                testLog('🔎 Format detected: .' + data.extension + ' (was looking for .' + this.extension + ')', 'info');
+                this.extension = data.extension;
+            }
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    entryFor(index) {
+        for (const entry of this.entries) {
+            if (entry && entry.index === index) return entry;
+        }
+        return null;
+    }
+
+    maxIndex() {
+        let top = -1;
+        for (const entry of this.entries) {
+            if (entry && typeof entry.index === 'number' && entry.index > top) top = entry.index;
+        }
+        return top;
+    }
+
     getUrl(index) {
+        const entry = this.entryFor(index);
+        if (entry && typeof entry.url === 'string' && entry.url) return entry.url;
         const chunkNumber = index + 1;
         const paddedIndex = String(chunkNumber).padStart(4, '0');
         return this.basePath + '/chunk_' + paddedIndex + '.' + this.extension;
     }
 
     async exists(index) {
-        // T1.3: probe candidate extensions until one answers
-        for (const ext of this.candidates) {
-            if (!ext) continue;
-            try {
-                const chunkNumber = index + 1;
-                const paddedIndex = String(chunkNumber).padStart(4, '0');
-                const url = this.basePath + '/chunk_' + paddedIndex + '.' + ext;
-                const res = await fetch(url, { method: 'HEAD' });
-                if (res.ok) {
-                    if (ext !== this.extension) {
-                        testLog('🔎 Format detected: .' + ext + ' (was looking for .' + this.extension + ')', 'info');
-                        this.extension = ext;
-                    }
-                    return true;
-                }
-                // 404 for this extension — try next candidate
-            } catch (e) {
-                // network error — treat as missing and continue probing
-            }
-        }
-        return false;
+        await this.refreshPlaylist();
+        return !!this.entryFor(index);
     }
 
     async waitForNextChunk(maxMisses) {
-        const targetIndex = this.currentIndex + 1;
+        let targetIndex = this.currentIndex + 1;
         maxMisses = maxMisses || 0; // 0 = wait forever (for live), >0 = stop after N misses
         let localMisses = 0;
+        let gapSkips = 0;
 
         while (true) {
-            const exists = await this.exists(targetIndex);
-            if (exists) {
+            await this.refreshPlaylist();
+            if (this.entryFor(targetIndex)) {
                 this.currentIndex = targetIndex;
                 this.misses = 0;
                 return targetIndex;
             }
 
+            // Gap support: the server already lists LATER chunks, so the
+            // missing index was dropped or is late — skip it (counted) and
+            // keep the tail flowing instead of stalling forever.
+            if (this.maxIndex() > targetIndex) {
+                gapSkips++;
+                testLog('⏭️ Gap at chunk ' + (targetIndex + 1) + ' (skip ' + gapSkips + ')', 'warn');
+                if (gapSkips > this.MAX_GAP_SKIP) {
+                    throw new Error('STREAM_ENDED');
+                }
+                this.currentIndex = targetIndex;
+                targetIndex++;
+                continue;
+            }
+
             localMisses++;
             this.misses = localMisses;
-            
+
             // إذا وصلت المحاولات للحد الأقصى → انتهى البث
             if (maxMisses > 0 && localMisses >= maxMisses) {
                 throw new Error('STREAM_ENDED');
             }
-            
+
+            // Backoff grows 1s → 5s cap while nothing new arrives: bounded,
+            // 429-friendly polling instead of a fixed hot loop.
             const delay = Math.min(1000 + localMisses * 500, 5000);
             await new Promise(function(r) { setTimeout(r, delay); });
         }
     }
 
     async getAvailableChunks() {
-        const chunks = [];
-        let index = 0;
-
-        while (true) {
-            const exists = await this.exists(index);
-            if (!exists) break;
-            chunks.push({
-                index: index,
-                url: this.getUrl(index)
+        await this.refreshPlaylist();
+        return this.entries
+            .filter(function(entry) { return entry && typeof entry.index === 'number'; })
+            .map(function(entry) {
+                return {
+                    index: entry.index,
+                    url: (typeof entry.url === 'string' && entry.url) ? entry.url : null
+                };
             });
-            index++;
-        }
-
-        return chunks;
     }
 
     /**
@@ -505,19 +539,16 @@ class ChunkManager {
      */
     async skipToLatest() {
         try {
-            // T1.3: CORS-safe proxy (remote playlist.php blocks browsers)
-            const playlistUrl = '/api/chunks/playlist/' + this.competitionId;
-            const res = await fetch(playlistUrl);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.chunks && data.chunks.length > 1) {
-                    // نبدأ من آخر chunk كاملة (ما قبل الأخيرة لضمان اكتمالها)
-                    const latestIndex = data.chunks.length - 2;
-                    if (latestIndex > 0) {
-                        this.currentIndex = latestIndex;
-                        testLog('⏭️ Skipping to chunk ' + (latestIndex + 1) + '/' + data.chunks.length, 'info');
-                        return latestIndex;
-                    }
+            await this.refreshPlaylist();
+            if (this.entries.length > 1) {
+                // نبدأ من آخر chunk كاملة (ما قبل الأخيرة لضمان اكتمالها) —
+                // بالفهرس الفعلي للمدخل، لا بطول القائمة (الفجوات مسموحة).
+                const sorted = this.entries.slice().sort(function(a, b) { return a.index - b.index; });
+                const latestIndex = sorted[sorted.length - 2].index;
+                if (latestIndex > 0) {
+                    this.currentIndex = latestIndex;
+                    testLog('⏭️ Skipping to chunk ' + (latestIndex + 1) + '/' + this.entries.length, 'info');
+                    return latestIndex;
                 }
             }
         } catch (e) {
@@ -545,6 +576,17 @@ class LiveSequentialPlayer {
         this.isRunning = false;
         this.preloadedChunks = new Map();
         this.MAX_MISSES = 25; // ~25 * متوسط 3ث = ~75ث بدون قطعة جديدة = انتهى البث
+        // R4-CHUNK-PLAY-1: consecutive chunk-playback failures are bounded —
+        // a poisoned chunk must surface a fatal error (with manual retry on
+        // the page), never an endless error/retry loop.
+        this.consecutiveErrors = 0;
+        this.MAX_CONSECUTIVE_ERRORS = 10;
+        // R4-CHUNK-PLAY-1: a single poisoned (undecodable) chunk must be
+        // SKIPPED after a few retries so the tail keeps flowing — retrying
+        // the same bytes forever would kill an otherwise healthy stream.
+        this.lastFailedIndex = null;
+        this.lastFailedCount = 0;
+        this.MAX_CHUNK_RETRIES = 3;
     }
 
     async start(options) {
@@ -567,14 +609,43 @@ class LiveSequentialPlayer {
 
     async runLoop() {
         while (this.isRunning) {
+            var target = null;
             try {
-                const nextIndex = await this.chunkManager.waitForNextChunk(this.MAX_MISSES);
-                await this.playChunk(nextIndex);
+                target = await this.chunkManager.waitForNextChunk(this.MAX_MISSES);
+                await this.playChunk(target);
+                this.consecutiveErrors = 0;
+                this.lastFailedIndex = null;
+                this.lastFailedCount = 0;
             } catch (error) {
                 if (error.message === 'STREAM_ENDED') {
                     this.isRunning = false;
                     this.onStatus && this.onStatus('Stream ended');
                     this.onStreamEnd && this.onStreamEnd();
+                    break;
+                }
+                // Poisoned-chunk skip: the same index failing repeatedly is a
+                // bad segment, not a bad stream — skip it (counted gap) and
+                // keep the tail flowing.
+                if (target !== null && target === this.lastFailedIndex) {
+                    this.lastFailedCount++;
+                } else {
+                    this.lastFailedIndex = target;
+                    this.lastFailedCount = 1;
+                }
+                if (target !== null && this.lastFailedCount >= this.MAX_CHUNK_RETRIES) {
+                    this.onStatus && this.onStatus('Skipping unplayable chunk ' + (target + 1));
+                    this.chunkManager.currentIndex = target;
+                    this.lastFailedIndex = null;
+                    this.lastFailedCount = 0;
+                    // NOTE: consecutiveErrors is deliberately NOT reset here —
+                    // an all-poisoned stream must still trip the fatal bound
+                    // below instead of skipping forever.
+                    continue;
+                }
+                this.consecutiveErrors++;
+                if (this.consecutiveErrors >= this.MAX_CONSECUTIVE_ERRORS) {
+                    this.isRunning = false;
+                    this.onError && this.onError(new Error('Too many consecutive playback errors'));
                     break;
                 }
                 this.onError && this.onError(error);
@@ -594,7 +665,9 @@ class LiveSequentialPlayer {
 
         await new Promise(function(resolve, reject) {
             nextPlayer.oncanplay = resolve;
-            nextPlayer.onerror = reject;
+            // Reject with a real Error (not the bare event) so upstream
+            // handlers log a meaningful message instead of 'undefined'.
+            nextPlayer.onerror = function() { reject(new Error('Chunk playback failed')); };
             setTimeout(resolve, 3000);
         });
 
@@ -751,7 +824,17 @@ class SmartVodPlayer {
             
             this.chunks = this.playlist.chunks || [];
             this.extension = this.playlist.extension || 'webm';
-            
+
+            // R4-CHUNK-PLAY-1: an upstream failure is NOT a recording — fail
+            // loudly instead of playing an empty list or an error page as
+            // video. (No 'upstream' field = legacy proxy shape: proceed.)
+            if (this.playlist.upstream === 'error') {
+                throw new Error('Recording service unavailable (upstream error)');
+            }
+            if (this.playlist.upstream === 'invalid') {
+                throw new Error('Playlist is not a recording (invalid upstream response)');
+            }
+
             if (this.chunks.length === 0) {
                 throw new Error('No chunks available');
             }
@@ -866,7 +949,9 @@ class SmartVodPlayer {
         // عند انتهاء الـ chunk، انتقل للتالية
         this.videoElement.onended = function() {
             if (this.currentChunkIndex < this.chunks.length - 1) {
-                this.loadAndPlayChunk(this.currentChunkIndex + 1);
+                this.loadAndPlayChunk(this.currentChunkIndex + 1).catch(function(err) {
+                    this.onError && this.onError(err);
+                }.bind(this));
             } else {
                 testLog('✅ Playback complete', 'success');
             }
@@ -880,20 +965,39 @@ class SmartVodPlayer {
      */
     async loadChunk(index) {
         if (this.loadedChunks[index]) return; // محملة مسبقاً
-        
+
         const chunk = this.chunks[index];
-        
+
         try {
             const response = await fetch(chunk.url);
             if (!response.ok) throw new Error('Chunk fetch failed');
-            
+
+            // R4-CHUNK-PLAY-1: a 200-with-HTML soft-404 is not video — reject
+            // it loudly instead of storing garbage that stalls playback.
+            // ffmpeg serves video/* (mp4/webm); octet-stream is accepted as
+            // a generic binary container. Anything textual is rejected.
+            // (String matching on purpose: regex slashes do not survive the
+            // server-side template emission intact.)
+            var rawCt = response.headers.get('content-type') || '';
+            var ct = (rawCt || '').toLowerCase();
+            if (ct.indexOf('text/html') !== -1) {
+                throw new Error('Chunk URL returned HTML, not video');
+            }
+            if (ct && ct.indexOf('video/') !== 0
+                && ct.indexOf('application/octet-stream') !== 0
+                && ct.indexOf('binary/octet-stream') !== 0) {
+                throw new Error('Chunk URL returned non-video content: ' + rawCt);
+            }
+
             const buffer = await response.arrayBuffer();
+            if (!buffer || buffer.byteLength === 0) throw new Error('Chunk is empty');
             this.loadedChunks[index] = buffer;
-            
+
             this.onChunkLoaded && this.onChunkLoaded(index, this.getLoadedCount());
-            
+
         } catch (error) {
             testLog('❌ Failed to load chunk ' + index + ': ' + error.message, 'error');
+            throw error;
         }
     }
 
@@ -903,12 +1007,15 @@ class SmartVodPlayer {
     async startPreloading() {
         for (let i = 0; i < this.chunks.length; i++) {
             if (!this.loadedChunks[i]) {
-                await this.loadChunk(i);
+                // A single bad chunk must not stop the rest from preloading.
+                try {
+                    await this.loadChunk(i);
+                } catch (e) { /* already logged in loadChunk */ }
                 // تأخير بسيط لعدم إثقال الشبكة
                 await new Promise(function(r) { setTimeout(r, 100); });
             }
         }
-        
+
         testLog('📦 All ' + this.chunks.length + ' chunks preloaded!', 'success');
     }
 
@@ -956,7 +1063,9 @@ class SmartVodPlayer {
         } else {
             // chunk مختلفة - تحميل وتشغيل
             this.seekPending = globalTime;
-            this.loadAndPlayChunk(targetChunk);
+            this.loadAndPlayChunk(targetChunk).catch(function(err) {
+                this.onError && this.onError(err);
+            }.bind(this));
         }
     }
 

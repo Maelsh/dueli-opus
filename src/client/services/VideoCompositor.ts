@@ -54,11 +54,20 @@ export class VideoCompositor {
     private animationFrameId: number | null = null;
     private isCompositing: boolean = false;
     private isRecording: boolean = false;
+    /** Guards concurrent startRecording() calls (page fires it per track). */
+    private startPending: boolean = false;
     private chunkNumber: number = 0;
     private chunksUploaded: number = 0;
     private startTime: number = 0;
     private mimeType: string = '';
     private fileExtension: string = 'webm';
+    /**
+     * R4-CHUNK-PLAY-1: in-flight ondataavailable handlers. stop() must wait
+     * for the final handler to ENQUEUE its blob before finalize() drains —
+     * otherwise the last chunk is uploaded after finalization (lost from the
+     * merge) or never at all.
+     */
+    private pendingSaves = 0;
 
     // Canvas dimensions
     private readonly CANVAS_WIDTH = 1280;
@@ -242,11 +251,27 @@ export class VideoCompositor {
      * Start recording the canvas
      */
     async startRecording(): Promise<void> {
-        if (this.isRecording) return;
+        if (this.isRecording || this.startPending) return;
+        this.startPending = true;
+        try {
+            // Sync time with server first
+            await this.uploader.syncTime();
 
-        // Sync time with server first
-        await this.uploader.syncTime();
+            // R4-CHUNK-PLAY-1: resume AFTER the highest saved server index so a
+            // host gap/refresh appends without overwriting previous chunks.
+            await this.uploader.initialize();
 
+            await this.beginCapture();
+        } finally {
+            this.startPending = false;
+        }
+    }
+
+    /**
+     * Capture setup extracted so the startPending guard above covers every
+     * await (a second concurrent start can never build a second recorder).
+     */
+    private async beginCapture(): Promise<void> {
         // Get canvas stream
         const canvasStream = this.canvas.captureStream(30); // 30 FPS
 
@@ -307,12 +332,20 @@ export class VideoCompositor {
         this.chunksUploaded = 0;
         this.startTime = Date.now();
 
-        // Handle chunk data
+        // Handle chunk data — the uploader assigns dense numbers at
+        // processing time and holds pure-init blobs without consuming any,
+        // so failures can never open numbering gaps here.
         this.mediaRecorder.ondataavailable = async (event) => {
             if (event.data.size > 0) {
-                this.chunkNumber++;
-                debugLog(`[VideoCompositor] Chunk ${this.chunkNumber} ready (${event.data.size} bytes)`);
-                await this.uploader.uploadChunk(event.data, this.chunkNumber);
+                this.pendingSaves++;
+                try {
+                    if (this.uploader.enqueue(event.data)) {
+                        this.chunkNumber++;
+                        debugLog(`[VideoCompositor] Chunk accepted (${event.data.size} bytes)`);
+                    }
+                } finally {
+                    this.pendingSaves--;
+                }
             }
         };
 
@@ -325,7 +358,10 @@ export class VideoCompositor {
     }
 
     /**
-     * Stop recording
+     * Stop recording — drains the final in-flight save, then the upload
+     * queue, then finalizes exactly once (via the uploader's idempotent
+     * finalize). Resolves only when the last chunk is safely queued for
+     * upload, so end-of-stream never loses the tail.
      */
     async stopRecording(): Promise<void> {
         if (!this.isRecording || !this.mediaRecorder) return;
@@ -334,7 +370,12 @@ export class VideoCompositor {
             this.mediaRecorder!.onstop = async () => {
                 this.isRecording = false;
 
-                // Finalize on server
+                // Wait for the final ondataavailable handler to enqueue.
+                while (this.pendingSaves > 0) {
+                    await new Promise((r) => setTimeout(r, 50));
+                }
+
+                // Drain uploads, then finalize on server (single path).
                 await this.uploader.finalize();
 
                 debugLog('[VideoCompositor] Recording stopped');

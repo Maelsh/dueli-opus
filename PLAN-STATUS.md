@@ -1,3 +1,10 @@
+## R4-CHUNK-PLAY-1 audience chunks · فرع feat/r4-chunk-play-1 (من 98a1358 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B، وS معطلة بيئيًا — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل/تغيير خارجي أو إنتاجي (خادم القائمة + عميل الرفع/التسجيل/التشغيل + i18n الجمهور + اختبارات). H7 وPhase7 وCOMP-UNIFIED-1 وDOWNLOAD-1 لم تُمس.
+- نفّذ: عقد قائمة موحد (تطبيع/إزالة تكرار/ترتيب + timeline/format + حالات upstream + init route + cache قصير + صفر D1)؛ مدير مقاطع من القائمة (بلا HEAD خارجي، تخطي فجوات محدود، تراجع محدود) + حد أخطاء مميت + تخطي المسموم + رفض HTML؛ رفع محدود مُستأنف بعد الأعلى مع init-prepend لكل شظية وfinalize وحيد؛ تصريف المقطع الأخير قبل النهاية؛ توحيد finalize الصفحة وإنهاء صادق عند unload؛ ربط upstream بخالات المشغل؛ 6 مفاتيح ar/en.
+- **الأدلة**: T/B خضراء (قائمة ‏10 + رفع ‏9 + تسجيل ‏3 + تشغيل ‏12 + دبابيس ‏6)؛ الجيران خضراء لحظة التشغيل؛ ‏schema-contract ‏24/24 (مبكرًا)؛ ‏tsc/build ✅؛ ‏any ‏287 (‏BASE ‏289، ‏−2). ‏S: ‏BLOCKED بيئيًا موثق — مثبت جزئيًا وبلا ‏PASS مدّعى؛ الأدوات (stub/spec) محفوظة للـREMOTE. بلا مسح كامل معاد (أُوقف بأمر المالك).
+- **المتبقي**: REMOTE مستقلة (تشغيل S في بيئة مستقرة أولًا) ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-LIVE-INT-1 signaling integration recovery · فرع feat/r4-live-int-1-signaling-recovery (من 375bd18 = origin/main)
 
 - 🔧 REMOTE جزئي على `a0d0caf`: FUNCTIONAL ‏APPROVE (الوكيلان)؛ ARCHITECTURE ‏APPROVE/REJECT — المانع: نصّان إنجليزيان ثابتان في تنبيهات غرفة الإنتاج ← REMEDIATED / REMOTE PENDING (تحقق مستهدف) — ليست DONE. نفس الفرع وPR #107، بلا دمج/نشر/ترحيل/تغيير سلوكي (مفتاحا `live_signaling.room_create_failed/session_join_failed` في ar/en + مرجعهما في الصفحة + اختبار ‏4/4). ملاحظة ‏429 للصفين ‏25/26 مسجلة للقائد (بلا تغيير rate limits هنا، وبلا NEXT منافس).

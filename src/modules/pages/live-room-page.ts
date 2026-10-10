@@ -616,13 +616,18 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         document.getElementById('chunkCount').textContent = num;
                     },
                     onRecordingStarted: () => {
-                        recordingIndicator.classList.remove('hidden');
+                        // recordingIndicator has no DOM node on this page —
+                        // look it up defensively (a bare reference threw
+                        // ReferenceError and killed the stats that follow).
+                        const indicator = document.getElementById('recordingIndicator');
+                        if (indicator) indicator.classList.remove('hidden');
                         streamStats.classList.remove('hidden');
                         streamStartTime = Date.now();
                         updateDuration();
                     },
                     onRecordingStopped: () => {
-                        recordingIndicator.classList.add('hidden');
+                        const indicator = document.getElementById('recordingIndicator');
+                        if (indicator) indicator.classList.add('hidden');
                     },
                     onError: (error) => {
                         console.error('[LiveRoom] Compositor error:', error);
@@ -636,8 +641,36 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             function startRecording() {
                 if (compositor && !compositor.getStats().isRecording) {
                     console.log('[LiveRoom] Starting recording');
-                    compositor.startRecording();
+                    // R4-CHUNK-PLAY-1: never record a placeholder canvas — wait
+                    // (bounded 10s, fail-open) until both videos actually flow,
+                    // else the first chunks are tiny undecodable segments that
+                    // poison audience playback from the start.
+                    waitForMediaReady().then(function() {
+                        if (compositor && !compositor.getStats().isRecording) {
+                            compositor.startRecording();
+                        }
+                    });
                 }
+            }
+
+            // Bounded media-readiness gate for recording (fail-open: after
+            // 10s recording starts anyway rather than blocking forever).
+            function waitForMediaReady() {
+                const deadline = Date.now() + 10000;
+                return new Promise(function(resolve) {
+                    (function check() {
+                        const localOk = localVideo && localVideo.readyState >= 2;
+                        const remoteOk = remoteVideo && remoteVideo.readyState >= 2;
+                        if ((localOk && remoteOk) || Date.now() > deadline) {
+                            if (!localOk || !remoteOk) {
+                                log('Media not fully flowing — recording anyway (bounded wait over)', 'warn');
+                            }
+                            resolve();
+                            return;
+                        }
+                        setTimeout(check, 500);
+                    })();
+                });
             }
             
             // Update duration display
@@ -976,27 +1009,19 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const vodUrl = streamServerUrl + '/storage/vod/match_' + competitionId + '.mp4';
                 
                 try {
-                    // Stop compositor if host
+                    // Stop compositor if host — destroy() drains the final
+                    // chunk, the upload queue, then finalizes EXACTLY ONCE via
+                    // the uploader (single finalize path; never call
+                    // finalize.php directly — the old double call with a
+                    // different body shape is gone).
                     if (userRole === 'host' && compositor) {
                         log('Stopping compositor and finalizing...', 'info');
                         await compositor.destroy();
                     }
-                    
-                    // Always call finalize on the streaming server (from either side)
-                    log('Sending finalize request to streaming server...', 'info');
-                    try {
-                        const finalizeRes = await fetch(streamServerUrl + '/finalize.php', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ match_id: competitionId })
-                        });
-                        const finalizeData = await finalizeRes.json();
-                        log('Finalize response: ' + JSON.stringify(finalizeData), finalizeRes.ok ? 'success' : 'error');
-                    } catch (finErr) {
-                        log('Finalize request failed: ' + finErr.message, 'error');
-                    }
-                    
-                    // Update competition status to recorded
+
+                    // Update competition status (server decision ends the
+                    // competition AND the recording; finalize failure above
+                    // never blocks this — cutoff/result never wait for video).
                     log('Updating competition status...', 'info');
                     await fetch('/api/competitions/' + competitionId + '/end', {
                         method: 'POST',
@@ -1150,14 +1175,20 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 showToast(msg, type || 'info');
             }
             
-            // Cleanup on page unload
-            window.addEventListener('beforeunload', async () => {
-                if (compositor) {
-                    await compositor.destroy();
-                }
-                if (p2p) {
-                    await p2p.disconnect();
-                }
+            // Cleanup on page unload — BEST EFFORT ONLY. Browsers do not await
+            // async work in beforeunload, so destroy()/disconnect() below may
+            // never finish: the tail chunk/finalize is NOT guaranteed on
+            // refresh/close (documented gap — no promises made here). The
+            // competition itself is never ended from unload (row 26 must keep
+            // it that way); a returning host resumes after the last SAVED
+            // chunk via the uploader resume base.
+            window.addEventListener('beforeunload', () => {
+                try {
+                    if (compositor) void compositor.destroy();
+                } catch (e) {}
+                try {
+                    if (p2p) void p2p.disconnect();
+                } catch (e) {}
             });
         </script>
         ` : ''}

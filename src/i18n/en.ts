@@ -1210,6 +1210,13 @@ export const en = {
 
     // ── T1.3: Streaming ──────────────
     recording_processing: 'Preparing the recording...',
+    // ── R4-CHUNK-PLAY-1: audience live/VOD states ──────────────
+    recording_not_ready: 'Recording not available',
+    streaming_unavailable: 'Streaming service unavailable',
+    connecting_to_stream: 'Connecting to stream...',
+    loading_video: 'Loading video...',
+    stream_ended: 'Stream ended',
+    chunk: 'Chunk',
 
     // ── T3.3: Nested comments ──────────────
     reply: 'Reply',

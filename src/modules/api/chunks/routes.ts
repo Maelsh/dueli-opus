@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
 import { CryptoUtils } from '../../../lib/services/CryptoUtils';
+import { findInitEnd } from '../../../lib/services/ChunkInitSegment';
 import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../config/defaults';
 
 const chunksRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -240,7 +241,78 @@ chunksRoutes.delete('/:key', verifyUploadServerHmac, verifyUploadServerOrigin, a
  * dueli.maelshpro.com could never call it directly — viewers were unable to
  * discover chunks for live skip-to-latest and VOD playback. This proxy fetches
  * server-side (no CORS restriction) and normalizes the response.
+ *
+ * R4-CHUNK-PLAY-1 contract (backward compatible — `{success, id, chunks}`
+ * keep their shape; new fields are additive):
+ *  - `chunks`: validated, de-duplicated (first wins), index-sorted entries
+ *    `{index, url, duration?, size?}` — the single ordering truth. Late,
+ *    missing (gap), or duplicate upstream rows can never corrupt it.
+ *  - `upstream`: 'ok' | 'empty' (valid reply, zero usable chunks) | 'error'
+ *    (transport/timeout/non-OK status) | 'invalid' (non-JSON, e.g. an HTML
+ *    error page with HTTP 200 — NEVER treated as video).
+ *  - `extension` / `total_duration`: timeline/format metadata when the
+ *    upstream provides it (null otherwise — callers fall back, never guess).
+ *  - `chunk_count`, `max_index`, `checked_at`.
+ *  - Zero D1 reads by design (no competition lookup): per-viewer polling
+ *    must stay cheap; clients map `upstream` + competition status to the
+ *    empty-live / processing / ready / not-recorded / upstream-error states.
+ *  - `Cache-Control: public, max-age=5`: collapses multi-viewer fan-out at
+ *    the edge without serving stale live data.
  */
+interface NormalizedChunk {
+    index: number;
+    url: string;
+    duration?: number;
+    size?: number;
+}
+
+/** Extract a chunk number from any plausible upstream shape. */
+function chunkEntryIndex(entry: unknown, position: number, url: string): number {
+    if (entry && typeof entry === 'object') {
+        const rec = entry as Record<string, unknown>;
+        for (const key of ['index', 'chunk_number', 'chunkNumber', 'n', 'position']) {
+            const v = rec[key];
+            if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.floor(v);
+            if (typeof v === 'string' && /^\d+$/.test(v.trim())) return parseInt(v.trim(), 10);
+        }
+    }
+    const fromUrl = url.match(/chunk_(\d+)/i);
+    if (fromUrl) return parseInt(fromUrl[1], 10);
+    return position;
+}
+
+/** Extract a playable URL from any plausible upstream shape. */
+function chunkEntryUrl(entry: unknown, id: string, base: string): string | null {
+    if (typeof entry === 'string') {
+        const s = entry.trim();
+        if (/^https?:\/\//i.test(s)) return s;
+        const file = s.match(/(chunk_\d+\.(mp4|webm))/i);
+        if (file) return `${base}/stream.php?path=live/match_${id}/${file[1]}`;
+        return null;
+    }
+    if (entry && typeof entry === 'object') {
+        const rec = entry as Record<string, unknown>;
+        for (const key of ['url', 'file', 'filename', 'path']) {
+            const v = rec[key];
+            if (typeof v === 'string' && /^https?:\/\//i.test(v.trim())) return v.trim();
+        }
+        for (const key of ['file', 'filename', 'path']) {
+            const v = rec[key];
+            if (typeof v === 'string') {
+                const file = v.match(/(chunk_\d+\.(mp4|webm))/i);
+                if (file) return `${base}/stream.php?path=live/match_${id}/${file[1]}`;
+            }
+        }
+    }
+    return null;
+}
+
+function finiteNumber(v: unknown): number | undefined {
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+    if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0) return Number(v);
+    return undefined;
+}
+
 chunksRoutes.get('/playlist/:id', async (c) => {
     const id = c.req.param('id');
 
@@ -249,32 +321,183 @@ chunksRoutes.get('/playlist/:id', async (c) => {
     }
 
     const base = (c.env.FFMPEG_SERVER_URL || DEFAULT_UPLOAD_URL).replace(/\/+$/, '');
+    const jsonHeaders = { 'Cache-Control': 'public, max-age=5' };
+    const empty = (upstream: string) => c.json({
+        success: true,
+        id: Number(id),
+        chunks: [],
+        chunk_count: 0,
+        max_index: -1,
+        extension: null,
+        total_duration: null,
+        upstream,
+        checked_at: new Date().toISOString(),
+    }, 200, jsonHeaders);
 
+    let res: Response;
+    try {
+        res = await fetch(`${base}/playlist.php?id=${id}`, {
+            signal: AbortSignal.timeout(10_000)
+        });
+    } catch (error) {
+        console.error('[chunks/playlist] upstream error:', error instanceof Error ? error.message : error);
+        // Transport/timeout — distinct from "no chunks yet", never fatal.
+        return empty('error');
+    }
+
+    if (!res.ok) {
+        console.error('[chunks/playlist] upstream status:', res.status);
+        return empty('error');
+    }
+
+    const text = await res.text();
+
+    // The PHP endpoint may answer 200 with an EMPTY body — "no chunks yet".
+    // A 200 with an HTML error page is NOT a playlist (invalid, never video).
+    let data: unknown = null;
+    if (text && text.trim()) {
+        const trimmed = text.trim();
+        if (trimmed[0] !== '{' && trimmed[0] !== '[') {
+            return empty('invalid');
+        }
+        try {
+            data = JSON.parse(trimmed) as unknown;
+        } catch {
+            return empty('invalid');
+        }
+    }
+    if (!data) return empty('empty');
+
+    const raw: unknown[] = Array.isArray(data)
+        ? data
+        : data !== null && typeof data === 'object' && Array.isArray((data as { chunks?: unknown }).chunks)
+            ? (data as { chunks: unknown[] }).chunks
+            : [];
+    if (raw.length === 0 && !Array.isArray(data) && !(data !== null && typeof data === 'object' && Array.isArray((data as { chunks?: unknown }).chunks))) {
+        return empty('invalid');
+    }
+
+    const seen = new Set<number>();
+    const chunks: NormalizedChunk[] = [];
+    raw.forEach((entry, position) => {
+        const url = chunkEntryUrl(entry, id, base);
+        if (!url) return; // unusable entry — dropped, never guessed
+        const index = chunkEntryIndex(entry, position, url);
+        if (seen.has(index)) return; // duplicate index — first wins, no overwrite
+        seen.add(index);
+        const chunk: NormalizedChunk = { index, url };
+        const duration = entry && typeof entry === 'object'
+            ? finiteNumber((entry as Record<string, unknown>).duration) : undefined;
+        const size = entry && typeof entry === 'object'
+            ? finiteNumber((entry as Record<string, unknown>).size ?? (entry as Record<string, unknown>).filesize) : undefined;
+        if (duration !== undefined) chunk.duration = duration;
+        if (size !== undefined) chunk.size = size;
+        chunks.push(chunk);
+    });
+    chunks.sort((a, b) => a.index - b.index);
+
+    if (chunks.length === 0) {
+        // Valid reply shape but nothing usable — same "no chunks yet" as empty.
+        return empty(raw.length === 0 ? 'empty' : 'invalid');
+    }
+
+    const firstUrl = chunks[0].url;
+    const extMatch = firstUrl.match(/\.(mp4|webm)(?=[?#]|$)/i);
+    const allDurations = chunks.every((ch) => typeof ch.duration === 'number');
+    const totalDuration = allDurations
+        ? chunks.reduce((sum, ch) => sum + (ch.duration as number), 0)
+        : null;
+
+    return c.json({
+        success: true,
+        id: Number(id),
+        chunks,
+        chunk_count: chunks.length,
+        max_index: chunks[chunks.length - 1].index,
+        extension: extMatch ? extMatch[1].toLowerCase() : null,
+        total_duration: totalDuration,
+        upstream: 'ok',
+        checked_at: new Date().toISOString(),
+    }, 200, jsonHeaders);
+});
+
+/**
+ * GET /api/chunks/init/:id
+ * R4-CHUNK-PLAY-1: serve the recording init segment (mp4 ftyp+moov / webm
+ * header) for a competition, extracted server-side from its first saved
+ * chunk. MediaRecorder timeslices are FRAGMENTS, not standalone files —
+ * every blob after the first lacks init bytes and can never decode alone
+ * (proven: 0 frames standalone vs decoded with init prepended). The host
+ * prepends this init to every uploaded chunk so each stored chunk plays
+ * standalone in a plain <video> (live sequential + VOD blob playback).
+ *
+ * Zero D1 reads (playlist + one bounded byte fetch). The init of a
+ * competition never changes once written → `max-age=300`.
+ */
+chunksRoutes.get('/init/:id', async (c) => {
+    const id = c.req.param('id');
+
+    if (!/^\d+$/.test(id)) {
+        return c.json({ success: false, error: 'Invalid competition id' }, 400);
+    }
+
+    const base = (c.env.FFMPEG_SERVER_URL || DEFAULT_UPLOAD_URL).replace(/\/+$/, '');
+    const headers = { 'Cache-Control': 'public, max-age=300' };
+    const fail = () => c.json({ success: false, error: 'No init segment available' }, 404, headers);
+
+    // Reuse the normalized playlist (single ordering truth) to find chunk one.
+    let firstUrl: string | null = null;
     try {
         const res = await fetch(`${base}/playlist.php?id=${id}`, {
             signal: AbortSignal.timeout(10_000)
         });
+        if (!res.ok) return fail();
         const text = await res.text();
+        if (!text || !text.trim() || (text.trim()[0] !== '{' && text.trim()[0] !== '[')) return fail();
+        const data: unknown = JSON.parse(text.trim());
+        const raw: unknown[] = Array.isArray(data)
+            ? data
+            : data !== null && typeof data === 'object' && Array.isArray((data as { chunks?: unknown }).chunks)
+                ? (data as { chunks: unknown[] }).chunks
+                : [];
+        const sorted = raw
+            .map((entry, position) => ({ url: chunkEntryUrl(entry, id, base), index: chunkEntryIndex(entry, position, '') }))
+            .filter((e) => e.url !== null)
+            .sort((a, b) => a.index - b.index);
+        if (sorted.length === 0) return fail();
+        const first = sorted[0].url;
+        if (typeof first !== 'string') return fail();
+        firstUrl = first;
+    } catch {
+        return fail();
+    }
 
-        // The PHP endpoint may answer 200 with an EMPTY body — treat as "no chunks yet"
-        let data: any = { chunks: [] };
-        if (text && text.trim()) {
-            try {
-                data = JSON.parse(text);
-            } catch {
-                data = { chunks: [] };
-            }
+    try {
+        const res = await fetch(firstUrl as string, { signal: AbortSignal.timeout(10_000) });
+        if (!res.ok) return fail();
+        const buf = new Uint8Array(await res.arrayBuffer());
+        if (buf.length === 0 || buf.length > 256 * 1024) return fail();
+        const extMatch = (firstUrl as string).match(/\.(mp4|webm)(?=[?#]|$)/i);
+        const format = extMatch ? extMatch[1].toLowerCase() : null;
+        if (!format) return fail();
+        const cut = findInitEnd(buf, format);
+        const init = cut > 0 ? buf.subarray(0, cut) : buf;
+        if (init.length === 0) return fail();
+        // Stack-safe base64 (init is small, but apply() on huge arrays blows up).
+        let binary = '';
+        const STEP = 8192;
+        for (let i = 0; i < init.length; i += STEP) {
+            binary += String.fromCharCode.apply(null, Array.from(init.subarray(i, i + STEP)) as number[]);
         }
-
         return c.json({
             success: true,
             id: Number(id),
-            chunks: Array.isArray(data.chunks) ? data.chunks : []
-        });
-    } catch (error: any) {
-        console.error('[chunks/playlist] upstream error:', error);
-        // Graceful degradation: empty playlist, never a hard failure
-        return c.json({ success: true, id: Number(id), chunks: [] });
+            format,
+            byteLength: init.length,
+            init: btoa(binary),
+        }, 200, headers);
+    } catch {
+        return fail();
     }
 });
 
