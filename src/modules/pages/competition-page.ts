@@ -1716,7 +1716,17 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 return;
             }
             const playlistData = await playlistRes.json();
-            
+
+            // R4-CHUNK-PLAY-1: the proxy discriminates upstream states — an
+            // upstream failure is an ERROR (with manual retry), never the
+            // processing spinner; only a valid-but-empty list polls as
+            // processing → unavailable.
+            if (playlistData.upstream === 'error' || playlistData.upstream === 'invalid') {
+                setMediaState('error');
+                showStatusOverlay(tr.recording_not_ready || 'Recording not available');
+                return;
+            }
+
             if (!playlistData.chunks || playlistData.chunks.length === 0) {
                 handleVodNotReady();
                 return;
@@ -1756,7 +1766,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
 
         } catch (err) {
-          log('Embedded viewer error: ' + err.message, 'error');
+          log('Embedded viewer error: ' + ((err && err.message) || err), 'error');
           setMediaState('error');
           showStatusOverlay(tr.error_occurred || 'An error occurred');
         }
