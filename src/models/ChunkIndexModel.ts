@@ -83,6 +83,17 @@ export interface ChunkReceipt {
     object_hash?: string | null;
 }
 
+/**
+ * R4-CHUNK-UPLOAD-SAFE-1: sanity ceiling for sequence numbers. Realistic
+ * traffic stays far below (2h at one chunk per 5s = 1440); an absurd value
+ * is a client or corruption bug, rejected loudly instead of opening a
+ * billion-row gap scan.
+ */
+export const MAX_SEQUENCE = 1000000;
+
+/** Gap scans above this many slots report truncated (bounded iteration). */
+export const MAX_GAP_SCAN = 10000;
+
 export interface TimelineEntry {
     sequence: number;
     duration_ms: number;
@@ -146,14 +157,18 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
      */
     async recordChunk(competitionId: number, input: RecordChunkInput, writerUserId: number): Promise<RecordingChunk> {
         const seq = asInt(input.sequence);
-        if (!seq || seq < 1) {
-            throw Object.assign(new Error('BAD_INPUT: sequence must be a positive integer'), { code: 'BAD_INPUT' });
+        if (!seq || seq < 1 || seq > MAX_SEQUENCE) {
+            throw Object.assign(new Error('BAD_INPUT: sequence must be a positive integer within bounds'), { code: 'BAD_INPUT' });
         }
         if (!input.object_path || typeof input.object_path !== 'string') {
             throw Object.assign(new Error('BAD_INPUT: object_path is required'), { code: 'BAD_INPUT' });
         }
         if (input.container !== 'mp4' && input.container !== 'webm') {
             throw Object.assign(new Error('BAD_INPUT: container must be mp4 or webm'), { code: 'BAD_INPUT' });
+        }
+        if (input.declared_duration_ms !== undefined && input.declared_duration_ms !== null
+            && (!(typeof input.declared_duration_ms === 'number') || !Number.isFinite(input.declared_duration_ms) || input.declared_duration_ms < 0)) {
+            throw Object.assign(new Error('BAD_INPUT: declared_duration_ms must be a non-negative number'), { code: 'BAD_INPUT' });
         }
         const comp = await this.db.prepare(
             'SELECT id, creator_id, status FROM competitions WHERE id = ?'
@@ -183,30 +198,147 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
         }
 
         const now = nowIso();
-        await this.db.prepare(
-            `INSERT INTO ${this.tableName}
-             (competition_id, generation, sequence, object_path, object_hash,
-              container, codec_video, codec_audio, bytes, declared_duration_ms,
-              duration_ms, state, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'uploaded', ?, ?)`
-        ).bind(
-            competitionId,
-            asInt(input.generation) ?? 1,
-            seq,
-            input.object_path,
-            input.object_hash ?? null,
-            input.container,
-            input.codec_video ?? null,
-            input.codec_audio ?? null,
-            asInt(input.bytes),
-            asInt(input.declared_duration_ms),
-            now, now
-        ).run();
+        try {
+            await this.db.prepare(
+                `INSERT INTO ${this.tableName}
+                 (competition_id, generation, sequence, object_path, object_hash,
+                  container, codec_video, codec_audio, bytes, declared_duration_ms,
+                  duration_ms, state, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'uploaded', ?, ?)`
+            ).bind(
+                competitionId,
+                asInt(input.generation) ?? 1,
+                seq,
+                input.object_path,
+                input.object_hash ?? null,
+                input.container,
+                input.codec_video ?? null,
+                input.codec_audio ?? null,
+                asInt(input.bytes),
+                asInt(input.declared_duration_ms),
+                now, now
+            ).run();
+        } catch (error: unknown) {
+            // Lost an insert race on UNIQUE(competition_id, sequence):
+            // normalize to the same outcome as the pre-check path instead
+            // of leaking a raw D1 constraint error (row 28 scope 9).
+            const raced = await this.db.prepare(
+                `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
+            ).bind(competitionId, seq).first<Record<string, unknown> | null>();
+            if (!raced) throw error;
+            const winner = this.row(raced);
+            const samePath = winner.object_path === input.object_path;
+            const sameBytes = (winner.bytes ?? null) === (asInt(input.bytes) ?? null);
+            if (samePath && sameBytes) return winner;
+            throw Object.assign(
+                new Error(`CONFLICT: sequence ${seq} already recorded with different bytes`),
+                { code: 'CONFLICT', existing: winner }
+            );
+        }
         const created = await this.db.prepare(
             `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
         ).bind(competitionId, seq).first<Record<string, unknown> | null>();
         if (!created) throw new Error('Chunk record lost after insert');
         return this.row(created);
+    }
+
+    /**
+     * R4-CHUNK-UPLOAD-SAFE-1 receipt interface: create-or-confirm from
+     * SERVER-measured facts (upload host receipt — never client data).
+     *  - no row + measured duration → INSERT ready (measured = verified);
+     *  - no row without duration → INSERT uploaded (facts kept, never ready);
+     *  - uploaded row + duration → confirm (same rules as confirmChunk);
+     *  - uploaded row without duration → facts noted, stays uploaded;
+     *  - ready row → idempotent same-identity, CONFLICT on divergent bytes;
+     *  - failed row → FINAL. Never overwrites, never invents.
+     */
+    async confirmReceipt(
+        competitionId: number, sequence: number,
+        facts: { bytes?: number | null; object_hash?: string | null; duration_ms?: number | null }
+    ): Promise<RecordingChunk> {
+        const seq = asInt(sequence);
+        if (!seq || seq < 1 || seq > MAX_SEQUENCE) {
+            throw Object.assign(new Error('BAD_INPUT: sequence out of bounds'), { code: 'BAD_INPUT' });
+        }
+        const dur = asInt(facts.duration_ms);
+        if (dur !== null && dur <= 0) {
+            throw Object.assign(new Error('BAD_INPUT: verified duration_ms must be positive'), { code: 'BAD_INPUT' });
+        }
+        const existing = await this.db.prepare(
+            `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
+        ).bind(competitionId, seq).first<Record<string, unknown> | null>();
+        if (!existing) {
+            if (dur === null) {
+                const now = nowIso();
+                await this.db.prepare(
+                    `INSERT INTO ${this.tableName}
+                     (competition_id, generation, sequence, object_path, object_hash,
+                      container, codec_video, codec_audio, bytes, declared_duration_ms,
+                      duration_ms, state, created_at, updated_at)
+                     VALUES (?, 1, ?, ?, ?, 'mp4', NULL, NULL, ?, NULL, NULL, 'uploaded', ?, ?)`
+                ).bind(
+                    competitionId, seq,
+                    `live/match_${competitionId}/chunk_${String(seq).padStart(4, '0')}.mp4`,
+                    facts.object_hash ?? null, asInt(facts.bytes), now, now
+                ).run();
+            } else {
+                const now = nowIso();
+                await this.db.prepare(
+                    `INSERT INTO ${this.tableName}
+                     (competition_id, generation, sequence, object_path, object_hash,
+                      container, codec_video, codec_audio, bytes, declared_duration_ms,
+                      duration_ms, state, created_at, updated_at)
+                     VALUES (?, 1, ?, ?, ?, 'mp4', NULL, NULL, ?, NULL, ?, 'ready', ?, ?)`
+                ).bind(
+                    competitionId, seq,
+                    `live/match_${competitionId}/chunk_${String(seq).padStart(4, '0')}.mp4`,
+                    facts.object_hash ?? null, asInt(facts.bytes), dur, now, now
+                ).run();
+            }
+            const created = await this.db.prepare(
+                `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
+            ).bind(competitionId, seq).first<Record<string, unknown> | null>();
+            if (!created) throw new Error('Chunk record lost after receipt insert');
+            return this.row(created);
+        }
+        const row = this.row(existing);
+        if (row.state === 'failed') {
+            throw Object.assign(new Error('FINAL: failed chunks stay failed'), { code: 'FINAL' });
+        }
+        // Identity check: NULL means "unknown" (compatible), never a fact.
+        // Conflict ONLY when both sides know and disagree — never overwrite.
+        const factBytes = asInt(facts.bytes);
+        const factHash = facts.object_hash ?? null;
+        const clash = (row.bytes ?? null) !== null && factBytes !== null && row.bytes !== factBytes
+            || (row.object_hash ?? null) !== null && factHash !== null && row.object_hash !== factHash;
+        if (row.state === 'ready') {
+            if ((dur !== null && dur !== row.duration_ms) || clash) {
+                throw Object.assign(new Error('CONFLICT: receipt disagrees with confirmed facts'), { code: 'CONFLICT', existing: row });
+            }
+            return row;
+        }
+        if (clash) {
+            throw Object.assign(new Error('CONFLICT: receipt disagrees with recorded facts'), { code: 'CONFLICT', existing: row });
+        }
+        // Uploaded row: note facts; confirm only with a measured duration.
+        await this.db.prepare(
+            `UPDATE ${this.tableName}
+             SET bytes = COALESCE(?, bytes),
+                 object_hash = COALESCE(?, object_hash),
+                 updated_at = ?
+             WHERE competition_id = ? AND sequence = ?`
+        ).bind(asInt(facts.bytes), facts.object_hash ?? null, nowIso(), competitionId, seq).run();
+        if (dur === null) {
+            const noted = await this.db.prepare(
+                `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
+            ).bind(competitionId, seq).first<Record<string, unknown> | null>();
+            return this.row(noted!);
+        }
+        return this.confirmChunk(competitionId, seq, {
+            duration_ms: dur,
+            bytes: asInt(facts.bytes),
+            object_hash: facts.object_hash ?? null,
+        });
     }
 
     /**
@@ -329,16 +461,21 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
     }
 
     /** Documented gaps in 1..max (a host gap stays a gap — never invented). */
-    async detectGaps(competitionId: number): Promise<{ max: number; missing: number[] }> {
+    async detectGaps(competitionId: number): Promise<{ max: number; missing: number[]; truncated: boolean }> {
         const present = await this.sequences(competitionId);
-        if (present.length === 0) return { max: 0, missing: [] };
+        if (present.length === 0) return { max: 0, missing: [], truncated: false };
         const have = new Set(present);
         const max = present[present.length - 1];
+        // Bounded iteration (row 28 scope 9): absurd maxima (corrupt or
+        // hostile sequence numbers) report truncated instead of scanning
+        // billions of slots. Realistic traffic (2h at 5s/chunk = 1440)
+        // never approaches the bound.
+        const ceiling = Math.min(max, MAX_GAP_SCAN);
         const missing: number[] = [];
-        for (let n = 1; n <= max; n++) {
+        for (let n = 1; n <= ceiling; n++) {
             if (!have.has(n)) missing.push(n);
         }
-        return { max, missing };
+        return { max, missing, truncated: max > MAX_GAP_SCAN };
     }
 
     /**

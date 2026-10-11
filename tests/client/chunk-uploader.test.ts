@@ -38,9 +38,17 @@ function installFetch() {
             calls.push({ url: u });
             return { ok: true, json: async () => ({ success: true, chunks: playlistChunks }) };
         }
+        // R4-CHUNK-UPLOAD-SAFE-1: uploads are key-mandatory now — the mock
+        // issues bound keys (mock-infra follows the owner-ordered behavior).
+        if (u.includes('/api/chunks/register')) {
+            const body = JSON.parse(String(init?.body || '{}'));
+            calls.push({ url: `${u}#${body.chunk_index}` });
+            return { ok: true, json: async () => ({ success: true, data: { chunk_key: `k-${body.chunk_index}`, sequence: body.chunk_index, lease_generation: 1 } }) };
+        }
         if (u.includes('/upload.php')) {
             const body = init?.body as FormData;
             const num = Number((body.get('chunk_number') as string) || 0);
+            if (!body.get('chunk_key')) throw new Error('keyless upload reached the mock');
             attempts[num] = (attempts[num] || 0) + 1;
             calls.push({ url: `${u}#${num}@${attempts[num]}` });
             if (uploadBehavior(num, attempts[num]) === 'ok') {
@@ -103,6 +111,10 @@ describe('R4-CHUNK-PLAY-1 ChunkUploader', () => {
         let release!: () => void;
         const gate = new Promise<void>((r) => { release = r; });
         (globalThis as any).fetch = async (url: any, init?: any) => {
+            // Key-mandatory uploads (SAFE28 mock follows the behavior).
+            if (String(url).includes('/api/chunks/register')) {
+                return { ok: true, json: async () => ({ success: true, data: { chunk_key: 'k-gate' } }) };
+            }
             if (String(url).includes('/upload.php')) {
                 const num = (init?.body as FormData).get('chunk_number');
                 calls.push({ url: `${url}#${num}@1` });
@@ -202,6 +214,10 @@ describe('R4-CHUNK-PLAY-1 ChunkUploader', () => {
         const seenHeads: string[] = [];
         (globalThis as any).fetch = async (url: any, init?: any) => {
             const u = String(url);
+            // Key-mandatory uploads (SAFE28 mock follows the behavior).
+            if (u.includes('/api/chunks/register')) {
+                return { ok: true, json: async () => ({ success: true, data: { chunk_key: 'k-init' } }) };
+            }
             if (u.includes('/api/chunks/playlist/')) {
                 return { ok: true, json: async () => ({ success: true, chunks: [{ index: 0 }, { index: 1 }] }) };
             }
@@ -230,6 +246,10 @@ describe('R4-CHUNK-PLAY-1 ChunkUploader', () => {
         const seen: { num: string; head: string }[] = [];
         (globalThis as any).fetch = async (url: any, init?: any) => {
             const u = String(url);
+            // Key-mandatory uploads (SAFE28 mock follows the behavior).
+            if (u.includes('/api/chunks/register')) {
+                return { ok: true, json: async () => ({ success: true, data: { chunk_key: 'k-frag' } }) };
+            }
             if (u.includes('/api/chunks/playlist/')) {
                 return { ok: true, json: async () => ({ success: true, chunks: [] }) };
             }

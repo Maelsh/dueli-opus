@@ -246,14 +246,20 @@ describe('F-5A invitation flow (invitations SQL moved to model)', () => {
     });
 });
 
-describe('F-5A chunk_keys cleanup on end (moved to CompetitionModel)', () => {
-    it('ending a live competition deletes its chunk keys', async () => {
+describe('F-5A chunk_keys on end (SUPERSEDED by R4-CHUNK-UPLOAD-SAFE-1)', () => {
+    it('ending a live competition PRESERVES drain-tail keys (no bulk wipe)', async () => {
+        // Owner-ordered SAFE28 change: in-flight drain tails carry valid
+        // single-use keys and must still verify after the transition
+        // (bounded by their 10-minute TTL). Bulk-deleting them here used
+        // to silently drop the recording tail. Hygiene now comes from
+        // single-use consume + TTL expiry + opportunistic prune — the
+        // table cannot accumulate live keys.
         insertCompetition(4001, { opponent: OPPONENT, status: 'live' });
         db.exec(`INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key)
                  VALUES (4001, 0, 'f5a-key-0'), (4001, 1, 'f5a-key-1');`);
         const ended = await call('POST', '/api/competitions/4001/end', CREATOR_SESSION, {});
         expect(ended.status).toBe(200);
-        expect(await scalar('SELECT COUNT(*) FROM chunk_keys WHERE competition_id = 4001')).toBe(0);
+        expect(await scalar('SELECT COUNT(*) FROM chunk_keys WHERE competition_id = 4001')).toBe(2);
         expect(await scalar('SELECT status FROM competitions WHERE id = 4001')).toBe('completed');
     });
 });

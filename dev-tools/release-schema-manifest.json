@@ -75,6 +75,7 @@
       "0037_support_messaging.sql",
       "0038_withdrawal_payout_snapshot.sql",
       "0039_r4_db_opt1_indexes.sql",
+      "0040_recording_leases.sql",
       "0041_chunk_index.sql"
     ],
   "required_schema": {

@@ -23,6 +23,7 @@ import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 import { ExploreResultProvider, ExploreSessionService } from '../lib/services/ExploreSessionService';
 import { getUILanguage, normalizeContentLanguage } from '../i18n';
 import { EventPusher } from '../lib/services/EventPusher';
+import { RecordingLeaseModel } from '../models/RecordingLeaseModel';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
 import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError, ValidationError } from '../lib/errors/AppError';
@@ -869,9 +870,24 @@ export class CompetitionController extends BaseController {
                 return this.success(c, { ended: true, status: 'completed', already_completed: true });
             }
 
-            // Delete chunk keys when competition ends (live → completed)
-            // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة
-            await model.deleteChunkKeys(id);
+            // R4-CHUNK-UPLOAD-SAFE-1: NO bulk key deletion on end. In-flight
+            // drain tails carry valid single-use keys and must still verify
+            // after the transition (bounded by their 10-minute TTL); wiping
+            // them here would silently drop the recording tail. Hygiene is
+            // preserved by single-use consume + TTL expiry + the
+            // opportunistic expired-key prune in register/verify (same
+            // pattern as chunk_upload_nonces) — no accumulation.
+            // (Supersedes the F-5A end-cleanup pins; see tests.)
+
+            // R4-CHUNK-UPLOAD-SAFE-1: the recorder lease dies with the
+            // competition — no stuck lock survives an end (extracted lease
+            // lifecycle, PR110/HOLD preserved for row 30). Best-effort; the
+            // table ships in migration 0040 and may lag the code on deploy.
+            try {
+                await new RecordingLeaseModel(c.env.DB).releaseForCompetition(id);
+            } catch (leaseError) {
+                console.error(`[End] Lease release failed for ${id}:`, leaseError);
+            }
 
             // R4-CHUNK-INDEX-1: snapshot the index at end (ended ≠ finalized).
             // Best-effort and never blocking: the marker records what the
