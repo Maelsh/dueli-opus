@@ -4,10 +4,14 @@
  */
 
 import { Hono } from 'hono';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
 import { CryptoUtils } from '../../../lib/services/CryptoUtils';
 import { findInitEnd } from '../../../lib/services/ChunkInitSegment';
+import { ChunkIndexModel } from '../../../models/ChunkIndexModel';
+import { mergePlaylistWithIndex } from '../../../lib/services/ChunkIndexPlaylist';
+import type { RecordingChunk } from '../../../models/ChunkIndexModel';
 import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../config/defaults';
 
 const chunksRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -253,9 +257,14 @@ chunksRoutes.delete('/:key', verifyUploadServerHmac, verifyUploadServerOrigin, a
  *  - `extension` / `total_duration`: timeline/format metadata when the
  *    upstream provides it (null otherwise — callers fall back, never guess).
  *  - `chunk_count`, `max_index`, `checked_at`.
- *  - Zero D1 reads by design (no competition lookup): per-viewer polling
- *    must stay cheap; clients map `upstream` + competition status to the
- *    empty-live / processing / ready / not-recorded / upstream-error states.
+ *  - R4-CHUNK-INDEX-1: D1 is the metadata authority when rows exist (one
+ *    bounded indexed SELECT + one PK lookup per call; proxy-only otherwise
+ *    — including when c.env.DB is absent or migration 0041 is not applied
+ *    yet, so legacy/error paths stay byte-identical). D1 rows annotate
+ *    entries (`ready`, verified `duration`, `timeline_start_ms`) and supply
+ *    orphan entries built from object_path; `index_source` + `index_metadata`
+ *    are additive. A dead/empty proxy with D1 rows still serves the
+ *    authority list (index_source 'd1') instead of erasing video.
  *  - `Cache-Control: public, max-age=5`: collapses multi-viewer fan-out at
  *    the edge without serving stale live data.
  */
@@ -322,7 +331,52 @@ chunksRoutes.get('/playlist/:id', async (c) => {
 
     const base = (c.env.FFMPEG_SERVER_URL || DEFAULT_UPLOAD_URL).replace(/\/+$/, '');
     const jsonHeaders = { 'Cache-Control': 'public, max-age=5' };
-    const empty = (upstream: string) => c.json({
+    const compId = Number(id);
+
+    // R4-CHUNK-INDEX-1: D1 authority layer (dormant-safe). Absent DB (unit
+    // tests pass no env), a missing 0041 table (prod before owner-gated
+    // apply), or zero rows all fall through to the exact legacy behavior.
+    let indexRows: RecordingChunk[] = [];
+    let indexFinalized = false;
+    const db = (c.env as unknown as { DB?: D1Database }).DB;
+    if (db) {
+        try {
+            const indexModel = new ChunkIndexModel(db);
+            indexRows = await indexModel.listOrdered(compId, { limit: 2000 });
+            indexFinalized = (await indexModel.getFinalMarker(compId)) !== null;
+        } catch {
+            indexRows = [];
+            indexFinalized = false;
+        }
+    }
+    const hasIndex = indexRows.length > 0;
+
+    const serveIndex = (proxyUpstream: string) => {
+        // D1 serves the authority list even when the proxy is dead/empty/
+        // invalid (e.g. the known-empty playlist.php): the response IS a
+        // valid playlist, hence upstream 'ok' + provenance fields. Per-chunk
+        // fetch failures stay loud downstream under existing bounds.
+        const merged = mergePlaylistWithIndex([], indexRows, base, indexFinalized);
+        const totalReady = merged.metadata.total_ready_ms;
+        return c.json({
+            success: true,
+            id: compId,
+            chunks: merged.chunks,
+            chunk_count: merged.chunks.length,
+            max_index: merged.chunks.length > 0 ? merged.chunks[merged.chunks.length - 1].index : -1,
+            extension: merged.chunks.length > 0 ? (merged.chunks[0].url.match(/\.(mp4|webm)(?=[?#]|$)/i)?.[1].toLowerCase() ?? null) : null,
+            total_duration: totalReady > 0 ? totalReady / 1000 : null,
+            upstream: 'ok',
+            checked_at: new Date().toISOString(),
+            index_source: 'd1' as const,
+            index_detail: { proxy_upstream: proxyUpstream },
+            index_metadata: merged.metadata,
+        }, 200, jsonHeaders);
+    };
+
+    const empty = (upstream: string) => {
+        if (hasIndex) return serveIndex(upstream);
+        return c.json({
         success: true,
         id: Number(id),
         chunks: [],
@@ -333,6 +387,7 @@ chunksRoutes.get('/playlist/:id', async (c) => {
         upstream,
         checked_at: new Date().toISOString(),
     }, 200, jsonHeaders);
+    };
 
     let res: Response;
     try {
@@ -407,6 +462,30 @@ chunksRoutes.get('/playlist/:id', async (c) => {
     const totalDuration = allDurations
         ? chunks.reduce((sum, ch) => sum + (ch.duration as number), 0)
         : null;
+
+    // R4-CHUNK-INDEX-1: D1 authority annotates (verified durations win,
+    // orphans appended, gaps reported) — additive fields only. No D1 rows:
+    // the exact legacy shape below is preserved untouched.
+    if (hasIndex) {
+        const merged = mergePlaylistWithIndex(chunks, indexRows, base, indexFinalized);
+        const served = merged.chunks;
+        const first = served.length > 0 ? served[0].url : null;
+        const ext = first ? first.match(/\.(mp4|webm)(?=[?#]|$)/i) : null;
+        const allDur = served.length > 0 && served.every((ch) => typeof ch.duration === 'number');
+        return c.json({
+            success: true,
+            id: Number(id),
+            chunks: served,
+            chunk_count: served.length,
+            max_index: served.length > 0 ? served[served.length - 1].index : -1,
+            extension: ext ? ext[1].toLowerCase() : null,
+            total_duration: allDur ? served.reduce((sum, ch) => sum + (ch.duration as number), 0) : null,
+            upstream: 'ok',
+            checked_at: new Date().toISOString(),
+            index_source: 'merged' as const,
+            index_metadata: merged.metadata,
+        }, 200, jsonHeaders);
+    }
 
     return c.json({
         success: true,

@@ -344,6 +344,16 @@ export class ScheduledTaskService {
             DELETE FROM chunk_keys WHERE competition_id = ?
         `).bind(competitionId).run();
 
+        // R4-CHUNK-INDEX-1: snapshot the index at auto-end (ended ≠
+        // finalized). Best-effort like the controller path — the marker is
+        // informational for SAFE28/download and never blocks the cutoff.
+        try {
+            const { ChunkIndexModel } = await import('../../models/ChunkIndexModel');
+            await new ChunkIndexModel(this.db).recordFinalMarker(competitionId);
+        } catch (e) {
+            console.error(`[AutoEnd] Index marker failed for #${competitionId}:`, e);
+        }
+
         const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
         for (const userId of userIds) {
             // F-7: i18n (stored snapshot stays English; behavior unchanged).

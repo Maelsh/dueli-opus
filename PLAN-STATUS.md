@@ -1,3 +1,10 @@
+## R4-CHUNK-INDEX-1 D1 chunk metadata · فرع feat/r4-chunk-index-1 (من 216e4b5 = origin/main بعد PR #109)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/تغيير خارجي (‏0041 محلي فقط). ‏PR110 مفتوحة ومحفوظة ولم تُمس (لا تكرار لعملها؛ الترقيم ‏0041 يتجنب ‏0040 الخاصة بها). ‏H7 والمالية والصفوف ‏28–43 لم تُمس.
+- نفّذ: فهرس ‏D1 (حالات ‏uploaded/ready/failed، مدد موثقة بالإيصال فقط، ‏timeline محسوب، ‏gaps، ‏resume، ‏lookup زمان→قطعة، ‏marker نهائي ‏idempotent مع تمييز ‏ended/finalized، ضمانات الكاتب، استيراد قديم ‏read-only)؛ قائمة التشغيل بسلطة ‏D1 مع توافق تام للقديم (فارغ/غائب = بايت-مطابق)؛ لقطة ‏marker في ‏end/cron دون حجب؛ ‏manifest (عضوية ‏0041 بلا ‏baseline جديد) + تغطية ‏FK.
+- **الأدلة**: ‏T/B ‏19/19 جديدة؛ الجيران ‏128/128؛ ‏release-readiness نفس ‏12 البيئية على ‏BASE؛ ‏tsc/build ✅؛ ‏any ‏+0 (‏287 = ‏BASE)؛ ‏0041 مطبقة محليًا. بلا ‏S/E2E (النطاق ‏T/B فقط).
+- **المتبقي**: REMOTE مستقلة ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE. ‏SAFE28/PLAYER29/DOWNLOAD30 تستهلك العقد لاحقًا. تنبيه دمج: ‏0040 في ‏PR110 بلا ‏manifest — على القائد معالجته عند دمجها.
+
 ## R4-COMP-UNIFIED-1 unified competition page · فرع feat/r4-comp-unified-1 (من 8f3d194 = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B + S — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل/تغيير خارجي أو إنتاجي. H7 وPhase7 وDOWNLOAD-1 لم تُمس.
