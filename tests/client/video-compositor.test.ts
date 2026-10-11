@@ -49,8 +49,9 @@ class MockMediaRecorder {
 
 const ctx2d = () => ({
     fillStyle: '', fillRect() {}, strokeStyle: '', lineWidth: 0,
-    beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+    beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, strokeRect() {},
     drawImage() {}, font: '', textAlign: '', textBaseline: '', fillText() {},
+    createLinearGradient: () => ({ addColorStop() {} }),
 });
 
 const fakeCanvas = () => ({
@@ -177,5 +178,135 @@ describe('R4-CHUNK-PLAY-1 VideoCompositor drain', () => {
         comp.stopCompositing();
         const first = calls.find((c) => c.startsWith('upload:'));
         expect(first).toBe('upload:4'); // appends, never overwrites 0..2
+    });
+});
+
+describe('R4-COMP-UNIFIED-1 original design + MIME (reused literally)', () => {
+    let ctxLog: Array<{ op: string; args: unknown[] }>;
+    let imageSrcs: string[];
+
+    const recordingCtx = () => {
+        const api: any = {
+            createLinearGradient: () => ({ addColorStop: () => {} }),
+        };
+        for (const m of ['fillRect', 'drawImage', 'strokeRect', 'fillText', 'beginPath', 'moveTo', 'lineTo', 'stroke']) {
+            api[m] = (...args: unknown[]) => ctxLog.push({ op: m, args });
+        }
+        api.fillStyle = '';
+        api.strokeStyle = '';
+        api.lineWidth = 0;
+        api.font = '';
+        api.textAlign = '';
+        return api;
+    };
+
+    class MockImage {
+        complete = true;
+        naturalWidth = 64;
+        crossOrigin = '';
+        private _src = '';
+        set src(v: string) { this._src = v; imageSrcs.push(v); }
+        get src() { return this._src; }
+    }
+
+    const readyVideo = () => ({
+        readyState: 4, videoWidth: 640, videoHeight: 480, srcObject: null,
+    });
+
+    function makeDesignCompositor(opts: { rtl: boolean; platformName: string }) {
+        (globalThis as any).Image = MockImage;
+        imageSrcs = [];
+        ctxLog = [];
+        return new VideoCompositor({
+            competitionId: 9,
+            localVideo: readyVideo() as any,
+            remoteVideo: readyVideo() as any,
+            canvas: { width: 1280, height: 720, getContext: () => recordingCtx(), captureStream: () => new FakeStream() } as any,
+            serverUrl: 'https://x.test/ffmpeg',
+            platformName: opts.platformName,
+            rtl: opts.rtl,
+        });
+    }
+
+    it('1. draws gradient background, logo, host-language name, both videos with Dueli borders', () => {
+        const comp = makeDesignCompositor({ rtl: true, platformName: 'ديولي' });
+        comp.startCompositing();
+        const ops = (name: string) => ctxLog.filter((c) => c.op === name);
+
+        // Gradient background over the full 1280×720 frame.
+        expect(ops('fillRect').length).toBeGreaterThanOrEqual(3); // bg + 2 video cells
+        expect(ops('fillRect')[0].args).toEqual([0, 0, 1280, 720]);
+
+        // Original logo asset requested once.
+        expect(imageSrcs).toEqual(['/static/dueli-icon.png']);
+
+        // Host-language platform name (single fillText with the RTL font).
+        const texts = ops('fillText');
+        expect(texts.length).toBe(1);
+        expect(texts[0].args[0]).toBe('ديولي');
+
+        // Logo drawn once (first arg is the image) + both competitors + borders.
+        const draws = ops('drawImage');
+        expect(draws.filter((c) => (c.args as any[])[0] instanceof MockImage).length).toBe(1);
+        expect(draws.filter((c) => !((c.args as any[])[0] instanceof MockImage)).length).toBe(2);
+        expect(ops('strokeRect').length).toBe(2);
+        comp.stopCompositing();
+    });
+
+    it('2. RTL puts the host right, LTR puts the host left (original order)', () => {
+        const rtlComp = makeDesignCompositor({ rtl: true, platformName: 'ديولي' });
+        rtlComp.startCompositing();
+        const rtlFirstVideoX = (ctxLog.find((c) => c.op === 'drawImage' && !((c.args as any[])[0] instanceof MockImage))?.args as any[])[1];
+        rtlComp.stopCompositing();
+
+        const ltrComp = makeDesignCompositor({ rtl: false, platformName: 'Dueli' });
+        ltrComp.startCompositing();
+        const ltrFirstVideoX = (ctxLog.find((c) => c.op === 'drawImage' && !((c.args as any[])[0] instanceof MockImage))?.args as any[])[1];
+        ltrComp.stopCompositing();
+
+        // RTL host cell starts right of center (660), LTR host cell at margin (40).
+        expect(rtlFirstVideoX).toBeGreaterThan(640);
+        expect(ltrFirstVideoX).toBeLessThan(640);
+    });
+
+    it('3. non-flowing videos are skipped, background still painted', () => {
+        (globalThis as any).Image = MockImage;
+        imageSrcs = [];
+        ctxLog = [];
+        const comp = new VideoCompositor({
+            competitionId: 9,
+            localVideo: { readyState: 0, videoWidth: 0, srcObject: null } as any,
+            remoteVideo: { readyState: 0, videoWidth: 0, srcObject: null } as any,
+            canvas: { width: 1280, height: 720, getContext: () => recordingCtx(), captureStream: () => new FakeStream() } as any,
+            serverUrl: 'https://x.test/ffmpeg',
+        });
+        comp.startCompositing();
+        // Background gradient + logo only — no video cells, no borders, no crash.
+        const draws = ctxLog.filter((c) => c.op === 'drawImage');
+        expect(draws.filter((c) => (c.args as any[])[0] instanceof MockImage).length).toBe(1);
+        expect(draws.filter((c) => !((c.args as any[])[0] instanceof MockImage)).length).toBe(0);
+        expect(ctxLog.filter((c) => c.op === 'strokeRect').length).toBe(0);
+        expect(ctxLog.filter((c) => c.op === 'fillRect').length).toBe(1);
+        comp.stopCompositing();
+    });
+
+    it('4. MIME matrix: MP4 when supported, real WebM fallback otherwise (never mislabeled)', () => {
+        const MR = MockMediaRecorder as any;
+        const orig = MR.isTypeSupported;
+        try {
+            MR.isTypeSupported = () => true;
+            expect(makeDesignCompositor({ rtl: false, platformName: 'Dueli' }).getFormat())
+                .toEqual({ mimeType: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"', extension: 'mp4' });
+
+            MR.isTypeSupported = (t: string) => !t.includes('mp4');
+            expect(makeDesignCompositor({ rtl: false, platformName: 'Dueli' }).getFormat().extension).toBe('webm');
+            expect(makeDesignCompositor({ rtl: false, platformName: 'Dueli' }).getFormat().mimeType).toContain('webm');
+
+            MR.isTypeSupported = () => false;
+            expect(makeDesignCompositor({ rtl: false, platformName: 'Dueli' }).getFormat())
+                .toEqual({ mimeType: 'video/webm', extension: 'webm' });
+        } finally {
+            MR.isTypeSupported = orig;
+        }
     });
 });

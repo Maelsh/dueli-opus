@@ -1,3 +1,10 @@
+## R4-COMP-UNIFIED-1 unified competition page · فرع feat/r4-comp-unified-1 (من 8f3d194 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B + S — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل/تغيير خارجي أو إنتاجي. H7 وPhase7 وDOWNLOAD-1 لم تُمس.
+- نفّذ: الرسم الأصلي حرفيًا داخل VideoCompositor (شعار + لغة المضيف + خلفية + إطارات + 720p + RTL)؛ MP4 عند الدعم مع fallback حقيقي؛ قرار سطح واحد خالص (4 أدوار × 4 حالات، بلا ادعاء دور)؛ كتلة المتنافس داخل الصفحة بنفس فئات الحزمة (تسجيل المضيف وحده، بلا رفع/finalize مزدوج، بلا إنهاء من unload)؛ المشاهد بمشغل PR108؛ صفحات الاختبار و/live للتوافق؛ 4 مفاتيح ar/en وهوامش منطقية.
+- **الأدلة**: مصفوفة ‏22/22 + دبابيس ‏6 + تصميم/MIME ‏4؛ الجيران خضراء؛ الكاملة ‏1549 + نفس ‏18 البيئية على ‏BASE؛ ‏tsc/build ✅؛ ‏any ‏287 (‏BASE ‏289، ‏−2). ‏S: ‏PASS بأدلة (`comp-unified.evidence.json`: متنافسان متصلان + تسجيل مرفوع + جمهور بإطارات ‏@1280 + finalize وحيد + VOD بإطارات؛ الصوت بالمستوى البايتي من الصف ‏25).
+- **المتبقي**: REMOTE مستقلة ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-CHUNK-PLAY-1 audience chunks · فرع feat/r4-chunk-play-1 (من 98a1358 = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B، وS معطلة بيئيًا — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل/تغيير خارجي أو إنتاجي (خادم القائمة + عميل الرفع/التسجيل/التشغيل + i18n الجمهور + اختبارات). H7 وPhase7 وCOMP-UNIFIED-1 وDOWNLOAD-1 لم تُمس.

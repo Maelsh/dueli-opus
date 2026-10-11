@@ -1,0 +1,14 @@
+{
+  "startedAt": "2026-10-11T00:12:25.900Z",
+  "project": "en",
+  "stubBase": "https://127.0.0.1:4931",
+  "competitionId": 360,
+  "liveAudience": {
+    "frames": 19,
+    "width": 1280
+  },
+  "vod": {
+    "frames": 22
+  },
+  "verdict": "PASS"
+}
