@@ -60,3 +60,7 @@ export type { ManagedDocument, ManagedDocumentInput, ManagedDocumentStatus, Mana
 // R2-M (H6): independent admin-messaging store
 export { SupportModel } from './SupportModel';
 export type { SupportThread, SupportMessage, SupportThreadStatus, SupportSenderKind, SupportThreadWithMeta } from './SupportModel';
+
+// R4-CHUNK-INDEX-1 (row 27): D1 chunk metadata authority (portable model)
+export { ChunkIndexModel, nowIso } from './ChunkIndexModel';
+export type { RecordingChunk, ChunkState, RecordChunkInput, ChunkReceipt, TimelineEntry, FinalMarker } from './ChunkIndexModel';

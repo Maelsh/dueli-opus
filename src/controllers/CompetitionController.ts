@@ -16,7 +16,8 @@ import {
     NotificationModel,
     UserModel,
     RatingModel,
-    UserBlockModel
+    UserBlockModel,
+    ChunkIndexModel
 } from '../models';
 import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 import { ExploreResultProvider, ExploreSessionService } from '../lib/services/ExploreSessionService';
@@ -871,6 +872,16 @@ export class CompetitionController extends BaseController {
             // Delete chunk keys when competition ends (live → completed)
             // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة
             await model.deleteChunkKeys(id);
+
+            // R4-CHUNK-INDEX-1: snapshot the index at end (ended ≠ finalized).
+            // Best-effort and never blocking: the marker records what the
+            // index held (uploaded/ready/gaps) for SAFE28/download; cutoff
+            // and payouts below never wait for video (owner 15 §2).
+            try {
+                await new ChunkIndexModel(c.env.DB).recordFinalMarker(id);
+            } catch (markerError) {
+                console.error(`[End] Index marker failed for ${id}:`, markerError);
+            }
 
             // R2-V: cutoff FIRST (guarded live->completed above — from here on
             // every rating write is rejected), THEN the final result/ELO/
