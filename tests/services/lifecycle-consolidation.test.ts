@@ -126,7 +126,9 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     });
 
     /* ---------- RULE C ---------- */
-    it('Rule C cron: live >=2h auto-ended, users freed, chunk_keys deleted', async () => {
+    it('Rule C cron: live >=2h auto-ended, users freed, drain keys preserved', async () => {
+        // SUPERSEDED by R4-CHUNK-UPLOAD-SAFE-1 (same drain-tail rule as
+        // the controller path): auto-end no longer bulk-wipes keys.
         await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at) VALUES (7, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H});`);
         await exec(d, `INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key) VALUES (7, 1, 'k1');`);
 
@@ -135,7 +137,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
         expect(await statusOf(d, 7)).toBe('completed');
         expect(await isBusy(d, 9001)).toBe(false);
         expect(await isBusy(d, 9002)).toBe(false);
-        expect(await exists(d, `SELECT 1 FROM chunk_keys WHERE competition_id = 7`)).toBe(false);
+        expect(await exists(d, `SELECT 1 FROM chunk_keys WHERE competition_id = 7`)).toBe(true);
         const row7 = (await d.prepare(`SELECT auto_deleted_reason FROM competitions WHERE id = 7`).first()) as any;
         expect(row7?.auto_deleted_reason).toBe('live_max_2hr');
     });

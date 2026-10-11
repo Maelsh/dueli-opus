@@ -12,6 +12,7 @@ import { findInitEnd } from '../../../lib/services/ChunkInitSegment';
 import { ChunkIndexModel } from '../../../models/ChunkIndexModel';
 import { mergePlaylistWithIndex } from '../../../lib/services/ChunkIndexPlaylist';
 import type { RecordingChunk } from '../../../models/ChunkIndexModel';
+import { RecordingLeaseModel } from '../../../models/RecordingLeaseModel';
 import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../config/defaults';
 
 const chunksRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -114,25 +115,47 @@ const verifyUploadServerHmac = async (c: any, next: any) => {
 
 /**
  * POST /api/chunks/register
- * Register a new chunk key before upload
- * المضيف يسجل مفتاح جديد لقطعة قبل رفعها
+ * R4-CHUNK-UPLOAD-SAFE-1: MANDATORY short-lived upload authorization bound
+ * to (host, competition, lease generation, sequence, object identity,
+ * byte ceiling). No optional key, no legacy bypass — when any safety
+ * condition is missing the call fails closed with an explicit code.
+ *
+ * Flow: host acquires the recorder lease (extracted PR110 lifecycle) → per
+ * chunk, registers here → uploads to the external host WITH chunk_key →
+ * the host verifies via GET /verify (atomic consume) → the host reports
+ * via POST /receipt → ready is published from verified facts only.
+ * The object_path is DERIVED server-side (never trusted from the client)
+ * in the exact uploader filename shape (chunk_NNNN.ext) the playlist
+ * stream builder and the index import mapping already use.
  */
+const REGISTER_MAX_BYTES = 60000000; // 60MB documented ceiling (PHP enforces per runbook)
+
 chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => {
     const { DB } = c.env;
     const user = c.get('user');
 
     try {
-        const body = await c.req.json();
-        const { competition_id, chunk_index } = body;
+        const body = await c.req.json().catch(() => ({})) as {
+            competition_id?: unknown; chunk_index?: unknown; extension?: unknown;
+        };
+        const competitionId = Number(body?.competition_id);
+        const chunkIndex = Number(body?.chunk_index);
+        const extension = typeof body?.extension === 'string' ? body.extension.toLowerCase() : 'webm';
 
-        if (!competition_id || chunk_index === undefined) {
+        if (!Number.isFinite(competitionId) || competitionId <= 0) {
             return c.json({ success: false, error: 'Missing competition_id or chunk_index' }, 400);
         }
+        if (!Number.isInteger(chunkIndex) || chunkIndex < 1) {
+            return c.json({ success: false, error: 'chunk_index must be a positive integer sequence', code: 'bad_sequence' }, 400);
+        }
+        if (extension !== 'mp4' && extension !== 'webm') {
+            return c.json({ success: false, error: 'extension must be mp4 or webm', code: 'bad_container' }, 400);
+        }
 
-        // Verify user is host of competition
+        // Verify user is host of a live competition (unchanged gates).
         const competition = await DB.prepare(
             'SELECT creator_id FROM competitions WHERE id = ? AND status = ?'
-        ).bind(competition_id, 'live').first();
+        ).bind(competitionId, 'live').first() as any;
 
         if (!competition) {
             return c.json({ success: false, error: 'Competition not found or not live' }, 404);
@@ -142,19 +165,83 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
             return c.json({ success: false, error: 'Only host can register chunk keys' }, 403);
         }
 
-        // Generate unique key bound to (user, competition, chunk) with a
-        // short expiry — the upload server must present it within minutes.
+        // Lease REQUIRED (fail closed — no recording without proven
+        // ownership; missing 0040 store is a 503, never a legacy bypass).
+        let generation: number;
+        try {
+            const lease = await new RecordingLeaseModel(DB).status(competitionId);
+            if (!lease.held) {
+                return c.json({ success: false, error: 'No active recorder lease for this competition', code: 'lease_not_held' }, 409);
+            }
+            generation = lease.generation;
+        } catch (error: unknown) {
+            if (leaseUnavailable(error)) {
+                return c.json({ success: false, error: 'Recorder lease store unavailable', code: 'lease_unavailable' }, 503);
+            }
+            throw error;
+        }
+
+        const objectPath = `live/match_${competitionId}/chunk_${String(chunkIndex).padStart(4, '0')}.${extension}`;
+
+        // Opportunistic expired-key prune (same pattern as upload nonces):
+        // single-use + TTL already bound table growth; this keeps it tiny
+        // without a cron dependency and never touches live keys.
+        await DB.prepare(
+            `DELETE FROM chunk_keys WHERE expires_at IS NOT NULL AND expires_at < datetime('now')`
+        ).run().catch(() => undefined);
+
+        // Generate unique key bound to (host, competition, sequence,
+        // generation, object) with a short expiry.
         const chunk_key = generateChunkKey();
 
-        // Insert into database
-        await DB.prepare(
-            `INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key, user_id, expires_at)
-             VALUES (?, ?, ?, ?, ${CHUNK_KEY_TTL})`
-        ).bind(competition_id, chunk_index, chunk_key, user?.id ?? null).run();
+        try {
+            await DB.prepare(
+                `INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key, user_id, expires_at, lease_generation, object_path, max_bytes)
+                 VALUES (?, ?, ?, ?, ${CHUNK_KEY_TTL}, ?, ?, ?)`
+            ).bind(competitionId, chunkIndex, chunk_key, user?.id ?? null, generation, objectPath, REGISTER_MAX_BYTES).run();
+        } catch (error: unknown) {
+            if (leaseUnavailable(error)) {
+                // 0042 not applied yet — fail closed, never keyless.
+                return c.json({ success: false, error: 'Key binding store unavailable', code: 'binding_unavailable' }, 503);
+            }
+            throw error;
+        }
+
+        // Index the slot immediately (uploaded, unverified) so order/gaps
+        // are live before bytes land; readiness waits for receipts.
+        try {
+            await new ChunkIndexModel(DB).recordChunk(competitionId, {
+                sequence: chunkIndex,
+                generation,
+                object_path: objectPath,
+                container: extension as 'mp4' | 'webm',
+            }, user?.id as number);
+        } catch (error: unknown) {
+            const code = (error as { code?: string })?.code;
+            if (code === 'CONFLICT') {
+                await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(chunk_key).run().catch(() => undefined);
+                return c.json({ success: false, error: 'Sequence already recorded with different bytes', code: 'conflict' }, 409);
+            }
+            // Gate-to-write race (status flipped mid-call): report the
+            // state, never a 500.
+            if (code === 'NOT_LIVE') {
+                await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(chunk_key).run().catch(() => undefined);
+                return c.json({ success: false, error: 'Competition not found or not live', code: 'not_live' }, 409);
+            }
+            if (code === 'FORBIDDEN' || code === 'NO_COMPETITION') {
+                await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(chunk_key).run().catch(() => undefined);
+                return c.json({ success: false, error: 'Only host can register chunk keys', code: 'forbidden' }, 403);
+            }
+            if (leaseUnavailable(error)) {
+                await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(chunk_key).run().catch(() => undefined);
+                return c.json({ success: false, error: 'Chunk index store unavailable', code: 'index_unavailable' }, 503);
+            }
+            throw error;
+        }
 
         return c.json({
             success: true,
-            data: { chunk_key }
+            data: { chunk_key, sequence: chunkIndex, lease_generation: generation, object_path: objectPath, max_bytes: REGISTER_MAX_BYTES }
         });
 
     } catch (error: any) {
@@ -165,7 +252,15 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
 
 /**
  * GET /api/chunks/verify
- * Verify a chunk key (called by upload server)
+ * R4-CHUNK-UPLOAD-SAFE-1: verify + ATOMICALLY CONSUME a chunk key (called
+ * by the upload server). Single-use: the first verification deletes the key
+ * inside the same serialized batch, so a replayed key is simply not found.
+ * Generation fencing: a key bound to an older lease generation than the
+ * current one is stale (takeover happened) and rejected. Pre-binding legacy
+ * keys (NULL generation) are rejected — fail closed, no legacy bypass.
+ * Drain rule: after a clean end (lease released, no successor) unexpired
+ * keys still verify — the bounded drain tail must land; the final marker
+ * snapshots whatever the index holds. Expiry cleanup is included.
  * التحقق من مفتاح القطعة (يستدعيه سيرفر الرفع)
  */
 chunksRoutes.get('/verify', verifyUploadServerHmac, verifyUploadServerOrigin, async (c) => {
@@ -179,17 +274,59 @@ chunksRoutes.get('/verify', verifyUploadServerHmac, verifyUploadServerOrigin, as
         }
 
         const chunkKey = await DB.prepare(
-            'SELECT id, competition_id, chunk_index, user_id, expires_at FROM chunk_keys WHERE chunk_key = ?'
+            `SELECT id, competition_id, chunk_index, user_id, expires_at, lease_generation, object_path, max_bytes,
+                    (expires_at IS NOT NULL AND expires_at < datetime('now')) AS expired
+             FROM chunk_keys WHERE chunk_key = ?`
         ).bind(key).first() as any;
 
         if (!chunkKey) {
             return c.json({ valid: false, error: 'Key not found' });
         }
 
-        // Short-lived keys: reject expired ones and clean them up
-        if (chunkKey.expires_at && new Date(chunkKey.expires_at).getTime() < Date.now()) {
+        // Short-lived keys: reject expired ones and clean them up. The
+        // comparison runs INSIDE SQLite (both sides UTC text) — parsing
+        // 'YYYY-MM-DD HH:MM:SS' in JS shifts by the host timezone (a latent
+        // bug this replaces: non-UTC hosts expired fresh keys).
+        if (chunkKey.expired) {
             await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(key).run();
             return c.json({ valid: false, error: 'Key expired' });
+        }
+
+        // Pre-binding legacy keys carry no generation — unverifiable by
+        // design (fail closed; no live legacy keys exist: no client path
+        // used register before SAFE28).
+        if (chunkKey.lease_generation === null || chunkKey.lease_generation === undefined) {
+            await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(key).run();
+            return c.json({ valid: false, error: 'Key not bound to a lease generation' });
+        }
+
+        // Generation fencing against the CURRENT lease (takeover kills old
+        // keys immediately, even inside their TTL). A missing lease row
+        // (released after a clean end, never re-acquired) still verifies —
+        // bounded drain tails must land; the marker snapshots the index.
+        try {
+            const lease = await new RecordingLeaseModel(DB).status(chunkKey.competition_id);
+            if (lease.held && lease.generation !== chunkKey.lease_generation) {
+                await DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(key).run();
+                return c.json({ valid: false, error: 'Stale lease generation' });
+            }
+        } catch (error: unknown) {
+            if (!leaseUnavailable(error)) throw error;
+            // 0040 not applied yet — without fencing there is no safe
+            // verification: fail closed.
+            return c.json({ valid: false, error: 'Lease store unavailable' });
+        }
+
+        // Atomic single-use consume: SELECT above + DELETE here run in one
+        // serialized batch — a concurrent replay finds nothing (D1 batches
+        // never interleave, same guarantee the nonce + rate guards rely on).
+        // Expired strays are pruned opportunistically (see register).
+        const consumed = await DB.batch([
+            DB.prepare('DELETE FROM chunk_keys WHERE chunk_key = ?').bind(key),
+            DB.prepare(`DELETE FROM chunk_keys WHERE expires_at IS NOT NULL AND expires_at < datetime('now')`),
+        ]);
+        if ((consumed[0]?.meta?.changes ?? 0) === 0) {
+            return c.json({ valid: false, error: 'Key already used' });
         }
 
         return c.json({
@@ -197,13 +334,88 @@ chunksRoutes.get('/verify', verifyUploadServerHmac, verifyUploadServerOrigin, as
             data: {
                 competition_id: chunkKey.competition_id,
                 chunk_index: chunkKey.chunk_index,
-                user_id: chunkKey.user_id ?? null
+                user_id: chunkKey.user_id ?? null,
+                lease_generation: chunkKey.lease_generation,
+                object_path: chunkKey.object_path ?? null,
+                max_bytes: chunkKey.max_bytes ?? null
             }
         });
 
     } catch (error: any) {
         console.error('Verify chunk error:', error);
         return c.json({ valid: false, error: error.message }, 500);
+    }
+});
+
+/**
+ * POST /api/chunks/receipt
+ * R4-CHUNK-UPLOAD-SAFE-1: authenticated storage receipt (called by the
+ * upload server AFTER bytes are durably stored). Connects verified
+ * confirmation to ChunkIndexModel — ready is published from measured facts
+ * only. Client-declared duration/bytes can NEVER reach this path (same
+ * HMAC + origin envelope as /verify; no user session accepted here).
+ * Body: { competition_id, sequence, bytes?, object_hash?, duration_ms?,
+ *         status: 'stored' | 'failed', error? }.
+ *  - stored + measured duration → ready (create-or-confirm, idempotent;
+ *    divergent bytes for the same sequence → conflict, never overwrite).
+ *  - stored without duration → facts noted, slot stays uploaded.
+ *  - failed → slot marked failed (terminal, keeps locator).
+ */
+chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, async (c) => {
+    const { DB } = c.env;
+
+    try {
+        const body = await c.req.json().catch(() => ({})) as {
+            competition_id?: unknown; sequence?: unknown; bytes?: unknown;
+            object_hash?: unknown; duration_ms?: unknown; status?: unknown; error?: unknown;
+        };
+        const competitionId = Number(body?.competition_id);
+        const sequence = Number(body?.sequence);
+        if (!Number.isFinite(competitionId) || competitionId <= 0 || !Number.isInteger(sequence) || sequence < 1) {
+            return c.json({ success: false, error: 'Invalid competition_id or sequence' }, 400);
+        }
+        const status = body?.status === 'failed' ? 'failed' : 'stored';
+        const bytes = typeof body?.bytes === 'number' && Number.isFinite(body.bytes) && (body.bytes as number) >= 0
+            ? Math.floor(body.bytes as number) : null;
+        const objectHash = typeof body?.object_hash === 'string' && (body.object_hash as string).length <= 256
+            ? (body.object_hash as string) : null;
+        const durationMs = typeof body?.duration_ms === 'number' && Number.isFinite(body.duration_ms)
+            ? Math.floor(body.duration_ms as number) : null;
+
+        const model = new ChunkIndexModel(DB);
+        if (status === 'failed') {
+            try {
+                const row = await model.failChunk(competitionId, sequence);
+                return c.json({ success: true, data: { state: row.state, sequence } });
+            } catch (error: unknown) {
+                if ((error as { code?: string })?.code === 'NOT_FOUND') {
+                    return c.json({ success: false, error: 'No such chunk slot' }, 404);
+                }
+                throw error;
+            }
+        }
+
+        try {
+            const row = await model.confirmReceipt(competitionId, sequence, {
+                bytes, object_hash: objectHash, duration_ms: durationMs,
+            });
+            return c.json({ success: true, data: { state: row.state, sequence, duration_ms: row.duration_ms } });
+        } catch (error: unknown) {
+            const code = (error as { code?: string })?.code;
+            if (code === 'CONFLICT') {
+                return c.json({ success: false, error: 'Conflicting bytes for this sequence', code: 'conflict' }, 409);
+            }
+            if (code === 'FINAL') {
+                return c.json({ success: false, error: 'Chunk slot is terminally failed', code: 'final' }, 409);
+            }
+            throw error;
+        }
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Chunk index store unavailable', code: 'index_unavailable' }, 503);
+        }
+        console.error('Receipt error:', error);
+        return c.json({ success: false, error: error.message }, 500);
     }
 });
 
@@ -577,6 +789,158 @@ chunksRoutes.get('/init/:id', async (c) => {
         }, 200, headers);
     } catch {
         return fail();
+    }
+});
+
+/**
+ * R4-CHUNK-UPLOAD-SAFE-1 (row 28): server-backed exclusive recorder
+ * ownership (lease/fencing) — EXTRACTED from PR110/HOLD (commit
+ * 6e7ca1039484980affbcaf6f0eab548a82c35d17, paths
+ * migrations/0040_recording_leases.sql + src/models/RecordingLeaseModel.ts
+ * copied identical + this section ported). PR110 is preserved for row 30;
+ * its client lease enforcement (uploader stop/finalize-refuse, page wiring)
+ * is NOT duplicated here — issuance + verification + receipts (this unit)
+ * are enforced platform-side regardless of client.
+ *
+ * Identity: holder_hash = server hash of (session credential + per-tab
+ * holder_nonce). The client never sends the credential. Every check
+ * re-authenticates via authMiddleware + the creator gate, so the hash is
+ * an opaque session label, never a capability.
+ *
+ * POST /api/chunks/lease/acquire {competition_id, holder_nonce?}
+ * POST /api/chunks/lease/heartbeat {competition_id, holder_nonce?, generation}
+ * POST /api/chunks/lease/release {competition_id, holder_nonce?}
+ * GET  /api/chunks/lease/:id (status — no secret exposed)
+ */
+function leaseUnavailable(error: unknown): boolean {
+    const msg = error instanceof Error ? error.message : String(error);
+    return /no such table/i.test(msg);
+}
+
+function leaseHolderHash(c: any, nonce: string): string {
+    const auth = c.req.header('Authorization') || '';
+    const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+    const credential = bearer || c.req.header('Cookie') || 'anonymous';
+    // Opaque label only (see header above); CryptoUtils.sha256Hex is async
+    // so routes stay sync here on purpose.
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    const s = credential + '|' + nonce;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+}
+
+function validNonce(nonce: unknown): string {
+    return typeof nonce === 'string' && /^[0-9a-fA-F]{8,64}$/.test(nonce) ? nonce.toLowerCase() : 'default';
+}
+
+async function requireLiveHost(c: any, competitionId: number): Promise<{ ok: true } | { ok: false; response: Response }> {
+    const { DB } = c.env;
+    const user = c.get('user');
+    const competition = await DB.prepare(
+        'SELECT creator_id FROM competitions WHERE id = ? AND status = ?'
+    ).bind(competitionId, 'live').first() as any;
+    if (!competition) {
+        return { ok: false, response: c.json({ success: false, error: 'Competition not found or not live' }, 404) };
+    }
+    // The recorder host is the creator — mirror the chunk register gate.
+    if (competition.creator_id !== user?.id) {
+        return { ok: false, response: c.json({ success: false, error: 'Only the host can hold the recording lease' }, 403) };
+    }
+    return { ok: true };
+}
+
+chunksRoutes.post('/lease/acquire', authMiddleware({ required: true }), async (c) => {
+    try {
+        const body = await c.req.json().catch(() => ({})) as { competition_id?: number; holder_nonce?: string };
+        const competitionId = Number(body?.competition_id);
+        if (!Number.isFinite(competitionId) || competitionId <= 0) {
+            return c.json({ success: false, error: 'Invalid competition_id' }, 400);
+        }
+        const gate = await requireLiveHost(c, competitionId);
+        if (!gate.ok) return gate.response;
+        const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
+        const result = await new RecordingLeaseModel(c.env.DB).acquire(competitionId, holder);
+        if (result.acquired) {
+            return c.json({ success: true, data: { generation: result.generation, took_over: result.took_over } });
+        }
+        return c.json({
+            success: false, error: 'Recording is already held by another session',
+            code: 'lease_held', generation: result.generation,
+            expires_in_seconds: result.expires_in_seconds
+        }, 409);
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease acquire error:', error);
+        return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+chunksRoutes.post('/lease/heartbeat', authMiddleware({ required: true }), async (c) => {
+    try {
+        const body = await c.req.json().catch(() => ({})) as { competition_id?: number; holder_nonce?: string; generation?: number };
+        const competitionId = Number(body?.competition_id);
+        const generation = Number(body?.generation);
+        if (!Number.isFinite(competitionId) || competitionId <= 0 || !Number.isFinite(generation)) {
+            return c.json({ success: false, error: 'Invalid competition_id or generation' }, 400);
+        }
+        const gate = await requireLiveHost(c, competitionId);
+        if (!gate.ok) {
+            // Ended (or never-live) competition: recording must stop anyway.
+            return c.json({ success: true, data: { held: false, generation: 0, reason: 'not_live' } });
+        }
+        const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
+        const result = await new RecordingLeaseModel(c.env.DB).heartbeat(competitionId, holder, generation);
+        return c.json({ success: true, data: result });
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease heartbeat error:', error);
+        return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+chunksRoutes.post('/lease/release', authMiddleware({ required: true }), async (c) => {
+    try {
+        const body = await c.req.json().catch(() => ({})) as { competition_id?: number; holder_nonce?: string };
+        const competitionId = Number(body?.competition_id);
+        if (!Number.isFinite(competitionId) || competitionId <= 0) {
+            return c.json({ success: false, error: 'Invalid competition_id' }, 400);
+        }
+        const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
+        const released = await new RecordingLeaseModel(c.env.DB).release(competitionId, holder);
+        return c.json({ success: true, data: { released } });
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease release error:', error);
+        return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+chunksRoutes.get('/lease/:id', authMiddleware({ required: true }), async (c) => {
+    const id = String(c.req.param('id') ?? '');
+    if (!/^\d+$/.test(id)) {
+        return c.json({ success: false, error: 'Invalid competition id' }, 400);
+    }
+    try {
+        const status = await new RecordingLeaseModel(c.env.DB).status(Number(id));
+        return c.json({ success: true, data: status });
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease status error:', error);
+        return c.json({ success: false, error: error.message }, 500);
     }
 });
 

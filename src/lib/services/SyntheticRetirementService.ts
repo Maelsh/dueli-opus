@@ -113,6 +113,10 @@ export const COMPETITION_DEPENDENTS: Dependent[] = [
     // skipped by hasDependent, so this is safe before 0041 is applied.
     { table: 'recording_chunks', column: 'competition_id' },
     { table: 'recording_finals', column: 'competition_id' },
+    // R4-CHUNK-UPLOAD-SAFE-1: recorder lease rows reference their
+    // competition (0040, cascade on delete; extracted lifecycle, PR110/HOLD
+    // preserved for row 30). Missing tables are skipped by hasDependent.
+    { table: 'recording_leases', column: 'competition_id' },
 ];
 
 async function existingTables(db: D1Database): Promise<Set<string>> {

@@ -340,9 +340,18 @@ export class ScheduledTaskService {
             WHERE current_competition_id = ?
         `).bind(competitionId).run();
 
-        await this.db.prepare(`
-            DELETE FROM chunk_keys WHERE competition_id = ?
-        `).bind(competitionId).run();
+        // R4-CHUNK-UPLOAD-SAFE-1: NO bulk key deletion on auto-end either
+        // (same drain-tail rule as the controller path — single-use + TTL
+        // + opportunistic prune keep the table tiny without killing tails).
+
+        // R4-CHUNK-UPLOAD-SAFE-1: cron auto-end frees the recorder lease
+        // (extracted lifecycle, PR110/HOLD preserved for row 30).
+        try {
+            const { RecordingLeaseModel } = await import('../../models/RecordingLeaseModel');
+            await new RecordingLeaseModel(this.db).releaseForCompetition(competitionId);
+        } catch (e) {
+            console.error(`[AutoEnd] Lease release failed for #${competitionId}:`, e);
+        }
 
         // R4-CHUNK-INDEX-1: snapshot the index at auto-end (ended ≠
         // finalized). Best-effort like the controller path — the marker is

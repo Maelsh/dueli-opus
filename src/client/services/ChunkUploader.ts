@@ -324,9 +324,44 @@ export class ChunkUploader {
     }
 
     /**
+     * R4-CHUNK-UPLOAD-SAFE-1: fetch a bound upload key for one chunk.
+     * Fail-closed: any issuance failure (no lease, stale generation,
+     * store down, network) throws — the chunk is NEVER uploaded keyless.
+     * The key binds (competition, sequence, lease generation, object
+     * identity, byte ceiling); the external host verifies + consumes it.
+     */
+    private async fetchChunkKey(chunkNumber: number): Promise<string> {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        try {
+            const sess = (typeof window !== 'undefined' && (window as unknown as { sessionId?: string }).sessionId)
+                || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId'));
+            if (sess) headers['Authorization'] = 'Bearer ' + sess;
+        } catch { /* storage unavailable — server will 401 */ }
+        const res = await fetch('/api/chunks/register', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                competition_id: this.config.competitionId,
+                chunk_index: chunkNumber,
+                extension: this.extension,
+            }),
+        });
+        const data = await res.json().catch(() => ({})) as {
+            success?: boolean; error?: string; code?: string;
+            data?: { chunk_key?: string };
+        };
+        if (!res.ok || !data || data.success !== true || !data.data?.chunk_key) {
+            throw new Error(data?.code ? `Key refused (${data.code})` : (data?.error || `Key issuance failed: ${res.status}`));
+        }
+        return data.data.chunk_key as string;
+    }
+
+    /**
      * Perform the actual upload
      */
     private async doUpload(blob: Blob, chunkNumber: number): Promise<void> {
+        // Mandatory authorization first (fail-closed — see fetchChunkKey).
+        const chunkKey = await this.fetchChunkKey(chunkNumber);
         const formData = new FormData();
 
         // Create filename with correct extension
@@ -336,6 +371,7 @@ export class ChunkUploader {
         formData.append('chunk_number', chunkNumber.toString());
         formData.append('extension', this.extension);
         formData.append('offset', this.getOffset().toString());
+        formData.append('chunk_key', chunkKey);
 
         try {
             const response = await fetch(`${this.config.serverUrl}/upload.php`, {

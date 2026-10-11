@@ -73,6 +73,9 @@ const EXPECTED_MIGRATIONS = [
     '0037_support_messaging.sql',
     '0038_withdrawal_payout_snapshot.sql',
     '0039_r4_db_opt1_indexes.sql',
+    '0040_recording_leases.sql',
+    '0041_chunk_index.sql',
+    '0042_chunk_key_binding.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -190,8 +193,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 40 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(40);
+    it('has exactly 43 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(43);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -299,6 +302,12 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
     it('chunk_keys has user_id and expires_at columns (0013_chunk_key_binding.sql)', () => {
         expect(chunkKeysColumns).toContain('user_id');
         expect(chunkKeysColumns).toContain('expires_at');
+    });
+
+    it('chunk_keys carries SAFE28 binding columns (0042_chunk_key_binding.sql)', () => {
+        for (const col of ['lease_generation', 'object_path', 'max_bytes']) {
+            expect(chunkKeysColumns, `missing column: ${col}`).toContain(col);
+        }
     });
 
     it('advertisements has the 0026 category-targeting column: target_category_id', () => {

@@ -76,6 +76,11 @@ function installGlobals() {
             calls.push('playlist');
             return { ok: true, json: async () => ({ success: true, chunks: [] }) };
         }
+        // R4-CHUNK-UPLOAD-SAFE-1: uploads are key-mandatory now (mock-infra
+        // follows the owner-ordered behavior).
+        if (u.includes('/api/chunks/register')) {
+            return { ok: true, json: async () => ({ success: true, data: { chunk_key: 'k-test', sequence: 1, lease_generation: 1 } }) };
+        }
         if (u.includes('/upload.php')) {
             const num = (init?.body as FormData).get('chunk_number');
             calls.push(`upload:${num}`);
@@ -152,6 +157,10 @@ describe('R4-CHUNK-PLAY-1 VideoCompositor drain', () => {
     it('3. recording resolves its resume base from the server playlist', async () => {
         (globalThis as any).fetch = async (url: any, init?: any) => {
             const u = String(url);
+            // Key-mandatory uploads (SAFE28 mock follows the behavior).
+            if (u.includes('/api/chunks/register')) {
+                return { ok: true, json: async () => ({ success: true, data: { chunk_key: 'k-resume' } }) };
+            }
             if (u.includes('/api/chunks/playlist/')) {
                 calls.push('playlist');
                 return { ok: true, json: async () => ({ success: true, chunks: [{ index: 0 }, { index: 1 }, { index: 2 }] }) };

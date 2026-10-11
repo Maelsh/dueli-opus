@@ -156,13 +156,14 @@ describe('R4-CHUNK-INDEX-1 chunk metadata (model)', () => {
 
     it('7. gaps, resume base, range, continuation are bounded and exact', async () => {
         for (const seq of [1, 2, 4, 5]) await model.recordChunk(50, chunk(seq), 1);
-        expect(await model.detectGaps(50)).toEqual({ max: 5, missing: [3] });
+        // R4-CHUNK-UPLOAD-SAFE-1: gap scans report truncation past the bound.
+        expect(await model.detectGaps(50)).toEqual({ max: 5, missing: [3], truncated: false });
         expect(await model.resumeBase(50)).toBe(5);
         expect((await model.listRange(50, 2, 4)).map((r) => r.sequence)).toEqual([2, 4]);
         await expect(model.listRange(50, 4, 2)).rejects.toMatchObject({ code: 'BAD_INPUT' });
         expect((await model.continuation(50, 2, 2)).map((r) => r.sequence)).toEqual([4, 5]);
         expect((await model.continuation(50, 0, 2)).map((r) => r.sequence)).toEqual([1, 2]);
-        expect(await model.detectGaps(51)).toEqual({ max: 0, missing: [] });
+        expect(await model.detectGaps(51)).toEqual({ max: 0, missing: [], truncated: false });
     });
 
     it('8. timeline + time lookup use the confirmed prefix only', async () => {
