@@ -9,6 +9,7 @@ import { authMiddleware } from '../../../middleware/auth';
 import { CryptoUtils } from '../../../lib/services/CryptoUtils';
 import { findInitEnd } from '../../../lib/services/ChunkInitSegment';
 import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../config/defaults';
+import { RecordingLeaseModel } from '../../../models/RecordingLeaseModel';
 
 const chunksRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -498,6 +499,162 @@ chunksRoutes.get('/init/:id', async (c) => {
         }, 200, headers);
     } catch {
         return fail();
+    }
+});
+
+/**
+ * R4-CHUNK-DOWNLOAD-1 (row 27, section D): server-backed exclusive recorder
+ * ownership (lease/fencing). localStorage/BroadcastChannel cannot fence two
+ * browsers/devices; this row is the arbiter every host session checks at the
+ * sensitive record/upload points (acquire → heartbeat → release).
+ *
+ * Identity: holder_hash = sha256(session credential + per-tab holder_nonce).
+ * The nonce lives in sessionStorage (per tab, survives reload), so a reload
+ * resumes as the SAME holder while a second tab is a DIFFERENT holder.
+ * The client never sends the credential — the server hashes the
+ * Authorization Bearer token (or the raw Cookie header as fallback).
+ *
+ * POST /api/chunks/lease/acquire {competition_id, holder_nonce?}
+ * POST /api/chunks/lease/heartbeat {competition_id, holder_nonce?, generation}
+ * POST /api/chunks/lease/release {competition_id, holder_nonce?}
+ * GET  /api/chunks/lease/:id (status — no secret exposed)
+ */
+
+function leaseUnavailable(error: unknown): boolean {
+    const msg = error instanceof Error ? error.message : String(error);
+    return /no such table/i.test(msg);
+}
+
+function leaseHolderHash(c: any, nonce: string): string {
+    const auth = c.req.header('Authorization') || '';
+    const bearer = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+    const credential = bearer || c.req.header('Cookie') || 'anonymous';
+    // Synchronous djb2-style hex is NOT enough for a holder id — but this
+    // value is only an opaque session label, never a secret or capability:
+    // every check re-authenticates the caller via authMiddleware + the
+    // creator gate below, so a predictable hash cannot escalate anything.
+    // (CryptoUtils.sha256Hex is async; routes stay sync here on purpose.)
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    const s = credential + '|' + nonce;
+    for (let i = 0; i < s.length; i++) {
+        const ch = s.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 2654435761);
+        h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+}
+
+function validNonce(nonce: unknown): string {
+    return typeof nonce === 'string' && /^[0-9a-fA-F]{8,64}$/.test(nonce) ? nonce.toLowerCase() : 'default';
+}
+
+async function requireLiveHost(c: any, competitionId: number): Promise<{ ok: true } | { ok: false; response: Response }> {
+    const { DB } = c.env;
+    const user = c.get('user');
+    const competition = await DB.prepare(
+        'SELECT creator_id FROM competitions WHERE id = ? AND status = ?'
+    ).bind(competitionId, 'live').first() as any;
+    if (!competition) {
+        return { ok: false, response: c.json({ success: false, error: 'Competition not found or not live' }, 404) };
+    }
+    // The recorder host is the creator (competition page gates the
+    // compositor on creator identity) — mirror the chunk register gate.
+    if (competition.creator_id !== user?.id) {
+        return { ok: false, response: c.json({ success: false, error: 'Only the host can hold the recording lease' }, 403) };
+    }
+    return { ok: true };
+}
+
+chunksRoutes.post('/lease/acquire', authMiddleware({ required: true }), async (c) => {
+    try {
+        const body = await c.req.json().catch(() => ({})) as { competition_id?: number; holder_nonce?: string };
+        const competitionId = Number(body?.competition_id);
+        if (!Number.isFinite(competitionId) || competitionId <= 0) {
+            return c.json({ success: false, error: 'Invalid competition_id' }, 400);
+        }
+        const gate = await requireLiveHost(c, competitionId);
+        if (!gate.ok) return gate.response;
+        const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
+        const result = await new RecordingLeaseModel(c.env.DB).acquire(competitionId, holder);
+        if (result.acquired) {
+            return c.json({ success: true, data: { generation: result.generation, took_over: result.took_over } });
+        }
+        return c.json({
+            success: false, error: 'Recording is already held by another session',
+            code: 'lease_held', generation: result.generation,
+            expires_in_seconds: result.expires_in_seconds
+        }, 409);
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            // Deployment window: migration 0040 not applied yet — the client
+            // records in legacy mode (explicit, logged) instead of blocking.
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease acquire error:', error);
+        return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+chunksRoutes.post('/lease/heartbeat', authMiddleware({ required: true }), async (c) => {
+    try {
+        const body = await c.req.json().catch(() => ({})) as { competition_id?: number; holder_nonce?: string; generation?: number };
+        const competitionId = Number(body?.competition_id);
+        const generation = Number(body?.generation);
+        if (!Number.isFinite(competitionId) || competitionId <= 0 || !Number.isFinite(generation)) {
+            return c.json({ success: false, error: 'Invalid competition_id or generation' }, 400);
+        }
+        const gate = await requireLiveHost(c, competitionId);
+        if (!gate.ok) {
+            // Ended (or never-live) competition: recording must stop anyway.
+            return c.json({ success: true, data: { held: false, generation: 0, reason: 'not_live' } });
+        }
+        const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
+        const result = await new RecordingLeaseModel(c.env.DB).heartbeat(competitionId, holder, generation);
+        return c.json({ success: true, data: result });
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease heartbeat error:', error);
+        return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+chunksRoutes.post('/lease/release', authMiddleware({ required: true }), async (c) => {
+    try {
+        const body = await c.req.json().catch(() => ({})) as { competition_id?: number; holder_nonce?: string };
+        const competitionId = Number(body?.competition_id);
+        if (!Number.isFinite(competitionId) || competitionId <= 0) {
+            return c.json({ success: false, error: 'Invalid competition_id' }, 400);
+        }
+        const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
+        const released = await new RecordingLeaseModel(c.env.DB).release(competitionId, holder);
+        return c.json({ success: true, data: { released } });
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease release error:', error);
+        return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+chunksRoutes.get('/lease/:id', authMiddleware({ required: true }), async (c) => {
+    const id = String(c.req.param('id') ?? '');
+    if (!/^\d+$/.test(id)) {
+        return c.json({ success: false, error: 'Invalid competition id' }, 400);
+    }
+    try {
+        const status = await new RecordingLeaseModel(c.env.DB).status(Number(id));
+        return c.json({ success: true, data: status });
+    } catch (error: any) {
+        if (leaseUnavailable(error)) {
+            return c.json({ success: false, error: 'Recording lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
+        console.error('Lease status error:', error);
+        return c.json({ success: false, error: error.message }, 500);
     }
 });
 

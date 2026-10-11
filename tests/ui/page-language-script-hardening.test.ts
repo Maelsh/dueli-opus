@@ -142,20 +142,26 @@ describe('post-#69: every affected surface serves canonical serialized language'
         }
     }
 
-    it('/live/801 renders valid + strict CSP with no raw lang sink', async () => {
-        // No competition row is fetchable in-process, so the room script is
-        // absent — the source-scan test above covers its fixed sink.
+    it('/live/801 redirects to the unified page with lang preserved (no room render)', async () => {
+        // SUPERSEDED by R4-CHUNK-DOWNLOAD-1 (row 27, owner §B): /live/:id is
+        // a legacy compat redirect to /competition/:id, not a room render —
+        // there is no room HTML (and no lang sink) to harden here anymore.
+        // The redirect target must preserve a valid lang and never reflect
+        // an invalid one (no open-redirect / sink content).
         for (const [query] of LANG_CASES) {
             const res = await app.request(`/live/801?lang=${query}`, {}, env(db));
-            expect(res.status).toBe(200);
-            assertStrictCsp(res);
-            const html = await res.text();
-            expect(html).not.toContain(`const lang = '`);
-            for (const body of inlineScripts(html)) {
-                expect(body).not.toContain('alert(document.domain)');
-                expect(body).not.toContain('__xss');
-            }
+            expect(res.status).toBe(302);
+            const location = res.headers.get('location') || '';
+            // Only a valid ar/en lang is preserved; anything else is
+            // dropped (never reflected — no sink, no open redirect).
+            const expected = query === 'ar' || query === 'en'
+                ? `/competition/801?lang=${query}`
+                : '/competition/801';
+            expect(location).toBe(expected);
         }
+        const evil = await app.request(`/live/801?lang=${encodeURIComponent('en"+alert(1)+"')}`, {}, env(db));
+        expect(evil.status).toBe(302);
+        expect(evil.headers.get('location') || '').toBe('/competition/801');
     });
 
     it('competition id cannot break out: quoted JSON even for a malicious id', async () => {

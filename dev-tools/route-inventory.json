@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-08T13:17:54.959Z",
-  "total": 237,
+  "generatedAt": "2026-10-11T06:30:32.986Z",
+  "total": 242,
   "routes": [
     {
       "method": "GET",
@@ -595,6 +595,41 @@
       "path": "/api/chunks/:key",
       "classification": "SERVICE(origin-only ⚠)",
       "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chunks/init/:id",
+      "classification": "SERVICE(origin-only ⚠)",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chunks/lease/:id",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chunks/lease/acquire",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chunks/lease/heartbeat",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chunks/lease/release",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/chunks/routes.ts"
     },
     {

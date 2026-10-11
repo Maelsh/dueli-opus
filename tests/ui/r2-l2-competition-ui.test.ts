@@ -28,9 +28,12 @@ const PAGE = readFileSync(resolve(__dirname, '../../src/modules/pages/competitio
 const CSP = readFileSync(resolve(__dirname, '../../src/client/csp-delegate.ts'), 'utf-8');
 
 describe('R2-L2 competition page UI contract', () => {
-    it('1. production room: every role enters /live/:id (test pages not the sole path)', () => {
-        expect(PAGE).toContain("window.location.href = '/live/' + competitionId + '?lang=' + lang");
-        expect(PAGE).toContain('<a href="/live/\\${competitionId}?lang=\\${lang}"');
+    it('1. production room: every role stays on /competition/:id (test pages not the sole path)', () => {
+        // SUPERSEDED by R4-CHUNK-DOWNLOAD-1 (row 27, owner §B): /live/:id
+        // is now a server redirect to /competition/:id — the unified page
+        // itself holds no functional /live entry (it IS the live room).
+        expect(PAGE).not.toContain("window.location.href = '/live/' + competitionId + '?lang=' + lang");
+        expect(PAGE).not.toContain('<a href="/live/\\${competitionId}?lang=\\${lang}"');
         // No production href points at the test-only host/guest/viewer pages.
         expect(PAGE).not.toMatch(/href="\/live\/(host|guest|viewer)\?comp=/);
         expect(PAGE).not.toContain('/live/host?comp=');

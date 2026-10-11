@@ -178,8 +178,7 @@ export class EventPusher {
         return this.publish(`user:${inviterId}`, type, { ...response });
     }
 
-    async publishCompetitionSuspended(
-        competitionId: number,
+    async publishCompetitionSuspended(        competitionId: number,
         adminName: string,
         reason: string
     ) {
@@ -195,6 +194,27 @@ export class EventPusher {
             'competition_suspended',
             { competition_id: competitionId, reason, timestamp: new Date().toISOString() }
         );
+    }
+
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (row 27), section C: lifecycle transitions
+     * (pending→accepted→live→completed) on the EXISTING competition channel
+     * — no new realtime system. The `competition_status` event type already
+     * existed in SseEventLogModel but nothing ever published it; the unified
+     * competition page listens and updates without a manual refresh.
+     * Best-effort like every other publish: a broadcast failure must never
+     * fail the transition itself (callers catch).
+     */
+    async publishCompetitionStatus(
+        competitionId: number,
+        status: 'pending' | 'accepted' | 'live' | 'completed',
+        extra?: { opponent_id?: number | null; ended_at?: string | null }
+    ) {
+        return this.publish(`competition:${competitionId}`, 'competition_status', {
+            competition_id: competitionId,
+            status,
+            ...(extra ?? {})
+        });
     }
 
     async publishNotification(

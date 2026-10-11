@@ -312,7 +312,7 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, helpPage, docsIndexPage, docReaderPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
+import { aboutPage, helpPage, docsIndexPage, docReaderPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
@@ -331,7 +331,16 @@ app.get('/notifications', notificationsPage);
 app.get('/settings', settingsPage);
 app.get('/my-competitions', myCompetitionsPage);
 app.get('/my-requests', myRequestsPage);
-app.get('/live/:id', liveRoomPage);
+// R4-CHUNK-DOWNLOAD-1 (B): /competition/:id is the single live surface —
+// /live/:id is a legacy compat entry that redirects there (no loop: the
+// unified page holds no functional /live link). Test-lab pages
+// (/live/host|guest|viewer) and /live/:id/finance below are untouched.
+app.get('/live/:id', (c) => {
+  const id = c.req.param('id');
+  const lang = c.req.query('lang');
+  const suffix = lang === 'ar' || lang === 'en' ? `?lang=${lang}` : '';
+  return c.redirect(`/competition/${id}${suffix}`, 302);
+});
 app.get('/earnings', earningsPage);
 app.get('/reports', reportsPage);
 app.get('/donate', donatePage);

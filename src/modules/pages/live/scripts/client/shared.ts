@@ -779,6 +779,34 @@ window.VodMsePlayer = VodMsePlayer;
  * - دمج وتحميل الفيديو كملف واحد
  * - دعم تحويل WebM→MP4 عبر FFmpeg.wasm
  */
+// ===== FFmpeg.wasm shared loader + MP4 proof (R4-CHUNK-DOWNLOAD-1) =====
+// One loaded core per page (window.FFmpegWASM): assembly and the legacy
+// WebM→MP4 conversion share it instead of loading twice.
+async function loadFfmpegCore(onLoadProgress) {
+    var baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+    if (!window.FFmpegWASM) {
+        testLog('Loading FFmpeg.wasm core...', 'info');
+        var mod = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/+esm');
+        window.FFmpegWASM = { FFmpeg: mod.FFmpeg };
+    }
+    var ffmpeg = new window.FFmpegWASM.FFmpeg();
+    try { onLoadProgress && onLoadProgress(0.02); } catch (e) {}
+    await ffmpeg.load({
+        coreURL: baseURL + '/ffmpeg-core.js',
+        wasmURL: baseURL + '/ffmpeg-core.wasm'
+    });
+    testLog('FFmpeg loaded!', 'success');
+    try { onLoadProgress && onLoadProgress(0.08); } catch (e) {}
+    return ffmpeg;
+}
+
+// MP4 proof (pure — tested through the harness): ftyp box at bytes 4..8
+// plus a real size. The .mp4 name is used ONLY after this passes.
+function isValidMp4Bytes(bytes) {
+    if (!bytes || bytes.length < 16) return false;
+    return bytes[4] === 102 && bytes[5] === 116 && bytes[6] === 121 && bytes[7] === 112;
+}
+
 class SmartVodPlayer {
     constructor(options) {
         this.videoElement = options.videoElement;
@@ -1118,15 +1146,263 @@ class SmartVodPlayer {
     }
 
     /**
+     * R4-CHUNK-DOWNLOAD-1 (A): sorted numeric indices present in the
+     * playlist (pure — tested through the emitted-script harness).
+     */
+    sortedPresentIndices() {
+        const out = [];
+        for (let i = 0; i < this.chunks.length; i++) {
+            const n = this.chunks[i] && this.chunks[i].index;
+            if (typeof n === 'number' && isFinite(n)) out.push(Math.floor(n));
+        }
+        out.sort(function(a, b) { return a - b; });
+        return out;
+    }
+
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (A): gaps in 1..max(present) — a missing chunk is
+     * an explicit, reported gap, never a silent skip.
+     */
+    findMissingIndices() {
+        const present = this.sortedPresentIndices();
+        if (present.length === 0) return [];
+        const have = {};
+        for (let i = 0; i < present.length; i++) have[present[i]] = true;
+        const missing = [];
+        const top = present[present.length - 1];
+        for (let n = 1; n <= top; n++) {
+            if (!have[n]) missing.push(n);
+        }
+        return missing;
+    }
+
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (A): fetch one chunk URL with content validation
+     * (same HTML/non-video/empty rejection as playback — garbage never
+     * enters the assembled file). Single attempt; retry wraps this.
+     */
+    async fetchChunkBuffer(index, abortSignal) {
+        const chunk = this.chunks[index];
+        if (!chunk || !chunk.url) throw new Error('Chunk has no URL');
+        const opts = {};
+        if (abortSignal) opts.signal = abortSignal;
+        const response = await fetch(chunk.url, opts);
+        if (!response.ok) throw new Error('Chunk fetch failed: ' + response.status);
+        var rawCt = response.headers.get('content-type') || '';
+        var ct = (rawCt || '').toLowerCase();
+        if (ct.indexOf('text/html') !== -1) {
+            throw new Error('Chunk URL returned HTML, not video');
+        }
+        if (ct && ct.indexOf('video/') !== 0
+            && ct.indexOf('application/octet-stream') !== 0
+            && ct.indexOf('binary/octet-stream') !== 0) {
+            throw new Error('Chunk URL returned non-video content: ' + rawCt);
+        }
+        const buffer = await response.arrayBuffer();
+        if (!buffer || buffer.byteLength === 0) throw new Error('Chunk is empty');
+        return buffer;
+    }
+
+    /**
+     * Bounded retry around fetchChunkBuffer (3 attempts, linear backoff).
+     * An aborted signal stops retrying immediately (cancel support).
+     */
+    async fetchChunkWithRetry(index, abortSignal, maxAttempts) {
+        const attempts = maxAttempts && maxAttempts > 0 ? maxAttempts : 3;
+        let lastError = null;
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            if (abortSignal && abortSignal.aborted) throw new Error('Download cancelled');
+            try {
+                return await this.fetchChunkBuffer(index, abortSignal);
+            } catch (err) {
+                lastError = err;
+                if (abortSignal && abortSignal.aborted) throw new Error('Download cancelled');
+                const name = err && err.name ? String(err.name) : '';
+                if (name === 'AbortError') throw new Error('Download cancelled');
+                testLog('Chunk ' + (index + 1) + ' attempt ' + attempt + ' failed: ' + (err && err.message ? err.message : err), 'warn');
+                if (attempt < attempts) {
+                    await new Promise(function(r) { setTimeout(r, 500 * attempt); });
+                }
+            }
+        }
+        throw lastError || new Error('Chunk fetch failed');
+    }
+
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (A): assemble ONE valid, seekable MP4 from the
+     * ordered playlist via FFmpeg.wasm concat + re-encode.
+     *
+     * Why re-encode (not Blob concat): every stored chunk is an INDEPENDENT
+     * container (init-prepended) whose timestamps restart at zero — a naive
+     * byte-concat plays only the first segment with a wrong duration and
+     * broken seek (13 §4 matrix row). The concat filter + libx264/aac
+     * re-encode rebuilds continuous timestamps, a true duration, and a
+     * front moov (+faststart) so the file seeks and plays outside Dueli.
+     * The .mp4 name is used ONLY after the ftyp proof below — a WebM is
+     * never renamed to MP4.
+     *
+     * options: { onProgress(stage, ratio01, detail), abortSignal }
+     * stages: 'fetching' | 'assembling' | 'validating' | 'done'.
+     * Resolves { blob, extension:'mp4', fetched, total, missing, duration }.
+     * Throws loudly (CANCELLED / NO_CHUNKS / SIZE_EXCEEDED / FETCH_FAILED /
+     * ASSEMBLE_FAILED / OUTPUT_INVALID) — a corrupt file is never saved
+     * silently.
+     */
+    async assembleRecording(options) {
+        const opts = options || {};
+        const onProgress = opts.onProgress;
+        const abortSignal = opts.abortSignal || null;
+        const progress = function(stage, ratio, detail) {
+            try { onProgress && onProgress(stage, ratio, detail || ''); } catch (e) {}
+        };
+
+        if (this.playlist && (this.playlist.upstream === 'error' || this.playlist.upstream === 'invalid')) {
+            throw new Error('ASSEMBLE_FAILED: recording service has no valid playlist');
+        }
+        if (!this.chunks || this.chunks.length === 0) {
+            throw new Error('NO_CHUNKS: playlist is empty');
+        }
+        // Playlist contract is index-sorted already; sort defensively here
+        // so assembly order never depends on fetch order.
+        this.chunks.sort(function(a, b) { return (a.index || 0) - (b.index || 0); });
+
+        const missing = this.findMissingIndices();
+        if (missing.length > 0) {
+            testLog('Assembly gaps (missing chunks, skipped explicitly): ' + missing.join(','), 'warn');
+        }
+
+        // Fetch FIRST, load the ~30MB wasm core only after every chunk
+        // proved fetchable — network/content failures fail fast without
+        // the heavy download (and stay unit-testable without FFmpeg).
+        const srcExt = this.extension === 'mp4' ? 'mp4' : 'webm';
+        const buffers = [];
+        let totalBytes = 0;
+        // Browser-RAM honesty (A5): the whole recording + the encoder live
+        // in memory — refuse explicitly beyond 512MB instead of OOMing.
+        const MAX_ASSEMBLE_BYTES = 512 * 1024 * 1024;
+        for (let i = 0; i < this.chunks.length; i++) {
+            if (abortSignal && abortSignal.aborted) throw new Error('CANCELLED');
+            progress('fetching', this.chunks.length > 0 ? i / this.chunks.length : 0, 'chunk ' + (i + 1) + '/' + this.chunks.length);
+            let buf = null;
+            try {
+                buf = await this.fetchChunkWithRetry(i, abortSignal, 3);
+            } catch (err) {
+                const msg = err && err.message ? err.message : String(err);
+                if (msg === 'Download cancelled') throw err;
+                throw new Error('FETCH_FAILED: chunk ' + (i + 1) + ' (' + msg + ')');
+            }
+            totalBytes += buf.byteLength;
+            if (totalBytes > MAX_ASSEMBLE_BYTES) {
+                throw new Error('SIZE_EXCEEDED: recording exceeds the 512MB in-browser assembly limit');
+            }
+            buffers.push(buf);
+            // Keep the player cache consistent so a later downloadVideo()
+            // reuses the validated bytes instead of refetching.
+            this.loadedChunks[i] = buf;
+        }
+        progress('fetching', 1, 'fetched ' + buffers.length + '/' + this.chunks.length);
+
+        const ffmpeg = await loadFfmpegCore(function(p) { progress('assembling', p, ''); });
+        if (abortSignal && abortSignal.aborted) throw new Error('CANCELLED');
+
+        try {
+            const listLines = [];
+            for (let i = 0; i < buffers.length; i++) {
+                const name = 'seg' + i + '.' + srcExt;
+                await ffmpeg.writeFile(name, new Uint8Array(buffers[i]));
+                listLines.push('file ' + "'" + name + "'");
+            }
+            // NOTE: no backslash escapes in emitted code — the outer TS
+            // template resolves them at emission time and the emitted JS
+            // would break (same hazard class as the row-25 regex lesson).
+            await ffmpeg.writeFile('list.txt', listLines.join(String.fromCharCode(10)));
+        } catch (err) {
+            throw new Error('ASSEMBLE_FAILED: could not stage inputs (' + (err && err.message ? err.message : err) + ')');
+        }
+
+        if (abortSignal && abortSignal.aborted) throw new Error('CANCELLED');
+        progress('assembling', 0.1, 're-encoding');
+        try {
+            await ffmpeg.exec([
+                '-f', 'concat', '-safe', '0', '-i', 'list.txt',
+                '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+                '-c:a', 'aac', '-b:a', '128k',
+                '-movflags', '+faststart',
+                'output.mp4'
+            ]);
+        } catch (err) {
+            throw new Error('ASSEMBLE_FAILED: re-encode failed (' + (err && err.message ? err.message : err) + ')');
+        }
+
+        progress('validating', 0.5, 'verifying output');
+        let out = null;
+        try {
+            out = await ffmpeg.readFile('output.mp4');
+        } catch (err) {
+            throw new Error('OUTPUT_INVALID: no output produced');
+        }
+        const bytes = out instanceof Uint8Array ? out : new Uint8Array(out);
+        // ftyp proof: bytes 4..8 must read 'ftyp' and the file must be real.
+        // Without this proof the file is rejected — never a silent corrupt.
+        if (!isValidMp4Bytes(bytes)) {
+            throw new Error('OUTPUT_INVALID: assembled bytes are not a valid MP4');
+        }
+        try { ffmpeg.terminate(); } catch (e) {}
+
+        const blob = new Blob([bytes], { type: 'video/mp4' });
+        progress('done', 1, 'valid MP4 (' + Math.round(blob.size / 1024) + 'KB)');
+        testLog('Assembly complete: ' + buffers.length + ' chunks, ' + missing.length + ' gaps, ' + Math.round(blob.size / 1024 / 1024) + ' MB valid MP4', 'success');
+        return {
+            blob: blob,
+            extension: 'mp4',
+            fetched: buffers.length,
+            total: this.chunks.length,
+            missing: missing,
+            duration: this.totalDuration || 0
+        };
+    }
+
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (A): assemble then trigger the browser download.
+     * Resolves the assembly info (fetched/total/missing) for UI reporting.
+     */
+    async downloadAssembled(filename, onProgress, abortSignal) {
+        const info = await this.assembleRecording({ onProgress: onProgress, abortSignal: abortSignal || null });
+        const finalFilename = filename || ('competition_' + this.competitionId + '.mp4');
+        const url = URL.createObjectURL(info.blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = finalFilename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        testLog('Download started: ' + finalFilename, 'success');
+        return info;
+    }
+
+    /**
      * دمج كل الـ chunks في Blob واحد
+     * R4-CHUNK-DOWNLOAD-1 (A5): the wait is BOUNDED — a chunk that failed
+     * preloading used to hang this loop forever (loaded count can never
+     * reach the total). After 30s the missing indices are reported loudly
+     * instead of producing a silent partial file.
      */
     async mergeChunks() {
+        var waited = 0;
+        while (!this.isFullyLoaded() && waited < 60) {
+            if (waited === 0) testLog('Waiting for all chunks to load...', 'warn');
+            await new Promise(function(r) { setTimeout(r, 500); });
+            waited++;
+        }
         if (!this.isFullyLoaded()) {
-            testLog('⏳ Waiting for all chunks to load...', 'warn');
-            // انتظار اكتمال التحميل
-            while (!this.isFullyLoaded()) {
-                await new Promise(function(r) { setTimeout(r, 500); });
+            const have = {};
+            for (const k in this.loadedChunks) have[k] = true;
+            const missing = [];
+            for (let i = 0; i < this.chunks.length; i++) {
+                if (!have[i]) missing.push(i + 1);
             }
+            throw new Error('MERGE_INCOMPLETE: chunks unavailable after 30s: ' + missing.join(','));
         }
         
         testLog('🔗 Merging ' + this.chunks.length + ' chunks...', 'info');
@@ -1182,29 +1458,11 @@ class SmartVodPlayer {
         try {
             onProgress && onProgress('loading', 0);
             
-            // تحميل FFmpeg.wasm 0.12 من CDN
-            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-            
-            // تحميل الـ script إذا لم يكن محملاً
-            if (!window.FFmpegWASM) {
-                testLog('📦 Loading FFmpeg.wasm core...', 'info');
-                
-                // تحميل FFmpeg module
-                const { FFmpeg } = await import('https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/+esm');
-                window.FFmpegWASM = { FFmpeg };
-            }
-            
-            const { FFmpeg } = window.FFmpegWASM;
-            const ffmpeg = new FFmpeg();
-            
-            // تحميل core files
-            testLog('📦 Loading FFmpeg core files...', 'info');
-            await ffmpeg.load({
-                coreURL: baseURL + '/ffmpeg-core.js',
-                wasmURL: baseURL + '/ffmpeg-core.wasm',
+            // Shared core loader (one FFmpeg instance-setup per page).
+            var ffmpeg = await loadFfmpegCore(function(p) {
+                // Map loader progress (0..0.08) into the converting scale.
+                try { onProgress && onProgress('loading', p); } catch (e) {}
             });
-            
-            testLog('✅ FFmpeg loaded!', 'success');
             
             // كتابة ملف الإدخال
             onProgress && onProgress('converting', 30);
@@ -1229,6 +1487,10 @@ class SmartVodPlayer {
             // قراءة الناتج
             onProgress && onProgress('finishing', 90);
             const mp4Data = await ffmpeg.readFile('output.mp4');
+            // Same honesty rule as assembly: no ftyp proof, no file.
+            if (!isValidMp4Bytes(mp4Data instanceof Uint8Array ? mp4Data : new Uint8Array(mp4Data))) {
+                throw new Error('Conversion produced invalid MP4 output');
+            }
             const mp4Blob = new Blob([mp4Data], { type: 'video/mp4' });
             
             // تنظيف الذاكرة

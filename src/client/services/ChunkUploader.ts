@@ -51,6 +51,135 @@ export interface ChunkUploaderConfig {
     serverUrl: string;
     onChunkUploaded?: (chunkNumber: number) => void;
     onError?: (error: Error) => void;
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (D): server-backed exclusive recorder ownership.
+     * When absent the uploader works exactly as before (lease off — e.g.
+     * test pages / legacy surfaces). When present, sensitive points
+     * (acquire at start, heartbeat, pre-upload revalidation, finalize)
+     * verify ownership; a fenced-out session stops and never finalizes.
+     */
+    lease?: RecordingLeaseHandle;
+    /** Fired once when this session loses the lease (takeover/release). */
+    onLeaseLost?: (info: { generation: number }) => void;
+    /** Heartbeat period while holding the lease (default 10s). */
+    heartbeatIntervalMs?: number;
+    /** Pre-upload server revalidation when the last heartbeat is older. */
+    maxHeartbeatStaleMs?: number;
+}
+
+/**
+ * Server-backed exclusive recorder ownership (lease/fencing) handle.
+ * Implemented by PlatformRecordingLease below (platform fetch contract);
+ * tests inject fakes. Only the session whose (holder, generation) matches
+ * the server row may record/upload.
+ */
+export interface RecordingLeaseHandle {
+    acquire(): Promise<
+        | { ok: true; generation: number; took_over: boolean }
+        | { ok: false; reason: 'held' | 'unavailable' | 'error'; generation?: number; expires_in_seconds?: number }
+    >;
+    heartbeat(generation: number): Promise<{ held: boolean; generation: number }>;
+    release(): Promise<void>;
+}
+
+/**
+ * Platform lease client: POST /api/chunks/lease/{acquire,heartbeat,release}.
+ * Identity = server-hashed (session credential + per-tab holder_nonce).
+ * The nonce lives in sessionStorage: per TAB (a second tab is a different
+ * holder) and surviving reload (a reload resumes as the SAME holder).
+ */
+export class PlatformRecordingLease implements RecordingLeaseHandle {
+    private readonly nonce: string;
+
+    constructor(
+        private readonly competitionId: number,
+        private readonly authHeaders: () => Record<string, string> = () => {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            try {
+                const sess = (typeof window !== 'undefined' && window.sessionId)
+                    || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId'));
+                if (sess) headers['Authorization'] = 'Bearer ' + sess;
+            } catch { /* storage unavailable */ }
+            return headers;
+        }
+    ) {
+        const key = 'dueli_lease_nonce_' + competitionId;
+        let nonce: string | null = null;
+        try {
+            nonce = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(key) : null;
+            if (!nonce) {
+                const bytes = new Uint8Array(16);
+                crypto.getRandomValues(bytes);
+                nonce = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+                try { sessionStorage.setItem(key, nonce); } catch { /* private mode */ }
+            }
+        } catch {
+            nonce = 'fallback' + Math.floor(Math.random() * 1e12).toString(16);
+        }
+        this.nonce = nonce as string;
+    }
+
+    /** Exposed for diagnostics/tests (the nonce is an opaque label, not a secret). */
+    get holderNonce(): string {
+        return this.nonce;
+    }
+
+    private async post(path: string, body: Record<string, unknown>): Promise<{ status: number; data: any }> {
+        const res = await fetch(path, {
+            method: 'POST',
+            headers: this.authHeaders(),
+            body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        return { status: res.status, data };
+    }
+
+    async acquire(): Promise<
+        | { ok: true; generation: number; took_over: boolean }
+        | { ok: false; reason: 'held' | 'unavailable' | 'error'; generation?: number; expires_in_seconds?: number }
+    > {
+        try {
+            const { status, data } = await this.post('/api/chunks/lease/acquire', {
+                competition_id: this.competitionId, holder_nonce: this.nonce
+            });
+            if (status === 200 && data && data.success) {
+                return { ok: true, generation: data.data.generation, took_over: !!data.data.took_over };
+            }
+            if (status === 409) {
+                return {
+                    ok: false, reason: 'held',
+                    generation: data && typeof data.generation === 'number' ? data.generation : 0,
+                    expires_in_seconds: data && typeof data.expires_in_seconds === 'number' ? data.expires_in_seconds : 0
+                };
+            }
+            if (status === 503 && data && data.code === 'lease_unavailable') {
+                // Deployment window (migration 0040 not applied yet): legacy
+                // mode — explicit, counted by the caller, never silent.
+                return { ok: false, reason: 'unavailable' };
+            }
+            return { ok: false, reason: 'error' };
+        } catch {
+            return { ok: false, reason: 'error' };
+        }
+    }
+
+    async heartbeat(generation: number): Promise<{ held: boolean; generation: number }> {
+        const { data } = await this.post('/api/chunks/lease/heartbeat', {
+            competition_id: this.competitionId, holder_nonce: this.nonce, generation
+        });
+        if (data && data.success && data.data && typeof data.data.held === 'boolean') {
+            return { held: data.data.held, generation: Number(data.data.generation) || 0 };
+        }
+        throw new Error('Lease heartbeat failed');
+    }
+
+    async release(): Promise<void> {
+        try {
+            await this.post('/api/chunks/lease/release', {
+                competition_id: this.competitionId, holder_nonce: this.nonce
+            });
+        } catch { /* best effort */ }
+    }
 }
 
 export interface ChunkUploadStats {
@@ -92,6 +221,21 @@ export class ChunkUploader {
     private finalized = false;
     private finalizeResult = false;
     /**
+     * R4-CHUNK-DOWNLOAD-1 (D): lease state. 'off' = no handle configured
+     * (legacy surfaces behave exactly as before); 'legacy' = server store
+     * unavailable (deployment window — explicit, uploads proceed); 'enforced'
+     * = this session claimed the lease and must keep proving it.
+     */
+    private leaseMode: 'off' | 'legacy' | 'enforced' = 'off';
+    private leaseGeneration = 0;
+    /** True when recording may proceed: always in off/legacy mode, only
+     *  while the claim holds in enforced mode. Defaults to true so
+     *  lease-less surfaces (and tests) behave exactly as before. */
+    private leaseActive = true;
+    private leaseLostFired = false;
+    private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    private lastHeartbeatOk = 0;
+    /**
      * Init bytes prepended to every fragment so each stored chunk decodes
      * standalone (see ChunkInitSegment). Sourced from the first local blob
      * (fresh session) or the platform init route (resume).
@@ -108,6 +252,149 @@ export class ChunkUploader {
         this.config = config;
         this.maxQueue = options?.maxQueue ?? 3;
         this.maxAttempts = options?.maxAttempts ?? 3;
+    }
+
+    private heartbeatInterval(): number {
+        return this.config.heartbeatIntervalMs && this.config.heartbeatIntervalMs > 0
+            ? this.config.heartbeatIntervalMs : 10000;
+    }
+
+    private maxStale(): number {
+        return this.config.maxHeartbeatStaleMs && this.config.maxHeartbeatStaleMs > 0
+            ? this.config.maxHeartbeatStaleMs : 30000;
+    }
+
+    /**
+     * Claim the recorder lease before recording starts. Returns true when
+     * this session may record (no handle / legacy window / claim won).
+     * Returns false when another session actively holds it (409) or the
+     * claim errored — the caller must NOT start the recorder and should
+     * surface "recording in another tab" with a bounded retry (the holder
+     * may crash or finish; TTL frees the lease).
+     */
+    async acquireLease(): Promise<boolean> {
+        if (!this.config.lease) {
+            this.leaseMode = 'off';
+            this.leaseActive = true;
+            return true;
+        }
+        // From here the session is lease-governed even before the claim
+        // resolves: a rejection below leaves enforced+inactive, so no chunk
+        // is ever accepted or finalized without proven ownership.
+        this.leaseMode = 'enforced';
+        this.leaseActive = false;
+        const result = await this.config.lease.acquire();
+        if (result.ok) {
+            this.leaseMode = 'enforced';
+            this.leaseGeneration = result.generation;
+            this.leaseActive = true;
+            this.leaseLostFired = false;
+            this.lastHeartbeatOk = Date.now();
+            this.startHeartbeat();
+            debugLog(`[ChunkUploader] Lease acquired (generation ${result.generation}${result.took_over ? ', takeover' : ''})`);
+            return true;
+        }
+        if (result.reason === 'unavailable') {
+            this.leaseMode = 'legacy';
+            this.leaseActive = true;
+            debugLog('[ChunkUploader] Lease store unavailable — legacy mode (no fencing)');
+            return true;
+        }
+        debugLog('[ChunkUploader] Lease held by another session');
+        return false;
+    }
+
+    private startHeartbeat(): void {
+        this.stopHeartbeat();
+        if (this.leaseMode !== 'enforced') return;
+        this.heartbeatTimer = setInterval(() => {
+            void this.beat();
+        }, this.heartbeatInterval());
+    }
+
+    private stopHeartbeat(): void {
+        if (this.heartbeatTimer) {
+            clearInterval(this.heartbeatTimer);
+            this.heartbeatTimer = null;
+        }
+    }
+
+    private async beat(): Promise<void> {
+        if (this.leaseMode !== 'enforced' || !this.leaseActive || !this.config.lease) return;
+        try {
+            const res = await this.config.lease.heartbeat(this.leaseGeneration);
+            if (res.held) {
+                this.lastHeartbeatOk = Date.now();
+            } else {
+                this.handleLeaseLost(res.generation);
+            }
+        } catch {
+            // Transient network failure: do NOT kill the recording on a
+            // blip — the pre-upload revalidation below bounds the staleness.
+            debugLog('[ChunkUploader] Lease heartbeat failed (transient — retrying)');
+        }
+    }
+
+    /**
+     * Sensitive-point check (D4): before every upload, when the last
+     * heartbeat is stale, revalidate ownership with the server NOW.
+     * Fail-closed on explicit loss, fail-open on network error (bounded by
+     * staleness — a fenced-out session is still caught at the next beat).
+     */
+    private async ensureLease(): Promise<boolean> {
+        if (this.leaseMode !== 'enforced') return this.leaseActive;
+        if (!this.leaseActive) return false;
+        if (Date.now() - this.lastHeartbeatOk <= this.maxStale()) return true;
+        await this.beat();
+        return this.leaseActive;
+    }
+
+    /**
+     * Fence this session out: stop heartbeats, drop waiting chunks
+     * (counted — never silent), refuse finalize, notify once.
+     */
+    private handleLeaseLost(serverGeneration: number): void {
+        if (!this.leaseActive) return;
+        this.leaseActive = false;
+        this.stopHeartbeat();
+        const waiting = this.queue.length;
+        this.queue.length = 0;
+        this.droppedChunks += waiting;
+        debugLog(`[ChunkUploader] Lease lost (server generation ${serverGeneration}) — stopped, ${waiting} waiting chunk(s) dropped`);
+        if (!this.leaseLostFired) {
+            this.leaseLostFired = true;
+            try {
+                this.config.onLeaseLost?.({ generation: serverGeneration });
+            } catch { /* listener must never break fencing */ }
+        }
+    }
+
+    /** Voluntary clean handover (end of recording): stop beats, release. */
+    async releaseLease(): Promise<void> {
+        this.stopHeartbeat();
+        if (this.leaseMode === 'enforced' && this.config.lease) {
+            try {
+                await this.config.lease.release();
+            } catch { /* best effort */ }
+        }
+        this.leaseActive = false;
+    }
+
+    /**
+     * Emergency stop WITHOUT finalize (lease lost): the old session must
+     * never trigger a merge after a takeover. Drops waiting chunks (counted).
+     */
+    shutdown(): void {
+        this.stopHeartbeat();
+        const waiting = this.queue.length;
+        this.queue.length = 0;
+        this.droppedChunks += waiting;
+        this.leaseActive = false;
+    }
+
+    /** True while this session is the proven recorder (or lease is off). */
+    get leaseHeld(): boolean {
+        return this.leaseActive;
     }
 
     /**
@@ -129,6 +416,15 @@ export class ChunkUploader {
         this.finalizeResult = false;
         this.initSegment = null;
         this.formatWarned = false;
+        // A re-initialized session must re-prove ownership from scratch
+        // (resume-after-max numbering below is untouched — D6). Lease-less
+        // surfaces stay active; governed ones claim via acquireLease().
+        this.stopHeartbeat();
+        this.leaseMode = 'off';
+        this.leaseGeneration = 0;
+        this.leaseActive = !this.config.lease;
+        this.leaseLostFired = false;
+        this.lastHeartbeatOk = 0;
         try {
             const res = await fetch(`/api/chunks/playlist/${this.config.competitionId}`);
             if (!res.ok) {
@@ -228,6 +524,13 @@ export class ChunkUploader {
             debugLog('[ChunkUploader] Rejected chunk (<1KB, likely empty recorder flush)');
             return false;
         }
+        // Fenced-out sessions accept no new work (the recorder is aborted
+        // via onLeaseLost; this guards the race window).
+        if (this.leaseMode === 'enforced' && !this.leaseActive) {
+            this.failedChunks++;
+            debugLog('[ChunkUploader] Rejected chunk (lease lost)');
+            return false;
+        }
         if (blob.size > 50 * 1024 * 1024) {
             this.failedChunks++;
             debugLog('[ChunkUploader] Rejected chunk (>50MB)');
@@ -268,6 +571,13 @@ export class ChunkUploader {
                     // and a failed chunk retries with the SAME number
                     // (idempotent server overwrite) — dense, no gaps.
                     if (item.number < 0) item.number = this.nextNumber++;
+                    // D4 sensitive-point ownership check: a session fenced
+                    // out mid-queue stops here (handleLeaseLost already
+                    // cleared the queue including this item — never upload
+                    // after losing the lease).
+                    if (!(await this.ensureLease())) {
+                        return;
+                    }
                     await this.doUpload(payload, item.number);
                     this.queue.shift();
                     this.uploadedCount++;
@@ -384,6 +694,11 @@ export class ChunkUploader {
         if (this.finalized && !force) {
             return this.finalizeResult;
         }
+        // A fenced-out session must never trigger the merge (D3).
+        if (this.leaseMode === 'enforced' && !this.leaseActive) {
+            debugLog('[ChunkUploader] Finalize refused (lease lost)');
+            return false;
+        }
         // Wait for pending uploads
         await this.waitForUploads();
 
@@ -405,6 +720,10 @@ export class ChunkUploader {
             debugLog('[ChunkUploader] Finalization triggered:', result);
             this.finalized = true;
             this.finalizeResult = result.success === true;
+            // Clean handover: a finalized session frees the lease so a
+            // later session (or the same tab re-recording) claims cleanly.
+            // Best-effort — /end also releases server-side.
+            await this.releaseLease();
             return this.finalizeResult;
         } catch (error) {
             console.error('[ChunkUploader] Failed to finalize:', error);
