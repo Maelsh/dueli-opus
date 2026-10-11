@@ -22,6 +22,7 @@ import { ScheduledTaskService } from '../lib/services/ScheduledTaskService';
 import { ExploreResultProvider, ExploreSessionService } from '../lib/services/ExploreSessionService';
 import { getUILanguage, normalizeContentLanguage } from '../i18n';
 import { EventPusher } from '../lib/services/EventPusher';
+import { RecordingLeaseModel } from '../models/RecordingLeaseModel';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
 import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError, ValidationError } from '../lib/errors/AppError';
@@ -707,6 +708,16 @@ export class CompetitionController extends BaseController {
                 reference_id: competitionId
             });
 
+            // R4-CHUNK-DOWNLOAD-1 (C): pending→accepted on the existing
+            // competition channel (best-effort — never fails the accept).
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(
+                    competitionId, 'accepted', { opponent_id: request.requester_id }
+                );
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus failed:', pushError);
+            }
+
             return this.success(c, {
                 accepted: true,
                 otherDeclined: declinedCount,
@@ -814,6 +825,14 @@ export class CompetitionController extends BaseController {
             // Cancel the auto_delete task since it's now live
             await taskService.cancel(id, 'auto_delete_if_not_live');
 
+            // R4-CHUNK-DOWNLOAD-1 (C): accepted→live on the existing
+            // competition channel (best-effort — never fails the start).
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(id, 'live');
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus failed:', pushError);
+            }
+
             return this.success(c, { started: true, status: 'live' });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -871,6 +890,23 @@ export class CompetitionController extends BaseController {
             // Delete chunk keys when competition ends (live → completed)
             // حذف مفاتيح القطع عند تحول المنافسة من حية لمسجلة
             await model.deleteChunkKeys(id);
+
+            // R4-CHUNK-DOWNLOAD-1 (D): the recorder lease dies with the
+            // competition — no stuck lock survives an end (best-effort; the
+            // table ships in migration 0040 and may lag the code on deploy).
+            try {
+                await new RecordingLeaseModel(c.env.DB).releaseForCompetition(id);
+            } catch (leaseError) {
+                console.error(`[End] Lease release failed for ${id}:`, leaseError);
+            }
+
+            // R4-CHUNK-DOWNLOAD-1 (C): live→completed on the existing
+            // competition channel (best-effort — never fails the end).
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(id, 'completed');
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus failed:', pushError);
+            }
 
             // R2-V: cutoff FIRST (guarded live->completed above — from here on
             // every rating write is rejected), THEN the final result/ELO/
@@ -1683,6 +1719,16 @@ if (!invitation) {
                 });
             } catch (pushError) {
                 console.error('[CompetitionController] publishInviteResponse failed:', pushError);
+            }
+
+            // R4-CHUNK-DOWNLOAD-1 (C): pending→accepted on the existing
+            // competition channel (best-effort — never fails the accept).
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(
+                    competitionId, 'accepted', { opponent_id: user.id }
+                );
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus failed:', pushError);
             }
 
             return this.success(c, { accepted: true, autoDeleted: deletedCount });

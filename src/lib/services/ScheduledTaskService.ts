@@ -344,6 +344,22 @@ export class ScheduledTaskService {
             DELETE FROM chunk_keys WHERE competition_id = ?
         `).bind(competitionId).run();
 
+        // R4-CHUNK-DOWNLOAD-1 (D+C): cron auto-end frees the recorder lease
+        // and announces live→completed on the existing competition channel
+        // (best-effort — the client poll fallback covers a missed event).
+        try {
+            const { RecordingLeaseModel } = await import('../../models/RecordingLeaseModel');
+            await new RecordingLeaseModel(this.db).releaseForCompetition(competitionId);
+        } catch (e) {
+            console.error(`[AutoEnd] Lease release failed for #${competitionId}:`, e);
+        }
+        try {
+            const { EventPusher } = await import('./EventPusher');
+            await new EventPusher(this.db).publishCompetitionStatus(competitionId, 'completed');
+        } catch (e) {
+            console.error(`[AutoEnd] Status publish failed for #${competitionId}:`, e);
+        }
+
         const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
         for (const userId of userIds) {
             // F-7: i18n (stored snapshot stays English; behavior unchanged).

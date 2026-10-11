@@ -108,6 +108,10 @@ export const COMPETITION_DEPENDENTS: Dependent[] = [
     { table: 'users', column: 'current_competition_id' },
     // R2-L1: qualified daily views reference their competition (0034).
     { table: 'competition_views', column: 'competition_id' },
+    // R4-CHUNK-DOWNLOAD-1 (row 27): recorder lease rows reference their
+    // competition (0040, cascade on delete). Missing tables are skipped by
+    // hasDependent, so this is safe before 0040 is applied anywhere.
+    { table: 'recording_leases', column: 'competition_id' },
 ];
 
 async function existingTables(db: D1Database): Promise<Set<string>> {

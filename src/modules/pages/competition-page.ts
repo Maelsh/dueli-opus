@@ -247,9 +247,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         <span class="hidden sm:inline text-sm">\${tr.end}</span>
                       </button>
                     </div>
-                    <div class="text-center pb-2">
-                      <a href="/live/\${competitionId}?lang=\${lang}" class="text-xs text-gray-500 dark:text-gray-400 hover:underline">\${tr.join_stream} · /live</a>
-                    </div>
                     
                   \` : (isCreator || isOpponent) && comp.opponent_id && (isPending || comp.status === 'accepted') ? \`
                     <!-- Ready to Go Live -->
@@ -337,6 +334,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                                   class="w-9 h-9 flex items-center justify-center bg-gray-700 text-white rounded-full hover:bg-gray-600 flex-shrink-0">
                             <i class="fas fa-expand text-sm"></i>
                           </button>
+                        </div>
+                        <!-- R4-CHUNK-DOWNLOAD-1 (A): assembly progress + cancel.
+                             The file is a real re-encoded MP4 (ftyp-proven);
+                             gaps/cancel/errors are reported, never silent. -->
+                        <div id="embeddedDownloadProgress" class="hidden mt-2" role="status" aria-live="polite">
+                          <div class="flex items-center gap-2 text-xs text-gray-300">
+                            <span id="embeddedDownloadLabel" class="flex-1 truncate"></span>
+                            <button id="embeddedDownloadCancelBtn" data-csp-on="click" data-csp-fn="embeddedCancelDownload" data-csp-args='[]'
+                                    class="px-3 py-1 bg-gray-700 text-white rounded-full hover:bg-gray-600 flex-shrink-0">\${tr.cancel || 'Cancel'}</button>
+                          </div>
+                          <div class="h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                            <div id="embeddedDownloadBar" class="h-full bg-green-500 rounded-full transition-all w-0"></div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -622,6 +632,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const liveUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
         
         try {
+          window.__goLiveState = 'starting';
           const res = await fetch('/api/competitions/' + competitionId + '/start', {
             method: 'POST',
             headers: {
@@ -631,13 +642,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             body: JSON.stringify({ live_url: liveUrl })
           });
           
-          const data = await res.json();
-          if (data.success) {
-            // R2-L2: production room for every role — /live/:id resolves
-            // host/opponent/viewer from the session (same guards as start).
-            window.location.href = '/live/' + competitionId + '?lang=' + lang;
+          // Defensive parse: an unparseable body must never strand the host
+          // on the accepted panel — HTTP 200 IS the start decision.
+          const data = await res.json().catch(function() { return null; });
+          if (res.ok && (!data || data.success !== false)) {
+            // R4-CHUNK-DOWNLOAD-1 (B): the unified page IS the live room —
+            // stay here. Reload straight onto the live DOM — lossless here
+            // by construction (no media exists pre-live; the recorder only
+            // starts after the live DOM exists).
+            window.__goLiveState = 'reloading';
+            location.reload();
           } else {
-            showToast(data.error || 'Failed to start', 'error');
+            window.__goLiveState = 'failed';
+            showToast((data && data.error) || 'Failed to start', 'error');
           }
         } catch (err) {
           console.error(err);
@@ -862,7 +879,135 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               if (payload && payload.comment_id !== undefined) removeLiveComment(payload.comment_id);
             } catch (e) {}
           });
+          // R4-CHUNK-DOWNLOAD-1 (C): lifecycle transitions on the SAME
+          // always-on channel (no new connection). The comments stream
+          // exists in every status, so pending→accepted→live→completed all
+          // arrive here; the bounded poll below is the fallback only.
+          es.addEventListener('competition_status', function(ev) {
+            try {
+              const payload = JSON.parse(ev.data);
+              if (payload && payload.competition_id === Number(competitionId)
+                  && typeof payload.status === 'string') {
+                handleRemoteStatus(payload.status);
+              }
+            } catch (e) {}
+          });
         } catch (e) {}
+      }
+
+      // R4-CHUNK-DOWNLOAD-1 (C): automatic state transitions, no manual
+      // refresh. Rules (all lossless by construction):
+      // - pre-live remote changes (old status pending/accepted): NO media
+      //   can exist on this page (competitor flow + embedded viewer only
+      //   init for live/completed) → reload lands on the right surface;
+      // - live→completed: in-place teardown (host finalizes FIRST so the
+      //   tail + merge are never lost) then re-render + VOD/viewer init;
+      // - own actions refresh in place (goLive) or reload themselves
+      //   (endStream) — a remote echo of our own status is ignored.
+      // Single 15s poll while non-terminal + an immediate check when the
+      // tab becomes visible (ES gaps on hidden tabs) — one interval only.
+      var statusWatchTimer = null;
+      var statusTransitionBusy = false;
+      function isTerminalStatus() {
+        return !!competitionData && competitionData.status === 'completed';
+      }
+      function stopStatusWatch() {
+        if (statusWatchTimer) {
+          try { clearInterval(statusWatchTimer); } catch (e) {}
+          statusWatchTimer = null;
+        }
+      }
+      function startStatusWatch() {
+        stopStatusWatch();
+        if (isTerminalStatus()) return;
+        statusWatchTimer = setInterval(function() {
+          if (document.visibilityState !== 'visible') return;
+          void refreshCompetitionState();
+        }, 15000);
+      }
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible' && !isTerminalStatus()) {
+          void refreshCompetitionState();
+        }
+      });
+      async function fetchFreshCompetition() {
+        try {
+          const res = await fetch('/api/competitions/' + competitionId);
+          if (!res.ok) return null;
+          const data = await res.json().catch(function() { return null; });
+          if (!data) return null;
+          return data.data || data;
+        } catch (e) {
+          return null;
+        }
+      }
+      async function refreshCompetitionState() {
+        if (statusTransitionBusy || !competitionData) return;
+        const fresh = await fetchFreshCompetition();
+        if (!fresh || !fresh.status) return;
+        if (fresh.status === competitionData.status) {
+          // Same status: adopt fresh fields (timer/opponent) silently —
+          // never re-render (re-render destroys live video elements).
+          competitionData = fresh;
+          return;
+        }
+        await applyRemoteStatusTransition(fresh);
+      }
+      function handleRemoteStatus(newStatus) {
+        if (!competitionData || newStatus === competitionData.status) return;
+        if (statusTransitionBusy) return;
+        void refreshCompetitionState();
+      }
+      async function teardownLiveMedia() {
+        try {
+          if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
+        } catch (e) {}
+        try { competitorLastOfferAt = 0; } catch (e) {}
+        try {
+          if (window._statusPollInterval) { clearInterval(window._statusPollInterval); window._statusPollInterval = null; }
+        } catch (e) {}
+        try {
+          if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
+        } catch (e) {}
+        embeddedCurrentPlayer = null;
+        try {
+          if (p2p && p2p.disconnect) await p2p.disconnect();
+        } catch (e) {}
+        p2p = null;
+        try {
+          if (compositor) { await compositor.destroy(); compositor = null; }
+        } catch (e) {}
+      }
+      async function applyRemoteStatusTransition(fresh) {
+        const oldStatus = competitionData.status;
+        const newStatus = fresh.status;
+        try { log('Status transition: ' + oldStatus + ' → ' + newStatus, 'info'); } catch (e) {}
+        // Pre-live: nothing media exists → reload is lossless.
+        if (oldStatus === 'pending' || oldStatus === 'accepted') {
+          location.reload();
+          return;
+        }
+        if (oldStatus === 'live' && newStatus === 'completed') {
+          statusTransitionBusy = true;
+          try {
+            // Host recorder first: drain + single finalize BEFORE leaving
+            // live (unless WE ended — endStream reloads on its own path).
+            // Then tear everything down and re-render as completed.
+            await teardownLiveMedia();
+            competitionData = fresh;
+            stopStatusWatch();
+            competitorStarted = false;
+            userRole = null;
+            // The render wrapper below re-runs checkAndInitStream on the
+            // fresh DOM (VOD/viewer init for the completed surface).
+            renderCompetition(fresh);
+          } finally {
+            statusTransitionBusy = false;
+          }
+          return;
+        }
+        // Any other change converges via reload (no media assumptions).
+        location.reload();
       }
 
       // R2-L2: VOD timed comments — same comments/SSE system (no second
@@ -1037,6 +1182,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         subscribeCommentsLive();
         loadRatingSummary();
         subscribeRatingsLive();
+        startStatusWatch();
         loadReactionStatus();
         loadCompetitionAd();
         // Sequential: the heartbeat must see the guest token the intent may
@@ -1530,7 +1676,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       async function initEmbeddedViewer() {
         const viewerSection = document.getElementById('embeddedViewerSection');
         if (!viewerSection) return; // not shown (competitor or no stream)
-        
+
+        // R4-CHUNK-DOWNLOAD-1 (C4): single active player — retries and
+        // transitions re-enter here; stop the previous player FIRST so two
+        // chunk pollers/listeners can never stack.
+        try {
+          if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
+        } catch (e) {}
+        embeddedCurrentPlayer = null;
         const videoPlayers = [
           document.getElementById('embeddedVideoPlayer1'),
           document.getElementById('embeddedVideoPlayer2')
@@ -1703,24 +1856,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             });
             // يبدأ من آخر قطعة متاحة حالياً لعدم التأخر عن البث
             await embeddedCurrentPlayer.start({ startFromLatest: true });
-            
-            // استطلاع حالة المنافسة كل 30 ثانية لاكتشاف نهاية البث فوراً
-            window._statusPollInterval = setInterval(async function() {
-              try {
-                const pollRes = await fetch('/api/competitions/' + competitionId);
-                const pollData = await pollRes.json();
-                const pollComp = pollData.data || pollData;
-                if (pollComp.status === 'completed') {
-                  clearInterval(window._statusPollInterval);
-                  if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
-                  log('🏁 Competition completed - switching to VOD', 'success');
-                  // تحديث شارة الحالة في واجهة المنافسة
-                  const liveSpan = document.querySelector('.bg-red-600.text-white.text-xs');
-                  if (liveSpan) liveSpan.remove();
-                  await initEmbeddedViewer();
-                }
-              } catch(e) { /* تجاهل أخطاء الاستطلاع */ }
-            }, 30000);
+
+            // R4-CHUNK-DOWNLOAD-1 (C): the global status watcher (started in
+            // initCompetitionDynamics) owns live→completed now — one 15s
+            // interval per page instead of one per viewer init.
             
           } else if (isCompletedComp) {
             // === VOD: Use SmartVodPlayer ===
@@ -1886,17 +2025,64 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         if (icon) icon.className = document.fullscreenElement ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
       });
       
-      // Download VOD recording (merge all chunks in browser memory)
+      // R4-CHUNK-DOWNLOAD-1 (A): one valid MP4 assembled in-browser from
+      // the ordered playlist (concat + re-encode, ftyp-proven) — never a
+      // renamed byte-concat. Progress + cancel + explicit gap/error/retry
+      // reporting; failures never save a corrupt file silently.
+      window.embeddedCancelDownload = function() {
+        try {
+          if (window._dlAbort) window._dlAbort.abort();
+        } catch (e) {}
+      };
       window.embeddedDownload = async function() {
-        if (!embeddedCurrentPlayer || !embeddedCurrentPlayer.downloadVideo) return;
+        if (!embeddedCurrentPlayer || !embeddedCurrentPlayer.downloadAssembled) return;
+        if (window._dlRunning) return;
+        window._dlRunning = true;
         const btn = document.getElementById('embeddedDownloadBtn');
+        const box = document.getElementById('embeddedDownloadProgress');
+        const bar = document.getElementById('embeddedDownloadBar');
+        const label = document.getElementById('embeddedDownloadLabel');
         const originalHtml = btn ? btn.innerHTML : '';
+        const abort = new AbortController();
+        window._dlAbort = abort;
+        function paintDl(stage, ratio, detail) {
+          const pct = Math.max(0, Math.min(100, Math.round((ratio || 0) * 100)));
+          if (bar) bar.style.width = pct + '%';
+          if (label) {
+            const stageText = stage === 'fetching' ? (tr.download_fetching || 'Fetching chunks')
+              : stage === 'assembling' ? (tr.download_assembling || 'Assembling video')
+              : stage === 'validating' ? (tr.download_validating || 'Verifying file')
+              : (tr.download || 'Download');
+            label.textContent = stageText + ' ' + pct + '%' + (detail ? ' — ' + detail : '');
+          }
+        }
         try {
           if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-sm"></i>'; }
-          await embeddedCurrentPlayer.downloadVideo('competition_' + competitionId);
+          if (box) box.classList.remove('hidden');
+          paintDl('fetching', 0, '');
+          const info = await embeddedCurrentPlayer.downloadAssembled(
+            'competition_' + competitionId + '.mp4', paintDl, abort.signal
+          );
+          if (info && info.missing && info.missing.length > 0) {
+            showToast((tr.download_gaps || 'Downloaded with gaps (missing chunks)') + ': ' + info.missing.join(','), 'warn');
+          } else {
+            showToast(tr.download_done || 'Download complete', 'success');
+          }
+          log('Download complete: ' + (info ? info.fetched + '/' + info.total + ' chunks' : ''), 'success');
         } catch (e) {
-          log('Download failed: ' + e.message, 'error');
+          const msg = (e && e.message) || '';
+          if (msg === 'Download cancelled' || (abort.signal && abort.signal.aborted)) {
+            showToast(tr.download_cancelled || 'Download cancelled', 'info');
+            log('Download cancelled by user', 'info');
+          } else {
+            log('Download failed: ' + msg, 'error');
+            showToast((tr.download_failed || 'Download failed') + ' — ' + (tr.retry || 'Retry'), 'error');
+          }
         } finally {
+          window._dlRunning = false;
+          window._dlAbort = null;
+          if (box) box.classList.add('hidden');
+          if (bar) bar.style.width = '0%';
           if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
         }
       };
@@ -1952,15 +2138,29 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       }
 
+      // R4-CHUNK-DOWNLOAD-1 (C4): the offer loop lives until CONNECTED —
+      // a one-shot offer stalls forever when both sides re-init at once
+      // (transition reloads) and the first pair mismatches (glare). Re-offer
+      // at most every 15s while the opponent is present but unconnected;
+      // the adapter's generation guards drop stale SDP/ICE. Stops on
+      // connected (single active loop — no offer storm while connecting).
+      var competitorLastOfferAt = 0;
       function watchCompetitorOpponent() {
         if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
         competitorWatcher = setInterval(async function() {
           if (!p2p) return;
           try {
-            const status = await p2p.getRoomStatus();
-            if (status && status.opponent_joined && !p2p.isP2PConnected()) {
-              await p2p.createOffer();
+            if (p2p.isP2PConnected && p2p.isP2PConnected()) {
               if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
+              return;
+            }
+            const status = await p2p.getRoomStatus();
+            if (status && status.opponent_joined) {
+              const now = Date.now();
+              if (now - competitorLastOfferAt >= 15000) {
+                competitorLastOfferAt = now;
+                await p2p.createOffer();
+              }
             }
           } catch (e) { /* transient presence read — next tick retries */ }
         }, 2000);
@@ -1979,6 +2179,18 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           serverUrl: streamServerUrl,
           platformName: tr.app_title,
           rtl: isRTL,
+          // R4-CHUNK-DOWNLOAD-1 (D): exclusive recorder ownership — a
+          // second host tab/browser/device cannot record alongside us.
+          // startRecording claims first and refuses on a held lease; a
+          // mid-recording loss aborts our recorder WITHOUT finalizing.
+          lease: (window.PlatformRecordingLease
+            ? new window.PlatformRecordingLease(Number(competitionId))
+            : undefined),
+          onLeaseLost: function() {
+            leaseRetryCount = 0;
+            showToast(tr.recording_lease_lost || 'Recording stopped — another session took over', 'error');
+            log('Recording lease lost: recorder aborted, uploads fenced (no finalize from this session)', 'warn');
+          },
           onChunkUploaded: function(num) {
             const cc = document.getElementById('chunkCount');
             if (cc) cc.textContent = num;
@@ -2020,11 +2232,34 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         });
       }
 
+      // R4-CHUNK-DOWNLOAD-1 (D): bounded re-claim attempts while the
+      // holder may finish or crash (TTL frees the lease — never infinite).
+      var leaseRetryCount = 0;
+      function notifyLeaseHeld() {
+        showToast(tr.recording_in_use || 'Recording is active in another tab or device', 'warn');
+        log('Recording lease held by another session — not recording (no double upload)', 'warn');
+        if (leaseRetryCount < 6 && compositor && !compositor.getStats().isRecording) {
+          leaseRetryCount++;
+          setTimeout(function() {
+            if (compositor && !compositor.getStats().isRecording) startCompetitorRecording();
+          }, 10000);
+        }
+      }
+
       function startCompetitorRecording() {
         if (compositor && !compositor.getStats().isRecording) {
           const localVideo = document.getElementById('localVideo');
           const remoteVideo = document.getElementById('remoteVideo');
-          waitCompetitorMediaReady(localVideo, remoteVideo).then(function() {
+          waitCompetitorMediaReady(localVideo, remoteVideo).then(async function() {
+            if (!compositor || compositor.getStats().isRecording) return;
+            // D: claim exclusive ownership BEFORE the recorder exists —
+            // a held lease means another session records; never build a
+            // second recorder for the same competition.
+            try {
+              const claimed = await compositor.acquireRecordingLease();
+              if (!claimed) { notifyLeaseHeld(); return; }
+            } catch (e) { /* legacy surfaces proceed without a lease */ }
+            leaseRetryCount = 0;
             if (compositor && !compositor.getStats().isRecording) {
               compositor.startRecording();
             }

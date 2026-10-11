@@ -1,0 +1,12 @@
+{
+  "startedAt": "2026-10-11T09:32:29.788Z",
+  "project": "en",
+  "stubBase": "https://127.0.0.1:4931",
+  "legs": {
+    "wasmReachable": true,
+    "goLiveState": null
+  },
+  "competitionId": 360,
+  "verdict": "FAIL-throw",
+  "reason": "goLive reached the reload branch\n\n\u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"reloading\"\u001b[39m\nReceived: \u001b[31mnull\u001b[39m"
+}

@@ -8,7 +8,7 @@
  * يسجل قطع ويرفعها للسيرفر.
  */
 
-import { ChunkUploader } from './ChunkUploader';
+import { ChunkUploader, RecordingLeaseHandle } from './ChunkUploader';
 
 /**
  * Conditional debug logger (same pattern as
@@ -44,6 +44,15 @@ export interface VideoCompositorConfig {
     onRecordingStarted?: () => void;
     onRecordingStopped?: () => void;
     onError?: (error: Error) => void;
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (D): exclusive recorder ownership. When present,
+     * startRecording acquires the lease first and refuses to record when
+     * another session holds it; losing the lease mid-recording aborts the
+     * recorder without finalizing (the new holder owns the merge).
+     */
+    lease?: RecordingLeaseHandle;
+    /** Fired once when this session is fenced out mid-recording. */
+    onLeaseLost?: (info: { generation: number }) => void;
 }
 
 export interface RecordingStats {
@@ -122,7 +131,16 @@ export class VideoCompositor {
                 this.chunksUploaded++;
                 this.config.onChunkUploaded?.(num);
             },
-            onError: config.onError
+            onError: config.onError,
+            lease: config.lease,
+            onLeaseLost: (info) => {
+                // Fenced out: abort the recorder WITHOUT finalizing, then
+                // tell the page (toast/status) via the same callback.
+                void this.abortRecording();
+                try {
+                    this.config.onLeaseLost?.(info);
+                } catch { /* listener must never break fencing */ }
+            }
         });
 
         // Determine best mime type for recording (prioritize MP4 for iOS)
@@ -319,7 +337,10 @@ export class VideoCompositor {
     }
 
     /**
-     * Start recording the canvas
+     * Start recording the canvas.
+     * With a lease configured, ownership is claimed FIRST (acquireLease):
+     * a session that loses the claim never builds a recorder, so two host
+     * tabs can never record the same competition at once.
      */
     async startRecording(): Promise<void> {
         if (this.isRecording || this.startPending) return;
@@ -332,10 +353,31 @@ export class VideoCompositor {
             // host gap/refresh appends without overwriting previous chunks.
             await this.uploader.initialize();
 
+            // R4-CHUNK-DOWNLOAD-1 (D): claim exclusive ownership BEFORE the
+            // recorder exists. False = another session holds it; the page
+            // surfaces "recording in another tab" (with bounded retry).
+            if (!(await this.uploader.acquireLease())) {
+                debugLog('[VideoCompositor] Recording refused — lease held by another session');
+                return;
+            }
+
             await this.beginCapture();
         } finally {
             this.startPending = false;
         }
+    }
+
+    /**
+     * Explicit claim (for pages that want the held/not-held answer before
+     * wiring the recorder). Pass-through to the uploader.
+     */
+    async acquireRecordingLease(): Promise<boolean> {
+        return this.uploader.acquireLease();
+    }
+
+    /** True while this session provably owns the recorder role. */
+    get recordingLeaseHeld(): boolean {
+        return this.uploader.leaseHeld;
     }
 
     /**
@@ -439,6 +481,16 @@ export class VideoCompositor {
 
         return new Promise((resolve) => {
             this.mediaRecorder!.onstop = async () => {
+                // A lease loss that lands mid-stop must not finalize.
+                if (this.aborting) {
+                    this.aborting = false;
+                    this.isRecording = false;
+                    this.uploader.shutdown();
+                    debugLog('[VideoCompositor] Recording aborted (no finalize)');
+                    this.config.onRecordingStopped?.();
+                    resolve();
+                    return;
+                }
                 this.isRecording = false;
 
                 // Wait for the final ondataavailable handler to enqueue.
@@ -456,6 +508,30 @@ export class VideoCompositor {
 
             this.mediaRecorder!.stop();
         });
+    }
+
+    /**
+     * R4-CHUNK-DOWNLOAD-1 (D): emergency stop WITHOUT finalize. A session
+     * fenced out by a takeover must never trigger the merge — the new
+     * holder owns it. stopRecording()'s onstop honors `aborting` (shutdown,
+     * no finalize); the timeout below bounds a dead recorder.
+     */
+    private aborting = false;
+
+    async abortRecording(): Promise<void> {
+        if (!this.isRecording || !this.mediaRecorder) {
+            this.uploader.shutdown();
+            return;
+        }
+        this.aborting = true;
+        const stop = this.stopRecording();
+        const timeout = new Promise<void>((resolve) => setTimeout(() => {
+            this.aborting = false;
+            this.isRecording = false;
+            this.uploader.shutdown();
+            resolve();
+        }, 3000));
+        await Promise.race([stop, timeout]);
     }
 
     /**

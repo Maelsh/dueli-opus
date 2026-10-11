@@ -78,7 +78,13 @@ describe('R4-COMP-UNIFIED-1 page wiring pins', () => {
         ]) {
             expect(() => readSrc(rel)).not.toThrow();
         }
-        // /live/:id compat entry stays reachable from the unified page.
-        expect(readSrc(PAGE)).toContain('/live/');
+        // SUPERSEDED by R4-CHUNK-DOWNLOAD-1 (row 27, owner §B): the /live
+        // compat anchor was REMOVED from the unified page on purpose — the
+        // page must hold no functional /live link (server redirects /live
+        // to /competition instead). '/live/' still appears in comments and
+        // in ./live/ import paths, so a naive toContain would mislead;
+        // assert the real contract: no /live href or navigation remains.
+        expect(readSrc(PAGE)).not.toContain("window.location.href = '/live/'");
+        expect(readSrc(PAGE)).not.toContain('<a href="/live/');
     });
 });

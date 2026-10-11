@@ -22,7 +22,7 @@ import { ThemeService } from './services/ThemeService';
 import { P2PConnection } from './services/P2PConnection';
 import { SignalingManager } from './services/SignalingManager';
 import { VideoCompositor } from './services/VideoCompositor';
-import { ChunkUploader } from './services/ChunkUploader';
+import { ChunkUploader, PlatformRecordingLease } from './services/ChunkUploader';
 
 // Note: Test Streaming functions are now injected as inline scripts in test pages
 // See: modules/pages/test/scripts/client/shared.ts
@@ -235,6 +235,8 @@ declare global {
         SignalingManager: typeof SignalingManager;
         VideoCompositor: typeof VideoCompositor;
         ChunkUploader: typeof ChunkUploader;
+        // R4-CHUNK-DOWNLOAD-1 (D): platform lease client for the host page.
+        PlatformRecordingLease: typeof PlatformRecordingLease;
 
         // R4-COMP-UNIFIED-1: pure role×state surface decision (unified page)
         resolveVideoSurface: typeof resolveVideoSurface;
@@ -356,6 +358,7 @@ if (typeof window !== 'undefined') {
     window.SignalingManager = SignalingManager;
     window.VideoCompositor = VideoCompositor;
     window.ChunkUploader = ChunkUploader;
+    window.PlatformRecordingLease = PlatformRecordingLease;
     // R4-COMP-UNIFIED-1: pure role×state decision for the unified page.
     window.resolveVideoSurface = resolveVideoSurface;
 

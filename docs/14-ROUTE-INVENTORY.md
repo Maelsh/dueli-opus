@@ -1,16 +1,16 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-08T13:17:54.959Z
+> تاريخ التوليد: 2026-10-11T06:30:32.986Z
 
-## الإجمالي: 237 مسار
+## الإجمالي: 242 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 128 |
-| AUTHENTICATED | 64 |
+| AUTHENTICATED | 68 |
 | UNGUARDED ⚠ | 42 |
-| SERVICE(origin-only ⚠) | 3 |
+| SERVICE(origin-only ⚠) | 4 |
 
 ## الحماية على مستوى المجموعات (main.ts)
 
@@ -109,6 +109,11 @@
 | GET | `/api/categories/:id` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/categories/routes.ts` |
 | GET | `/api/categories/:id/subcategories` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/categories/routes.ts` |
 | DELETE | `/api/chunks/:key` | SERVICE(origin-only ⚠) | group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
+| GET | `/api/chunks/init/:id` | SERVICE(origin-only ⚠) | group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
+| GET | `/api/chunks/lease/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
+| POST | `/api/chunks/lease/acquire` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
+| POST | `/api/chunks/lease/heartbeat` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
+| POST | `/api/chunks/lease/release` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
 | GET | `/api/chunks/playlist/:id` | SERVICE(origin-only ⚠) | group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
 | POST | `/api/chunks/register` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
 | GET | `/api/chunks/verify` | SERVICE(origin-only ⚠) | group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
