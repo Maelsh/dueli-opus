@@ -57,6 +57,7 @@ import { DateFormatter } from './helpers/DateFormatter';
 import { NumberFormatter } from './helpers/NumberFormatter';
 import { YouTubeHelpers } from './helpers/YouTubeHelpers';
 import { Utils } from './helpers/Utils';
+import { resolveVideoSurface } from './helpers/CompetitionSurface';
 
 /**
  * Country selection functions (moved from CountryService)
@@ -235,6 +236,9 @@ declare global {
         VideoCompositor: typeof VideoCompositor;
         ChunkUploader: typeof ChunkUploader;
 
+        // R4-COMP-UNIFIED-1: pure role×state surface decision (unified page)
+        resolveVideoSurface: typeof resolveVideoSurface;
+
         // Invite Panel (Task 10)
         openInvitePanel: (competitionId: number) => void;
         closeInvitePanel: () => void;
@@ -352,6 +356,8 @@ if (typeof window !== 'undefined') {
     window.SignalingManager = SignalingManager;
     window.VideoCompositor = VideoCompositor;
     window.ChunkUploader = ChunkUploader;
+    // R4-COMP-UNIFIED-1: pure role×state decision for the unified page.
+    window.resolveVideoSurface = resolveVideoSurface;
 
     // Note: Test Streaming functions are injected as inline scripts in test pages
 }

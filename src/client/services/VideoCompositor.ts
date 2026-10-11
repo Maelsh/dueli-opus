@@ -32,6 +32,14 @@ export interface VideoCompositorConfig {
     canvas?: HTMLCanvasElement;
     chunkDuration?: number; // in milliseconds, default 10000 (10s)
     serverUrl?: string;
+    /**
+     * R4-COMP-UNIFIED-1: original test-page identity, drawn INSIDE the
+     * recorded frames (not a page overlay). platformName is the host-language
+     * app title (e.g. 'Dueli' / 'ديولي'), rtl mirrors the whole layout.
+     */
+    platformName?: string;
+    rtl?: boolean;
+    logoUrl?: string;
     onChunkUploaded?: (chunkNumber: number) => void;
     onRecordingStarted?: () => void;
     onRecordingStopped?: () => void;
@@ -61,6 +69,8 @@ export class VideoCompositor {
     private startTime: number = 0;
     private mimeType: string = '';
     private fileExtension: string = 'webm';
+    /** Original Dueli logo image (drawn into the recorded frames). */
+    private logoImage: HTMLImageElement | null = null;
     /**
      * R4-CHUNK-PLAY-1: in-flight ondataavailable handlers. stop() must wait
      * for the final handler to ENQUEUE its blob before finalize() drains —
@@ -69,18 +79,29 @@ export class VideoCompositor {
      */
     private pendingSaves = 0;
 
-    // Canvas dimensions
+    // Canvas dimensions — original test-page design (1280×720).
     private readonly CANVAS_WIDTH = 1280;
-    private readonly CANVAS_HEIGHT = 480;
-    private readonly VIDEO_WIDTH = 640;
-    private readonly VIDEO_HEIGHT = 480;
+    private readonly CANVAS_HEIGHT = 720;
 
     constructor(config: VideoCompositorConfig) {
         this.config = {
             chunkDuration: 5000, // ⭐ 5s بدلاً من 10s (تقليل latency)
             serverUrl: 'https://maelshpro.com/ffmpeg',
+            platformName: 'Dueli',
+            rtl: false,
+            logoUrl: '/static/dueli-icon.png',
             ...config
         };
+
+        // Original identity asset (same-origin: no canvas taint).
+        try {
+            const logo = new Image();
+            logo.crossOrigin = 'anonymous';
+            logo.src = this.config.logoUrl as string;
+            this.logoImage = logo;
+        } catch {
+            this.logoImage = null;
+        }
 
         // Create or use provided canvas
         if (config.canvas) {
@@ -154,6 +175,14 @@ export class VideoCompositor {
     }
 
     /**
+     * R4-COMP-UNIFIED-1: resolved recording format (MP4 when the browser
+     * supports it, real WebM fallback otherwise — never mislabeled).
+     */
+    getFormat(): { mimeType: string; extension: string } {
+        return { mimeType: this.mimeType, extension: this.fileExtension };
+    }
+
+    /**
      * Start compositing (drawing both videos to canvas)
      */
     startCompositing(): void {
@@ -165,43 +194,86 @@ export class VideoCompositor {
     }
 
     /**
-     * Draw both videos side by side on canvas
+     * Draw both videos side by side on canvas — ORIGINAL test-page design,
+     * reused literally: gradient background, Dueli logo + host-language
+     * platform name (RTL-mirrored), both competitors with Dueli gradient
+     * borders in RTL-aware order. This is what lands INSIDE recorded frames.
      */
     private drawFrame(): void {
         if (!this.isCompositing) return;
 
-        // Clear canvas
-        this.ctx.fillStyle = '#000';
-        this.ctx.fillRect(0, 0, this.CANVAS_WIDTH, this.CANVAS_HEIGHT);
+        const ctx = this.ctx;
+        const CANVAS_WIDTH = this.CANVAS_WIDTH;
+        const CANVAS_HEIGHT = this.CANVAS_HEIGHT;
+        const isRTL = this.config.rtl === true;
+        const platformName = this.config.platformName as string;
 
-        // Draw local video (left side)
-        if (this.config.localVideo.readyState >= 2) {
-            this.drawVideoFit(this.config.localVideo, 0, 0, this.VIDEO_WIDTH, this.VIDEO_HEIGHT);
+        // خلفية متدرجة (original)
+        const gradient = ctx.createLinearGradient(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        gradient.addColorStop(0, '#1a1a2e');
+        gradient.addColorStop(1, '#16213e');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Dueli Logo + Text (original, RTL-mirrored)
+        const logoSize = 40;
+        const logoY = 10;
+
+        if (isRTL) {
+            // RTL: النص يسار الشعار
+            const logoX = (CANVAS_WIDTH / 2) + 30;
+
+            if (this.logoImage && this.logoImage.complete && this.logoImage.naturalWidth > 0) {
+                ctx.drawImage(this.logoImage, logoX, logoY, logoSize, logoSize);
+            }
+
+            const logoGradient = ctx.createLinearGradient(logoX - 100, 0, logoX, 0);
+            logoGradient.addColorStop(0, '#f59e0b');
+            logoGradient.addColorStop(1, '#9333ea');
+            ctx.fillStyle = logoGradient;
+            ctx.font = 'bold 32px Cairo, Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText(platformName, logoX - 25, logoY + 32);
         } else {
-            this.drawPlaceholder(0, 0, this.VIDEO_WIDTH, this.VIDEO_HEIGHT, 'Waiting for camera...');
+            // LTR: النص يمين الشعار
+            const logoX = (CANVAS_WIDTH / 2) - 70;
+
+            if (this.logoImage && this.logoImage.complete && this.logoImage.naturalWidth > 0) {
+                ctx.drawImage(this.logoImage, logoX, logoY, logoSize, logoSize);
+            }
+
+            const logoGradient = ctx.createLinearGradient(logoX + logoSize, 0, logoX + logoSize + 100, 0);
+            logoGradient.addColorStop(0, '#9333ea');
+            logoGradient.addColorStop(1, '#f59e0b');
+            ctx.fillStyle = logoGradient;
+            ctx.font = 'bold 32px Inter, Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(platformName, logoX + logoSize + 10, logoY + 32);
         }
 
-        // Draw remote video (right side)
-        if (this.config.remoteVideo.readyState >= 2) {
-            this.drawVideoFit(this.config.remoteVideo, this.VIDEO_WIDTH, 0, this.VIDEO_WIDTH, this.VIDEO_HEIGHT);
-        } else {
-            this.drawPlaceholder(this.VIDEO_WIDTH, 0, this.VIDEO_WIDTH, this.VIDEO_HEIGHT, 'Waiting for opponent...');
-        }
+        const margin = 40;
+        const videoAreaWidth = (CANVAS_WIDTH / 2) - (margin * 1.5);
+        const videoAreaHeight = CANVAS_HEIGHT - (margin * 2);
 
-        // Draw separator line
-        this.ctx.strokeStyle = '#333';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(this.VIDEO_WIDTH, 0);
-        this.ctx.lineTo(this.VIDEO_WIDTH, this.VIDEO_HEIGHT);
-        this.ctx.stroke();
+        // رسم الفيديوهات (الترتيب حسب الاتجاه — original)
+        if (isRTL) {
+            // RTL: المضيف يمين، الضيف يسار
+            this.drawVideoFit(this.config.localVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin + 20, videoAreaWidth, videoAreaHeight - 20);
+            this.drawVideoFit(this.config.remoteVideo, margin, margin + 20, videoAreaWidth, videoAreaHeight - 20);
+        } else {
+            // LTR: المضيف يسار، الضيف يمين
+            this.drawVideoFit(this.config.localVideo, margin, margin + 20, videoAreaWidth, videoAreaHeight - 20);
+            this.drawVideoFit(this.config.remoteVideo, (CANVAS_WIDTH / 2) + (margin / 2), margin + 20, videoAreaWidth, videoAreaHeight - 20);
+        }
 
         // Continue animation loop
         this.animationFrameId = requestAnimationFrame(() => this.drawFrame());
     }
 
     /**
-     * Draw video maintaining aspect ratio
+     * Draw video maintaining aspect ratio + original Dueli gradient border.
+     * Videos that are not flowing yet are skipped (background shows through),
+     * exactly like the original test-page renderer.
      */
     private drawVideoFit(
         video: HTMLVideoElement,
@@ -210,6 +282,8 @@ export class VideoCompositor {
         maxWidth: number,
         maxHeight: number
     ): void {
+        if (!video || video.readyState < 2 || video.videoWidth === 0) return;
+
         const videoWidth = video.videoWidth || maxWidth;
         const videoHeight = video.videoHeight || maxHeight;
         const videoRatio = videoWidth / videoHeight;
@@ -230,21 +304,18 @@ export class VideoCompositor {
             offsetX = x + (maxWidth - drawWidth) / 2;
         }
 
-        this.ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
-    }
+        const ctx = this.ctx;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(x, y, maxWidth, maxHeight);
+        ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 
-    /**
-     * Draw placeholder when video not ready
-     */
-    private drawPlaceholder(x: number, y: number, width: number, height: number, text: string): void {
-        this.ctx.fillStyle = '#1a1a2e';
-        this.ctx.fillRect(x, y, width, height);
-
-        this.ctx.fillStyle = '#666';
-        this.ctx.font = '16px Arial';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(text, x + width / 2, y + height / 2);
+        // إطار بألوان Dueli (original: purple-600 → amber-500 diagonal)
+        const borderGradient = ctx.createLinearGradient(x, y, x + maxWidth, y + maxHeight);
+        borderGradient.addColorStop(0, '#9333ea');
+        borderGradient.addColorStop(1, '#f59e0b');
+        ctx.strokeStyle = borderGradient;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, maxWidth, maxHeight);
     }
 
     /**

@@ -194,25 +194,61 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 <!-- Video Player Area -->
                 <div class="rounded-2xl overflow-hidden shadow-xl relative" id="videoPlayerArea">
                   
-                  <!-- ===== للمنافسين (host/guest): توجيه لصفحة البث المخصصة ===== -->
-                  \${(isCreator || isOpponent) && comp.opponent_id && isLive ? \`
-                    <div class="bg-gradient-to-br \${bgColor} aspect-video flex items-center justify-center relative">
-                      <div class="text-center text-white">
-                        <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <i class="fas fa-broadcast-tower text-3xl text-red-400 animate-pulse"></i>
-                        </div>
-                        <p class="text-lg font-bold mb-2">\${tr.status_live || 'البث مباشر'}</p>
-                        <p class="text-sm opacity-75 mb-4">\${isCreator ? (tr.you_are_host || 'أنت المضيف') : (tr.you_are_guest || 'أنت الضيف')}</p>
-                        <!-- R2-L2: production room — creator/host, opponent and viewers
-                             all enter /live/:id (role resolved server-side from the
-                             session vs creator/opponent). The /live/host|guest test
-                             pages remain for diagnostics only, never the sole path. -->
-                        <a href="/live/\${competitionId}?lang=\${lang}"
-                           class="px-6 py-3 bg-red-600 rounded-full font-bold hover:bg-red-700 transition-all inline-flex items-center gap-2">
-                          <i class="fas fa-video"></i>
-                          \${tr.join_stream || 'انضم للبث'}
-                        </a>
+                  <!-- ===== R4-COMP-UNIFIED-1: in-page competitor live (unified) ===== -->
+                  \${(window.resolveVideoSurface ? window.resolveVideoSurface(comp, window.currentUser && window.currentUser.id) : 'embedded') === 'competitor' ? \`
+                    <div id="competitorView" class="relative bg-black aspect-video overflow-hidden">
+                      <div id="remoteVideoWrapper" class="absolute inset-0 z-10">
+                        <video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video>
                       </div>
+                      <div id="waitingOverlay" class="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-20">
+                        <div class="text-center text-white">
+                          <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
+                          <p class="text-lg">\${tr.waiting_opponent}</p>
+                        </div>
+                      </div>
+                      <div id="localVideoWrapper" class="absolute ${rtl ? 'left-4' : 'right-4'} top-4 z-20">
+                        <div class="relative w-28 h-20 md:w-40 md:h-28 rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500">
+                          <video id="localVideo" class="w-full h-full object-cover" autoplay muted playsinline></video>
+                          <div class="absolute bottom-1 ${rtl ? 'right-1' : 'left-1'} bg-black/60 px-2 py-0.5 rounded text-white text-xs">
+                            \${tr.you}
+                          </div>
+                        </div>
+                      </div>
+                      <div id="opponentLabel" class="absolute top-4 ${rtl ? 'right-4' : 'left-4'} bg-black/50 px-3 py-1 rounded-full text-white text-sm z-20">
+                        <i class="fas fa-user me-1"></i> \${tr.opponent}
+                      </div>
+                      <div id="connectionStatus" class="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm hidden z-30">
+                        <i class="fas fa-wifi me-2"></i><span>...</span>
+                      </div>
+                      <canvas id="compositeCanvas" class="hidden" width="1280" height="720"></canvas>
+                    </div>
+                    <div id="streamStats" class="hidden bg-gray-800 dark:bg-gray-900 px-4 py-2 text-sm text-gray-400 dark:text-gray-300 flex items-center justify-between">
+                      <div><span id="chunkCount">0</span> \${tr.chunks_uploaded}</div>
+                      <div><span id="streamDuration">00:00</span></div>
+                    </div>
+                    <div id="competitorControls" class="flex items-center justify-center gap-1 py-2 overflow-x-auto">
+                      <button data-csp-on="click" data-csp-fn="toggleLocalVideo" data-csp-args='[]' id="localVideoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.toggle_my_video}" title="\${tr.toggle_my_video}">
+                        <i class="fas fa-user-circle"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="switchCamera" data-csp-args='[]' id="switchCamBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.switch_camera}" title="\${tr.switch_camera}">
+                        <i class="fas fa-sync-alt"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="shareScreen" data-csp-args='[]' id="screenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.share_screen}" title="\${tr.share_screen}">
+                        <i class="fas fa-desktop"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleAudio" data-csp-args='[]' id="audioBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.toggle_mic}" title="\${tr.toggle_mic}">
+                        <i class="fas fa-microphone"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleVideo" data-csp-args='[]' id="videoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.toggle_camera}" title="\${tr.toggle_camera}">
+                        <i class="fas fa-video"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="endStream" data-csp-args='[]' id="endBtn" class="px-3 py-2 rounded-lg bg-red-600/90 text-white hover:bg-red-700 transition-colors flex items-center gap-1" aria-label="\${tr.end_stream}" title="\${tr.end_stream}">
+                        <i class="fas fa-stop-circle"></i>
+                        <span class="hidden sm:inline text-sm">\${tr.end}</span>
+                      </button>
+                    </div>
+                    <div class="text-center pb-2">
+                      <a href="/live/\${competitionId}?lang=\${lang}" class="text-xs text-gray-500 dark:text-gray-400 hover:underline">\${tr.join_stream} · /live</a>
                     </div>
                     
                   \` : (isCreator || isOpponent) && comp.opponent_id && (isPending || comp.status === 'accepted') ? \`
@@ -1864,6 +1900,223 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
         }
       };
+
+      // ========== R4-COMP-UNIFIED-1: in-page competitor live ==========
+      // Same bundle classes as /live/:id (window.P2PConnection transport +
+      // window.VideoCompositor host-only recording) — no parallel broadcast
+      // system. Role is server-derived (session user vs creator/opponent);
+      // presence/eligibility re-derived server-side per signaling request.
+      // Refresh/back safe: single init per page load, idempotent session
+      // join, resume-after-max upload, idempotent finalize. The competition
+      // is never ended from unload (no beforeunload end anywhere here).
+      var competitorStarted = false;
+      var competitorWatcher = null;
+      var competitorStartTime = null;
+
+      function competitorAuthHeaders() {
+        const h = { 'Content-Type': 'application/json' };
+        const sess = (window.sessionId || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId')));
+        if (sess) h['Authorization'] = 'Bearer ' + sess;
+        return h;
+      }
+
+      async function withCompetitorRetry(label, fn) {
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          try {
+            const res = await fn();
+            if (res !== false && res !== null && res !== undefined) return res;
+          } catch (err) {
+            log(label + ' attempt ' + attempt + ' failed: ' + (err && err.message ? err.message : err), 'error');
+          }
+          if (attempt < 5) {
+            await new Promise(function(r) { setTimeout(r, Math.min(1000 * Math.pow(2, attempt - 1), 8000)); });
+          }
+        }
+        return false;
+      }
+
+      function updateCompetitorStatus(state) {
+        const el = document.getElementById('connectionStatus');
+        if (!el) return;
+        el.classList.remove('hidden');
+        if (state === 'connected') {
+          el.className = 'absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm bg-green-600 text-white z-30';
+          el.innerHTML = '<i class="fas fa-check me-2"></i>' + (tr.live_signaling ? tr.live_signaling.connected : 'Connected');
+          setTimeout(function() { el.classList.add('hidden'); }, 3000);
+        } else if (state === 'connecting' || state === 'checking') {
+          el.className = 'absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm bg-yellow-600 text-white z-30';
+          el.innerHTML = '<i class="fas fa-wifi me-2"></i>' + (tr.live_signaling ? tr.live_signaling.connecting : 'Connecting...');
+        } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+          el.className = 'absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm bg-red-600 text-white z-30';
+          el.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>' + (tr.live_signaling ? tr.live_signaling.connection_failed : 'Connection failed');
+        }
+      }
+
+      function watchCompetitorOpponent() {
+        if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
+        competitorWatcher = setInterval(async function() {
+          if (!p2p) return;
+          try {
+            const status = await p2p.getRoomStatus();
+            if (status && status.opponent_joined && !p2p.isP2PConnected()) {
+              await p2p.createOffer();
+              if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
+            }
+          } catch (e) { /* transient presence read — next tick retries */ }
+        }, 2000);
+      }
+
+      function initCompetitorCompositor() {
+        const canvas = document.getElementById('compositeCanvas');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        compositor = new window.VideoCompositor({
+          competitionId: Number(competitionId),
+          localVideo: localVideo,
+          remoteVideo: remoteVideo,
+          canvas: canvas,
+          chunkDuration: 10000,
+          serverUrl: streamServerUrl,
+          platformName: tr.app_title,
+          rtl: isRTL,
+          onChunkUploaded: function(num) {
+            const cc = document.getElementById('chunkCount');
+            if (cc) cc.textContent = num;
+          },
+          onRecordingStarted: function() {
+            const stats = document.getElementById('streamStats');
+            if (stats) stats.classList.remove('hidden');
+            competitorStartTime = Date.now();
+            updateCompetitorDuration();
+          },
+          onRecordingStopped: function() {},
+          onError: function(error) {
+            log('Compositor error: ' + (error && error.message ? error.message : error), 'error');
+          }
+        });
+        compositor.startCompositing();
+      }
+
+      function updateCompetitorDuration() {
+        if (!competitorStartTime) return;
+        const el = document.getElementById('streamDuration');
+        if (!el) return;
+        const elapsed = Math.floor((Date.now() - competitorStartTime) / 1000);
+        const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+        const secs = (elapsed % 60).toString().padStart(2, '0');
+        el.textContent = mins + ':' + secs;
+        setTimeout(updateCompetitorDuration, 1000);
+      }
+
+      function waitCompetitorMediaReady(localVideo, remoteVideo) {
+        const deadline = Date.now() + 10000;
+        return new Promise(function(resolve) {
+          (function check() {
+            const localOk = localVideo && localVideo.readyState >= 2;
+            const remoteOk = remoteVideo && remoteVideo.readyState >= 2;
+            if ((localOk && remoteOk) || Date.now() > deadline) return resolve();
+            setTimeout(check, 500);
+          })();
+        });
+      }
+
+      function startCompetitorRecording() {
+        if (compositor && !compositor.getStats().isRecording) {
+          const localVideo = document.getElementById('localVideo');
+          const remoteVideo = document.getElementById('remoteVideo');
+          waitCompetitorMediaReady(localVideo, remoteVideo).then(function() {
+            if (compositor && !compositor.getStats().isRecording) {
+              compositor.startRecording();
+            }
+          });
+        }
+      }
+
+      async function initCompetitorStream() {
+        if (competitorStarted) return;
+        competitorStarted = true;
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const waitingOverlay = document.getElementById('waitingOverlay');
+        if (!localVideo || !remoteVideo || !window.P2PConnection) {
+          log('Competitor stream unavailable (missing media/bundle)', 'error');
+          return;
+        }
+        const me = window.currentUser.id;
+        userRole = (me === competitionData.creator_id) ? 'host' : 'opponent';
+
+        if (userRole === 'host') {
+          const created = await withCompetitorRetry('room/create', async function() {
+            const res = await fetch('/api/signaling/room/create', {
+              method: 'POST',
+              headers: competitorAuthHeaders(),
+              body: JSON.stringify({ competition_id: Number(competitionId) })
+            });
+            const data = await res.json().catch(function() { return null; });
+            return (res.ok && data && data.success) ? data : false;
+          });
+          if (created === false) {
+            showToast(tr.live_signaling.room_create_failed, 'error');
+            return;
+          }
+        }
+
+        p2p = new window.P2PConnection({
+          roomId: 'comp_' + competitionId,
+          role: userRole,
+          userId: me,
+          onRemoteStream: function(stream) {
+            remoteVideo.srcObject = stream;
+            if (waitingOverlay) waitingOverlay.classList.add('hidden');
+            if (userRole === 'host' && compositor) {
+              setTimeout(function() { startCompetitorRecording(); }, 1000);
+            }
+          },
+          onConnectionStateChange: function(state) {
+            updateCompetitorStatus(state);
+            if (state === 'connected' && userRole === 'host') {
+              startCompetitorRecording();
+            }
+          },
+          onError: function(error) {
+            log('P2P error: ' + (error && error.message ? error.message : error), 'error');
+          },
+          onReconnectNeeded: function() {
+            if (userRole === 'host') watchCompetitorOpponent();
+          }
+        });
+
+        await p2p.initialize();
+        const joined = await withCompetitorRetry('session/join', function() { return p2p.joinRoom(); });
+        if (joined === false) {
+          showToast(tr.live_signaling.session_join_failed, 'error');
+          return;
+        }
+
+        try {
+          localVideo.srcObject = await p2p.initLocalStream();
+        } catch (err) {
+          showToast(tr.camera_error, 'error');
+          return;
+        }
+
+        if (userRole === 'host') {
+          initCompetitorCompositor();
+        }
+
+        try {
+          const status = await p2p.getRoomStatus();
+          if (status) {
+            if (userRole === 'host' && status.opponent_joined) {
+              await p2p.createOffer();
+            }
+          }
+        } catch (e) { /* presence read is best-effort; watcher covers it */ }
+
+        if (userRole === 'host') {
+          watchCompetitorOpponent();
+        }
+      }
       
       // Control Functions
       window.toggleFullscreen = function() {
@@ -1998,48 +2251,59 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       
       window.endStream = async function() {
         if (!confirm(tr.end_stream_confirm || 'End the stream?')) return;
-        
-        log('Ending stream...');
-        
+
+        log('Ending stream...', 'info');
+
         try {
-          // Stop compositor
-          if (compositor) {
-            compositor.destroy();
+          // Host-only recording teardown: destroy() drains the final chunk,
+          // the upload queue, then finalizes EXACTLY ONCE via the uploader
+          // (single finalize path — never finalize.php directly, never twice,
+          // never from unload).
+          if (userRole === 'host' && compositor) {
+            log('Stopping recording and finalizing...', 'info');
+            await compositor.destroy();
             compositor = null;
           }
-          
-          // Disconnect P2P
-          if (p2p) {
-            p2p.disconnect();
-            p2p = null;
-          }
-          
-          // End competition via the correct API endpoint
+
+          // Server decision ends the competition AND the recording.
+          // vod_url is a CLAIM (same contract as /live/:id — D-1); the real
+          // readiness proof is the playlist + decoded bytes (VOD branch).
+          const vodUrl = streamServerUrl + '/storage/vod/match_' + competitionId + '.mp4';
           const endRes = await fetch('/api/competitions/' + competitionId + '/end', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin'
+            headers: {
+              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || ''),
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ vod_url: vodUrl })
           });
-          const endData = await endRes.json();
-          if (!endData.success) {
-            log('Warning: ' + (endData.error || 'Could not update status'), 'warn');
+          const endData = await endRes.json().catch(function() { return null; });
+          if (!endRes.ok || !endData || endData.success === false) {
+            log('Warning: ' + ((endData && endData.error) || 'Could not update status'), 'warn');
           }
-          
-          // Also notify the ffmpeg server to finalize
-          await fetch(streamServerUrl + '/finalize.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              competition_id: competitionId,
-              user_id: window.currentUser ? window.currentUser.id : null
-            })
-          }).catch(function() {}); // not critical
-          
-          alert(tr.stream_ended || 'Stream ended successfully');
-          location.reload();
+
+          // Withdraw session presence (platform contract — leave never
+          // touches started_at/chunks; the session ends with the competition).
+          try {
+            await fetch('/api/signaling/session/leave', {
+              method: 'POST',
+              headers: competitorAuthHeaders(),
+              body: JSON.stringify({ competition_id: Number(competitionId) })
+            });
+          } catch (e) { /* best effort */ }
+
+          // Disconnect P2P
+          if (p2p) {
+            try { await p2p.disconnect(); } catch (e) { /* best effort */ }
+            p2p = null;
+          }
+
+          log('Stream ended successfully!', 'success');
         } catch (err) {
-          log('End stream error: ' + err.message, 'error');
+          log('End stream error: ' + (err && err.message ? err.message : err), 'error');
         }
+
+        location.reload();
       };
       
       // Check if competition needs embedded viewer and start it
@@ -2050,7 +2314,17 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const isUserCreator = window.currentUser && window.currentUser.id === competitionData.creator_id;
         const isUserOpponent = window.currentUser && window.currentUser.id === competitionData.opponent_id;
         
-        // Competitors go to dedicated pages. Viewers (anyone else) use embedded player.
+        // R4-COMP-UNIFIED-1: competitors run the in-page live flow below
+        // (same bundle classes as /live/:id — no parallel system). Viewers
+        // (anyone else) use the embedded chunk player. Single decision point:
+        // window.resolveVideoSurface (bundle) over server-derived inputs.
+        const surface = window.resolveVideoSurface
+          ? window.resolveVideoSurface(competitionData, window.currentUser && window.currentUser.id)
+          : 'embedded';
+        if (surface === 'competitor') {
+          initCompetitorStream();
+          return;
+        }
         if (isUserCreator || isUserOpponent) return;
         
         // Show embedded viewer for live or completed competitions
