@@ -41,19 +41,18 @@ const SHA_RE = /^[0-9a-f]{40}$/i;
 const MIGRATION_NAME_RE = /\b\d{4}_[\w-]+\.sql\b/g;
 
 /**
- * Digest of a migration file on its repository (LF) basis.
+ * Digest of a migration file by its RAW working-tree bytes — no normalization.
  *
- * Pins in release-schema-manifest.json are computed over the committed blob,
- * which is LF. A Windows checkout materializes CRLF working copies, so hashing
- * raw bytes there would report a false "history rewritten" FAIL for a file that
- * is byte-identical in content — and conversely hide a genuine rewrite only if
- * line endings were the sole difference. CRLF→LF normalization therefore makes
- * the pin comparison platform-independent while still failing on any real
- * content change.
+ * Pins in release-schema-manifest.json are the SHA256 of the committed blob.
+ * Cross-platform reproducibility is guaranteed by `.gitattributes` pinning
+ * `migrations/** eol=lf`, so the working tree is byte-identical to the index on
+ * every platform (including Windows `core.autocrlf=true`). That lets the gate
+ * verify raw bytes directly: any content edit OR a line-ending rewrite of a
+ * pinned migration fails closed as "history rewritten". Do NOT re-add CRLF→LF
+ * normalization here — it would silently accept a line-ending-only rewrite.
  */
 export function sha256File(path) {
-    const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
-    return createHash('sha256').update(text, 'utf8').digest('hex');
+    return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
 export function parsePendingNames(listText) {

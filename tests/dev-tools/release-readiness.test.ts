@@ -10,12 +10,12 @@ const MANIFEST_PATH = resolve('dev-tools/release-schema-manifest.json');
 const MIGRATIONS_DIR = resolve('migrations');
 
 function repoFileHash(file: string): string {
-    // Line endings are normalized to LF before hashing: the manifest pins are
-    // computed on the repository (LF) bytes, while Windows checkouts materialize
-    // CRLF working copies. Hashing the raw working copy would compare unrelated
-    // digests and fail a correct pin. Content bytes are otherwise untouched.
-    const raw = readFileSync(resolve('migrations', file)).toString('utf8').replace(/\r\n/g, '\n');
-    return createHash('sha256').update(raw, 'utf8').digest('hex');
+    // Raw working-tree bytes, matching check-release-readiness.sha256File().
+    // `.gitattributes` pins `migrations/** eol=lf`, so the working tree equals
+    // the committed blob on every platform; hashing raw bytes here is therefore
+    // correct cross-platform AND catches a line-ending-only rewrite (which the
+    // old CRLF→LF normalization would have silently accepted).
+    return createHash('sha256').update(readFileSync(resolve('migrations', file))).digest('hex');
 }
 
 function manifest() {
@@ -408,6 +408,39 @@ describe('release readiness gate', () => {
         const r = evaluateReadiness(goodInput(m));
         expect(r.ok).toBe(false);
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-integrity');
+    });
+
+    it('gate verifies RAW bytes and migrations are pinned to LF by .gitattributes', () => {
+        // R-RELEASE-1 integrity must be a true byte pin: no CRLF→LF normalization
+        // in sha256File(), and `.gitattributes` must pin `migrations/** eol=lf` so
+        // the working tree equals the committed blob on every platform. Together
+        // they make raw-byte hashing both correct and cross-platform reproducible.
+        const gateSrc = readFileSync(resolve('dev-tools/check-release-readiness.mjs'), 'utf8');
+        expect(gateSrc).not.toMatch(/createHash\('sha256'\)\.update\([^)]*\.replace\(/);
+        expect(gateSrc).toContain("createHash('sha256').update(readFileSync(path))");
+
+        const attr = readFileSync(resolve('.gitattributes'), 'utf8');
+        expect(attr).toMatch(/migrations\/\*\*[ \t]+eol=lf/);
+
+        // Working tree must actually be LF right now (no CRLF), or raw-byte
+        // pins could not hold — proves the attribute took effect locally.
+        for (const file of ['0040_recording_leases.sql', '0041_chunk_index.sql', '0042_chunk_key_binding.sql']) {
+            const buf = readFileSync(resolve('migrations', file));
+            expect(buf.includes(0x0d)).toBe(false);
+        }
+    });
+
+    it('raw-byte hash catches a line-ending-only rewrite that CRLF-normalization hid', () => {
+        // Regression guard for the earlier weakening: a pinned migration whose
+        // only change is CRLF↔LF must FAIL the gate. With raw-byte hashing +
+        // eol=lf pinning, a CRLF working copy of an LF-pinned file is a real diff.
+        const m = manifest();
+        const pin = m.required_migrations.find((x) => x.file === '0041_chunk_index.sql');
+        const crlfHash = createHash('sha256')
+            .update(readFileSync(resolve('migrations', '0041_chunk_index.sql')).toString('utf8').replace(/\n/g, '\r\n'), 'utf8')
+            .digest('hex');
+        expect(crlfHash).not.toBe(String(pin.sha256).toLowerCase());
+        expect(repoFileHash('0041_chunk_index.sql')).toBe(String(pin.sha256).toLowerCase());
     });
 
     it('missing required table/column/index => FAIL (missing-schema)', () => {
