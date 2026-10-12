@@ -364,9 +364,16 @@ describe('R4-CHUNK-INDEX-1 playlist compatibility (routes)', () => {
         expect(status.finalized).toBe(true);
     });
 
-    it('19. manifest carries 0041 as known history (no new baseline)', async () => {
-        expect(manifest.manifest_version).toBe('R-RELEASE-1.baseline-0039');
-        expect(manifest.known_history).toContain('0041_chunk_index.sql');
-        expect(manifest.required_migrations.map((m: any) => m.file)).not.toContain('0041_chunk_index.sql');
+    it('19. manifest carries 0042 as known history (baseline-0042)', async () => {
+        // R4-RELEASE-RECOVERY-C: the manifest baseline is raised to 0042 so the
+        // readiness gate can enforce the ROW28 window (0040 leases, 0041 index,
+        // 0042 key binding) instead of trusting a 0039-only pin set.
+        expect(manifest.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(manifest.known_history).toContain('0042_chunk_key_binding.sql');
+        expect(manifest.required_migrations.map((m: any) => m.file)).toEqual(expect.arrayContaining([
+            '0040_recording_leases.sql',
+            '0041_chunk_index.sql',
+            '0042_chunk_key_binding.sql',
+        ]));
     });
 });

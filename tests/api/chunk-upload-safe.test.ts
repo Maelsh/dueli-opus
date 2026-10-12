@@ -27,7 +27,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { createHmac, createHash } from 'node:crypto';
 import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
-import { ChunkIndexModel } from '../../src/models/ChunkIndexModel';
+import { ChunkIndexModel, MAX_DURATION_MS } from '../../src/models/ChunkIndexModel';
 import { mergePlaylistWithIndex } from '../../src/lib/services/ChunkIndexPlaylist';
 
 const SECRET = 'safe28-test-upload-secret';
@@ -197,6 +197,48 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 register (mandatory bound keys)', () => {
         expect(noLease.status).toBe(503);
         expect(((await noLease.json()) as any).code).toBe('lease_unavailable');
     });
+
+    it('5b. missing binding COLUMN (not table) fails closed 503, not 500', async () => {
+        // D1 phrases partial-0042 states as "no such column" / "has no column
+        // named" — both must map to a fail-closed 503 (binding_unavailable for
+        // the binding store), never a 500 or a keyless fallback.
+        await acquire(db, 70, 'a1b2c3d4');
+        db.exec('ALTER TABLE chunk_keys RENAME TO chunk_keys_backup;');
+        db.exec(`CREATE TABLE chunk_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            competition_id INTEGER NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            chunk_key TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            expires_at DATETIME
+        );`);
+        const r = await register(db, 70, 1);
+        expect(r.status).toBe(503);
+        expect(((await r.json()) as any).code).toBe('binding_unavailable');
+    });
+
+    it('5c. UPLOADS_FROZEN maintenance barrier → 503 uploads_frozen, fail-closed (ROW28.1)', async () => {
+        // Real, implementable replacement for the fictional "frozen Worker":
+        // a truthy UPLOADS_FROZEN stops NEW upload sessions at the single
+        // key-issuance point — no queue, no keyless fallback. Checked before
+        // any DB read/key issuance. In-flight chunks (already holding a key)
+        // keep draining via /verify → /receipt across a Worker deploy.
+        await acquire(db, 70, 'a1b2c3d4');
+        const frozenEnv = { DB: db, UPLOAD_SERVER_SECRET: SECRET, UPLOADS_FROZEN: '1' } as unknown as Parameters<typeof app.request>[2];
+        const res = await app.request('/api/chunks/register',
+            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4' }), frozenEnv);
+        expect(res.status).toBe(503);
+        expect(((await res.json()) as any).code).toBe('uploads_frozen');
+        // No key was issued while frozen (fail-closed, never keyless).
+        const keys = await db.prepare('SELECT COUNT(*) AS n FROM chunk_keys').first<{ n: number }>();
+        expect(keys?.n).toBe(0);
+        // Unfrozen (explicit falsy) resumes normally — barrier is not sticky.
+        const okEnv = { DB: db, UPLOAD_SERVER_SECRET: SECRET, UPLOADS_FROZEN: 'false' } as unknown as Parameters<typeof app.request>[2];
+        const ok = await app.request('/api/chunks/register',
+            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4' }), okEnv);
+        expect(ok.status).toBe(200);
+    });
 });
 
 describe('R4-CHUNK-UPLOAD-SAFE-1 verify (atomic consume + fencing)', () => {
@@ -328,6 +370,40 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 receipts (verified confirmation)', () => {
         const bad = await receipt(db, { competition_id: 70, sequence: -1, status: 'stored' });
         expect(bad.status).toBe(400);
     });
+
+    it('14b. secure activation path needs no finalize: ready via receipt alone', async () => {
+        // Retires the unsafe finalize dependency from the secure path: the
+        // D1 index reaches ready through verify + receipt only. No
+        // server-side FFmpeg/merge/transcode/chunk-deletion is invoked here.
+        await acquire(db, 70, 'a1b2c3d4');
+        const key = (((await (await register(db, 70, 6)).json()) as any).data.chunk_key) as string;
+        const v = await verifyKey(db, key);
+        expect(v.valid).toBe(true);
+        const { headers } = hmacGet('/api/chunks/verify');
+        await app.request(`/api/chunks/${encodeURIComponent(key)}`, { method: 'DELETE', headers }, env(db));
+        const r = await receipt(db, { competition_id: 70, sequence: 6, status: 'stored', bytes: 512, object_hash: 'h6', duration_ms: 5000 });
+        expect(((await r.json()) as any).data.state).toBe('ready');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        const status = await model.recordingStatus(70);
+        expect(status.ready).toBeGreaterThanOrEqual(1);
+    });
+
+    it('14c. verified duration above the sanity ceiling → 400 fail-closed (never poisons the timeline)', async () => {
+        // ROW28.1 item 1: the trusted duration source is the HMAC upload-host
+        // receipt (client-declared stays display-only), but a corrupt or
+        // spoofed-but-signed oversized value must NOT silently poison the
+        // timeline (cursor += duration_ms on read). Both confirmReceipt and
+        // confirmChunk reject dur > MAX_DURATION_MS with a 400, never ready.
+        await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 8);
+        const over = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8', duration_ms: MAX_DURATION_MS + 1 });
+        expect(over.status).toBe(400);
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded'); // stayed unverified
+        // A within-ceiling measured value still reaches ready.
+        const okDur = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8', duration_ms: 30000 });
+        expect(((await okDur.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 30000 });
+    });
 });
 
 describe('R4-CHUNK-UPLOAD-SAFE-1 PHP-harness order (documented double)', () => {
@@ -388,6 +464,25 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 PHP-harness order (documented double)', () => {
         const key = (((await (await register(db, 70, 1)).json()) as any).data.chunk_key) as string;
         await phpUpload(1, key, 4096, { reportDuration: 7000 });
         expect((await verifyKey(db, key)).valid).toBe(false); // consumed
+    });
+
+    it('17b. partial-0042 state (binding columns absent) fails closed 503, not 500', async () => {
+        // Simulates code deployed against a production still on 0039/0041:
+        // the INSERT carrying 0042 columns must surface lease_unavailable.
+        await acquire(db, 70, 'a1b2c3d4');
+        db.exec('ALTER TABLE chunk_keys RENAME TO chunk_keys_backup;');
+        db.exec(`CREATE TABLE chunk_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            competition_id INTEGER NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            chunk_key TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            expires_at DATETIME
+        );`);
+        const r = await register(db, 70, 1);
+        expect(r.status).toBe(503);
+        expect(((await r.json()) as any).code).toBe('binding_unavailable');
     });
 });
 

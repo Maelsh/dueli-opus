@@ -1,3 +1,17 @@
+## R4-RELEASE-RECOVERY-C follow-up · raw-byte SHA256 بلا إضعاف سلامة · فرع fix/r4-release-recovery-c (متابعة لـ222576e)
+
+- 🔧 تنفيذ LOCAL — REMOTE PENDING، ليست DONE. نطاقه بوابة الجاهزية/دبابيس الهاش فقط. بلا كتابة إنتاجية/PHP/أسرار، بلا تجاوز جاهزية، بلا مساس بـROW29/PR110/PR113، بلا تطبيق ثانٍ، بلا إعادة اختبار شاملة.
+- **المشكلة**: الهاش في `sha256File()` ومساعده في الاختبار كان على أساس CRLF→LF مُطبَّع — إضعاف حقيقي (ولو ضيق): إعادة كتابة نهايات الأسطر وحدها لترحيل مُدبَّس كانت ستُقبل بصمت لأن CRLF وLF يُطبَّعان لنفس البصمة. سببه `core.autocrlf=true` على ويندوز مقابل دبابيس LF.
+- **الحل**: `.gitattributes` يثبّت `migrations/** eol=lf` ⇒ شجرة العمل مطابقة للفهرس بايت-ببايت على كل منصة (43 بلوب ترحيل كلها LF أصلاً — صفر تغيير بايت مُرحَّل مُؤكَّد). `sha256File()` يتحقق الآن من **البايتات الخام** بلا تطبيع؛ والاختبار يحاكيه.
+- **الأدلة**: readiness 32/32 ✅ (منها اختباران جديدان: بايت-خام + pin eol=lf + لا CR في الشجرة؛ وإعادة كتابة CRLF-only تُنتج بصمة ≠ الدبوس بينما repoFileHash الخام يطابق)؛ T/B مركزة خضراء؛ الكاملة 156/157 (‏`quality-gate-poll` فقط لغياب `jq` محلياً)؛ `tsc` ✅؛ `build` ✅. الحاجز القائم: لا ترحيل بعيد/نشر Worker/PHP حقيقي — التفعيل موقوف لموافقة المالك + القبول.
+
+## R4-RELEASE-RECOVERY-C ROW28 post-merge deploy recovery · فرع fix/r4-release-recovery-c (من d778090 = origin/main بعد PR #112)
+
+- 🔧 تنفيذ LOCAL — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/تغيير خارجي. PR110 محفوظة؛ ROW29 (player UX/seek/pagination/download) لم تُمس.
+- نفّذ: manifest إلى baseline-0042 (‏0040/0041/0042 ‏required مع ‏SHA256 + جداول/أعمدة/فهارس)؛ ‏leaseUnavailable يغطي غياب العمود (حالات ‏0040/0042 الجزئية ‏503)؛ ‏runbook: نافذة صيانة + تجميد رفع + تصريف + ترتيب ‏Worker←PHP + تراجع أمامي بلا ‏DROP مدمر + ‏patch دقيق لـupload.php (مراجعة فقط)؛ دورة ‏lease في العميل (‏acquire/heartbeat/expiry/reconnect/takeover) + ربط صفحة المضيف فقط؛ مسار التفعيل الآمن بلا ‏finalize.
+- **الأدلة**: T/B مركزة 80/80 ✅ (readiness/uploader/safe/lease/schema-contract)؛ `tsc --noEmit` ✅؛ `build` ✅؛ ملاحظة: `tests/dev-tools/quality-gate-poll.test.ts` يسقط محلياً لغياب `jq` (بيئة فقط، CI يملكه). إثبات PHP الحقيقي للوكيل الخارجي (غير مدّعى).
+- **المتبقي**: REMOTE مستقلة ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-CHUNK-UPLOAD-SAFE-1 secure upload · فرع feat/r4-chunk-upload-safe-1 (من 870a78c = origin/main بعد PR #111)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/تغيير خارجي (‏0040+0042 محلي فقط). ‏PR110 مفتوحة ومحفوظة (استخراج خادمي فقط بلا تكرار)؛ ‏PLAYER29/DOWNLOAD30 والمالية وH7 لم تُمس.

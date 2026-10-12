@@ -1,0 +1,11 @@
+# Pin migration files to LF in the working tree.
+#
+# release-schema-manifest.json pins each required migration by the SHA256 of
+# its committed blob, which is LF. Under Windows `core.autocrlf=true` a fresh
+# checkout materializes CRLF working copies, so raw-byte hashing of the working
+# file would report a false "history rewritten" FAIL on an untouched file.
+# Pinning `eol=lf` makes the working tree byte-identical to the index on every
+# platform, so the readiness gate can verify raw bytes with no normalization
+# and no loss of integrity. Recomputing the pins WITHOUT this attribute (or
+# editing a migration) will fail the gate by design.
+migrations/** eol=lf

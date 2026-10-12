@@ -1,5 +1,5 @@
 {
-  "manifest_version": "R-RELEASE-1.baseline-0039",
+  "manifest_version": "R-RELEASE-1.baseline-0042",
   "target": {
     "pages_project": "project-8e7c178d",
     "database_name": "dueli-db"
@@ -32,6 +32,18 @@
     {
       "file": "0039_r4_db_opt1_indexes.sql",
       "sha256": "ddf4ac98cc2ebf2bd9ad987e65d1c30239ed1570e6487bb8af39755112f58ca9"
+    },
+    {
+      "file": "0040_recording_leases.sql",
+      "sha256": "7aa8f2ca60183590c05cf340ac6c9e43f0d94c0c5db0bd0d988ef9d5f371af81"
+    },
+    {
+      "file": "0041_chunk_index.sql",
+      "sha256": "e7f4a452f6ab12b56a69b3ba8ac3ae20161df1ad93f8c1679cbb76c8d2b75e07"
+    },
+    {
+      "file": "0042_chunk_key_binding.sql",
+      "sha256": "373651bc49b6bb9bf69ee46590e2efa11734b134bc88c976e86cc937b935fb80"
     }
   ],
   "known_history": [
@@ -76,7 +88,8 @@
       "0038_withdrawal_payout_snapshot.sql",
       "0039_r4_db_opt1_indexes.sql",
       "0040_recording_leases.sql",
-      "0041_chunk_index.sql"
+      "0041_chunk_index.sql",
+      "0042_chunk_key_binding.sql"
     ],
   "required_schema": {
     "tables": {
@@ -141,12 +154,58 @@
       "withdrawal_requests": [
         "payout_method_id",
         "payout_snapshot"
+      ],
+      "recording_leases": [
+        "competition_id",
+        "holder_hash",
+        "generation",
+        "acquired_at",
+        "last_heartbeat_at",
+        "ttl_seconds",
+        "released_at"
+      ],
+      "recording_chunks": [
+        "id",
+        "competition_id",
+        "generation",
+        "sequence",
+        "object_path",
+        "object_hash",
+        "container",
+        "codec_video",
+        "codec_audio",
+        "bytes",
+        "declared_duration_ms",
+        "duration_ms",
+        "state",
+        "created_at",
+        "updated_at"
+      ],
+      "recording_finals": [
+        "competition_id",
+        "finalized_at",
+        "uploaded_count",
+        "ready_count",
+        "total_ready_ms",
+        "marker_generation"
+      ],
+      "chunk_keys": [
+        "id",
+        "competition_id",
+        "chunk_index",
+        "chunk_key",
+        "created_at",
+        "user_id",
+        "expires_at",
+        "lease_generation",
+        "object_path",
+        "max_bytes"
       ]
     },
-    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method", "idx_ratings_competitor", "idx_competitions_creator", "idx_competitions_opponent", "idx_users_active", "idx_user_blocks_blocked", "idx_sse_channel_id"]
+    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method", "idx_ratings_competitor", "idx_competitions_creator", "idx_competitions_opponent", "idx_users_active", "idx_user_blocks_blocked", "idx_sse_channel_id", "idx_recording_leases_holder", "idx_recording_chunks_order", "idx_recording_chunks_state", "idx_chunk_keys_lookup", "idx_chunk_keys_owner", "idx_chunk_keys_bound"]
   },
   "notes": [
-    "Baseline R-RELEASE-1.baseline-0039 requires migrations 0033, 0034, 0035, 0036, 0037, 0038 and 0039 applied with the pinned sha256 each (no post-apply rewrite).",
+    "Baseline R-RELEASE-1.baseline-0042 requires migrations 0033 through 0042 applied with the pinned sha256 each (no post-apply rewrite). 0040 (recording_leases + idx_recording_leases_holder), 0041 (recording_chunks + recording_finals + order/state indexes) and 0042 (chunk_keys lease_generation/object_path/max_bytes + idx_chunk_keys_bound) close the ROW28 unsafe window: issuance without fencing/index is rejected by the readiness gate until all three are applied.",
     "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
     "The gate never applies migrations. Unexpected pending is recorded and FAILS the gate; it is never auto-applied."
   ]

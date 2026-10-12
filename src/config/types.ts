@@ -46,6 +46,14 @@ export type Bindings = {
   TURN_API_TOKEN?: string;
   UPLOAD_SERVER_ORIGINS?: string; // Allowed origins for chunk APIs, comma-separated (e.g., "https://maelshpro.com,https://stream.maelshpro.com")
   UPLOAD_SERVER_SECRET?: string; // C2 (SEC-03): HMAC secret for upload-server verify/delete auth; unset ⇒ 503
+  // ROW28.1 / R4-RELEASE-RECOVERY-C: upload maintenance barrier. When set to a
+  // truthy value ("1"/"true"/"yes"), POST /api/chunks/register refuses to issue
+  // ANY new chunk key with 503 {code:'uploads_frozen'} — fail-closed, no queue,
+  // no keyless fallback. This is the real, implementable replacement for the
+  // fictional "frozen Worker": it stops new upload *sessions* at the single
+  // key-issuance point so in-flight chunks (already holding a key) can drain
+  // across a deploy. Unset/empty/false ⇒ normal operation.
+  UPLOADS_FROZEN?: string;
   REALTIME_PUBLISH_SECRET?: string; // C4: shared secret with the realtime DO worker (/publish + /redeem); unset ⇒ 503
   FFMPEG_SERVER_URL?: string; // Optional override for the ffmpeg/upload server used by chunks routes (falls back to DEFAULT_UPLOAD_URL)
   CRON_SECRET?: string;       // Shared secret required to trigger /api/cron/* via HTTP (T1.5)
