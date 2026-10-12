@@ -1,3 +1,10 @@
+## R4-PROFILE-SEC11-1 profile session auth · فرع fix/r4-profile-sec11 (من d778090 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/كتابة إنتاجية/PHP/أسرار. ROW29/PR110/Recovery-C وديون Auth/SQL/BaseModel لم تُمس.
+- نفّذ: إزالة مصدري جلسة غير مصرّح بهما من مسار `‎/profile‎` (بلا اسم مستخدم): `‎?token=‎` (SEC-11) و‏كوكي `session_id` القديمة (SEC-07). المصدر الكنسي الآن ترويسة Bearer أو كوكي `sessionId` فقط (يطابق `src/middleware/auth.ts`). الملفان المحذوفان الآن يفشلان مُغلقين ← 401. محفوظ: الملفات العامة `/profile/:username`، وصول Bearer/sessionId الصالح، رمز تحقق البريد `verify-page` (رمز لمرة واحدة ليس جلسة)، ومسار realtime ticket.
+- **الأدلة**: profile 10/10 (منها 6 جديدة)؛ profile-sql-extraction سليم (حالة `session_id` المقلوبة إلى سالب 401)؛ إثبات انحدار: إرجاع profile-page.ts فقط يُسقط 3 اختبارات؛ الكاملة 156/157 (الـ6 الفاشلة = `quality-gate-poll` المحلية لغياب `jq` فقط، غير ذات صلة)؛ `tsc` ✅؛ `build` ✅ (exit 0)؛ حارس CI ضيّق مانع جديد (يمنع إعادة `query('token')`/`session_id'` في profile-page.ts فقط، لا يمس verify-page)؛ 4 ملفات فقط بلا انحراف نطاق.
+- **المتبقي**: REMOTE مستقلة ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-CHUNK-UPLOAD-SAFE-1 secure upload · فرع feat/r4-chunk-upload-safe-1 (من 870a78c = origin/main بعد PR #111)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/تغيير خارجي (‏0040+0042 محلي فقط). ‏PR110 مفتوحة ومحفوظة (استخراج خادمي فقط بلا تكرار)؛ ‏PLAYER29/DOWNLOAD30 والمالية وH7 لم تُمس.

@@ -52,16 +52,25 @@ describe('F-5C profile SSR follow counts', () => {
         expect(counts(await res.text())).toEqual([0, 4, 0, 0]);
     });
 
+    // R4-PROFILE-SEC11-1 / SEC-07 — own-profile resolution is Bearer header OR
+    // the canonical `sessionId` cookie ONLY. The legacy `session_id` cookie was
+    // an unauthorized fallback (SEC-07) and must now fail closed (401).
     it.each([
         { Authorization: 'Bearer pages-session' },
         { Cookie: 'sessionId=pages-session' },
-        { Cookie: 'session_id=pages-session' },
     ])('preserves own-profile session resolution using %j', async (headers) => {
         const res = await call('/profile?lang=en', headers);
         expect(res.status).toBe(200);
         const html = await res.text();
         expect(html).toContain('@pages_a');
         expect(counts(html)).toEqual([0, 4, 2, 1]);
+    });
+
+    it('rejects the legacy session_id cookie (SEC-07) — 401, not the owner profile', async () => {
+        const res = await call('/profile?lang=en', { Cookie: 'session_id=pages-session' });
+        expect(res.status).toBe(401);
+        const html = await res.text();
+        expect(html).not.toContain('@pages_a');
     });
 
     it('preserves 401 for missing/expired sessions and 404 for unknown profiles', async () => {

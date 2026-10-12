@@ -73,6 +73,24 @@ jobs:
             exit 1
           fi
 
+      # ROW28.2 / R4-PROFILE-SEC11-1 — profile-page own-profile session
+      # resolution must match the canonical auth source (src/middleware/auth.ts:
+      # Bearer header OR `sessionId` cookie ONLY). This is a SSR page, not the
+      # SSE/EventSource path, so the ?token= removal here is UNCONDITIONAL and
+      # BLOCKING — no GRACE-PERIOD. Scope is profile-page.ts only: the email
+      # verification token in verify-page.ts is a legitimate one-shot use and
+      # must keep working (see R4-PROFILE-SEC11-1 in tests/api/profile.test.ts).
+      - name: SEC-11/SEC-07 — profile-page must not accept query token or legacy session_id cookie (BLOCKING)
+        run: |
+          if grep -n "query('token')" src/modules/pages/profile-page.ts; then
+            echo "::error::profile-page.ts accepts a session via ?token= (SEC-11) — own-profile auth must use Bearer header or sessionId cookie only (canonical: src/middleware/auth.ts)"
+            exit 1
+          fi
+          if grep -n "session_id'" src/modules/pages/profile-page.ts; then
+            echo "::error::profile-page.ts reads the legacy session_id cookie (SEC-07) — use the sessionId cookie only (canonical: src/middleware/auth.ts)"
+            exit 1
+          fi
+
       - name: SEC-08 — no session id in localStorage (GRACE-PERIOD)
         continue-on-error: true
         run: |
