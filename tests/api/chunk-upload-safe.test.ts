@@ -27,7 +27,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { createHmac, createHash } from 'node:crypto';
 import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
-import { ChunkIndexModel } from '../../src/models/ChunkIndexModel';
+import { ChunkIndexModel, MAX_DURATION_MS } from '../../src/models/ChunkIndexModel';
 import { mergePlaylistWithIndex } from '../../src/lib/services/ChunkIndexPlaylist';
 
 const SECRET = 'safe28-test-upload-secret';
@@ -217,6 +217,28 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 register (mandatory bound keys)', () => {
         expect(r.status).toBe(503);
         expect(((await r.json()) as any).code).toBe('binding_unavailable');
     });
+
+    it('5c. UPLOADS_FROZEN maintenance barrier → 503 uploads_frozen, fail-closed (ROW28.1)', async () => {
+        // Real, implementable replacement for the fictional "frozen Worker":
+        // a truthy UPLOADS_FROZEN stops NEW upload sessions at the single
+        // key-issuance point — no queue, no keyless fallback. Checked before
+        // any DB read/key issuance. In-flight chunks (already holding a key)
+        // keep draining via /verify → /receipt across a Worker deploy.
+        await acquire(db, 70, 'a1b2c3d4');
+        const frozenEnv = { DB: db, UPLOAD_SERVER_SECRET: SECRET, UPLOADS_FROZEN: '1' } as unknown as Parameters<typeof app.request>[2];
+        const res = await app.request('/api/chunks/register',
+            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4' }), frozenEnv);
+        expect(res.status).toBe(503);
+        expect(((await res.json()) as any).code).toBe('uploads_frozen');
+        // No key was issued while frozen (fail-closed, never keyless).
+        const keys = await db.prepare('SELECT COUNT(*) AS n FROM chunk_keys').first<{ n: number }>();
+        expect(keys?.n).toBe(0);
+        // Unfrozen (explicit falsy) resumes normally — barrier is not sticky.
+        const okEnv = { DB: db, UPLOAD_SERVER_SECRET: SECRET, UPLOADS_FROZEN: 'false' } as unknown as Parameters<typeof app.request>[2];
+        const ok = await app.request('/api/chunks/register',
+            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4' }), okEnv);
+        expect(ok.status).toBe(200);
+    });
 });
 
 describe('R4-CHUNK-UPLOAD-SAFE-1 verify (atomic consume + fencing)', () => {
@@ -364,6 +386,23 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 receipts (verified confirmation)', () => {
         const model = new ChunkIndexModel(db as unknown as D1Database);
         const status = await model.recordingStatus(70);
         expect(status.ready).toBeGreaterThanOrEqual(1);
+    });
+
+    it('14c. verified duration above the sanity ceiling → 400 fail-closed (never poisons the timeline)', async () => {
+        // ROW28.1 item 1: the trusted duration source is the HMAC upload-host
+        // receipt (client-declared stays display-only), but a corrupt or
+        // spoofed-but-signed oversized value must NOT silently poison the
+        // timeline (cursor += duration_ms on read). Both confirmReceipt and
+        // confirmChunk reject dur > MAX_DURATION_MS with a 400, never ready.
+        await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 8);
+        const over = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8', duration_ms: MAX_DURATION_MS + 1 });
+        expect(over.status).toBe(400);
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded'); // stayed unverified
+        // A within-ceiling measured value still reaches ready.
+        const okDur = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8', duration_ms: 30000 });
+        expect(((await okDur.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 30000 });
     });
 });
 

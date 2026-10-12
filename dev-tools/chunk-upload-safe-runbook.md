@@ -50,8 +50,13 @@ unsafe window row 28 closes: issuance without fencing/index. Verify with
 No migration is applied while uploads are flowing. The ordered cutover is:
 
 1. Owner declares the maintenance window and approves the exact HEAD.
-2. Freeze: host recording/upload is paused (announce; new `register` calls
-   are rejected by the frozen Worker — no keyless fallback, no queueing).
+2. Freeze: operator sets the Worker secret `UPLOADS_FROZEN=1` (re-issuing
+   the deploy env for the current HEAD), then host recording/upload is paused
+   (announce). This is a **real, implementable** barrier: with the flag truthy,
+   `POST /api/chunks/register` refuses to issue **any** new chunk key with
+   `503 {"code":"uploads_frozen"}` (fail-closed, no keyless fallback, no
+   queueing). In-flight chunks that already hold a key are unaffected and
+   continue to `/verify → /receipt`, so they drain. New sessions cannot start.
 3. Drain: wait for in-flight PHP uploads to finish (verify → save →
    DELETE → receipt) or expire via the 10-minute key TTL. Poll
    `recording_chunks` for rows stuck in `uploaded` past TTL — they are
@@ -185,19 +190,36 @@ above rejects them before any byte lands.
 
 ## 4. Cutover sequencing (no unsafe window)
 
-- Phase 0 (today): keyless direct uploads; proxy playlist; no index.
-- Phase 1 (this PR deployed, PHP untouched): clients attach keys
-  (additive FormData field — old PHP ignores it); platform issues,
-  verifies (on request), indexes and receipts; playlist gains D1
-  authority where rows exist, legacy elsewhere. Rollback: revert code;
-  old PHP never saw the field.
-- Phase 2 (PHP hardened per §3 + migrations applied): verify mandatory,
-  receipts live, fencing enforced, immutable store. Rollback: restore
-  PHP backup (platform tolerates unverified uploads again — keys stay
-  additive); index rows remain valid history.
-- Phase 3 (row 30): player/download consume the index; `finalize.php`
+There is **no** keyless/old-PHP-tolerant phase in the activation path.
+Uploads only ever run against the hardened PHP (§3) that mandates
+`chunk_key` and fencing; the keyless Phase-1/old-PHP-ignores-the-field
+model was **banned** (ROW28.1) because it reopens the insecure
+dual-write window the whole runbook exists to close.
+
+- Phase 0 (before activation, production frozen): uploads stopped via
+  `UPLOADS_FROZEN=1` (§2a); only the legacy/playback path is live.
+  Activation is blocked until the release candidate below is READY.
+- Phase A (release candidate = **Recovery C + Profile ROW28.2**): both
+  units land on `main` together as one candidate; no partial deploy.
+  Apply 0040→0042, deploy the Worker (§2a), harden PHP (§3), run
+  acceptance (§6), then **only then** clear `UPLOADS_FROZEN` to reopen
+  uploads. Rollback: set `UPLOADS_FROZEN=1` again (uploads halt,
+  fail-closed) — never a destructive schema rollback.
+- Phase B (row 30): player/download consume the index; `finalize.php`
   trigger retired with its own runbook. Never before receipts prove
   ready end-to-end.
+
+### 4a. Release candidate definition (ROW28.1 item 4)
+
+The production activation candidate is **exactly** the merge of:
+- **Recovery C** (this PR #114, HEAD on `fix/r4-release-recovery-c`), and
+- **Profile ROW28.2** (PR #115, R4-PROFILE-SEC11-1).
+
+Neither unit is deployable alone for activation: Recovery C gates
+activation on readiness (fail-closed), Profile ROW28.2 removes the
+SEC-11/07 query-token/session_id drift on the profile path. Both must be
+merged to `main` and pass Quality + Deploy on the **merge commit** before
+`UPLOADS_FROZEN` is cleared in production.
 
 ## 5. Rollback (forward-only — no destructive schema rollback)
 
@@ -212,6 +234,24 @@ above rejects them before any byte lands.
   (3) `DROP TABLE IF EXISTS recording_leases;` (0040). Never `DROP`
   `chunk_keys` itself and never rewrite applied migration history.
 - PHP: restore the timestamped backup; confirm old shapes respond.
+
+### 5a. Deploy behavior — readiness is a backstop, NOT the barrier (ROW28.1 item 5)
+
+`main` is **auto-deployed to Cloudflare on every merge** (`.github/workflows/deploy.yml`,
+`on: push: branches: [main]`). A failed readiness read inside that deploy job
+does NOT reliably stop the already-started production deploy. Therefore the
+**primary** activation barrier is operational, not the readiness check:
+
+- Production stays `UPLOADS_FROZEN=1` across the whole cutover. Even if the
+  auto-deploy ships the Worker while migrations/PHP are not yet ready, uploads
+  remain closed (fail-closed 503), so nothing unsafe can happen.
+- The readiness check (`check-release-readiness.mjs`, fail-closed on read
+  failure or unexpected applied/pending) is a **detector** for the operator:
+  it tells you whether 0040→0042 + schema are in place. Treat a READY-green
+  deploy run as confirmation, not as the thing keeping uploads safe.
+- Do **not** gate activation on "the deploy workflow will fail if not ready."
+  Gate it on the ordered §2a sequence + explicit owner sign-off, then clear
+  `UPLOADS_FROZEN` only after §6 acceptance passes.
 
 ## 6. External evidence still needed (NOT claimed by row-28 T/B)
 
