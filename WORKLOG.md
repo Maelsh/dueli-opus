@@ -1,3 +1,14 @@
+## 2026-10-12 — R4-PROFILE-SEC11-1 profile session auth hardening (branch fix/r4-profile-sec11, from d778090 = origin/main)
+
+- **Scope**: ROW28.2, SEC-11 + SEC-07 on `src/modules/pages/profile-page.ts` own-profile (`/profile`, no username) session resolution only. No production D1/PHP/secrets, no merge/deploy, no ROW29/PR110/Recovery-C/Auth-SQL-BaseModel debt.
+- **Removed two unauthorized session sources** (profile-page.ts, ~5 lines): raw `?token=<session>` query param (SEC-11 — leaks sessions into access logs / browser history / Referer) and the legacy `session_id` cookie (SEC-07). Own-profile now resolves the session exactly from the canonical auth source in `src/middleware/auth.ts`: Bearer header OR `sessionId` cookie. Both removed sources now fail closed → 401 login.
+- **Preserved**: public profiles `/profile/:username` (no session, never enters this branch); valid Bearer / `sessionId` cookie own-profile access; email-verification `?token=` in `verify-page.ts` (legit one-shot token, NOT a session); realtime ticket path untouched.
+- **Narrow blocking CI guard** (quality-gate.yml, new step, separate from the SSE GRACE-PERIOD check): fails the build if `profile-page.ts` reintroduces `query('token')` or `session_id'`. Scoped to that one file so it never trips the legitimate `verify-page.ts` email token. SSE `authMiddleware` GRACE-PERIOD warning left unchanged.
+- **Tests T/B**: `tests/api/profile.test.ts` +6 (SEC-11 ?token= → 401, legacy session_id → 401, canonical sessionId cookie → 200, public /profile/:username → 200, source-pin that profile-page.ts has neither, source-pin that verify-page.ts keeps its token). `tests/api/profile-sql-extraction.test.ts` F-5C: the `session_id` it.each case inverted to a dedicated 401 negative (it was pinning the very debt being removed). Regression-proof: reverting only profile-page.ts flips 3 of these to FAIL; with the fix all pass.
+- **Evidence**: profile suites green (profile 10/10 incl. new; profile-sql-extraction all). Full unit 156/157 — the only failures are 6 pre-existing `quality-gate-poll` cases (local `jq` missing; CI has it — unrelated to this change). `tsc --noEmit` ✅; `build` ✅ (exit 0); `styles.css` build-churn reverted; only 4 files changed, no scope drift.
+- **State**: LOCAL VERIFIED (T/B) / REMOTE PENDING. Not DONE/DEPLOYED. No merge/deploy.
+- **ROLLBACK (G8)**: revert branch (profile-page.ts + quality-gate.yml + 2 test files; no prod data touched).
+
 ## 2026-10-12 — R4-RECOVERY-C follow-up: raw-byte SHA256 restored, no integrity weakening (branch fix/r4-release-recovery-c, follow-up to 222576e)
 
 - **Scope**: readiness/manifest hash integrity only (Task 3 of the post-merge remediation unit). No production D1/PHP/secrets, no merge/deploy, no readiness bypass, no ROW29/PR110/PR113 change, no second implementation, no broad re-test.
