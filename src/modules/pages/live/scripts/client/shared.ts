@@ -457,6 +457,31 @@ class ChunkManager {
         return null;
     }
 
+    /**
+     * R4-CHUNK-PLAYER-UX-1: index readiness (additive playlist fields).
+     * hasReadyInfo = at least one entry carries ready===true. Entries
+     * flagged ready===false are skipped ONLY then; legacy lists without
+     * any flags play everything (old VOD compatibility preserved).
+     */
+    hasReadyInfo() {
+        for (const entry of this.entries) {
+            if (entry && entry.ready === true) return true;
+        }
+        return false;
+    }
+
+    isSkippable(entry) {
+        return !!entry && entry.ready === false && this.hasReadyInfo();
+    }
+
+    latestReadyIndex() {
+        let top = -1;
+        for (const entry of this.entries) {
+            if (entry && typeof entry.index === 'number' && entry.ready === true && entry.index > top) top = entry.index;
+        }
+        return top;
+    }
+
     maxIndex() {
         let top = -1;
         for (const entry of this.entries) {
@@ -486,10 +511,22 @@ class ChunkManager {
 
         while (true) {
             await this.refreshPlaylist();
-            if (this.entryFor(targetIndex)) {
+            // R4-CHUNK-PLAYER-UX-1: playable entries return immediately;
+            // index-marked unconfirmed slots are SKIPPED only when newer
+            // entries exist (authoritative, budget-free); an unready newest
+            // or a hole falls through to the bounded wait below (never
+            // played blind, never skipped forever).
+            const listed = this.entryFor(targetIndex);
+            if (listed && !this.isSkippable(listed)) {
                 this.currentIndex = targetIndex;
                 this.misses = 0;
                 return targetIndex;
+            }
+            if (listed && this.isSkippable(listed) && this.maxIndex() > targetIndex) {
+                testLog('Skipping unconfirmed chunk ' + (targetIndex + 1) + ' (index authority)', 'warn');
+                this.currentIndex = targetIndex;
+                targetIndex++;
+                continue;
             }
 
             // Gap support: the server already lists LATER chunks, so the
@@ -535,11 +572,21 @@ class ChunkManager {
 
     /**
      * الانتقال لآخر chunk موجود حالياً (للبث المباشر)
-     * skip to the latest available chunk via playlist endpoint
+     * R4-CHUNK-PLAYER-UX-1 (15 §5): start at the NEWEST confirmed-ready
+     * chunk — never the oldest, and not the penultimate by default. A
+     * ready flag means finalized bytes, so the newest ready is safe to
+     * play immediately. Only legacy lists without ANY readiness info keep
+     * the penultimate fallback (their last chunk may be a partial write).
      */
     async skipToLatest() {
         try {
             await this.refreshPlaylist();
+            const readyTop = this.latestReadyIndex();
+            if (readyTop >= 0) {
+                this.currentIndex = readyTop;
+                testLog('Starting at newest confirmed-ready chunk ' + (readyTop + 1), 'info');
+                return readyTop;
+            }
             if (this.entries.length > 1) {
                 // نبدأ من آخر chunk كاملة (ما قبل الأخيرة لضمان اكتمالها) —
                 // بالفهرس الفعلي للمدخل، لا بطول القائمة (الفجوات مسموحة).
@@ -592,23 +639,61 @@ class LiveSequentialPlayer {
     async start(options) {
         options = options || {};
         this.isRunning = true;
+        // Run-loop generation: rewindTo() retires the old loop so two loops
+        // can never drive the elements concurrently.
+        this.loopGen = (this.loopGen || 0) + 1;
         this.onStatus && this.onStatus('Starting live stream...');
 
         // إذا طُلب البدء من آخر chunk (للعرض المباشر للزوار)
         if (options.startFromLatest) {
             this.onStatus && this.onStatus('Finding latest chunk...');
-            await this.chunkManager.skipToLatest();
+            const edge = await this.chunkManager.skipToLatest();
+            // R4-CHUNK-PLAYER-UX-1: play the positioned edge ITSELF — the
+            // old code only waited for edge+1, which never arrives when the
+            // edge is the newest confirmed chunk (live would sit at
+            // 'waiting' forever). Falls through to the wait path only when
+            // the playlist is still empty.
+            if (edge > 0 || this.chunkManager.entryFor(edge)) {
+                this.onStatus && this.onStatus('Found chunk: ' + (edge + 1));
+                await this.playChunk(edge);
+                this.runLoop(this.loopGen);
+                return;
+            }
         }
 
         const firstChunk = await this.chunkManager.waitForNextChunk();
         this.onStatus && this.onStatus('Found chunk: ' + (firstChunk + 1));
 
         await this.playChunk(firstChunk);
-        this.runLoop();
+        this.runLoop(this.loopGen);
     }
 
-    async runLoop() {
-        while (this.isRunning) {
+    /**
+     * R4-CHUNK-PLAYER-UX-1 (scope 3): reliable rewind — jump back to an
+     * earlier chunk, then resume the forward flow from there. Retires the
+     * running loop first (generation token) so the old position cannot
+     * fight the new one; the next wait continues after the target.
+     */
+    async rewindTo(index) {
+        if (!this.videoPlayers || this.videoPlayers.length === 0) return;
+        if (typeof index !== 'number' || !isFinite(index) || index < 0) return;
+        this.loopGen = (this.loopGen || 0) + 1;
+        const gen = this.loopGen;
+        this.isRunning = false;
+        try {
+            await this.playChunk(Math.floor(index));
+        } catch (e) {
+            this.onError && this.onError(e);
+            return;
+        }
+        this.chunkManager.currentIndex = Math.floor(index);
+        this.isRunning = true;
+        this.runLoop(gen);
+    }
+
+    async runLoop(gen) {
+        var myGen = gen === undefined ? this.loopGen : gen;
+        while (this.isRunning && myGen === this.loopGen) {
             var target = null;
             try {
                 target = await this.chunkManager.waitForNextChunk(this.MAX_MISSES);
@@ -660,23 +745,46 @@ class LiveSequentialPlayer {
         const nextPlayer = this.videoPlayers[nextPlayerIndex];
         const currentPlayer = this.videoPlayers[this.activePlayerIndex];
 
+        // R4-CHUNK-PLAYER-UX-1 handoff: arm the next element MUTED
+        // (autoplay policy can block audible starts — a blocked audible
+        // start looks exactly like a stall), with a bounded wait whose
+        // timer is always cleaned up (the old code leaked it on every
+        // chunk and never cleared stale handlers).
+        nextPlayer.muted = true;
         nextPlayer.src = url;
         await nextPlayer.load();
 
-        await new Promise(function(resolve, reject) {
-            nextPlayer.oncanplay = resolve;
-            // Reject with a real Error (not the bare event) so upstream
-            // handlers log a meaningful message instead of 'undefined'.
-            nextPlayer.onerror = function() { reject(new Error('Chunk playback failed')); };
-            setTimeout(resolve, 3000);
+        const settled = await new Promise(function(resolve) {
+            var done = false;
+            var timer = setTimeout(function() { if (!done) { done = true; resolve('timeout'); } }, 3000);
+            nextPlayer.oncanplay = function() { if (!done) { done = true; clearTimeout(timer); resolve('canplay'); } };
+            // Resolve errors as data (not bare events) so upstream handlers
+            // log a meaningful message instead of 'undefined'.
+            nextPlayer.onerror = function() { if (!done) { done = true; clearTimeout(timer); resolve('error'); } };
         });
+        if (settled === 'error') {
+            throw new Error('Chunk playback failed');
+        }
 
+        // Swap first, then silence + park the old element: no overlap
+        // audio, no wasted buffering, and stale callbacks die here (the
+        // historical double-buffer cleanup the current code was missing).
         nextPlayer.style.opacity = '1';
         nextPlayer.style.zIndex = '2';
         currentPlayer.style.opacity = '0';
         currentPlayer.style.zIndex = '1';
+        try { currentPlayer.pause(); } catch (e) {}
+        currentPlayer.muted = true;
+        currentPlayer.oncanplay = null;
+        currentPlayer.onerror = null;
+        currentPlayer.onended = null;
 
-        nextPlayer.play().catch(function() {});
+        nextPlayer.play().then(function() {
+            setTimeout(function() { try { nextPlayer.muted = false; } catch (e) {} }, 100);
+        }).catch(function() {
+            // Audible blocked but muted flows — keep video, note it.
+            testLog('Muted playback continues (autoplay policy)', 'warn');
+        });
         this.activePlayerIndex = nextPlayerIndex;
 
         this.onChunkChange && this.onChunkChange(index, -1);
@@ -684,8 +792,12 @@ class LiveSequentialPlayer {
 
     stop() {
         this.isRunning = false;
+        this.loopGen = (this.loopGen || 0) + 1;
         this.videoPlayers.forEach(function(v) {
-            v.pause();
+            try { v.pause(); } catch (e) {}
+            v.oncanplay = null;
+            v.onerror = null;
+            v.onended = null;
             v.src = '';
         });
     }
@@ -799,6 +911,19 @@ class SmartVodPlayer {
         this.extension = 'webm';
         this.isLoading = false;
         this.currentChunkIndex = 0;
+
+        // R4-CHUNK-PLAYER-UX-1: verified per-entry starts (D1 timeline)
+        // override legacy math where present; bounded preload window
+        // (no preload-all, no full retention) + tracked blob URL.
+        this.verifiedStarts = {};
+        this.PRELOAD_AHEAD = 2;
+        this.RETAIN_DISTANCE = 3;
+        this.currentBlobUrl = null;
+        // Fetch-window guard (inactive until the first ensureWindow): a
+        // load that resolves AFTER its index was evicted is dropped instead
+        // of re-polluting the cache (async-evict race).
+        this.windowLo = -1;
+        this.windowHi = -1;
         
         // للـ seeking
         this.seekPending = null;
@@ -843,12 +968,17 @@ class SmartVodPlayer {
             
             // 2. حساب المدة الإجمالية
             this.calculateDurations();
+            // 2b. verified time map (D1 authority wins per entry)
+            this.buildTimeMap();
             
-            // 3. تحميل أول chunk وتشغيلها
-            await this.loadAndPlayChunk(0);
+            // 3. تحميل أول chunk قابلة للتشغيل (الأولى المؤكدة عند توفر
+            // الفهرس، وإلا الأولى — توافق القديم محفوظ).
+            const firstPlayable = this.nextPlayableIndex(0);
+            if (firstPlayable === null) throw new Error('No playable chunks yet');
+            await this.loadAndPlayChunk(firstPlayable);
             
-            // 4. بدء التحميل المسبق في الخلفية
-            this.startPreloading();
+            // 4. تحميل مسبق محدود حول الموضع الحالي (نافذة، لا الكل)
+            this.ensureWindow(this.currentChunkIndex);
             
             // 5. إعداد الـ seekbar
             this.setupSeekbar();
@@ -888,6 +1018,42 @@ class SmartVodPlayer {
     }
 
     /**
+     * R4-CHUNK-PLAYER-UX-1: verified time map. Per-entry timeline_start_ms
+     * (D1 authority) wins where present; entries without one keep legacy
+     * math. hasReadyInfo/nextPlayableIndex gate unconfirmed skipping with
+     * legacy fallback (play-all when nothing is confirmed).
+     */
+    buildTimeMap() {
+        this.verifiedStarts = {};
+        for (let i = 0; i < this.chunks.length; i++) {
+            const t = this.chunks[i] && this.chunks[i].timeline_start_ms;
+            if (typeof t === 'number' && isFinite(t) && t >= 0) this.verifiedStarts[i] = t;
+        }
+    }
+
+    hasReadyInfo() {
+        for (let i = 0; i < this.chunks.length; i++) {
+            if (this.chunks[i] && this.chunks[i].ready === true) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Positional index of the next playable chunk at/after the given start
+     * (positions, not chunk ids). Unconfirmed entries are skipped only when
+     * confirmed content exists; otherwise the first entry plays (legacy).
+     */
+    nextPlayableIndex(from) {
+        const skipUnready = this.hasReadyInfo();
+        for (let i = from; i < this.chunks.length; i++) {
+            const e = this.chunks[i];
+            if (skipUnready && e && e.ready === false) continue;
+            return i;
+        }
+        return null;
+    }
+
+    /**
      * تحميل وتشغيل chunk معينة
      */
     async loadAndPlayChunk(index) {
@@ -903,11 +1069,17 @@ class SmartVodPlayer {
             await this.loadChunk(index);
         }
         
-        // إنشاء Blob URL وتشغيل
+        // إنشاء Blob URL وتشغيل (السابق يُسحَب لتفادي تسرب الذاكرة —
+        // كل chunk كانت تترك object URL خلفها).
+        if (this.currentBlobUrl) {
+            try { URL.revokeObjectURL(this.currentBlobUrl); } catch (e) {}
+            this.currentBlobUrl = null;
+        }
         const blob = new Blob([this.loadedChunks[index]], { 
             type: this.extension === 'mp4' ? 'video/mp4' : 'video/webm' 
         });
         const blobUrl = URL.createObjectURL(blob);
+        this.currentBlobUrl = blobUrl;
         
         // حفظ الوقت الحالي إذا كان هناك seek pending
         const seekTime = this.seekPending;
@@ -946,10 +1118,13 @@ class SmartVodPlayer {
             document.addEventListener('touchstart', playOnInteraction, { once: true });
         }
         
-        // عند انتهاء الـ chunk، انتقل للتالية
+        // عند انتهاء الـ chunk، انتقل للتالية القابلة للتشغيل (تخطي
+        // غير المؤكدة عند توفر المؤكدة — نفس قاعدة البدء).
         this.videoElement.onended = function() {
-            if (this.currentChunkIndex < this.chunks.length - 1) {
-                this.loadAndPlayChunk(this.currentChunkIndex + 1).catch(function(err) {
+            const nxt = this.nextPlayableIndex(this.currentChunkIndex + 1);
+            if (nxt !== null) {
+                this.ensureWindow(nxt);
+                this.loadAndPlayChunk(nxt).catch(function(err) {
                     this.onError && this.onError(err);
                 }.bind(this));
             } else {
@@ -991,6 +1166,9 @@ class SmartVodPlayer {
 
             const buffer = await response.arrayBuffer();
             if (!buffer || buffer.byteLength === 0) throw new Error('Chunk is empty');
+            // Evicted while fetching (a later ensureWindow moved on):
+            // drop instead of re-polluting the bounded cache.
+            if (this.windowLo >= 0 && (index < this.windowLo || index > this.windowHi)) return;
             this.loadedChunks[index] = buffer;
 
             this.onChunkLoaded && this.onChunkLoaded(index, this.getLoadedCount());
@@ -1002,21 +1180,27 @@ class SmartVodPlayer {
     }
 
     /**
-     * تحميل مسبق في الخلفية
+     * R4-CHUNK-PLAYER-UX-1: bounded preload window around the playhead
+     * (replaces preload-all — a full recording must never sit in RAM).
+     * Fetches center-1..center+2, evicts everything outside ±3.
      */
-    async startPreloading() {
-        for (let i = 0; i < this.chunks.length; i++) {
+    ensureWindow(centerIndex) {
+        var self = this;
+        var lo = Math.max(0, centerIndex - 1);
+        var hi = Math.min(this.chunks.length - 1, centerIndex + this.PRELOAD_AHEAD);
+        for (let i = lo; i <= hi; i++) {
             if (!this.loadedChunks[i]) {
-                // A single bad chunk must not stop the rest from preloading.
-                try {
-                    await this.loadChunk(i);
-                } catch (e) { /* already logged in loadChunk */ }
-                // تأخير بسيط لعدم إثقال الشبكة
-                await new Promise(function(r) { setTimeout(r, 100); });
+                this.loadChunk(i).catch(function() {});
             }
         }
-
-        testLog('📦 All ' + this.chunks.length + ' chunks preloaded!', 'success');
+        var keepLo = Math.max(0, centerIndex - this.RETAIN_DISTANCE);
+        var keepHi = Math.min(this.chunks.length - 1, centerIndex + this.RETAIN_DISTANCE + 1);
+        this.windowLo = keepLo;
+        this.windowHi = keepHi;
+        for (const k in this.loadedChunks) {
+            const n = parseInt(k, 10);
+            if (n < keepLo || n > keepHi) delete this.loadedChunks[k];
+        }
     }
 
     /**
@@ -1045,14 +1229,17 @@ class SmartVodPlayer {
     }
 
     /**
-     * Seek ذكي - القفز لوقت معين
+     * Seek ذكي - القفز لوقت معين (نافذة التحميل تتبع الهدف، والقفز يتخطى
+     * غير المؤكدة عند توفر المؤكدة).
      */
     seekTo(globalTime) {
         if (globalTime < 0) globalTime = 0;
         if (globalTime > this.totalDuration) globalTime = this.totalDuration;
         
         // حساب الـ chunk المناسبة
-        const targetChunk = this.getChunkForTime(globalTime);
+        let targetChunk = this.getChunkForTime(globalTime);
+        const playable = this.nextPlayableIndex(targetChunk);
+        if (playable !== null) targetChunk = playable;
         
         testLog('🎯 Seeking to ' + this.formatTime(globalTime) + ' (chunk ' + (targetChunk + 1) + ')', 'info');
         
@@ -1063,6 +1250,7 @@ class SmartVodPlayer {
         } else {
             // chunk مختلفة - تحميل وتشغيل
             this.seekPending = globalTime;
+            this.ensureWindow(targetChunk);
             this.loadAndPlayChunk(targetChunk).catch(function(err) {
                 this.onError && this.onError(err);
             }.bind(this));
@@ -1070,26 +1258,36 @@ class SmartVodPlayer {
     }
 
     /**
-     * الحصول على chunk المناسبة لوقت معين
+     * الحصول على chunk المناسبة لوقت معين — حدود موثقة (verified) أولًا،
+     * ثم الحساب القديم. كل chunk تغطي [بدايتها، بداية التالية).
      */
     getChunkForTime(globalTime) {
-        let accumulated = 0;
-        for (let i = 0; i < this.chunkDurations.length; i++) {
-            accumulated += this.chunkDurations[i];
-            if (globalTime < accumulated) {
+        const n = this.chunks.length;
+        if (n === 0) return 0;
+        for (let i = 0; i < n; i++) {
+            const start = this.getChunkStartTime(i);
+            const nextStart = (i + 1 < n) ? this.getChunkStartTime(i + 1) : null;
+            const end = (nextStart !== null && nextStart > start)
+                ? nextStart
+                : start + (this.chunkDurations[i] || 0);
+            if (globalTime < end) {
                 return i;
             }
         }
-        return this.chunks.length - 1;
+        return n - 1;
     }
 
     /**
-     * الحصول على وقت بداية chunk معينة
+     * الحصول على وقت بداية chunk معينة — timeline_start_ms الموثق (D1)
+     * يغلب الحساب القديم حيث يوجد.
      */
     getChunkStartTime(chunkIndex) {
+        if (this.verifiedStarts && this.verifiedStarts[chunkIndex] !== undefined) {
+            return this.verifiedStarts[chunkIndex];
+        }
         let start = 0;
         for (let i = 0; i < chunkIndex; i++) {
-            start += this.chunkDurations[i];
+            start += this.chunkDurations[i] || 0;
         }
         return start;
     }
@@ -1282,6 +1480,12 @@ class SmartVodPlayer {
         this.videoElement.src = '';
         this.videoElement.onended = null;
         this.videoElement.ontimeupdate = null;
+        // R4-CHUNK-PLAYER-UX-1: revoke the blob URL (no leak across
+        // switches — every chunk used to leave one behind).
+        if (this.currentBlobUrl) {
+            try { URL.revokeObjectURL(this.currentBlobUrl); } catch (e) {}
+            this.currentBlobUrl = null;
+        }
     }
 
     /**

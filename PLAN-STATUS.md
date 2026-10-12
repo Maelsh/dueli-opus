@@ -1,3 +1,10 @@
+## R4-CHUNK-PLAYER-UX-1 smooth playback · فرع feat/r4-chunk-player-ux-1 (من d778090 = origin/main بعد PR #112)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B + ‏S جزئية — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/‏FFmpeg/تنزيل. تنسيق متوازٍ: ‏manifest/workflows/migrations/auth/lease/receipts للوكيل الآخر (لم تُمس؛ استخراجي أُرجع)؛ ‏PR110 لم تُمس؛ العمل في ‏worktree منفصلة بعد تعارض الشجرة.
+- نفّذ: بدء الحي من أحدث ‏ready (احتياطي ‏penultimate للقديم) + تشغيل الحافة نفسها؛ تخطي غير المؤكد مع ‏fallback قديم؛ ‏rewind محدود بحلقة واحدة؛ ‏handoff (إيقاف/كتم/تنظيف + بدء صامت)؛ تحميل ‏VOD بنافذة محدودة + إخلاء + إلغاء ‏URLs + مواضع موثقة؛ زرّا الرجوع/الإرجاع + ‏ar/en + ‏CSP؛ استبعاد ‏failed + تطبيع ‏0→1 في الدمج؛ ‏timeline بترقيم داخلي.
+- **الأدلة**: ‏T/B ‏21 جديدة (‏16 مشغل + ‏5 واجهة)؛ الجيران خضراء (‏chunk-playback ‏12/12)؛ الكاملة ‏1603 بلا فشل (الملفان البيئيان مستبعدان)؛ ‏tsc/build ✅؛ ‏any ‏+0 (‏297)؛ الجرد بلا تغيير. ‏S: الحي/الإرجاع/الخلفية ‏PASS بأدلة حقيقية؛ ‏VOD/seek/audio للوكيل الخارجي. disposition عشرية في ‏WORKLOG (‏3 FIXED هنا + ‏2 VERIFIED + ‏5 DEFERRED بحواجز صريحة، منها ‏blackout التسجيل للوكيل الآخر).
+- **المتبقي**: REMOTE مستقلة ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-CHUNK-UPLOAD-SAFE-1 secure upload · فرع feat/r4-chunk-upload-safe-1 (من 870a78c = origin/main بعد PR #111)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/تغيير خارجي (‏0040+0042 محلي فقط). ‏PR110 مفتوحة ومحفوظة (استخراج خادمي فقط بلا تكرار)؛ ‏PLAYER29/DOWNLOAD30 والمالية وH7 لم تُمس.

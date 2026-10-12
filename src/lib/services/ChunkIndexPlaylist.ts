@@ -45,11 +45,25 @@ export interface IndexMetadata {
     finalized: boolean;
 }
 
-function chunkNumberFromUrl(url: string): number | null {
+/**
+ * R4-CHUNK-PLAYER-UX-1 (REMOTE F2): normalize an entry to its D1 sequence.
+ * Explicit uploader numbering (`chunk_number`, 1-based) wins — both the
+ * production and the test-path uploaders agree on it. Otherwise the stored
+ * filename decides, with the established zero-based test-path first chunk
+ * (`chunk_0000`, which uploader numbering calls 1) folding to sequence 1
+ * (production never emits 0: recordChunk requires >= 1, so the fold is
+ * collision-free). Anything else is unmatchable (never guessed).
+ */
+export function matchSequence(entry: { index?: unknown; chunk_number?: unknown; chunkNumber?: unknown }, url: string): number | null {
+    for (const key of ['chunk_number', 'chunkNumber'] as const) {
+        const v = entry[key];
+        if (typeof v === 'number' && Number.isFinite(v) && v >= 1) return Math.floor(v);
+    }
     const m = url.match(/chunk_(\d+)/i);
     if (!m) return null;
     const n = parseInt(m[1], 10);
-    return Number.isFinite(n) && n >= 1 ? n : null;
+    if (!Number.isFinite(n) || n < 0) return null;
+    return n === 0 ? 1 : n;
 }
 
 function streamUrlFor(base: string, objectPath: string): string {
@@ -107,11 +121,22 @@ export function mergePlaylistWithIndex(
 
     const served: ServedChunk[] = [];
     const consumed = new Set<number>();
+    // R4-CHUNK-PLAYER-UX-1 (REMOTE F1): failed slots are terminal — their
+    // proxy entries are suppressed (not merely annotated), because players
+    // play every returned entry and one failed chunk stalls the stream.
+    const failed = new Set<number>();
+    for (const row of indexRows) {
+        if (row.state === 'failed') failed.add(row.sequence);
+    }
     for (const entry of proxy) {
+        const seq = matchSequence(
+            entry as { index?: unknown; chunk_number?: unknown; chunkNumber?: unknown },
+            entry.url
+        );
+        if (seq !== null && failed.has(seq)) continue; // failed: suppressed
         const out: ServedChunk = { index: entry.index, url: entry.url };
         if (entry.duration !== undefined) out.duration = entry.duration;
         if (entry.size !== undefined) out.size = entry.size;
-        const seq = chunkNumberFromUrl(entry.url);
         const row = seq !== null ? bySequence.get(seq) : undefined;
         if (row) {
             consumed.add(row.sequence);
@@ -128,8 +153,9 @@ export function mergePlaylistWithIndex(
     }
 
     // Authority rows with no proxy match: append built entries (ordered).
+    // Failed rows stay suppressed here too (terminal — never resurrected).
     const orphans = [...bySequence.values()]
-        .filter((r) => !consumed.has(r.sequence))
+        .filter((r) => !consumed.has(r.sequence) && r.state !== 'failed')
         .sort((a, b) => a.sequence - b.sequence);
     for (const row of orphans) {
         const out: ServedChunk = {

@@ -719,6 +719,8 @@ export const ar = {
     chunks_uploaded: 'قطعة تم رفعها',
     camera_error: 'فشل في الوصول للكاميرا أو الميكروفون',
     hls_not_supported: 'متصفحك لا يدعم تشغيل HLS',
+    return_to_live: 'عودة للبث',
+    live_rewind: 'إرجاع مقطع واحد',
     live_comments: 'ستظهر التعليقات المباشرة هنا...',
     fullscreen: 'ملء الشاشة',
     exit_fullscreen: 'الخروج من ملء الشاشة',

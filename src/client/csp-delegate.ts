@@ -171,6 +171,8 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'embeddedRetryMedia',
     'embeddedToggleFullscreen',
     'embeddedTogglePlayPause',
+    'embeddedReturnToLive',
+    'embeddedRewindLive',
     'endCampaign',
     'endStream',
     'filterCountries',
