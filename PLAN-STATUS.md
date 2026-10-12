@@ -1,3 +1,10 @@
+## R4-RELEASE-RECOVERY-C ROW28 post-merge deploy recovery · فرع fix/r4-release-recovery-c (من d778090 = origin/main بعد PR #112)
+
+- 🔧 تنفيذ LOCAL — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/تغيير خارجي. PR110 محفوظة؛ ROW29 (player UX/seek/pagination/download) لم تُمس.
+- نفّذ: manifest إلى baseline-0042 (‏0040/0041/0042 ‏required مع ‏SHA256 + جداول/أعمدة/فهارس)؛ ‏leaseUnavailable يغطي غياب العمود (حالات ‏0040/0042 الجزئية ‏503)؛ ‏runbook: نافذة صيانة + تجميد رفع + تصريف + ترتيب ‏Worker←PHP + تراجع أمامي بلا ‏DROP مدمر + ‏patch دقيق لـupload.php (مراجعة فقط)؛ دورة ‏lease في العميل (‏acquire/heartbeat/expiry/reconnect/takeover) + ربط صفحة المضيف فقط؛ مسار التفعيل الآمن بلا ‏finalize.
+- **الأدلة**: T/B مركزة 80/80 ✅ (readiness/uploader/safe/lease/schema-contract)؛ `tsc --noEmit` ✅؛ `build` ✅؛ ملاحظة: `tests/dev-tools/quality-gate-poll.test.ts` يسقط محلياً لغياب `jq` (بيئة فقط، CI يملكه). إثبات PHP الحقيقي للوكيل الخارجي (غير مدّعى).
+- **المتبقي**: REMOTE مستقلة ← دمج القائد بـexpected_head_sha ← Quality/Deploy على merge-commit. أي فشل = POST-MERGE BLOCKED بلا ادعاء DONE.
+
 ## R4-CHUNK-UPLOAD-SAFE-1 secure upload · فرع feat/r4-chunk-upload-safe-1 (من 870a78c = origin/main بعد PR #111)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/تغيير خارجي (‏0040+0042 محلي فقط). ‏PR110 مفتوحة ومحفوظة (استخراج خادمي فقط بلا تكرار)؛ ‏PLAYER29/DOWNLOAD30 والمالية وH7 لم تُمس.

@@ -40,8 +40,20 @@ import { fileURLToPath } from 'node:url';
 const SHA_RE = /^[0-9a-f]{40}$/i;
 const MIGRATION_NAME_RE = /\b\d{4}_[\w-]+\.sql\b/g;
 
+/**
+ * Digest of a migration file on its repository (LF) basis.
+ *
+ * Pins in release-schema-manifest.json are computed over the committed blob,
+ * which is LF. A Windows checkout materializes CRLF working copies, so hashing
+ * raw bytes there would report a false "history rewritten" FAIL for a file that
+ * is byte-identical in content — and conversely hide a genuine rewrite only if
+ * line endings were the sole difference. CRLF→LF normalization therefore makes
+ * the pin comparison platform-independent while still failing on any real
+ * content change.
+ */
 export function sha256File(path) {
-    return createHash('sha256').update(readFileSync(path)).digest('hex');
+    const text = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+    return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
 export function parsePendingNames(listText) {

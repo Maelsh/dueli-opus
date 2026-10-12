@@ -814,7 +814,10 @@ chunksRoutes.get('/init/:id', async (c) => {
  */
 function leaseUnavailable(error: unknown): boolean {
     const msg = error instanceof Error ? error.message : String(error);
-    return /no such table/i.test(msg);
+    // Table- OR column-level absence (partial 0040/0042 migration states,
+    // SQLite and D1 word it differently) — both mean the safety store is not
+    // fully applied. Fail closed either way.
+    return /no such (table|column)|has no column named/i.test(msg);
 }
 
 function leaseHolderHash(c: any, nonce: string): string {

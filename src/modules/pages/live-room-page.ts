@@ -612,6 +612,18 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     canvas: canvas,
                     chunkDuration: 10000, // 10 seconds
                     serverUrl: streamServerUrl,
+                    // R4-RELEASE-RECOVERY-C: host-only lease wiring (minimum
+                    // scoped change — opponent/viewer paths untouched).
+                    // Absent PlatformRecordingLease = lease off (pre-cutover).
+                    lease: (window.PlatformRecordingLease
+                        ? new window.PlatformRecordingLease(Number(competitionId))
+                        : undefined),
+                    onLeaseLost: function() {
+                        log('Recording stopped - another session took over', 'error');
+                        if (compositor && compositor.abortOnLeaseLost) {
+                            compositor.abortOnLeaseLost();
+                        }
+                    },
                     onChunkUploaded: (num) => {
                         document.getElementById('chunkCount').textContent = num;
                     },

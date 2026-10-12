@@ -197,6 +197,26 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 register (mandatory bound keys)', () => {
         expect(noLease.status).toBe(503);
         expect(((await noLease.json()) as any).code).toBe('lease_unavailable');
     });
+
+    it('5b. missing binding COLUMN (not table) fails closed 503, not 500', async () => {
+        // D1 phrases partial-0042 states as "no such column" / "has no column
+        // named" — both must map to a fail-closed 503 (binding_unavailable for
+        // the binding store), never a 500 or a keyless fallback.
+        await acquire(db, 70, 'a1b2c3d4');
+        db.exec('ALTER TABLE chunk_keys RENAME TO chunk_keys_backup;');
+        db.exec(`CREATE TABLE chunk_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            competition_id INTEGER NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            chunk_key TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            expires_at DATETIME
+        );`);
+        const r = await register(db, 70, 1);
+        expect(r.status).toBe(503);
+        expect(((await r.json()) as any).code).toBe('binding_unavailable');
+    });
 });
 
 describe('R4-CHUNK-UPLOAD-SAFE-1 verify (atomic consume + fencing)', () => {
@@ -328,6 +348,23 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 receipts (verified confirmation)', () => {
         const bad = await receipt(db, { competition_id: 70, sequence: -1, status: 'stored' });
         expect(bad.status).toBe(400);
     });
+
+    it('14b. secure activation path needs no finalize: ready via receipt alone', async () => {
+        // Retires the unsafe finalize dependency from the secure path: the
+        // D1 index reaches ready through verify + receipt only. No
+        // server-side FFmpeg/merge/transcode/chunk-deletion is invoked here.
+        await acquire(db, 70, 'a1b2c3d4');
+        const key = (((await (await register(db, 70, 6)).json()) as any).data.chunk_key) as string;
+        const v = await verifyKey(db, key);
+        expect(v.valid).toBe(true);
+        const { headers } = hmacGet('/api/chunks/verify');
+        await app.request(`/api/chunks/${encodeURIComponent(key)}`, { method: 'DELETE', headers }, env(db));
+        const r = await receipt(db, { competition_id: 70, sequence: 6, status: 'stored', bytes: 512, object_hash: 'h6', duration_ms: 5000 });
+        expect(((await r.json()) as any).data.state).toBe('ready');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        const status = await model.recordingStatus(70);
+        expect(status.ready).toBeGreaterThanOrEqual(1);
+    });
 });
 
 describe('R4-CHUNK-UPLOAD-SAFE-1 PHP-harness order (documented double)', () => {
@@ -388,6 +425,25 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 PHP-harness order (documented double)', () => {
         const key = (((await (await register(db, 70, 1)).json()) as any).data.chunk_key) as string;
         await phpUpload(1, key, 4096, { reportDuration: 7000 });
         expect((await verifyKey(db, key)).valid).toBe(false); // consumed
+    });
+
+    it('17b. partial-0042 state (binding columns absent) fails closed 503, not 500', async () => {
+        // Simulates code deployed against a production still on 0039/0041:
+        // the INSERT carrying 0042 columns must surface lease_unavailable.
+        await acquire(db, 70, 'a1b2c3d4');
+        db.exec('ALTER TABLE chunk_keys RENAME TO chunk_keys_backup;');
+        db.exec(`CREATE TABLE chunk_keys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            competition_id INTEGER NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            chunk_key TEXT NOT NULL UNIQUE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            expires_at DATETIME
+        );`);
+        const r = await register(db, 70, 1);
+        expect(r.status).toBe(503);
+        expect(((await r.json()) as any).code).toBe('binding_unavailable');
     });
 });
 
