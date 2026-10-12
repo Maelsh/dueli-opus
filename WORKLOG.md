@@ -1,3 +1,12 @@
+## 2026-10-12 — R4-CHUNK-PLAYER-UX-1 REMOTE-REJECT FIX on PR #113 (same branch, no merge/deploy)
+
+- **REMOTE verdict**: REJECT — single blocker: `timeline_start_ms` is milliseconds (server/model domain) while every player time comparison runs in seconds, so indexed VOD seek resolved to chunk zero. My fixture 9 used seconds-scale values (0/12/24) and masked it.
+- **Fix (exclusive scope, 3 paths)**: (1) `SmartVodPlayer.buildTimeMap` divides ms→s once at the boundary (all seek/position math downstream stays seconds); (2) `ServedChunk.timeline_start_ms` contract documented (ms on the wire; seconds-domain consumers must convert — cites the root cause); (3) fixture 9 corrected to realistic 0/10000/20000 ms + seeks asserting chunks 1/2 + offset math. No model/route/contract change (server stays ms — stable for Recovery C/PHP).
+- **Regression proof**: new indexed-seek asserts fail on pre-fix code (verified by negative control: `expected 10000 to be 10` with the fix stashed; 16/16 green with it). Neighbours green (chunk-playback 12/12, player-ux UI 5/5, comp-unified 6/6 — 39/39 across the 4 files). `tsc` ✅. No build churn committed. `any` +0.
+- **S**: NOT re-run locally per owner order (external agent verifies VOD/seek/audio; prior partial evidence stands — live legs PASS, no product failure observed). Prior S runs additionally fixed two genuine bugs already in this PR (nested-quote inline-script kill, positioned-edge stall) — both pinned in T/B.
+- **State**: REMEDIATED / REMOTE PENDING (re-verify requested on new HEAD). Not DONE/DEPLOYED. No merge/self-deploy. Recovery C + PR110 untouched; separate worktree used throughout.
+- **ROLLBACK (G8)**: revert fix commits on the branch (2 src comments+code + 1 test file; no migration/data/flags/routes).
+
 ## 2026-10-12 — R4-CHUNK-PLAYER-UX-1 smooth playback (branch feat/r4-chunk-player-ux-1, from d778090 = origin/main after PR #112)
 
 - **Scope**: row 29 player UX (15 §5) + mandatory REMOTE-findings addendum (PR111/PR112). No PHP/remote-migration/prod/secrets, no server FFmpeg, no browser FFmpeg (row 30), no download code, no closed-phase rework. Parallel-agent coordination: manifest/workflows/migrations/runbook + upload-auth/lease-acquisition/receipt contracts UNTOUCHED (their scope); client lease extraction + all server REMOTE fixes REVERTED out of this branch; shared-file touches isolated to ChunkIndexPlaylist (F1/F2), ChunkIndexModel.timeline (D3 paging only), comp-unified.test.ts (regex window). PR110 unaltered.

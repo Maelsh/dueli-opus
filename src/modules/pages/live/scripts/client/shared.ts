@@ -1020,14 +1020,20 @@ class SmartVodPlayer {
     /**
      * R4-CHUNK-PLAYER-UX-1: verified time map. Per-entry timeline_start_ms
      * (D1 authority) wins where present; entries without one keep legacy
-     * math. hasReadyInfo/nextPlayableIndex gate unconfirmed skipping with
-     * legacy fallback (play-all when nothing is confirmed).
+     * math.
+     *
+     * UNITS CONTRACT (REMOTE REJECT fix): timeline_start_ms arrives in
+     * MILLISECONDS (server/model domain, like duration_ms), but every
+     * player comparison runs in SECONDS (currentTime, totalDuration,
+     * seek targets). The division happens HERE, once, at the boundary —
+     * comparing raw ms against seconds resolved every indexed seek to
+     * chunk zero.
      */
     buildTimeMap() {
         this.verifiedStarts = {};
         for (let i = 0; i < this.chunks.length; i++) {
             const t = this.chunks[i] && this.chunks[i].timeline_start_ms;
-            if (typeof t === 'number' && isFinite(t) && t >= 0) this.verifiedStarts[i] = t;
+            if (typeof t === 'number' && isFinite(t) && t >= 0) this.verifiedStarts[i] = t / 1000;
         }
     }
 

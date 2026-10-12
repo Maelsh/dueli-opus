@@ -267,19 +267,34 @@ describe('R4-CHUNK-PLAYER-UX-1 VOD window + verified time (emitted script)', () 
         player.stop();
     });
 
-    it('9. verified timeline positions win over legacy math', async () => {
+    it('9. verified timeline positions win over legacy math (ms wire → s player)', async () => {
+        // REMOTE REJECT regression: timeline_start_ms arrives in
+        // MILLISECONDS; the player compares in SECONDS. Realistic values
+        // (0/10000/20000) — the old seconds-scale fixture (0/12/24) masked
+        // the bug because it was already in seconds.
         const { SmartVodPlayer } = loadClasses();
         playlist = { chunks: [
             { index: 0, url: url(1), duration: 10, ready: true, timeline_start_ms: 0 },
-            { index: 1, url: url(2), duration: 10, ready: true, timeline_start_ms: 12 },
-            { index: 2, url: url(3), duration: 10, ready: true, timeline_start_ms: 24 },
+            { index: 1, url: url(2), duration: 10, ready: true, timeline_start_ms: 10000 },
+            { index: 2, url: url(3), duration: 10, ready: true, timeline_start_ms: 20000 },
         ] };
-        const player = new SmartVodPlayer({ videoElement: vodVideoStub(), competitionId: 9 });
+        const el = vodVideoStub();
+        const player = new SmartVodPlayer({ videoElement: el, competitionId: 9 });
         await player.start();
-        expect(player.getChunkStartTime(1)).toBe(12);
-        expect(player.getChunkStartTime(2)).toBe(24);
-        expect(player.getChunkForTime(13)).toBe(1);
+        expect(player.getChunkStartTime(0)).toBe(0);
+        expect(player.getChunkStartTime(1)).toBe(10);
+        expect(player.getChunkStartTime(2)).toBe(20);
+        expect(player.getChunkForTime(5)).toBe(0);
+        expect(player.getChunkForTime(13)).toBe(1); // buggy code answered 0 (13 < 10000ms)
+        expect(player.getChunkForTime(15)).toBe(1); // buggy code answered 0 here too
         expect(player.getChunkForTime(24)).toBe(2);
+        expect(player.getChunkForTime(29.9)).toBe(2);
+        expect(player.getChunkForTime(9999)).toBe(2); // past the end → last chunk
+        // Indexed VOD seek lands in the right chunk with the right offset.
+        player.seekTo(13);
+        await new Promise((r) => setTimeout(r, 50));
+        expect(player.currentChunkIndex).toBe(1);
+        expect((el as any).currentTime).toBe(3); // 13s − chunk start 10s
         player.stop();
     });
 

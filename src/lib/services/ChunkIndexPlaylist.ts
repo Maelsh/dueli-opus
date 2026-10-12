@@ -34,6 +34,12 @@ export interface ProxyChunk {
 
 export interface ServedChunk extends ProxyChunk {
     ready?: boolean;
+    /**
+     * MILLISECONDS (server/model domain, like duration_ms). Consumers in
+     * seconds-domains (players) MUST convert at their boundary — comparing
+     * raw ms against seconds resolves every indexed seek to chunk zero
+     * (row 29 REMOTE REJECT root cause; see SmartVodPlayer.buildTimeMap).
+     */
     timeline_start_ms?: number;
 }
 
