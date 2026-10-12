@@ -314,6 +314,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         <div class="absolute bottom-3 left-3 z-30 flex items-center gap-2">
                           \${isLive ? '<span class="flex items-center gap-1 bg-red-600 text-white text-xs px-2 py-1 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>' + (tr.status_live || 'مباشر') + '</span>' : ''}
                           <span id="embeddedChunkInfo" class="text-xs text-white/70 bg-black/40 px-2 py-1 rounded-full hidden"></span>
+                          <!-- R4-CHUNK-PLAYER-UX-1: rewind-one-chunk + return-to-live
+                               (live only; shown/hidden by playback position, RTL-safe flex). -->
+                          \${isLive ? '<button id="embeddedRewindBtn" data-csp-on="click" data-csp-fn="embeddedRewindLive" data-csp-args="[]" class="hidden items-center gap-1 bg-black/50 text-white text-xs px-2 py-1 rounded-full hover:bg-black/70 backdrop-blur" title="' + (tr.live_rewind || 'Rewind') + '" aria-label="' + (tr.live_rewind || 'Rewind') + '"><i class="fas fa-backward text-[10px]"></i></button>' : ''}
+                          \${isLive ? '<button id="embeddedLiveBtn" data-csp-on="click" data-csp-fn="embeddedReturnToLive" data-csp-args="[]" class="hidden items-center gap-1 bg-white/90 text-red-700 text-xs px-2 py-1 rounded-full font-bold hover:bg-white" title="' + (tr.return_to_live || 'Back to live') + '"><span class="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>' + (tr.return_to_live || 'Back to live') + '</button>' : ''}
                         </div>
                       </div>
                       
@@ -1520,6 +1524,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // ===== Embedded Viewer State =====
       let embeddedCurrentPlayer = null;
       let embeddedFullscreen = false;
+      // R4-CHUNK-PLAYER-UX-1: live-edge bookkeeping for rewind/return-live
+      // (manager ref + last played index; reset whenever the player is torn
+      // down so stale positions never drive the buttons).
+      let liveChunkManager = null;
+      let liveCurrentIndex = -1;
       
       function log(msg, type = 'info') {
         console.log('[LiveStream]', type === 'error' ? '❌' : '📡', msg);
@@ -1663,6 +1672,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             }
 
             const chunkManager = new window.ChunkManager(competitionId, 'mp4');
+            liveChunkManager = chunkManager;
+            liveCurrentIndex = -1;
             embeddedCurrentPlayer = new window.LiveSequentialPlayer({
               videoPlayers: videoPlayers,
               chunkManager: chunkManager,
@@ -1671,6 +1682,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 if (info) { info.textContent = (tr.chunk || 'Chunk') + ' ' + (index + 1); info.classList.remove('hidden'); }
                 setMediaState('playing');
                 hideStatusOverlay();
+                liveCurrentIndex = index;
+                syncLiveEdgeButtons();
               },
               onStatus: function(status) { log(status); },
               onError: function(err) {
@@ -1863,6 +1876,42 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const v = document.getElementById('embeddedVideoPlayer1');
         if (!v) return;
         v.paused ? v.play() : v.pause();
+      };
+
+      // R4-CHUNK-PLAYER-UX-1: live-edge buttons. Rewind = one chunk back
+      // then forward flow resumes there; Return-to-Live restarts at the
+      // newest confirmed-ready edge. Buttons show by position only.
+      function setLiveBtnVisible(id, show) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.classList.toggle('hidden', !show);
+        if (show) btn.classList.add('inline-flex');
+        else btn.classList.remove('inline-flex');
+      }
+      function syncLiveEdgeButtons() {
+        let edge = -1;
+        try {
+          edge = liveChunkManager && liveChunkManager.maxIndex ? liveChunkManager.maxIndex() : -1;
+        } catch (e) {}
+        const behind = edge >= 0 && liveCurrentIndex >= 0 && edge > liveCurrentIndex + 1;
+        setLiveBtnVisible('embeddedLiveBtn', behind);
+        setLiveBtnVisible('embeddedRewindBtn', liveCurrentIndex > 0);
+      }
+      window.embeddedReturnToLive = async function() {
+        try {
+          if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
+        } catch (e) {}
+        embeddedCurrentPlayer = null;
+        liveChunkManager = null;
+        liveCurrentIndex = -1;
+        await initEmbeddedViewer(); // restarts at the live edge
+      };
+      window.embeddedRewindLive = async function() {
+        try {
+          if (embeddedCurrentPlayer && embeddedCurrentPlayer.rewindTo && liveCurrentIndex > 0) {
+            await embeddedCurrentPlayer.rewindTo(liveCurrentIndex - 1);
+          }
+        } catch (e) { /* player surfaces errors via onError */ }
       };
       
       window.embeddedToggleFullscreen = function() {

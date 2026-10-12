@@ -500,21 +500,35 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
      * positions computed on read (no stored drift). Unconfirmed tails and
      * gaps contribute no duration — comments/video_offset and seek map onto
      * this timeline, never onto guesses.
+     *
+     * R4-CHUNK-PLAYER-UX-1 (D3): pages internally via continuation (500
+     * rows per bounded SELECT) so recordings beyond the 2000-row
+     * listOrdered cap still produce a COMPLETE timeline — bounded queries,
+     * complete output. Realistic traffic (2h at 5s/chunk = 720 rows) never
+     * needs a second page; the loop exists for the edge, not the norm.
      */
-    async timeline(competitionId: number): Promise<{ entries: TimelineEntry[]; total_ready_ms: number; ready_count: number }> {
-        const rows = await this.listOrdered(competitionId, { states: ['ready'], limit: 2000 });
+    async timeline(competitionId: number, pageSize = 500): Promise<{ entries: TimelineEntry[]; total_ready_ms: number; ready_count: number }> {
+        const PAGE = Math.min(Math.max(Math.floor(pageSize) || 500, 1), 2000);
         const entries: TimelineEntry[] = [];
         let cursor = 0;
-        for (const row of rows) {
-            const dur = row.duration_ms ?? 0;
-            entries.push({
-                sequence: row.sequence,
-                duration_ms: dur,
-                timeline_start_ms: cursor,
-                state: row.state,
-                object_path: row.object_path,
-            });
-            cursor += dur;
+        let after = 0;
+        for (;;) {
+            const rows = await this.continuation(competitionId, after, PAGE);
+            if (rows.length === 0) break;
+            for (const row of rows) {
+                if (row.state !== 'ready') continue;
+                const dur = row.duration_ms ?? 0;
+                entries.push({
+                    sequence: row.sequence,
+                    duration_ms: dur,
+                    timeline_start_ms: cursor,
+                    state: row.state,
+                    object_path: row.object_path,
+                });
+                cursor += dur;
+            }
+            after = rows[rows.length - 1].sequence;
+            if (rows.length < PAGE) break;
         }
         return { entries, total_ready_ms: cursor, ready_count: entries.length };
     }

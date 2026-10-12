@@ -1,3 +1,14 @@
+## R4-CHUNK-PLAYER-UX-1 REMEDIATION (units fix on PR #113, same branch)
+
+- 🔧 ‏REMOTE REJECT ← إصلاح LOCAL مكتمل على نفس الفرع/PR، بانتظار ‏re-REMOTE — ليست DONE. ‏ blocker واحد: ‏ms/s في ‏timeline (المشغل يقارن بالثواني) ← الإصلاح عند الحد (‏buildTimeMap ÷‏1000) + توثيق العقد + ‏fixture ‏0/10000/20000 + إثبات انحدار (يمر أخضر ويفشل بلا الإصلاح ‏10000←10). ‏T/B ‏39/39 (‏16 مشغل + ‏12 تشغيل + ‏5 واجهة + ‏6 موحد)؛ ‏tsc ✅؛ ‏any ‏+0. ‏S لم تُعَد محليًا بأمر المالك (للوكيل الخارجي). بلا ‏PR جديد/دمج/نشر/ترحيل.
+- **المتبقي**: ‏re-REMOTE مستقلة على ‏HEAD الجديد ← دمج القائد بـexpected_head_sha ← ‏Quality/Deploy على merge-commit.
+
+## R4-CHUNK-PLAYER-UX-1 smooth playback · فرع feat/r4-chunk-player-ux-1 (من d778090 = origin/main بعد PR #112)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B + ‏S جزئية — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/أسرار/‏FFmpeg/تنزيل. تنسيق متوازٍ: ‏manifest/workflows/migrations/auth/lease/receipts للوكيل الآخر (لم تُمس؛ استخراجي أُرجع)؛ ‏PR110 لم تُمس؛ العمل في ‏worktree منفصلة بعد تعارض الشجرة.
+- نفّذ: بدء الحي من أحدث ‏ready (احتياطي ‏penultimate للقديم) + تشغيل الحافة نفسها؛ تخطي غير المؤكد مع ‏fallback قديم؛ ‏rewind محدود بحلقة واحدة؛ ‏handoff (إيقاف/كتم/تنظيف + بدء صامت)؛ تحميل ‏VOD بنافذة محدودة + إخلاء + إلغاء ‏URLs + مواضع موثقة؛ زرّا الرجوع/الإرجاع + ‏ar/en + ‏CSP؛ استبعاد ‏failed + تطبيع ‏0→1 في الدمج؛ ‏timeline بترقيم داخلي.
+- **الأدلة**: ‏T/B ‏21 جديدة (‏16 مشغل + ‏5 واجهة)؛ الجيران خضراء (‏chunk-playback ‏12/12)؛ الكاملة ‏1603 بلا فشل (الملفان البيئيان مستبعدان)؛ ‏tsc/build ✅؛ ‏any ‏+0 (‏297)؛ الجرد بلا تغيير. ‏S: الحي/الإرجاع/الخلفية ‏PASS بأدلة حقيقية؛ ‏VOD/seek/audio للوكيل الخارجي. disposition عشرية في ‏WORKLOG (‏3 FIXED هنا + ‏2 VERIFIED + ‏5 DEFERRED بحواجز صريحة، منها ‏blackout التسجيل للوكيل الآخر).
+
 ## R4-PROFILE-SEC11-1 profile session auth · فرع fix/r4-profile-sec11 (من d778090 = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/كتابة إنتاجية/PHP/أسرار. ROW29/PR110/Recovery-C وديون Auth/SQL/BaseModel لم تُمس.

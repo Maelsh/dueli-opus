@@ -1,0 +1,28 @@
+{
+  "startedAt": "2026-10-12T04:23:17.113Z",
+  "project": "en",
+  "stubHttp": "http://127.0.0.1:4941",
+  "stubBase": "https://127.0.0.1:4942",
+  "legs": {
+    "seedMedia": {
+      "mime": "video/mp4;codecs=\"avc1.42E01E,mp4a.40.2\"",
+      "ext": "mp4",
+      "chunks": 5
+    },
+    "liveJoin": {
+      "frames": 8,
+      "width": 320,
+      "info": "Chunk 5"
+    },
+    "rewindUiClick": {
+      "infoAfterClick": "Chunk 5"
+    },
+    "behindState": {
+      "liveBtnVisible": true
+    }
+  },
+  "competitionId": 360,
+  "notes": [],
+  "verdict": "FAIL-throw",
+  "reason": "page.click: Target page, context or browser has been closed\nCall log:\n\u001b[2m  - waiting for locator('#embeddedLiveBtn')\u001b[22m\n\u001b[2m    - locator resolved to <button data-csp-args=\"[]\" data-csp-on=\"click\" id=\"embeddedLiveBtn\" title=\"Back to live\" data-csp-fn=\"embeddedReturnToLive\" class=\"items-center gap"
+}

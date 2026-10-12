@@ -743,6 +743,8 @@ export const en = {
     chunks_uploaded: 'chunks uploaded',
     camera_error: 'Failed to access camera/microphone',
     hls_not_supported: 'Your browser does not support HLS playback',
+    return_to_live: 'Back to live',
+    live_rewind: 'Rewind one chunk',
     live_comments: 'Live comments will appear here...',
     fullscreen: 'Fullscreen',
     exit_fullscreen: 'Exit Fullscreen',
