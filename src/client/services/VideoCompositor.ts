@@ -33,6 +33,15 @@ export interface VideoCompositorConfig {
     chunkDuration?: number; // in milliseconds, default 10000 (10s)
     serverUrl?: string;
     /**
+     * R4-RELEASE-RECOVERY-C: server-backed exclusive recorder ownership.
+     * Passed straight to the ChunkUploader (lease off when absent).
+     */
+    lease?: import('./ChunkUploader').RecordingLeaseHandle;
+    /** Fired once when this session loses the lease (takeover/release). */
+    onLeaseLost?: (info: { generation: number }) => void;
+    /** Heartbeat period while holding the lease (default 10000ms). */
+    heartbeatIntervalMs?: number;
+    /**
      * R4-COMP-UNIFIED-1: original test-page identity, drawn INSIDE the
      * recorded frames (not a page overlay). platformName is the host-language
      * app title (e.g. 'Dueli' / 'ديولي'), rtl mirrors the whole layout.
@@ -118,6 +127,9 @@ export class VideoCompositor {
         this.uploader = new ChunkUploader({
             competitionId: config.competitionId,
             serverUrl: this.config.serverUrl!,
+            lease: (config as { lease?: import('./ChunkUploader').RecordingLeaseHandle }).lease,
+            onLeaseLost: (config as { onLeaseLost?: (info: { generation: number }) => void }).onLeaseLost,
+            heartbeatIntervalMs: (config as { heartbeatIntervalMs?: number }).heartbeatIntervalMs,
             onChunkUploaded: (num) => {
                 this.chunksUploaded++;
                 this.config.onChunkUploaded?.(num);
@@ -325,6 +337,14 @@ export class VideoCompositor {
         if (this.isRecording || this.startPending) return;
         this.startPending = true;
         try {
+            // R4-RELEASE-RECOVERY-C: claim the recorder lease FIRST and
+            // refuse on a held lease (a second tab/device recording the same
+            // competition must stop, never dual-write).
+            const claimed = await this.uploader.acquireLease();
+            if (!claimed) {
+                this.config.onError?.(new Error('Recording lease held by another session'));
+                return;
+            }
             // Sync time with server first
             await this.uploader.syncTime();
 
@@ -449,6 +469,10 @@ export class VideoCompositor {
                 // Drain uploads, then finalize on server (single path).
                 await this.uploader.finalize();
 
+                // R4-RELEASE-RECOVERY-C: clean handover — a finalized session
+                // frees the lease so a later session claims cleanly.
+                await this.uploader.releaseLease();
+
                 debugLog('[VideoCompositor] Recording stopped');
                 this.config.onRecordingStopped?.();
                 resolve();
@@ -482,6 +506,25 @@ export class VideoCompositor {
             totalDuration: this.isRecording ? Date.now() - this.startTime : 0,
             isRecording: this.isRecording
         };
+    }
+
+    /**
+     * R4-RELEASE-RECOVERY-C: abort on lease loss WITHOUT finalizing (a
+     * fenced-out session must never trigger the merge). The secure
+     * activation path (D1 index + receipts) needs no finalize call.
+     */
+    async abortOnLeaseLost(): Promise<void> {
+        if (!this.isRecording) return;
+        try {
+            this.mediaRecorder?.stop();
+        } catch { /* already stopped */ }
+        this.isRecording = false;
+        this.config.onRecordingStopped?.();
+    }
+
+    /** Expose the uploader lease state for page-level wiring/tests. */
+    getLeaseState(): { mode: 'off' | 'enforced'; active: boolean; generation: number } {
+        return this.uploader.getLeaseState();
     }
 
     /**

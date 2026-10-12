@@ -10,7 +10,7 @@
  *  - explicit stats (uploaded/pending/dropped/failed/nextNumber).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChunkUploader } from '../../src/client/services/ChunkUploader';
+import { ChunkUploader, type RecordingLeaseHandle } from '../../src/client/services/ChunkUploader';
 
 const realFetch = globalThis.fetch;
 let calls: { url: string; body?: any }[] = [];
@@ -275,5 +275,87 @@ describe('R4-CHUNK-PLAY-1 ChunkUploader', () => {
         for (const s of seen) {
             expect(s.head.slice(8)).toBe('66747970'); // 'ftyp'
         }
+    });
+});
+
+describe('R4-RELEASE-RECOVERY-C client lease lifecycle (acquire/heartbeat/expiry/reconnect/takeover)', () => {
+    function fakeLease(opts?: { held?: boolean; loseAtBeat?: number }): RecordingLeaseHandle & { beats: number; releases: number } {
+        const state = { beats: 0, releases: 0, generation: 1, held: !(opts?.held === true) };
+        return {
+            get beats() { return state.beats; },
+            get releases() { return state.releases; },
+            async acquire() {
+                if (opts?.held === true) return { ok: false as const, reason: 'held' as const, generation: 7, expires_in_seconds: 30 };
+                return { ok: true as const, generation: state.generation, took_over: false };
+            },
+            async heartbeat(generation: number) {
+                state.beats++;
+                if (opts?.loseAtBeat !== undefined && state.beats >= opts.loseAtBeat) {
+                    return { held: false, generation: generation + 1 }; // takeover
+                }
+                return { held: state.held, generation };
+            },
+            async release() { state.releases++; },
+        };
+    }
+
+    function leasedUploader(lease: RecordingLeaseHandle, onLeaseLost?: (info: { generation: number }) => void) {
+        const up = new ChunkUploader({
+            competitionId: 9, serverUrl: 'https://x.test/ffmpeg', lease, onLeaseLost,
+            heartbeatIntervalMs: 60000, // manual beats in tests, no timer flakiness
+        });
+        up.setExtension('mp4');
+        return up;
+    }
+
+    it('L1. acquire claims first; heartbeat keeps the lease; release hands over', async () => {
+        const lease = fakeLease();
+        const up = leasedUploader(lease);
+        expect(await up.acquireLease()).toBe(true);
+        expect(up.getLeaseState()).toMatchObject({ mode: 'enforced', active: true, generation: 1 });
+        expect(await up.beatLease()).toBe(true);
+        expect(lease.beats).toBe(1);
+        await up.releaseLease();
+        expect(up.getLeaseState().active).toBe(false);
+        expect(lease.releases).toBe(1);
+    });
+
+    it('L2. held lease refuses (no recording); reconnect reacquires after expiry', async () => {
+        const up = leasedUploader(fakeLease({ held: true }));
+        expect(await up.acquireLease()).toBe(false);
+        expect(up.getLeaseState().active).toBe(false);
+        // Reconnect path: a fresh holder takes over after expiry.
+        const up2 = leasedUploader(fakeLease());
+        expect(await up2.reacquireLease()).toBe(true);
+        expect(up2.getLeaseState().active).toBe(true);
+        await up2.releaseLease();
+    });
+
+    it('L3. takeover during heartbeat stops uploads, fires onLeaseLost once, refuses finalize', async () => {
+        let lost = 0;
+        let lostGen = 0;
+        const up = leasedUploader(fakeLease({ loseAtBeat: 1 }), (info) => { lost++; lostGen = info.generation; });
+        await up.initialize();
+        expect(await up.acquireLease()).toBe(true);
+        expect(await up.beatLease()).toBe(false); // takeover at first beat
+        expect(await up.beatLease()).toBe(false); // idempotent — no second fire
+        expect(lost).toBe(1);
+        expect(lostGen).toBe(2);
+        // finalize is refused after the loss (never triggers the merge)...
+        await expect(up.finalize()).resolves.toBe(false);
+        expect(calls.filter((c) => c.url.includes('/finalize.php')).length).toBe(0);
+        // ...while the secure path (key + verify + receipt) needs no finalize.
+        await up.releaseLease();
+    });
+
+    it('L4. lease off (absent handle) behaves exactly as before', async () => {
+        const up = makeUploader();
+        expect(await up.acquireLease()).toBe(true);
+        expect(up.getLeaseState()).toMatchObject({ mode: 'off', active: false });
+        await up.initialize();
+        up.enqueue(bigBlob());
+        await up.waitForUploads();
+        expect(up.getStats().uploaded).toBe(1);
+        await expect(up.finalize()).resolves.toBe(true);
     });
 });

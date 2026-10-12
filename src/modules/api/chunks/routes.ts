@@ -28,6 +28,19 @@ function generateChunkKey(): string {
 // Short-lived one-time upload keys: 10 minutes is ample for a 5s chunk.
 const CHUNK_KEY_TTL = "datetime('now', '+10 minutes')";
 
+// ROW28.1 / R4-RELEASE-RECOVERY-C: real, fail-closed upload maintenance
+// barrier. Truthy UPLOADS_FROZEN stops new upload sessions at the single
+// key-issuance point (/register) — no queue, no keyless fallback, no
+// "frozen Worker" fiction. In-flight chunks already holding a key continue to
+// /verify → /receipt so they drain across a Worker deploy. Fail-closed: any
+// value other than an explicit falsy string freezes.
+function uploadsFrozen(env: { UPLOADS_FROZEN?: string }): boolean {
+    const v = env.UPLOADS_FROZEN;
+    if (v === undefined || v === null) return false;
+    const s = String(v).trim().toLowerCase();
+    return !(s === '' || s === '0' || s === 'false' || s === 'no');
+}
+
 // Origin verification middleware for upload server
 // التحقق من أن الطلب قادم من سيرفر الرفع المصرح به
 const verifyUploadServerOrigin = async (c: any, next: any) => {
@@ -133,6 +146,13 @@ const REGISTER_MAX_BYTES = 60000000; // 60MB documented ceiling (PHP enforces pe
 chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => {
     const { DB } = c.env;
     const user = c.get('user');
+
+    // ROW28.1 upload maintenance barrier (fail-closed). Checked first — before
+    // any DB read or key issuance — so a maintenance window stops NEW upload
+    // sessions while already-issued keys still drain. Never a keyless bypass.
+    if (uploadsFrozen(c.env)) {
+        return c.json({ success: false, error: 'Uploads are frozen for maintenance', code: 'uploads_frozen' }, 503);
+    }
 
     try {
         const body = await c.req.json().catch(() => ({})) as {
@@ -407,6 +427,14 @@ chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, 
             }
             if (code === 'FINAL') {
                 return c.json({ success: false, error: 'Chunk slot is terminally failed', code: 'final' }, 409);
+            }
+            if (code === 'BAD_INPUT') {
+                // ROW28.1 item 1: verified duration_ms (from the HMAC receipt) is
+                // non-positive or above the sanity ceiling. This is bad input,
+                // not a server fault — fail-closed as a client 400 so the slot
+                // stays `uploaded` and never reaches `ready` / poisons the
+                // timeline (cursor += duration_ms on read).
+                return c.json({ success: false, error: (error as Error).message, code: 'bad_input' }, 400);
             }
             throw error;
         }
@@ -814,7 +842,10 @@ chunksRoutes.get('/init/:id', async (c) => {
  */
 function leaseUnavailable(error: unknown): boolean {
     const msg = error instanceof Error ? error.message : String(error);
-    return /no such table/i.test(msg);
+    // Table- OR column-level absence (partial 0040/0042 migration states,
+    // SQLite and D1 word it differently) — both mean the safety store is not
+    // fully applied. Fail closed either way.
+    return /no such (table|column)|has no column named/i.test(msg);
 }
 
 function leaseHolderHash(c: any, nonce: string): string {
