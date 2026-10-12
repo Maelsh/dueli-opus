@@ -25,7 +25,7 @@ of callers alone.
 | `upload.php` | `ChunkUploader.doUpload` (+`chunk_key` since row 28), test host/guest/core scripts, `shared.ts` ChunkManager | Stores one chunk multipart upload | Optional-key verify; no competition/sequence/generation binding; overwrite possible (`chunk_%04d` fixed path); metadata.json read-modify-write without lock; `last_chunk` = last request, not max sequence; no size/type/duration proof; `offset` first-chunk only; CORS `*` is not auth; stale default URL + naive `.env` parse | KEEP + harden per §4 below (runbook, not in this PR) |
 | `playlist.php?id=` | Platform proxy `GET /api/chunks/playlist/:id`, init route | Lists stored chunks | Known-empty responses (owner); no CORS headers (hence the proxy) | KEEP (proxy stays the legacy locator; D1 index is the authority) |
 | `stream.php?path=` | Playlist URL builder, player/test basePaths | Serves chunk bytes | None platform-side (byte pipe) | KEEP |
-| `finalize.php` | `ChunkUploader.finalize` (client trigger only) | External merge trigger | Server-side merge on hosting (banned for new work); row 28 does NOT call it from the platform — the client trigger stays through the dual-write era until row 30 cutover | KEEP (do not invoke from new code; retire at row-30 cutover) |
+| `finalize.php` | `ChunkUploader.finalize` (client trigger only) | External merge trigger | Removed in ROW28.1 — no callable path, no dual-write era, no client trigger (platform-owned final marker only) | REMOVE (insecure finalize/release flow, deleted) |
 | `time.php` | `ChunkUploader.syncTime` | Timestamp alignment | Trivial | KEEP |
 | `watcher.js` | none in repo | Unknown (needs owner file copy) | Uninventoried | KEEP, inventory on receipt of the secret-stripped copy |
 | `end-stream.php` | none in repo | Unknown (needs owner file copy) | Uninventoried | KEEP, inventory on receipt |
@@ -76,117 +76,262 @@ that window is banned by this runbook.
 ## 3. PHP deployment steps (hosting operator, authorized separately)
 
 1. Back up the full ffmpeg directory (files + `.env`) with timestamp.
-   Snapshot production D1 first (read-only export) so 0042-column restore
-   never needs a destructive rollback.
+   Snapshot production D1 first (read-only export) so any restore never
+   needs a destructive rollback (see §5 — DROP TABLE is banned).
 2. `upload.php`: (a) REQUIRE `chunk_key` (reject keyless with explicit
    error — no silent accept, NO fallback to keyless upload); (b) verify via platform
    `GET /api/chunks/verify?key=` (HMAC envelope already shared) and
    enforce the returned binding (`lease_generation`, `object_path`,
-   `max_bytes`); (c) save EXCLUSIVELY (refuse overwrite of an existing
-   object — same bytes may retry idempotently, different bytes conflict);
-   (d) enforce size/type/duration bounds + no path traversal (noXSS);
-   (e) keep the post-save `DELETE {platform}/api/chunks/:key` call
-   (idempotent; verify already consumed); (f) report
-   `POST {platform}/api/chunks/receipt` with measured
-   `{bytes, object_hash?, duration_ms?}` on store AND on permanent
-   failure; (g) CORS allowlist for documented origins (transport note,
-   never treated as auth).
+   `max_bytes`); (c) save EXCLUSIVELY (atomic `link()` create; refuse
+   overwrite of an existing object — same bytes may retry idempotently,
+   different bytes conflict, the original is never replaced); (d) enforce
+   the size ceiling + object-path shape + no path traversal; (e) keep the
+   post-save `DELETE {platform}/api/chunks/:key` call (idempotent; verify
+   already consumed); (f) report `POST {platform}/api/chunks/receipt`
+   with STORAGE FACTS ONLY — `{bytes, object_hash, object_path,
+   lease_generation}` — on store AND on permanent failure. The duration
+   is NOT reported by PHP: the platform measures it server-side from the
+   real stored bytes (D3), so a WebM fragment with no Duration element
+   can never be mis-measured by host-side getID3; (g) CORS allowlist for
+   documented origins (transport note, never treated as auth).
 3. Do NOT add server FFmpeg/merge/transcode; do NOT delete chunks on any
    path; do NOT change `playlist.php`/`stream.php` response shapes.
-4. Keep `finalize.php` callable (dual-write era) but take NO new
-   dependencies on it; row 30 retires the trigger after the index cutover.
+4. `finalize.php` is REMOVED from the flow entirely (insecure finalizer +
+   release flow deleted): no callable path, no dual-write compatibility,
+   no new dependencies. The client finalize trigger is retired; the index
+   is the only authority.
 
-### 3a. Exact reviewed `upload.php` patch (REVIEW-ONLY — hosting applies)
+### 3a. Complete deployable `upload.php` (REVIEWED — hosting applies)
 
-The external agent applies this AFTER the owner supplies the current
-`upload.php` (stripped of secrets). It is reviewed here, never executed
-here. Contract: mandatory keys, immutable objects, generation fencing,
-verified receipts. Real-PHP PASS is NOT claimed without §6 proof.
+This is the COMPLETE file, not a patch: it replaces the current
+`upload.php` as-is. It embeds NO secret — configuration comes from
+`.env` (example below), and `UPLOAD_SERVER_SECRET` is the SAME shared
+value already configured on the Worker (never printed, never logged).
+Contract: mandatory bound keys (D1), immutable exclusive storage (D4),
+facts-only receipts (D3 platform-measured duration), retired
+finalize.php (D6). Real-PHP PASS is NOT claimed without §6 proof.
 
 ```php
 <?php
-// R4-CHUNK-UPLOAD-SAFE-1 / R4-RELEASE-RECOVERY-C — reviewed upload.php patch.
-// Assumes: $PLATFORM_BASE (e.g. https://<pages>/), $UPLOAD_SECRET (shared
-// HMAC secret, same as Worker's UPLOAD_SERVER_SECRET), $ALLOWED_ORIGINS.
-// Helpers hmac_headers()/api() below build the Worker HMAC envelope:
-//   canonical = METHOD\npath\ntimestamp\nnonce\nsha256(body),
-//   signature = HMAC-SHA256($UPLOAD_SECRET, canonical).
+/**
+ * upload.php — ROW28 (D1–D4, D6) hardened chunk uploader.
+ *
+ * Responsibilities (nothing else): verify the platform-issued chunk key,
+ * enforce its binding, store the object EXCLUSIVELY and atomically,
+ * delete the consumed key, and report storage facts. FFmpeg, merge,
+ * transcode, chunk deletion and finalize.php are all OUT of scope
+ * (banned by the runbook).
+ *
+ * Configuration comes from .env in this directory (chmod 600, NEVER
+ * committed):
+ *   PLATFORM_BASE=https://dueli.maelshpro.com
+ *   UPLOAD_SERVER_SECRET=<same value as the Worker's UPLOAD_SERVER_SECRET>
+ *   STORAGE_ROOT=/absolute/path/outside/web-root
+ *   ALLOWED_ORIGINS=https://dueli.maelshpro.com,https://www.dueli.maelshpro.com
+ */
 
-// (a) REQUIRE chunk_key — no keyless fallback, ever.
-$chunkKey = $_POST['chunk_key'] ?? '';
-if (!is_string($chunkKey) || $chunkKey === '') {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'chunk_key required']);
+/** Minimal .env reader (no secret is ever printed or logged). */
+function env_value(string $key, string $default = ''): string {
+    static $vars = null;
+    if ($vars === null) {
+        $vars = [];
+        $file = __DIR__ . '/.env';
+        if (is_readable($file)) {
+            foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+                $line = trim($line);
+                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+                [$k, $v] = explode('=', $line, 2);
+                $vars[trim($k)] = trim(trim(trim($v), "\"'"));
+            }
+        }
+    }
+    return $vars[$key] ?? $default;
+}
+
+function respond(int $status, array $payload): void {
+    http_response_code($status);
+    header('Content-Type: application/json');
+    echo json_encode($payload);
     exit;
 }
 
-// (b) Verify via the platform and enforce the returned binding.
+$PLATFORM_BASE    = rtrim(env_value('PLATFORM_BASE', 'https://dueli.maelshpro.com'), '/');
+$UPLOAD_SECRET    = env_value('UPLOAD_SERVER_SECRET');
+$STORAGE_ROOT     = rtrim(env_value('STORAGE_ROOT', __DIR__ . '/storage'), '/');
+$ALLOWED_ORIGINS  = array_values(array_filter(array_map(
+    'trim', explode(',', env_value('ALLOWED_ORIGINS', $PLATFORM_BASE))
+)));
+
+if ($UPLOAD_SECRET === '') {
+    respond(503, ['success' => false, 'error' => 'upload auth not configured']);
+}
+
+// CORS: transport allowlist ONLY — it is never treated as auth (the HMAC
+// envelope is the auth).
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin !== '' && in_array($origin, $ALLOWED_ORIGINS, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Vary: Origin');
+}
+header('Access-Control-Allow-Headers: Content-Type, X-Signature, X-Timestamp, X-Nonce');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { http_response_code(204); exit; }
+
+/** Platform call inside the shared HMAC envelope:
+ *  canonical = METHOD\npath\ntimestamp\nnonce\nsha256(body),
+ *  signature = HMAC-SHA256(UPLOAD_SERVER_SECRET, canonical). */
+function api(string $method, string $path, ?array $json = null): array {
+    global $PLATFORM_BASE, $UPLOAD_SECRET;
+    $body   = $json === null ? '' : json_encode($json);
+    $ts     = (string) round(microtime(true) * 1000);
+    $nonce  = bin2hex(random_bytes(12));
+    $canon  = $method . "\n" . $path . "\n" . $ts . "\n" . $nonce . "\n" . hash('sha256', $body);
+    $ch = curl_init($PLATFORM_BASE . $path);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CUSTOMREQUEST  => $method,
+        CURLOPT_TIMEOUT        => 20,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'X-Signature: ' . hash_hmac('sha256', $canon, $UPLOAD_SECRET),
+            'X-Timestamp: ' . $ts,
+            'X-Nonce: ' . $nonce,
+        ],
+    ]);
+    if ($body !== '') curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+    $raw  = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return ['ok' => $code >= 200 && $code < 300, 'json' => $raw ? json_decode($raw, true) : null];
+}
+
+// (a) chunk_key is MANDATORY — no keyless fallback, ever (D1).
+$chunkKey = is_string($_POST['chunk_key'] ?? null) ? $_POST['chunk_key'] : '';
+if ($chunkKey === '' || !preg_match('/^[0-9a-f]{48}$/', $chunkKey)) {
+    respond(400, ['success' => false, 'error' => 'chunk_key required']);
+}
+
+// (b) Verify via the platform and enforce the returned binding (D1).
 $verify = api('GET', '/api/chunks/verify?key=' . urlencode($chunkKey));
 if (!$verify['ok'] || empty($verify['json']['valid'])) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'key verification failed']);
-    exit;
+    respond(403, ['success' => false, 'error' => 'key verification failed']);
 }
-$binding = $verify['json']['data'] ?? [];
-$objectPath = (string)($binding['object_path'] ?? '');
-$leaseGen   = (int)($binding['lease_generation'] ?? 0);
-$maxBytes   = (int)($binding['max_bytes'] ?? 0);
+$binding    = $verify['json']['data'] ?? [];
+$objectPath = (string) ($binding['object_path'] ?? '');
+$leaseGen   = (int) ($binding['lease_generation'] ?? 0);
+$maxBytes   = (int) ($binding['max_bytes'] ?? 0);
 if ($objectPath === '' || $leaseGen < 1 || $maxBytes < 1) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'binding incomplete']);
-    exit;
+    respond(403, ['success' => false, 'error' => 'binding incomplete']);
 }
-// (b2) No path traversal: the object path is platform-derived, never trusted.
-if (strpos($objectPath, '..') !== false || $objectPath[0] === '/' || preg_match('#^[a-z]+://#i', $objectPath)) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'bad object path']);
-    exit;
+// The path is platform-derived; re-check shape + traversal (defense in depth).
+if (str_contains($objectPath, '..') || str_contains($objectPath, '\\')
+    || $objectPath[0] === '/' || preg_match('#^[a-z][a-z0-9+.-]*://#i', $objectPath)
+    || !preg_match('#^live/match_\d+/chunk_\d+\.(mp4|webm)$#', $objectPath)) {
+    respond(403, ['success' => false, 'error' => 'bad object path']);
+}
+$competitionId = (int) ($_POST['competition_id'] ?? 0);
+$sequence      = (int) ($_POST['chunk_number'] ?? 0);
+if ($competitionId < 1 || $sequence < 1) {
+    respond(400, ['success' => false, 'error' => 'bad competition_id or chunk_number']);
 }
 
-// (c) Save EXCLUSIVELY: refuse overwrite (same bytes may retry idempotently,
-//     different bytes conflict). Never trust client duration/bytes.
+// (c) EXCLUSIVE atomic storage (D4). The first object to land wins and is
+//     immutable: a concurrent DIFFERENT-byte upload can never replace the
+//     original bytes, while an identical retry stays idempotently safe.
 $tmp = $_FILES['chunk'] ?? null;
 if (!$tmp || ($tmp['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-    api('POST', '/api/chunks/receipt', ['competition_id' => (int)($_POST['competition_id'] ?? 0),
-        'sequence' => (int)($_POST['chunk_number'] ?? 0), 'status' => 'failed', 'error' => 'upload error']);
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'upload error']);
-    exit;
+    api('POST', '/api/chunks/receipt', [
+        'competition_id' => $competitionId, 'sequence' => $sequence,
+        'lease_generation' => $leaseGen, 'status' => 'failed', 'error' => 'upload error',
+    ]);
+    respond(400, ['success' => false, 'error' => 'upload error']);
 }
-$dest = storage_path($objectPath); // host-local mapping, outside web root
-if (file_exists($dest)) {
-    $same = (filesize($dest) === (int)$tmp['size'])
-        && (hash_file('sha256', $dest) === hash_file('sha256', $tmp['tmp_name']));
-    if (!$same) {
-        http_response_code(409);
-        echo json_encode(['success' => false, 'error' => 'object exists']);
-        exit;
+if ((int) $tmp['size'] > $maxBytes) {
+    api('POST', '/api/chunks/receipt', [
+        'competition_id' => $competitionId, 'sequence' => $sequence,
+        'lease_generation' => $leaseGen, 'status' => 'failed', 'error' => 'too large',
+    ]);
+    respond(413, ['success' => false, 'error' => 'too large']);
+}
+$dest = $STORAGE_ROOT . '/' . $objectPath;
+if (!is_dir(dirname($dest))) { mkdir(dirname($dest), 0770, true); }
+
+$stored = false;
+// Primary: link() is an ATOMIC exclusive create (O_EXCL semantics) — when
+// the destination already exists it fails and nothing is written, so two
+// concurrent uploads can never both "win" and the later one cannot replace
+// the winner's bytes.
+if (function_exists('link')) {
+    if (@link($tmp['tmp_name'], $dest)) { $stored = true; }
+}
+// Fallback (link() disabled or cross-device): serialize on a per-object
+// lock and re-check before the move — still no overwrite, just serialized.
+if (!$stored && !file_exists($dest)) {
+    $lock = @fopen($dest . '.lock', 'c');
+    if ($lock && flock($lock, LOCK_EX)) {
+        if (!file_exists($dest)) { $stored = @rename($tmp['tmp_name'], $dest); }
+        flock($lock, LOCK_UN);
     }
-} else {
-    if ((int)$tmp['size'] > $maxBytes) {
-        http_response_code(413);
-        echo json_encode(['success' => false, 'error' => 'too large']);
-        exit;
+    if ($lock) { fclose($lock); }
+    @unlink($dest . '.lock');
+}
+if (!$stored) {
+    // The object already exists: identical bytes are a safe idempotent
+    // retry (same size AND same sha256); different bytes CONFLICT and the
+    // original bytes are preserved untouched.
+    if (file_exists($dest)
+        && (int) filesize($dest) === (int) $tmp['size']
+        && hash_equals(hash_file('sha256', $dest), hash_file('sha256', $tmp['tmp_name']))) {
+        $stored = true;
+        @unlink($tmp['tmp_name']);
+    } else {
+        respond(409, ['success' => false, 'error' => 'object exists with different bytes']);
     }
-    move_uploaded_file($tmp['tmp_name'], $dest);
+}
+if (!$stored) {
+    respond(500, ['success' => false, 'error' => 'storage failed']);
 }
 
-// (d) Bounds already enforced above (size ceiling + never-trusted path);
-//     container allow-list stays mp4/webm by the platform register gate.
-
-// (e) Post-save DELETE of the consumed key (idempotent; verify consumed it).
+// (e) Post-save DELETE of the consumed key (idempotent — verify consumed it).
 api('DELETE', '/api/chunks/' . urlencode($chunkKey));
 
-// (f) Receipt with MEASURED facts (never client claims).
-api('POST', '/api/chunks/receipt', ['competition_id' => (int)($_POST['competition_id'] ?? 0),
-    'sequence' => (int)($_POST['chunk_number'] ?? 0), 'status' => 'stored',
-    'bytes' => filesize($dest), 'object_hash' => hash_file('sha256', $dest)]);
-echo json_encode(['success' => true]);
+// (f) Receipt with STORAGE FACTS ONLY (D3). No duration is ever declared
+//     here: the platform measures the real stored bytes itself, so a
+//     MediaRecorder WebM fragment (no Duration element, getID3-blind) is
+//     measured from its actual media timestamps or stays unverified.
+api('POST', '/api/chunks/receipt', [
+    'competition_id'   => $competitionId,
+    'sequence'         => $sequence,
+    'lease_generation' => $leaseGen,
+    'object_path'      => $objectPath,
+    'status'           => 'stored',
+    'bytes'            => (int) filesize($dest),
+    'object_hash'      => hash_file('sha256', $dest),
+]);
+
+respond(200, ['success' => true]);
 ```
+
+Deployment notes for the operator:
+
+- Set `STORAGE_ROOT` OUTSIDE the web root; `stream.php`/`playlist.php`
+  keep serving from the same root (move the existing `live/` tree once,
+  during the freeze window, and repoint the readers).
+- `.env` is `chmod 600`, owner = the PHP user, and is never committed,
+  printed, or logged. `UPLOAD_SERVER_SECRET` must equal the Worker's
+  value; rotating it requires updating BOTH sides in the same window.
+- Requirements: PHP 8.0+ with `curl` and `hash`. `link()` (preferred) or
+  `flock` fallback — both are standard on shared hosting.
+- The old `metadata.json` read-modify-write, `last_chunk` tracking,
+  `offset` handling and keyless path are GONE: the D1 index is the
+  metadata authority (row 27), receipts are the only writer.
+- Verify after deploy with §6 before reopening uploads.
 
 Generation fencing needs no extra PHP branch: a taken-over generation's
 keys fail `verify` platform-side (`Stale generation`), so the `(b)` gate
-above rejects them before any byte lands.
+above rejects them before any byte lands; the receipt route re-checks the
+generation binding against the registered slot and refuses a stale
+publication even when the lease was released between verify and receipt.
 
 ## 4. Cutover sequencing (no unsafe window)
 
@@ -225,14 +370,15 @@ merged to `main` and pass Quality + Deploy on the **merge commit** before
 
 - Code: revert this PR's branch (or the merge commit) — no prod data
   touched by the revert itself.
-- Migrations: D1/SQLite `ALTER ADD COLUMN` (0042) has no `DROP COLUMN`
-  path, so there is NO destructive schema rollback. If the authorized
-  apply must be undone: (1) restore `chunk_keys` from the mandatory
-  pre-apply read-only snapshot (operator backup, not a migration);
-  (2) `DROP TABLE IF EXISTS recording_chunks; DROP TABLE IF EXISTS
-  recording_finals;` (0041, additive tables, reverse-creation order);
-  (3) `DROP TABLE IF EXISTS recording_leases;` (0040). Never `DROP`
-  `chunk_keys` itself and never rewrite applied migration history.
+- Migrations: there is NO destructive schema rollback. DROP TABLE /
+  DROP COLUMN instructions are BANNED from this runbook (ROW28 D5):
+  `recording_chunks`, `recording_finals` and `recording_leases` are
+  additive, forward-only tables, and `chunk_keys` gains only nullable
+  columns (0042). If an authorized apply must be undone, the ONLY path
+  is restoring the pre-apply read-only D1 snapshot (operator backup,
+  taken in §2a step 1) or letting the additive tables sit unused — the
+  platform fails closed without them and never rewrites applied
+  migration history.
 - PHP: restore the timestamped backup; confirm old shapes respond.
 
 ### 5a. Deploy behavior — readiness is a backstop, NOT the barrier (ROW28.1 item 5)
@@ -258,6 +404,10 @@ does NOT reliably stop the already-started production deploy. Therefore the
 Per 15 §4 the following need the real host or a faithful equivalent,
 never the in-test double alone: mandatory-key rejection by the actual
 `upload.php`; generation-fenced verify against live PHP timing; receipt
-delivery failures/retries over the real network; the no-window proof
-across client/PHP/schema versions at each cutover phase. Row-28 T/B
-proves platform logic + the documented double order only.
+delivery failures/retries over the real network; concurrent
+different-byte uploads against the real `link()`/`flock` storage (the
+in-test harness proves the platform-side conflict path only — the
+atomic-exclusive guarantee of §3a(c) needs a real two-writer race on
+the host); the no-window proof across client/PHP/schema versions at
+each cutover phase. Row-28 T/B proves platform logic + the documented
+double order only.

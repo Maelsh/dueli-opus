@@ -11,6 +11,7 @@ import { CryptoUtils } from '../../../lib/services/CryptoUtils';
 import { findInitEnd } from '../../../lib/services/ChunkInitSegment';
 import { ChunkIndexModel } from '../../../models/ChunkIndexModel';
 import { mergePlaylistWithIndex } from '../../../lib/services/ChunkIndexPlaylist';
+import { measureStoredChunkDuration } from '../../../lib/services/MediaDuration';
 import type { RecordingChunk } from '../../../models/ChunkIndexModel';
 import { RecordingLeaseModel } from '../../../models/RecordingLeaseModel';
 import { DEFAULT_UPLOAD_SERVER_ORIGINS, DEFAULT_UPLOAD_URL } from '../../../config/defaults';
@@ -369,17 +370,29 @@ chunksRoutes.get('/verify', verifyUploadServerHmac, verifyUploadServerOrigin, as
 
 /**
  * POST /api/chunks/receipt
- * R4-CHUNK-UPLOAD-SAFE-1: authenticated storage receipt (called by the
- * upload server AFTER bytes are durably stored). Connects verified
- * confirmation to ChunkIndexModel — ready is published from measured facts
- * only. Client-declared duration/bytes can NEVER reach this path (same
- * HMAC + origin envelope as /verify; no user session accepted here).
- * Body: { competition_id, sequence, bytes?, object_hash?, duration_ms?,
- *         status: 'stored' | 'failed', error? }.
- *  - stored + measured duration → ready (create-or-confirm, idempotent;
- *    divergent bytes for the same sequence → conflict, never overwrite).
- *  - stored without duration → facts noted, slot stays uploaded.
- *  - failed → slot marked failed (terminal, keeps locator).
+ * R4-CHUNK-UPLOAD-SAFE-1 / ROW28 final form: authenticated storage receipt
+ * (called by the upload server AFTER bytes are durably stored). The body
+ * carries STORAGE FACTS ONLY — {competition_id, sequence, bytes?,
+ * object_hash?, object_path?, lease_generation, status, error?}. A
+ * declared duration_ms is NOT part of the contract: `ready` is published
+ * exclusively from the platform's own server-side MEASUREMENT of the real
+ * stored bytes (D3, MediaDurationService) — never declared, never
+ * invented. Client data can never reach this path (same HMAC + origin
+ * envelope as /verify; no user session accepted here).
+ *
+ * D1 fencing (identity binding + registered slot + atomic check):
+ *  - the receipt MUST carry the lease generation it verified under and the
+ *    slot MUST be registered under that same generation (takeover lineage
+ *    is rejected BEFORE any write);
+ *  - a separate lease-status read rejects the verify→takeover→receipt race
+ *    up front; the model then enforces the generation binding and the
+ *    uploaded→ready transition is one CONDITIONAL UPDATE — the database,
+ *    not a prior read, is the final arbiter;
+ *  - a released lease (clean end) still accepts the bounded drain tail,
+ *    mirroring /verify.
+ * D7: no slot is ever created from a receipt — an unregistered sequence is
+ * a protocol violation (404), and a mismatched object path is rejected —
+ * nothing fabricated (no generation=1, no container=mp4, no invented path).
  */
 chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, async (c) => {
     const { DB } = c.env;
@@ -387,7 +400,8 @@ chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, 
     try {
         const body = await c.req.json().catch(() => ({})) as {
             competition_id?: unknown; sequence?: unknown; bytes?: unknown;
-            object_hash?: unknown; duration_ms?: unknown; status?: unknown; error?: unknown;
+            object_hash?: unknown; object_path?: unknown; status?: unknown; error?: unknown;
+            lease_generation?: unknown;
         };
         const competitionId = Number(body?.competition_id);
         const sequence = Number(body?.sequence);
@@ -399,8 +413,34 @@ chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, 
             ? Math.floor(body.bytes as number) : null;
         const objectHash = typeof body?.object_hash === 'string' && (body.object_hash as string).length <= 256
             ? (body.object_hash as string) : null;
-        const durationMs = typeof body?.duration_ms === 'number' && Number.isFinite(body.duration_ms)
-            ? Math.floor(body.duration_ms as number) : null;
+        const objectPath = typeof body?.object_path === 'string' && (body.object_path as string).length <= 256
+            ? (body.object_path as string) : null;
+
+        // D1: no verified generation → no receipt (fail closed — there is no
+        // verified identity to bind the publication to).
+        const receiptGeneration = typeof body?.lease_generation === 'number'
+            && Number.isInteger(body.lease_generation) && (body.lease_generation as number) >= 1
+            ? (body.lease_generation as number) : null;
+        if (receiptGeneration === null) {
+            return c.json({ success: false, error: 'Missing verified lease generation', code: 'bad_generation' }, 400);
+        }
+
+        // Generation fencing pre-check (ROW28 Task A). A receipt is bound to
+        // the lease generation the uploader verified under: a takeover
+        // between /verify and /receipt bumps the generation, so a stale
+        // receipt is rejected BEFORE it can write into the new holder's
+        // index (the verify→takeover→receipt race). A released lease (clean
+        // end) still accepts a bounded drain tail — mirroring /verify. The
+        // lease store being unavailable (0040 not applied) fails closed.
+        try {
+            const lease = await new RecordingLeaseModel(DB).status(competitionId);
+            if (lease.held && lease.generation !== receiptGeneration) {
+                return c.json({ success: false, error: 'Stale lease generation', code: 'stale_generation' }, 409);
+            }
+        } catch (error: unknown) {
+            if (!leaseUnavailable(error)) throw error;
+            return c.json({ success: false, error: 'Lease store unavailable', code: 'lease_unavailable' }, 503);
+        }
 
         const model = new ChunkIndexModel(DB);
         if (status === 'failed') {
@@ -415,13 +455,25 @@ chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, 
             }
         }
 
+        // Facts are noted against the REGISTERED slot only (D7: no
+        // fabrication). The model enforces the generation + object binding.
+        let row: RecordingChunk;
         try {
-            const row = await model.confirmReceipt(competitionId, sequence, {
-                bytes, object_hash: objectHash, duration_ms: durationMs,
+            row = await model.confirmReceipt(competitionId, sequence, {
+                bytes, object_hash: objectHash, object_path: objectPath,
+                lease_generation: receiptGeneration,
             });
-            return c.json({ success: true, data: { state: row.state, sequence, duration_ms: row.duration_ms } });
         } catch (error: unknown) {
             const code = (error as { code?: string })?.code;
+            if (code === 'NOT_FOUND') {
+                return c.json({ success: false, error: 'No registered slot for this sequence', code: 'unregistered' }, 404);
+            }
+            if (code === 'STALE_GENERATION') {
+                return c.json({ success: false, error: 'Receipt generation does not own the registered slot', code: 'stale_generation' }, 409);
+            }
+            if (code === 'BAD_OBJECT') {
+                return c.json({ success: false, error: 'Receipt object path does not match the registered slot', code: 'object_mismatch' }, 409);
+            }
             if (code === 'CONFLICT') {
                 return c.json({ success: false, error: 'Conflicting bytes for this sequence', code: 'conflict' }, 409);
             }
@@ -429,15 +481,50 @@ chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, 
                 return c.json({ success: false, error: 'Chunk slot is terminally failed', code: 'final' }, 409);
             }
             if (code === 'BAD_INPUT') {
-                // ROW28.1 item 1: verified duration_ms (from the HMAC receipt) is
-                // non-positive or above the sanity ceiling. This is bad input,
-                // not a server fault — fail-closed as a client 400 so the slot
-                // stays `uploaded` and never reaches `ready` / poisons the
-                // timeline (cursor += duration_ms on read).
                 return c.json({ success: false, error: (error as Error).message, code: 'bad_input' }, 400);
+            }
+            if (leaseUnavailable(error)) {
+                // Partial-schema deployment (0041 not applied): fail closed
+                // with an explicit 503, never a 500 or a silent drop.
+                return c.json({ success: false, error: 'Chunk index store unavailable', code: 'index_unavailable' }, 503);
             }
             throw error;
         }
+
+        // D3: publish `ready` ONLY from a server-side measurement of the
+        // REAL stored bytes. The platform pulls the object back from the
+        // upload host and measures its media timestamps itself; anything
+        // unreachable/unparsable leaves the slot `uploaded` (fail closed —
+        // never ready, never invented, a later identical receipt retries).
+        if (row.state !== 'ready') {
+            const measuredMs = await measureStoredChunkDuration(
+                c.env as { FFMPEG_SERVER_URL?: string },
+                row.object_path,
+                row.container,
+            );
+            if (measuredMs !== null) {
+                try {
+                    row = await model.confirmChunk(competitionId, sequence, {
+                        duration_ms: measuredMs,
+                        bytes, object_hash: objectHash,
+                        lease_generation: receiptGeneration,
+                    });
+                } catch (error: unknown) {
+                    const code = (error as { code?: string })?.code;
+                    if (code === 'CONFLICT' || code === 'FINAL') {
+                        return c.json({ success: false, error: 'Conflicting facts for this sequence', code }, 409);
+                    }
+                    if (code === 'BAD_INPUT') {
+                        // A measured-but-insane duration (ceiling) fails
+                        // closed: the slot stays uploaded, never ready.
+                        return c.json({ success: true, data: { state: 'uploaded', sequence, duration_ms: null } });
+                    }
+                    throw error;
+                }
+            }
+        }
+
+        return c.json({ success: true, data: { state: row.state, sequence, duration_ms: row.duration_ms } });
     } catch (error: any) {
         if (leaseUnavailable(error)) {
             return c.json({ success: false, error: 'Chunk index store unavailable', code: 'index_unavailable' }, 503);

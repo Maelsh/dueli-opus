@@ -170,15 +170,18 @@ describe('R4-CHUNK-PLAY-1 ChunkUploader', () => {
         expect(up.getStats().nextNumber).toBe(4); // numbering kept advancing, gap explicit
     });
 
-    it('6. finalize drains first and runs once per session', async () => {
+    it('6. finalize drains first and runs once per session (no legacy finalize.php)', async () => {
         const up = makeUploader();
         await up.initialize();
         up.enqueue(bigBlob());
         up.enqueue(bigBlob());
+        // ROW28 Task B: the legacy server finalizer (finalize.php → server
+        // ffmpeg/merge/chunk-deletion) is RETIRED. finalize() now only DRAINS
+        // the secure upload pipeline (each chunk posts its own HMAC receipt);
+        // it must NEVER call /finalize.php. Idempotent: second call is a no-op.
         await expect(up.finalize()).resolves.toBe(true);
         await expect(up.finalize()).resolves.toBe(true);
-        const finals = calls.filter((c) => c.url.includes('/finalize.php'));
-        expect(finals.length).toBe(1); // single path — the page must not call finalize.php directly
+        expect(calls.filter((c) => c.url.includes('/finalize.php')).length).toBe(0); // retired path never invoked
         const uploads = calls.filter((c) => c.url.includes('/upload.php'));
         expect(uploads.length).toBe(2); // drained before finalize
     });
