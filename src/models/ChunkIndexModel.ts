@@ -94,6 +94,17 @@ export const MAX_SEQUENCE = 1000000;
 /** Gap scans above this many slots report truncated (bounded iteration). */
 export const MAX_GAP_SCAN = 10000;
 
+/**
+ * ROW28.1 / R4-RELEASE-RECOVERY-C: sanity ceiling for a VERIFIED chunk
+ * duration (ms). The trusted source is the HMAC-authenticated upload-host
+ * receipt — never client-declared duration. Realistic segments are ~5–30s;
+ * 10 minutes per chunk is already absurd for a single recorder segment.
+ * confirmReceipt/confirmChunk reject a receipt duration above this bound
+ * (fail-closed) so a corrupt or spoofed-but-signed oversized value cannot
+ * silently poison the timeline (cursor += duration_ms on read).
+ */
+export const MAX_DURATION_MS = 600000;
+
 export interface TimelineEntry {
     sequence: number;
     duration_ms: number;
@@ -264,6 +275,9 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
         if (dur !== null && dur <= 0) {
             throw Object.assign(new Error('BAD_INPUT: verified duration_ms must be positive'), { code: 'BAD_INPUT' });
         }
+        if (dur !== null && dur > MAX_DURATION_MS) {
+            throw Object.assign(new Error(`BAD_INPUT: verified duration_ms exceeds sanity ceiling (${MAX_DURATION_MS}ms)`), { code: 'BAD_INPUT' });
+        }
         const existing = await this.db.prepare(
             `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
         ).bind(competitionId, seq).first<Record<string, unknown> | null>();
@@ -354,6 +368,9 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
         const dur = asInt(receipt.duration_ms);
         if (!dur || dur <= 0) {
             throw Object.assign(new Error('BAD_INPUT: verified duration_ms must be positive'), { code: 'BAD_INPUT' });
+        }
+        if (dur > MAX_DURATION_MS) {
+            throw Object.assign(new Error(`BAD_INPUT: verified duration_ms exceeds sanity ceiling (${MAX_DURATION_MS}ms)`), { code: 'BAD_INPUT' });
         }
         const existing = await this.db.prepare(
             `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`

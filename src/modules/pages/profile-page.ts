@@ -41,11 +41,16 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
 
         // /profile (no username): resolve own profile from session
         if (!username) {
+            // ROW28.2 / SEC-11 + SEC-07: own-profile session resolution now
+            // matches the canonical auth source (src/middleware/auth.ts) —
+            // Bearer header OR the `sessionId` cookie ONLY. Raw `?token=`
+            // (SEC-11: leaks sessions into logs/browser history/Referer) and
+            // the legacy `session_id` cookie (SEC-07) are removed so the
+            // request fails closed. Public profiles (/profile/:username) never
+            // reach this branch; email-verification tokens live in verify-page.
             const sessionId =
                 c.req.header('Authorization')?.replace('Bearer ', '') ||
-                c.req.query('token') ||
-                getCookie(c, 'sessionId') ||
-                getCookie(c, 'session_id');
+                getCookie(c, 'sessionId');
             if (!sessionId) {
                 needsLogin = true;
             } else {
