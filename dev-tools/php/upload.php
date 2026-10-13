@@ -23,12 +23,15 @@
  * deletion, finalize.php, browser-declared durations.
  *
  * Configuration (existing hosting setup is preserved, nothing new forced):
- *   - if `upload-config.php` sits next to this file it is included as-is
- *     and may define $PLATFORM_BASE / $UPLOAD_SERVER_SECRET / $STORAGE_ROOT /
- *     $ALLOWED_ORIGINS (the names read below);
- *   - otherwise the `.env` the current upload.php already reads is used,
- *     with the SAME key names. `UPLOAD_SERVER_SECRET` must equal the
- *     Worker's value. No secret is ever printed or logged.
+ *   - `upload-config.php` next to this file (or the path in the
+ *     `DUELI_UPLOAD_CONFIG` environment variable) is a PHP file that
+ *     RETURNS an array with the keys `platform_url`, `upload_secret`,
+ *     `browser_origins` (list) and `storage_root`;
+ *   - `.env` is read ONLY as a fallback for values that array does not
+ *     provide (same key names as before). `upload_secret` must equal the
+ *     Worker's `UPLOAD_SERVER_SECRET`. No secret is ever printed or logged.
+ * A template without secrets ships as `upload-config.example.php`; the
+ * real `upload-config.php` is git-ignored and never committed.
  */
 
 declare(strict_types=1);
@@ -41,31 +44,70 @@ const RECEIPT_BACKOFF_US = 250000; // 250ms, 500ms between attempts
 
 /** Read one config value: upload-config.php (existing hosting file) first,
  *  then .env with the same names. Values are never echoed anywhere. */
+
 function upload_config(string $key, string $default = ''): string {
     static $vars = null;
-    static $loaded = false;
-    if (!$loaded) {
-        $loaded = true;
+
+    if ($vars === null) {
         $vars = [];
-        $configFile = __DIR__ . '/upload-config.php';
-        if (is_file($configFile)) {
-            // The existing hosting config is included unchanged; it may set
-            // the well-known variables below (they are read after include).
-            @include $configFile;
+
+        $configPath = getenv('DUELI_UPLOAD_CONFIG')
+            ?: __DIR__ . '/upload-config.php';
+
+        if (is_file($configPath)) {
+            $config = require $configPath;
+
+            if (is_array($config)) {
+                $vars['PLATFORM_BASE'] =
+                    $config['platform_url'] ?? '';
+
+                $vars['UPLOAD_SERVER_SECRET'] =
+                    $config['upload_secret'] ?? '';
+
+                $vars['STORAGE_ROOT'] =
+                    $config['storage_root'] ?? '';
+
+                if (isset($config['browser_origins'])
+                    && is_array($config['browser_origins'])) {
+                    $vars['ALLOWED_ORIGINS'] =
+                        implode(',', $config['browser_origins']);
+                }
+            }
         }
+
+        // .env fallback only for missing configuration values.
         $envFile = __DIR__ . '/.env';
+
         if (is_readable($envFile)) {
-            foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            foreach (file(
+                $envFile,
+                FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES
+            ) as $line) {
                 $line = trim($line);
-                if ($line === '' || $line[0] === '#' || !str_contains($line, '=')) continue;
+
+                if ($line === '' || $line[0] === '#'
+                    || !str_contains($line, '=')) {
+                    continue;
+                }
+
                 [$k, $v] = explode('=', $line, 2);
-                $vars[trim($k)] = trim(trim(trim($v), "\"'"));
+                $k = trim($k);
+                $v = trim(trim($v), "\"'");
+
+                if (!isset($vars[$k]) || $vars[$k] === '') {
+                    $vars[$k] = $v;
+                }
             }
         }
     }
-    $fromEnv = $vars[$key] ?? '';
-    return $fromEnv !== '' ? $fromEnv : $default;
+
+    $value = $vars[$key] ?? '';
+
+    return is_string($value) && $value !== ''
+        ? $value
+        : $default;
 }
+
 
 function respond(int $status, array $payload): void {
     http_response_code($status);

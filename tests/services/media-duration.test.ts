@@ -17,6 +17,7 @@ import {
 import {
     buildWebmObject, buildWebmWithBlockDurations, webmChunkWindow,
     buildMp4WithMovieDuration, buildFragmentedMp4, fragmentedMp4ChunkWindow,
+    buildRealTrunMp4,
 } from '../helpers/media-fixtures';
 
 describe('ROW28 D3 — WebM (MediaRecorder fragment shape)', () => {
@@ -154,6 +155,59 @@ describe('ROW28 D3 — chunk span, not session span (item 6)', () => {
         // the init's stale movie duration must never fill the gap.
         const zeroSpan = buildFragmentedMp4(90000, [{ baseTime: 450000, sampleDurations: [0] }], { movieDurationUnits: 900000 });
         expect(measureMp4DurationMs(zeroSpan)).toBeNull();
+    });
+});
+
+describe('ROW28 D3 — production regression: real trun flags 0x305 (first_sample_flags)', () => {
+    /**
+     * The production object used by the external acceptance agent carried
+     * `trun flags = 0x305` (data_offset 0x001 | first_sample_flags 0x004 |
+     * sample_duration 0x100 | sample_size 0x200). The parser previously
+     * looked for first_sample_flags under 0x000002, so it never skipped
+     * those 4 header bytes: every per-sample read shifted by 4 bytes and
+     * summed the SIZE fields as durations — reporting 1,145,457 ms for a
+     * ~14-second chunk. The real bit is 0x000004 (ffmpeg/GPAC/ISO). This
+     * fixture reproduces that byte layout and the parser must land on the
+     * true media span.
+     */
+    const TIMESCALE = 90000;
+    // 420 frames @3000 units (≈33.3ms) + one 23490-unit frame = 1,283,490
+    // units → exactly 14,261 ms at 90kHz.
+    const durations: number[] = [];
+    for (let i = 0; i < 420; i++) durations.push(3000);
+    durations.push(23490);
+    // Real fragment bytes carry large sample sizes; the shifted (buggy)
+    // parse summed exactly these instead of the durations.
+    const sizes = durations.map(() => 45_000);
+
+    it('16. flags 0x305 → 14,261 ms (parser runs the real byte layout)', () => {
+        const bytes = buildRealTrunMp4(90000, 0, durations, 0x305, { sampleSizes: sizes });
+        expect(measureMp4DurationMs(bytes)).toBe(14261);
+    });
+
+    it('17. flags 0x305 with a non-zero tfdt base still measures the chunk span', () => {
+        // 5s into the session: the span is the chunk's own, never absolute.
+        const bytes = buildRealTrunMp4(90000, 450000, durations, 0x305, { sampleSizes: sizes });
+        expect(measureMp4DurationMs(bytes)).toBe(14261);
+    });
+
+    it('18. the same media reads identically without the 0x004/0x200 fields', () => {
+        // Differential proof the flag handling is the fix: an equivalent
+        // 0x101 trun (data_offset + durations only) yields the same span,
+        // and the sizes are large enough that a 4-byte-shifted read could
+        // never accidentally land on 14,261 ms.
+        const bytes = buildRealTrunMp4(90000, 0, durations, 0x101);
+        expect(measureMp4DurationMs(bytes)).toBe(14261);
+    });
+
+    it('19. a shifted read would NOT produce 14,261 ms (guard against the old bug)', () => {
+        // If the parser skipped only the data_offset (the old 0x000002
+        // behaviour), the first duration read would be first_sample_flags
+        // and the rest would be size fields — a sum of millions of units.
+        const shifted = 0x02000000 + sizes.slice(0, -1).reduce((a, b) => a + b, 0);
+        expect(Math.round((shifted * 1000) / TIMESCALE)).toBeGreaterThan(200_000);
+        // The real parser, on the real bytes, lands on the true span.
+        expect(measureMp4DurationMs(buildRealTrunMp4(90000, 0, durations, 0x305, { sampleSizes: sizes }))).toBe(14261);
     });
 });
 

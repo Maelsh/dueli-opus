@@ -162,20 +162,36 @@ Contract implemented by the artifact:
 
 Deployment notes for the operator (nothing new is forced):
 
-- Configuration keeps the EXISTING hosting setup: `upload-config.php` is
-  included as-is when present (the artifact reads
-  `$PLATFORM_BASE` / `$UPLOAD_SERVER_SECRET` / `$STORAGE_ROOT` /
-  `$ALLOWED_ORIGINS` from it), otherwise the `.env` the current
-  `upload.php` already reads is used with the SAME key names. The
-  existing `storage/…` root, `stream.php` path and current recordings are
-  untouched; no file is trimmed, no secret or permission is changed by
-  this task.
+- **Configuration (owner's array form, preserved):** the artifact reads
+  `upload-config.php` as a PHP file that RETURNS an array with the keys
+  `platform_url`, `upload_secret`, `browser_origins` (list) and
+  `storage_root`; `DUELI_UPLOAD_CONFIG` may point the config at an
+  absolute private path outside the artifact directory. `.env` is read
+  ONLY as a fallback for values the array does not provide (same key
+  names as before). A template without secrets ships as
+  `dev-tools/php/upload-config.example.php`; the real
+  `upload-config.php` is git-ignored next to the artifact and must never
+  be committed. Arabic operator instructions live in
+  `dev-tools/php/README-AR.md` (kept aligned with this artifact's actual
+  responses: `{success:true,data:{state}}`, plain-message failures, and
+  the documented HTTP status table). The existing `storage/…` root,
+  `stream.php` path and current recordings are untouched; no file is
+  trimmed, no secret or permission is changed by this task.
 - `.env` (if used) is `chmod 600`, owner = the PHP user, never committed,
   printed or logged. `UPLOAD_SERVER_SECRET` must equal the Worker value;
   rotating it requires updating BOTH sides in the same window.
 - Requirements: PHP 8.0+ with `curl` + `hash`. `link()` (preferred) or the
   `flock` fallback — both standard on shared hosting.
 - After deploy: verify with §6 before reopening uploads.
+
+**Duration measurement note (ROW28 production fix):** the platform's MP4
+parser handles the real `trun` layout — `first_sample_flags` lives under
+`0x000004` (ffmpeg/GPAC/ISO), not `0x000002`. Mis-reading that bit shifts
+every per-sample read by 4 bytes and sums the sample SIZE fields as
+durations: a production fragment with `trun flags = 0x305` was reported
+as 1,145,457 ms before the fix and now measures its true span (regression
+tests in `tests/services/media-duration.test.ts` pin a 0x305 fixture at
+14,261 ms, and fail with the old bit).
 
 Generation fencing needs no extra PHP branch: a taken-over generation
 fails `verify` platform-side (`Stale lease generation`) before any byte
@@ -184,6 +200,7 @@ registered slot and the CURRENT lease generation (atomic subquery inside
 the critical UPDATE) — a stale publication is refused even when the lease
 was released between verify and receipt, and a replacement generation
 never drains.
+
 ## 4. Cutover sequencing (no unsafe window)
 
 There is **no** keyless/old-PHP-tolerant phase in the activation path.

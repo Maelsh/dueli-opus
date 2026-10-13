@@ -1,3 +1,11 @@
+## ROW28 hosting artifacts + production MP4 fix · فرع fix/row28-hosting-artifacts (من 19b686e = PR116 المدمج)
+
+- 🔧 نطاقَان في PR واحد، LOCAL T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/إنتاج/ROW30/تعديل D1 أو هجرات أو أسرار استضافة.
+- **النطاق أ — ملفات المالك (مُعتمدة كما هي):** `upload-config.php` يعيد **مصفوفة** (`platform_url`/`upload_secret`/`browser_origins`/`storage_root`) مع تجاوز `DUELI_UPLOAD_CONFIG` و`.env` يملأ الناقص فقط؛ مثال بلا أسرار + `README-AR.md` عربي. عُدِّل README ليطابق السلوك الفعلي للملف (شكل الرد، جدول حالات HTTP الحقيقي، DELETE بعد الحفظ، لا getID3/فحص ترويسات) دون تعديل PHP لمطابقة التوثيق؛ ملف المالك مُحافظ عليه. `upload-config.php` الحقيقي صار مُتجاهَلًا في Git (سر المضيف لا يُتبَّع أبدًا).
+- **النطاق ب — إصلاح MP4 الإنتاجي المؤكد:** `fragmentedDurationMs` كان يقرأ `first_sample_flags` بالبت `0x000002` والصحيح `0x000004` (ISO/ffmpeg/GPAC). مع `trun flags=0x305` كان الانزياح أربعة بايتات يجمع حقول **size** كأنها مدد (عيّنة الإنتاج: 1,145,457 ms بدل ~14 ثانية). الاختبار التنازلي الجديد (fixture ببنية حقيقية) يثبّت **14,261 ms**؛ إثبات red→green: القديم 582,827 ms ⇒ المُصلح 14,261 ms؛ وfixture تفريقي 0x101 بنفس المدى + حاجز يمنع Taxiff accidental.
+- **الأدلة:** PHP 8.3.30 CLI: `php -l` للملفات الثلاثة PASS؛ الجناح التنفيذي **42/42 PASS** (T0–T15) يشمل مصفوفة المالك تقود التدفق دون `.env` (T12)، CORS من `browser_origins` (T12b)، مصفوفة جزئية + fallback (T13)، غياب الإعداد ⇒ 503 مغلق (T14)، مسار خارجي عبر `DUELI_UPLOAD_CONFIG` (T15). TS: tsc نظيف؛ 100/100 مستهدفة (media-duration 22 منها 4 جديدة)؛ build exit 0؛ أي تغيير مسار (الجرد timestamp-only مُرجَع).
+- **المتبقي:** قبول الاستضافة الحقيقية (PHP منشور + سباق نظام الملفات) حسب §6 — غير مدّعى. ROW30 لم يبدأ (بحسب الخطة NEXT = صف 30، READY FOR LOCAL، ينتظر تحقق شرط الانتقال وموافقة المالك).
+
 ## ROW28 final REMEDIATION · بنود المالك 1–7 (PHP/القياس/التوليد) · نفس PR116 (فرع fix/row28-final-completion من 130e18b)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B على HEAD سابق داخل PR116 نفسها — REMOTE PENDING، ليست DONE. بلا دمج/نشر/بيئة إنتاج/PHP فعلي على المضيف/قواعد جديدة.
