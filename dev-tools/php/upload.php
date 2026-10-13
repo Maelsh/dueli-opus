@@ -23,12 +23,15 @@
  * deletion, finalize.php, browser-declared durations.
  *
  * Configuration (existing hosting setup is preserved, nothing new forced):
- *   - if `upload-config.php` sits next to this file it is included as-is
- *     and may define $PLATFORM_BASE / $UPLOAD_SERVER_SECRET / $STORAGE_ROOT /
- *     $ALLOWED_ORIGINS (the names read below);
- *   - otherwise the `.env` the current upload.php already reads is used,
- *     with the SAME key names. `UPLOAD_SERVER_SECRET` must equal the
- *     Worker's value. No secret is ever printed or logged.
+ *   - `upload-config.php` next to this file (or the path in the
+ *     `DUELI_UPLOAD_CONFIG` environment variable) is a PHP file that
+ *     RETURNS an array with the keys `platform_url`, `upload_secret`,
+ *     `browser_origins` (list) and `storage_root`;
+ *   - `.env` is read ONLY as a fallback for values that array does not
+ *     provide (same key names as before). `upload_secret` must equal the
+ *     Worker's `UPLOAD_SERVER_SECRET`. No secret is ever printed or logged.
+ * A template without secrets ships as `upload-config.example.php`; the
+ * real `upload-config.php` is git-ignored and never committed.
  */
 
 declare(strict_types=1);
