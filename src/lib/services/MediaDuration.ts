@@ -81,10 +81,25 @@ function idVintLength(b0: number): number {
 interface WebmScanState {
     /** TimecodeScale in NANOSECONDS per timecode unit (default 1ms). */
     timecodeScaleNs: number;
-    /** Highest absolute block end seen, in timecode units. */
-    maxEndUnits: number;
+    /**
+     * The media SPAN this object covers, in timecode units: MediaRecorder
+     * timeslices carry ABSOLUTE timestamps since the recording started, so
+     * the stored object's own duration is (last block end − first block
+     * start), never the absolute end (which grows with the session).
+     */
+    minBlockStartUnits: number | null;
+    maxBlockEndUnits: number;
     sawBlock: boolean;
     elements: number;
+}
+
+/** Record one block [start,end) pair into the span tracker. */
+function noteBlock(state: WebmScanState, start: number, end: number): void {
+    state.sawBlock = true;
+    if (state.minBlockStartUnits === null || start < state.minBlockStartUnits) {
+        state.minBlockStartUnits = start;
+    }
+    if (end > state.maxBlockEndUnits) state.maxBlockEndUnits = end;
 }
 
 /** Big-endian unsigned int over `len` bytes (leading zeros tolerated). */
@@ -153,9 +168,9 @@ function readBlockRelative(bytes: Uint8Array, start: number, limit: number): num
 function scanBlockLike(state: WebmScanState, bytes: Uint8Array, el: Element, clusterTs: number): void {
     const rel = readBlockRelative(bytes, el.contentStart, el.contentEnd);
     if (rel === null) return;
-    state.sawBlock = true;
-    const end = clusterTs + rel; // SimpleBlock carries no duration of its own
-    if (end > state.maxEndUnits) state.maxEndUnits = end;
+    // SimpleBlock carries no duration of its own: its end is its start
+    // (≤ one frame under the true end — the span tolerance).
+    noteBlock(state, clusterTs + rel, clusterTs + rel);
 }
 
 function scanCluster(state: WebmScanState, bytes: Uint8Array, cluster: Element): void {
@@ -189,9 +204,7 @@ function scanCluster(state: WebmScanState, bytes: Uint8Array, cluster: Element):
                 }
                 gpos = gchild.contentEnd;
             }
-            state.sawBlock = true;
-            const end = clusterTs + rel + dur;
-            if (end > state.maxEndUnits) state.maxEndUnits = end;
+            noteBlock(state, clusterTs + rel, clusterTs + rel + dur);
             pos = child.contentEnd;
         } else {
             pos = child.contentEnd;
@@ -235,16 +248,24 @@ function scanTopLevel(state: WebmScanState, bytes: Uint8Array, start: number, li
 }
 
 /**
- * Measure a WebM object (init-prepended fragment included) from its real
- * bytes. Returns milliseconds, or null when no block timestamp can be
- * verified (fail closed — never ready, never invented).
+ * Measure the media SPAN of a WebM object (init-prepended fragment
+ * included) from its real bytes: (last block end − first block start) in
+ * the object's own timecode units. MediaRecorder timeslices continue the
+ * session timeline, so a 10–15s chunk measures ~5s — never the absolute
+ * end timestamp. Returns milliseconds, or null when no block timestamp
+ * can be verified (fail closed — never ready, never invented).
  */
 export function measureWebmDurationMs(bytes: Uint8Array): number | null {
     if (bytes.length < 4) return null;
-    const state: WebmScanState = { timecodeScaleNs: 1_000_000, maxEndUnits: 0, sawBlock: false, elements: 0 };
+    const state: WebmScanState = {
+        timecodeScaleNs: 1_000_000, minBlockStartUnits: null, maxBlockEndUnits: 0,
+        sawBlock: false, elements: 0,
+    };
     scanTopLevel(state, bytes, 0, bytes.length);
-    if (!state.sawBlock || state.maxEndUnits <= 0) return null;
-    const durationMs = (state.maxEndUnits * state.timecodeScaleNs) / 1_000_000;
+    if (!state.sawBlock || state.minBlockStartUnits === null) return null;
+    const spanUnits = state.maxBlockEndUnits - state.minBlockStartUnits;
+    if (spanUnits <= 0) return null; // a single block has no measurable span
+    const durationMs = (spanUnits * state.timecodeScaleNs) / 1_000_000;
     if (!Number.isFinite(durationMs) || durationMs <= 0) return null;
     return Math.round(durationMs);
 }
@@ -353,9 +374,15 @@ function trackTimescales(bytes: Uint8Array, moov: Mp4Box): Map<number, number> {
     return map;
 }
 
-/** moof-walk: max fragment end (ms) from tfdt base + trun sample durations. */
+/**
+ * moof-walk: the SPAN the object's fragments cover, per track — tfdt base
+ * times are absolute since the start of the fragmented stream, so the
+ * chunk's own duration is (last fragment end − first fragment base), never
+ * the absolute end. MP4 MediaRecorder chunks keep this absolute timeline,
+ * so the span must be computed, not read from a movie header.
+ */
 function fragmentedDurationMs(bytes: Uint8Array, moofs: Mp4Box[], tracks: Map<number, number>): number | null {
-    let maxMs: number | null = null;
+    const spanByTrack = new Map<number, { minBase: number; maxEnd: number }>();
     for (const moof of moofs) {
         for (const traf of findBoxes(bytes, moof.bodyStart, moof.bodyEnd, 'traf')) {
             let trackId: number | null = null;
@@ -393,11 +420,20 @@ function fragmentedDurationMs(bytes: Uint8Array, moofs: Mp4Box[], tracks: Map<nu
             if (trackId === null) continue;
             const timescale = tracks.get(trackId);
             if (!timescale || !sawSamples) continue;
-            const endMs = ((baseTime + sampleSum) * 1000) / timescale;
-            if (endMs > (maxMs ?? 0)) maxMs = Math.round(endMs);
+            const cur = spanByTrack.get(trackId) ?? { minBase: baseTime, maxEnd: 0 };
+            cur.minBase = Math.min(cur.minBase, baseTime);
+            cur.maxEnd = Math.max(cur.maxEnd, baseTime + sampleSum);
+            spanByTrack.set(trackId, cur);
         }
     }
-    return maxMs;
+    let maxSpanMs: number | null = null;
+    for (const [trackId, span] of spanByTrack) {
+        const timescale = tracks.get(trackId);
+        if (!timescale) continue;
+        const spanMs = ((span.maxEnd - span.minBase) * 1000) / timescale;
+        if (spanMs > (maxSpanMs ?? 0)) maxSpanMs = Math.round(spanMs);
+    }
+    return maxSpanMs;
 }
 /** All sibling boxes in [start,end), in document order. */
 function childBoxes(bytes: Uint8Array, start: number, end: number): Mp4Box[] {
@@ -414,25 +450,33 @@ function findBoxes(bytes: Uint8Array, start: number, end: number, type: string):
 }
 
 /**
- * Measure an MP4 object from its real bytes: finalized movie duration
- * (mvhd) → movie-extends duration (mehd) → fragmented moof timeline.
- * Returns null when nothing is verifiable (fail closed).
+ * Measure an MP4 object from its real bytes. A FRAGMENTED object (moof
+ * boxes present — every init-prepended MediaRecorder chunk) is measured
+ * ONLY from its own moof/tfdt/trun timeline: the prepended init's
+ * mvhd/mehd describe the whole (growing) movie and would over-report
+ * every later chunk. A non-fragmented object falls back to the movie
+ * header (mvhd → mehd). Nothing verifiable → null (fail closed).
  */
 export function measureMp4DurationMs(bytes: Uint8Array): number | null {
     const movie = findBoxes(bytes, 0, bytes.length, 'moov')[0] ?? null;
     const moofs = findBoxes(bytes, 0, bytes.length, 'moof');
+    if (moofs.length > 0) {
+        if (movie) {
+            const tracks = trackTimescales(bytes, movie);
+            if (tracks.size > 0) {
+                const fragmented = fragmentedDurationMs(bytes, moofs, tracks);
+                if (fragmented !== null && fragmented > 0) return fragmented;
+            }
+        }
+        // moof present but not derivable: fail closed — a stale movie
+        // header must NEVER stand in for the fragment's own span.
+        return null;
+    }
     if (movie) {
         const finalized = movieDurationMs(bytes, movie);
         if (finalized !== null && finalized > 0) return finalized;
         const extendsDur = movieExtendsDurationMs(bytes, movie);
         if (extendsDur !== null && extendsDur > 0) return extendsDur;
-    }
-    if (moofs.length > 0 && movie) {
-        const tracks = trackTimescales(bytes, movie);
-        if (tracks.size > 0) {
-            const fragmented = fragmentedDurationMs(bytes, moofs, tracks);
-            if (fragmented !== null && fragmented > 0) return fragmented;
-        }
     }
     return null;
 }

@@ -15,8 +15,8 @@ import {
     measureStoredChunkDuration, MAX_MEASURE_BYTES,
 } from '../../src/lib/services/MediaDuration';
 import {
-    buildWebmObject, buildWebmWithBlockDurations,
-    buildMp4WithMovieDuration, buildFragmentedMp4,
+    buildWebmObject, buildWebmWithBlockDurations, webmChunkWindow,
+    buildMp4WithMovieDuration, buildFragmentedMp4, fragmentedMp4ChunkWindow,
 } from '../helpers/media-fixtures';
 
 describe('ROW28 D3 — WebM (MediaRecorder fragment shape)', () => {
@@ -88,6 +88,20 @@ describe('ROW28 D3 — WebM (MediaRecorder fragment shape)', () => {
         // Garbage after a valid header must not yield a duration.
         expect(measureWebmDurationMs(buildWebmObject([[0, []]]))).toBeNull();
     });
+
+    it('8b. CONSECUTIVE MediaRecorder chunks measure their own span, not the session', () => {
+        // The stored object is init + THIS chunk's clusters, whose timestamps
+        // are absolute since the recording started: the span is what counts.
+        const first = measureWebmDurationMs(webmChunkWindow(0, 5000)) as number;
+        expect(first).toBeGreaterThanOrEqual(5000 - 33);
+        expect(first).toBeLessThanOrEqual(5000);
+        const second = measureWebmDurationMs(webmChunkWindow(5000, 10000)) as number;
+        expect(second).toBeGreaterThanOrEqual(5000 - 33);
+        expect(second).toBeLessThanOrEqual(5000); // NOT 10000 — the session end
+        const third = measureWebmDurationMs(webmChunkWindow(10000, 15000)) as number;
+        expect(third).toBeGreaterThanOrEqual(5000 - 33);
+        expect(third).toBeLessThanOrEqual(15000);
+    });
 });
 
 describe('ROW28 D3 — MP4 (supported behavior, fail closed otherwise)', () => {
@@ -114,6 +128,32 @@ describe('ROW28 D3 — MP4 (supported behavior, fail closed otherwise)', () => {
         const webm = buildWebmObject([[0, [0, 1000]]]);
         expect(measureDurationMs(webm, 'webm')).toBe(1000);
         expect(measureDurationMs(webm, 'mp4')).toBeNull(); // wrong parser, fail closed
+    });
+});
+
+describe('ROW28 D3 — chunk span, not session span (item 6)', () => {
+    it('13. an MP4 later chunk measures its own tfdt/trun window', () => {
+        // Init prepended (stale mvhd = whole movie) + this chunk's moof at
+        // an absolute tfdt base: the span is the ONLY honest measurement.
+        const chunk = fragmentedMp4ChunkWindow(90000, 450000, [150000, 150000, 150000]);
+        expect(measureMp4DurationMs(chunk)).toBe(5000);
+    });
+
+    it('14. the prepended init mvhd/mehd NEVER stands in for a later chunk', () => {
+        // The init claims a 900000-unit (900s) movie; the fragment covers
+        // 3s. The stale movie duration must never leak into the measurement.
+        const chunk = fragmentedMp4ChunkWindow(90000, 180000, [90000, 90000, 90000], 900000);
+        expect(measureMp4DurationMs(chunk)).toBe(3000);
+        // A later chunk in the same session: same 3s span, different base.
+        const later = fragmentedMp4ChunkWindow(90000, 720000, [90000, 90000, 90000], 900000);
+        expect(measureMp4DurationMs(later)).toBe(3000);
+    });
+
+    it('15. moof without a derivable timeline → null (no stale-header fallback)', () => {
+        // A moof whose fragment sums to zero duration cannot be verified;
+        // the init's stale movie duration must never fill the gap.
+        const zeroSpan = buildFragmentedMp4(90000, [{ baseTime: 450000, sampleDurations: [0] }], { movieDurationUnits: 900000 });
+        expect(measureMp4DurationMs(zeroSpan)).toBeNull();
     });
 });
 

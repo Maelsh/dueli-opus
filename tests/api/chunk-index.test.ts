@@ -137,8 +137,18 @@ describe('R4-CHUNK-INDEX-1 chunk metadata (model)', () => {
         const again = await model.confirmChunk(50, 1, { duration_ms: 10000 });
         expect(again.state).toBe('ready');
         await model.recordChunk(50, chunk(2), 1);
-        await model.failChunk(50, 2);
+        // ROW28 item 5: the failure mutation is bound to the registered
+        // generation AND the current lease generation (atomic guard).
+        await db.prepare(
+            `INSERT INTO recording_leases (competition_id, holder_hash, generation, acquired_at, last_heartbeat_at, ttl_seconds, released_at)
+             VALUES (50, 'holder-1', 1, datetime('now'), datetime('now'), 45, NULL)`
+        ).run();
+        await model.failChunk(50, 2, { lease_generation: 1 });
         await expect(model.confirmChunk(50, 2, { duration_ms: 5000 })).rejects.toMatchObject({ code: 'FINAL' });
+        // A superseded generation (lease row moved to 2) is refused before any write.
+        await db.prepare('UPDATE recording_leases SET generation = 2 WHERE competition_id = 50').run();
+        await model.recordChunk(50, chunk(3), 1);
+        await expect(model.failChunk(50, 3, { lease_generation: 1 })).rejects.toMatchObject({ code: 'STALE_GENERATION' });
         await expect(model.confirmChunk(50, 99, { duration_ms: 5000 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
         await expect(model.confirmChunk(50, 1, { duration_ms: -5 })).rejects.toMatchObject({ code: 'BAD_INPUT' });
     });

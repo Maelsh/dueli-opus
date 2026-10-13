@@ -444,12 +444,32 @@ chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, 
 
         const model = new ChunkIndexModel(DB);
         if (status === 'failed') {
+            // The failure mutation is bound exactly like the stored one:
+            // the registered slot, its generation and its object path.
             try {
-                const row = await model.failChunk(competitionId, sequence);
+                const row = await model.failChunk(competitionId, sequence, {
+                    lease_generation: receiptGeneration, object_path: objectPath,
+                });
                 return c.json({ success: true, data: { state: row.state, sequence } });
             } catch (error: unknown) {
-                if ((error as { code?: string })?.code === 'NOT_FOUND') {
+                const code = (error as { code?: string })?.code;
+                if (code === 'NOT_FOUND') {
                     return c.json({ success: false, error: 'No such chunk slot' }, 404);
+                }
+                if (code === 'STALE_GENERATION') {
+                    return c.json({ success: false, error: 'Receipt generation does not own the registered slot', code: 'stale_generation' }, 409);
+                }
+                if (code === 'BAD_OBJECT') {
+                    return c.json({ success: false, error: 'Receipt object path does not match the registered slot', code: 'object_mismatch' }, 409);
+                }
+                if (code === 'FINAL') {
+                    return c.json({ success: false, error: 'Confirmed chunks are never demoted', code: 'final' }, 409);
+                }
+                if (code === 'BAD_INPUT') {
+                    return c.json({ success: false, error: (error as Error).message, code: 'bad_input' }, 400);
+                }
+                if (leaseUnavailable(error)) {
+                    return c.json({ success: false, error: 'Chunk index store unavailable', code: 'index_unavailable' }, 503);
                 }
                 throw error;
             }
@@ -514,10 +534,19 @@ chunksRoutes.post('/receipt', verifyUploadServerHmac, verifyUploadServerOrigin, 
                     if (code === 'CONFLICT' || code === 'FINAL') {
                         return c.json({ success: false, error: 'Conflicting facts for this sequence', code }, 409);
                     }
+                    if (code === 'STALE_GENERATION') {
+                        // A takeover landed after the pre-check (during the
+                        // measurement fetch): the DB refused the write, the
+                        // slot stays uploaded, nothing was published.
+                        return c.json({ success: false, error: 'Lease generation changed before publication', code: 'stale_generation' }, 409);
+                    }
                     if (code === 'BAD_INPUT') {
                         // A measured-but-insane duration (ceiling) fails
                         // closed: the slot stays uploaded, never ready.
                         return c.json({ success: true, data: { state: 'uploaded', sequence, duration_ms: null } });
+                    }
+                    if (leaseUnavailable(error)) {
+                        return c.json({ success: false, error: 'Chunk index store unavailable', code: 'index_unavailable' }, 503);
                     }
                     throw error;
                 }

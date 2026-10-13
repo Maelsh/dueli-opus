@@ -151,6 +151,20 @@ export function buildWebmWithBlockDurations(
     return new Uint8Array([...header, ...element(ID_SEGMENT, [...info, ...tracks, ...clusterBytes])]);
 }
 
+/**
+ * A REAL MediaRecorder timeslice: the init (header+segment start+info+
+ * tracks, prepended by the host to every fragment) followed by THIS
+ * chunk's clusters. MediaRecorder continues the session timeline, so the
+ * clusters carry ABSOLUTE timestamps [startMs..endMs] — the stored
+ * object's own duration is the span, not the absolute end.
+ */
+export function webmChunkWindow(startMs: number, endMs: number, frameMs = 33): Uint8Array {
+    const blocks: number[] = [];
+    for (let t = startMs; t <= endMs; t += frameMs) blocks.push(t);
+    if (blocks[blocks.length - 1] !== endMs) blocks.push(endMs);
+    return buildWebmObject([[startMs, blocks]]);
+}
+
 // ---------------------------------------------------------------------------
 // MP4 primitives
 // ---------------------------------------------------------------------------
@@ -190,11 +204,14 @@ export function buildMp4WithMovieDuration(timescale: number, durationUnits: numb
 export function buildFragmentedMp4(
     mediaTimescale: number,
     fragments: Array<{ baseTime: number; sampleDurations: number[] }>,
+    opts: { movieDurationUnits?: number } = {},
 ): Uint8Array {
     const tkhd = fullBox('tkhd', 0, 0, [...be32(0), ...be32(0), ...be32(1), ...be32(0), ...be32(0)]);
     const mdhd = fullBox('mdhd', 0, 0, [...be32(0), ...be32(0), ...be32(mediaTimescale), ...be32(0)]);
     const trak = box('trak', [...tkhd, ...box('mdia', [...mdhd])]);
-    const mvhd = fullBox('mvhd', 0, 0, [...be32(0), ...be32(0), ...be32(1000), ...be32(0)]);
+    // A prepended init carries the WHOLE movie's duration (it grows as the
+    // session continues) — a stale init must never be a chunk's duration.
+    const mvhd = fullBox('mvhd', 0, 0, [...be32(0), ...be32(0), ...be32(1000), ...be32(opts.movieDurationUnits ?? 0)]);
     const moov = box('moov', [...mvhd, ...trak]);
     let bytes: number[] = [...box('ftyp', [0x69, 0x73, 0x6f, 0x6d]), ...moov];
     for (const frag of fragments) {
@@ -208,4 +225,19 @@ export function buildFragmentedMp4(
         bytes = [...bytes, ...box('moof', [...traf]), ...box('mdat', [0x00])];
     }
     return new Uint8Array(bytes);
+}
+
+/**
+ * A real MP4 MediaRecorder timeslice object: the init (moov, prepended by
+ * the host) + THIS chunk's moof fragment at an absolute tfdt base.
+ */
+export function fragmentedMp4ChunkWindow(
+    mediaTimescale: number,
+    baseUnits: number,
+    sampleDurations: number[],
+    staleMovieDurationUnits = 900000,
+): Uint8Array {
+    return buildFragmentedMp4(mediaTimescale, [{ baseTime: baseUnits, sampleDurations }], {
+        movieDurationUnits: staleMovieDurationUnits,
+    });
 }

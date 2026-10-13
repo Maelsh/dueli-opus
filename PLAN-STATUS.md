@@ -1,3 +1,15 @@
+## ROW28 final REMEDIATION · بنود المالك 1–7 (PHP/القياس/التوليد) · نفس PR116 (فرع fix/row28-final-completion من 130e18b)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B على HEAD سابق داخل PR116 نفسها — REMOTE PENDING، ليست DONE. بلا دمج/نشر/بيئة إنتاج/PHP فعلي على المضيف/قواعد جديدة.
+- **(1) اتصال PHP:** عيب التوقيع مُصلح — canonical = `METHOD\nPATHNAME (بدون query)\nts\nnonce\nsha256(body)` مطابقًا تمامًا لـ`verifyUploadServerHmac`؛ الـquery يبقى في URL الطلب فقط. الملف الكامل `dev-tools/php/upload.php` مُختبَر تنفيذيًا كما هو (`php dev-tools/php/tests/run-tests.php` مقابل مرآة عقد الـWorker): PHP 8.3 CLI، lint PASS، 34/34 PASS — تشمل الترتيب، keyless→400، فقدان verify→إغلاق مغلق، توقيع pathname-only مقبول وquery-inclusive مرفوض (العيب القديم مُثبت بالطرفين)، تزامن مختلف البايتات (200+409، الأصل لا يُستبدل)، إعادة متطابقة آمنة، فشل receipt بعد الحفظ (لا نجاح كاذب + استكمال idempotent دون استبدال)، تخلّف قبل receipt مرفوض. الترويسات: HMAC + Origin (أصل المنصة: ضمن allowlist ويساوي Host ⇒ csrfProtection يمر) + X-CSRF-Token، بلا تعطيل أي حماية.
+- **(2) الربط:** competition/sequence/extension/object_path تُطابق binding التحقق قبل أي تخزين أو receipt؛ الإيصال يصدّر الجيل والمسار والمنصة تعيد ربطهما.
+- **(3) حفظحصري:** ملف مكتمـل ثم `link()` (O_EXCL)؛ احتياطي `flock` بملف قفل ثابت لا يُحذف تحت التزامن؛ كل نتيجة حفظ مفحوصة؛ مطابق→idempotent، مختلف→409.
+- **(4) تأكيد:** نجاح يتطلب HTTP 2xx + success + state معروف؛ retry محدود (3) + مسار idempotent موثق؛ لا reverify لمفتاح مستهلك ولا انتظار لا نهائي.
+- **(5) التوليد عند النشر:** التأكيد والفشل يربطان الجيل الحالي داخل الـUPDATE الشرطي (subquery على recording_leases + فحص changes) — القاعدة هي الحاكم لا القراءة المسبقة؛ جيل مستبدل لا يمر حتى بعد الإنهاء؛ ready لا يُنزل.
+- **(6) قياس المدة:** span القطعة نفسها (WebM min/max، MP4 tfdt/trun per-track)؛ mvhd/mehd من init قديم لا يُستخدم أبدًا لقطعة لاحقة؛ fixtures منزمنة 5–10ث/10–15ث ⇒ ~5ث لكل منها؛ غير قابل للإثبات ⇒ uploaded.
+- **(7) الاستضافة:** upload-config.php والإعداد الحالي محفوظان (يُقرأ أولاً)، ثم .env بالأسماء نفسها؛ STORAGE_ROOT/stream.php/التسجيلـات لم تُمس؛ لا تقليم ملفات أو تغيير سر/صلاحيات.
+- **الأدلة:** `npm test` 1683/1689 (الـ6 = `quality-gate-poll` تتطلب `jq` محليًا غير موجود على هذا الجهاز — بيئة سابقة لا صلة لها)؛ tsp منفّذ ✓؛ `npm run build` exit 0؛ any 66 = الأساس؛ الجرد بلا تغيير مسار؛ PHP Suite 34/34 + lint. **المتبقي:** قبول PHP الحقيقي على المضيف (سباق التخزين الفعلي + التسليم) حسب §6 من الـrunbook.
+
 ## ROW28 final completion · D1–D7 defects · فرع fix/row28-final-completion (من 130e18b = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/ترحيل بعيد/كتابة إنتاجية/PHP حقيقي/أسرار/تغيير خارج النطاق. بنية عميل الوكيل السابقة حُفظت (‎D6) وأُكملت آخر ثابتين قديمين في video-compositor.test.ts.
