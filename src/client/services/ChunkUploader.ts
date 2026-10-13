@@ -27,12 +27,6 @@ interface UploadResponse {
     chunk?: string;
 }
 
-interface FinalizeResponse {
-    success: boolean;
-    error?: string;
-    video_url?: string;
-}
-
 interface PlaylistEntry {
     index?: number;
     chunk_number?: number;
@@ -623,41 +617,30 @@ export class ChunkUploader {
         if (this.finalized && !force) {
             return this.finalizeResult;
         }
-        // R4-RELEASE-RECOVERY-C: a fenced-out session must never trigger the
-        // merge; the secure activation path (D1 index + receipts) does not
-        // depend on finalize.php at all. This client trigger is kept only
-        // for the dual-write era and is retired at the row-30 cutover.
+        // ROW28 Task B / R4-RELEASE-RECOVERY-C: the legacy server finalizer
+        // (finalize.php: unauthenticated competition_id → shell ffmpeg-static
+        // against playlist.m3u8 → merge → DELETES chunk_*.webm/metadata/
+        // playlist, wildcard CORS, no auth) is RETIRED from the secure
+        // activation path. There is NO server FFmpeg, merge, transcode or chunk
+        // deletion. Finalization is now the platform-owned, authenticated D1
+        // marker: each chunk reaching `ready` via its HMAC receipt advances
+        // recording_finals. This client method therefore only DRAINS the upload
+        // pipeline (ensuring every receipt is posted through the secure path) —
+        // it performs no server merge and fabricates no vod_url/success.
         if (this.leaseMode === 'enforced' && !this.leaseActive) {
             debugLog('[ChunkUploader] Finalize refused (lease lost)');
             return false;
         }
-        // Wait for pending uploads
+        // Wait for pending uploads (each posts its own HMAC receipt).
         await this.waitForUploads();
 
-        try {
-            const response = await fetch(`${this.config.serverUrl}/finalize.php`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    competition_id: this.config.competitionId,
-                    extension: this.extension
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Finalize failed: ${response.status}`);
-            }
-
-            const result: FinalizeResponse = await response.json();
-            debugLog('[ChunkUploader] Finalization triggered:', result);
-            this.finalized = true;
-            this.finalizeResult = result.success === true;
-            return this.finalizeResult;
-        } catch (error) {
-            console.error('[ChunkUploader] Failed to finalize:', error);
-            this.config.onError?.(error as Error);
-            return false;
-        }
+        // The authoritative final marker is derived server-side from receipts;
+        // the client reports only that its upload pipeline drained while the
+        // lease was still held. No finalize.php call, no fabricated vod_url.
+        this.finalized = true;
+        this.finalizeResult = this.leaseMode !== 'enforced' || this.leaseActive;
+        debugLog('[ChunkUploader] Upload pipeline drained; server-side final marker derives from receipts (legacy finalize.php retired)');
+        return this.finalizeResult;
     }
 
     /**

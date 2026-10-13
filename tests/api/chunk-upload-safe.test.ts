@@ -10,9 +10,12 @@
  *  B. verify: atomic single-use consume (double-verify → one valid),
  *     stale generation rejected after takeover, expired/unknown/legacy
  *     keys rejected, drain-after-release still verifies while unexpired.
- *  C. receipts (HMAC envelope): stored+duration → ready; stored without
- *     duration → uploaded facts kept; failed → terminal; divergent bytes →
- *     conflict (never overwrite); unauthenticated calls rejected.
+ *  C. receipts (HMAC envelope): facts-only contract — a declared duration
+ *     NEVER publishes ready; the platform measures the real stored bytes
+ *     (fetch double) and publishes ready from the measurement; unverifiable
+ *     → uploaded (fail closed); wrong/missing generation, unregistered
+ *     sequence (no fabricated slot), wrong object, divergent bytes,
+ *     takeover races and idempotent replay are all covered below.
  *  D. PHP-harness order: the documented upload.php flow (register → upload
  *     → verify → save → DELETE → receipt) driven against these routes with
  *     an in-test host double — incl. failure-without-DELETE (re-register
@@ -29,6 +32,8 @@ import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
 import { ChunkIndexModel, MAX_DURATION_MS } from '../../src/models/ChunkIndexModel';
 import { mergePlaylistWithIndex } from '../../src/lib/services/ChunkIndexPlaylist';
+import { buildWebmObject } from '../helpers/media-fixtures';
+import type { D1Database } from '@cloudflare/workers-types';
 
 const SECRET = 'safe28-test-upload-secret';
 const ORIGIN = 'https://maelshpro.com';
@@ -47,6 +52,17 @@ function authed(token: string | undefined, method = 'GET', body?: unknown) {
 }
 
 let nonceSeq = 0;
+// ROW28 Task A: the upload host binds each receipt to the lease generation it
+// registered/verified under (identity binding, echoed from /register's
+// data.lease_generation). Within one upload session that generation is stable,
+// so acquire() records it and the receipt() helper echoes it — exactly as the
+// real PHP host does. Tests that exercise takeover/replay set it explicitly.
+let currentGen: number | null = null;
+/** The object path the last register() bound (echoed by the host receipt). */
+let lastRegisteredPath: string | null = null;
+/** stream.php double for the platform's server-side duration measurement. */
+let streamObject: Uint8Array | (() => Uint8Array | Promise<Uint8Array>) | null = null;
+const realFetch = globalThis.fetch;
 const freshNonce = () => `safe28-${++nonceSeq}-${Date.now()}`;
 const canonical = (method: string, path: string, ts: string, nonce: string, body = '') =>
     `${method}\n${path}\n${ts}\n${nonce}\n${createHash('sha256').update(body).digest('hex')}`;
@@ -108,22 +124,57 @@ async function seedComp(db: SqliteD1, id: number, status: string, opponentId: nu
 async function acquire(db: SqliteD1, compId: number, nonce: string, token = 'sess-1') {
     const res = await app.request('/api/chunks/lease/acquire', authed(token, 'POST', { competition_id: compId, holder_nonce: nonce }), env(db));
     expect(res.status).toBe(200);
-    return ((await res.json()) as any).data.generation as number;
+    const generation = ((await res.json()) as any).data.generation as number;
+    currentGen = generation; // the host binds subsequent receipts to this generation
+    return generation;
 }
 async function register(db: SqliteD1, compId: number, seq: number, token = 'sess-1', ext = 'mp4') {
-    return app.request('/api/chunks/register', authed(token, 'POST', { competition_id: compId, chunk_index: seq, extension: ext }), env(db));
+    const res = await app.request('/api/chunks/register', authed(token, 'POST', { competition_id: compId, chunk_index: seq, extension: ext }), env(db));
+    const body: any = await res.clone().json().catch(() => null);
+    if (res.status === 200 && body?.data?.object_path) lastRegisteredPath = body.data.object_path as string;
+    return res;
 }
 async function verifyKey(db: SqliteD1, key: string) {
     const { headers } = hmacGet('/api/chunks/verify');
     const res = await app.request(`/api/chunks/verify?key=${encodeURIComponent(key)}`, { headers }, env(db));
-    return res.json() as Promise<{ valid: boolean; error?: string; data?: any }>;
+    return res.json() as Promise<{ valid: boolean; error?: string; data: any }>;
 }
 async function receipt(db: SqliteD1, body: Record<string, unknown>) {
-    const { init } = hmacPost('/api/chunks/receipt', body);
+    // Bind to the generation acquired this session and echo the registered
+    // object path (the verify binding), exactly as the real PHP host does —
+    // unless the caller overrides them explicitly (takeover/replay/wrong-
+    // object tests pass specific/absent values).
+    const payload: Record<string, unknown> = { ...body };
+    if (payload.lease_generation === undefined && currentGen !== null) {
+        payload.lease_generation = currentGen;
+    }
+    if (payload.object_path === undefined && lastRegisteredPath !== null) {
+        payload.object_path = lastRegisteredPath;
+    }
+    const { init } = hmacPost('/api/chunks/receipt', payload);
     return app.request('/api/chunks/receipt', init, env(db));
 }
 
-beforeEach(() => { nonceSeq = 0; });
+/** The upload-host double for stream.php (the bytes duration is measured from). */
+function serveStoredObject(bytes: Uint8Array | null): void {
+    streamObject = bytes;
+}
+
+beforeEach(() => {
+    nonceSeq = 0; currentGen = null; lastRegisteredPath = null; streamObject = null;
+    // The platform measures the stored object via stream.php; anything the
+    // test does not serve behaves like an unreachable host (fail closed).
+    // A FUNCTION may stand in for the bytes to race the measurement.
+    (globalThis as any).fetch = async (url: any, init?: any) => {
+        if (String(url).includes('/stream.php?path=')) {
+            if (streamObject === null) throw new Error('test double: stored object unavailable');
+            if (typeof streamObject === 'function') return new Response(await streamObject());
+            return new Response(streamObject);
+        }
+        return realFetch(url, init);
+    };
+});
+afterEach(() => { globalThis.fetch = realFetch; });
 
 describe('R4-CHUNK-UPLOAD-SAFE-1 register (mandatory bound keys)', () => {
     let db: SqliteD1;
@@ -337,16 +388,63 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 receipts (verified confirmation)', () => {
         expect(forged.status).toBe(403);
     });
 
-    it('12. stored + measured duration → ready; without → uploaded facts kept', async () => {
+    it('11b. HMAC canonical rule: pathname only — query-inclusive is rejected', async () => {
+        // The Worker canonicals METHOD\nPATHNAME\n... (src/modules/api/chunks/routes.ts
+        // verifyUploadServerHmac: `new URL(c.req.url).pathname`). The upload
+        // host signs pathname-only while keeping the query in the request
+        // URL; a signature computed over path+query (the historical PHP bug)
+        // must be rejected here — this locks the contract the real PHP is
+        // tested against in dev-tools/php/tests.
         await acquire(db, 70, 'a1b2c3d4');
-        await register(db, 70, 1);
+        const key = (((await (await register(db, 70, 1)).json()) as any).data.chunk_key) as string;
+        const path = '/api/chunks/verify';
+        const body = '';
+        const call = async (signedPath: string) => {
+            const ts = String(Date.now());
+            const nonce = freshNonce();
+            const canonical = `${'GET'}\n${signedPath}\n${ts}\n${nonce}\n${createHash('sha256').update(body).digest('hex')}`;
+            const signature = createHmac('sha256', SECRET).update(canonical).digest('hex');
+            return app.request(
+                `/api/chunks/verify?key=${encodeURIComponent(key)}`,
+                { method: 'GET', headers: { 'X-Signature': signature, 'X-Timestamp': ts, 'X-Nonce': nonce, Origin: ORIGIN } },
+                env(db),
+            );
+        };
+        // Pathname-only: accepted (the key may then be validated/consumed).
+        await call(path);
+        await register(db, 70, 2); // fresh key (the previous verify consumed it)
+        const key2 = (((await (await register(db, 70, 2)).json()) as any).data.chunk_key) as string;
+        const ts = String(Date.now());
+        const nonce = freshNonce();
+        const bogus = createHmac('sha256', SECRET)
+            .update(`GET\n/api/chunks/verify?key=${key2}\n${ts}\n${nonce}\n${createHash('sha256').update(body).digest('hex')}`)
+            .digest('hex');
+        const rejected = await app.request(
+            `/api/chunks/verify?key=${encodeURIComponent(key2)}`,
+            { method: 'GET', headers: { 'X-Signature': bogus, 'X-Timestamp': ts, 'X-Nonce': nonce, Origin: ORIGIN } },
+            env(db),
+        );
+        expect(rejected.status).toBe(403);
+        expect(((await rejected.json()) as any).error).toBe('Invalid upload signature');
+    });
+
+    it('12. declared duration never publishes ready; platform measurement does', async () => {
+        await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 1, 'sess-1', 'webm'); // the registered container drives the measurement parser
+        // Facts-only receipt with an unreachable host: stays uploaded.
         const noDur = await receipt(db, { competition_id: 70, sequence: 1, status: 'stored', bytes: 4096, object_hash: 'h1' });
         expect(noDur.status).toBe(200);
         expect(((await noDur.json()) as any).data.state).toBe('uploaded'); // never ready without measurement
-        const withDur = await receipt(db, { competition_id: 70, sequence: 1, status: 'stored', bytes: 4096, object_hash: 'h1', duration_ms: 8000 });
-        expect(((await withDur.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 8000 });
+        // A DECLARED duration_ms in the body is not part of the contract and
+        // must never publish ready (ROW28 D3).
+        const declared = await receipt(db, { competition_id: 70, sequence: 1, status: 'stored', bytes: 4096, object_hash: 'h1', duration_ms: 8000 });
+        expect(((await declared.json()) as any).data.state).toBe('uploaded');
+        // Server-side measurement of the REAL stored bytes publishes ready.
+        serveStoredObject(buildWebmObject([[0, [0]], [1000, [0]], [2000, [0]], [3000, [0]], [4000, [0]], [5000, [0]]]));
+        const withDur = await receipt(db, { competition_id: 70, sequence: 1, status: 'stored', bytes: 4096, object_hash: 'h1' });
+        expect(((await withDur.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 5000 });
         const model = new ChunkIndexModel(db as unknown as D1Database);
-        expect((await model.listOrdered(70))[0].duration_ms).toBe(8000); // verified, not declared
+        expect((await model.listOrdered(70))[0].duration_ms).toBe(5000); // measured, not declared
     });
 
     it('13. failed receipt marks terminal; divergent bytes conflict (never overwrite)', async () => {
@@ -354,19 +452,28 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 receipts (verified confirmation)', () => {
         await register(db, 70, 4);
         const failed = await receipt(db, { competition_id: 70, sequence: 4, status: 'failed', error: 'disk full' });
         expect(((await failed.json()) as any).data.state).toBe('failed');
-        const late = await receipt(db, { competition_id: 70, sequence: 4, status: 'stored', duration_ms: 5000 });
+        const late = await receipt(db, { competition_id: 70, sequence: 4, status: 'stored', bytes: 512 });
         expect(late.status).toBe(409);
         await register(db, 70, 5);
-        await receipt(db, { competition_id: 70, sequence: 5, status: 'stored', bytes: 100, duration_ms: 5000 });
-        const clash = await receipt(db, { competition_id: 70, sequence: 5, status: 'stored', bytes: 999, duration_ms: 5000 });
+        await receipt(db, { competition_id: 70, sequence: 5, status: 'stored', bytes: 100, object_hash: 'h5' });
+        const clash = await receipt(db, { competition_id: 70, sequence: 5, status: 'stored', bytes: 999, object_hash: 'h5' });
         expect(clash.status).toBe(409);
         expect(((await clash.json()) as any).code).toBe('conflict');
     });
 
-    it('14. receipt creates ready directly for server-measured first reports', async () => {
+    it('14. receipt for an UNREGISTERED sequence is 404 — no fabricated slot (D7)', async () => {
         await acquire(db, 70, 'a1b2c3d4');
-        const r = await receipt(db, { competition_id: 70, sequence: 2, status: 'stored', bytes: 2048, duration_ms: 9000 });
-        expect(((await r.json()) as any).data.state).toBe('ready');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        // No /register happened: nothing may be created from a receipt — not
+        // even with a declared duration (no generation=1, no container=mp4,
+        // no invented object path).
+        const r = await receipt(db, { competition_id: 70, sequence: 2, status: 'stored', bytes: 2048, object_hash: 'h2' });
+        expect(r.status).toBe(404);
+        expect(((await r.json()) as any).code).toBe('unregistered');
+        expect((await model.listOrdered(70)).length).toBe(0);
+        const withDeclared = await receipt(db, { competition_id: 70, sequence: 2, status: 'stored', bytes: 2048, duration_ms: 9000 });
+        expect(withDeclared.status).toBe(404);
+        expect((await model.listOrdered(70)).length).toBe(0);
         const bad = await receipt(db, { competition_id: 70, sequence: -1, status: 'stored' });
         expect(bad.status).toBe(400);
     });
@@ -376,33 +483,261 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 receipts (verified confirmation)', () => {
         // D1 index reaches ready through verify + receipt only. No
         // server-side FFmpeg/merge/transcode/chunk-deletion is invoked here.
         await acquire(db, 70, 'a1b2c3d4');
-        const key = (((await (await register(db, 70, 6)).json()) as any).data.chunk_key) as string;
+        const key = (((await (await register(db, 70, 6, 'sess-1', 'webm')).json()) as any).data.chunk_key) as string;
         const v = await verifyKey(db, key);
         expect(v.valid).toBe(true);
         const { headers } = hmacGet('/api/chunks/verify');
         await app.request(`/api/chunks/${encodeURIComponent(key)}`, { method: 'DELETE', headers }, env(db));
-        const r = await receipt(db, { competition_id: 70, sequence: 6, status: 'stored', bytes: 512, object_hash: 'h6', duration_ms: 5000 });
-        expect(((await r.json()) as any).data.state).toBe('ready');
+        serveStoredObject(buildWebmObject([[0, [0]], [2500, [0]], [5000, [0]]]));
+        const r = await receipt(db, { competition_id: 70, sequence: 6, status: 'stored', bytes: 512, object_hash: 'h6' });
+        expect(((await r.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 5000 });
         const model = new ChunkIndexModel(db as unknown as D1Database);
         const status = await model.recordingStatus(70);
         expect(status.ready).toBeGreaterThanOrEqual(1);
     });
 
-    it('14c. verified duration above the sanity ceiling → 400 fail-closed (never poisons the timeline)', async () => {
-        // ROW28.1 item 1: the trusted duration source is the HMAC upload-host
-        // receipt (client-declared stays display-only), but a corrupt or
-        // spoofed-but-signed oversized value must NOT silently poison the
-        // timeline (cursor += duration_ms on read). Both confirmReceipt and
-        // confirmChunk reject dur > MAX_DURATION_MS with a 400, never ready.
+    it('14c. measured duration above the sanity ceiling fails closed (never poisons the timeline)', async () => {
+        // The only trusted duration source is the platform measurement of the
+        // real stored bytes. A measurably absurd value must NOT reach ready
+        // nor poison the timeline (cursor += duration_ms on read): the slot
+        // stays uploaded and a sane measurement can still confirm it.
         await acquire(db, 70, 'a1b2c3d4');
-        await register(db, 70, 8);
-        const over = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8', duration_ms: MAX_DURATION_MS + 1 });
-        expect(over.status).toBe(400);
+        await register(db, 70, 8, 'sess-1', 'webm');
+        serveStoredObject(buildWebmObject([[0, [0]], [MAX_DURATION_MS + 1000, [0]]])); // end = ceiling + 1s
+        const over = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8' });
+        expect(over.status).toBe(200);
+        expect(((await over.json()) as any).data.state).toBe('uploaded'); // fail closed — never ready
         const model = new ChunkIndexModel(db as unknown as D1Database);
-        expect((await model.listOrdered(70))[0].state).toBe('uploaded'); // stayed unverified
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded');
         // A within-ceiling measured value still reaches ready.
-        const okDur = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8', duration_ms: 30000 });
+        serveStoredObject(buildWebmObject([[0, [0]], [30000, [0]]]));
+        const okDur = await receipt(db, { competition_id: 70, sequence: 8, status: 'stored', bytes: 512, object_hash: 'h8' });
         expect(((await okDur.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 30000 });
+    });
+});
+
+describe('R4-CHUNK-UPLOAD-SAFE-1 receipt fencing + binding (ROW28 final D1/D7)', () => {
+    let db: SqliteD1;
+    beforeEach(async () => {
+        db = new SqliteD1();
+        await seedUsers(db);
+        await seedComp(db, 70, 'live', 2);
+    });
+    afterEach(() => { db.close(); });
+
+    /** Raw receipt (no auto-injected generation/path) for exact-body tests. */
+    async function receiptRaw(body: Record<string, unknown>) {
+        const { init } = hmacPost('/api/chunks/receipt', body);
+        return app.request('/api/chunks/receipt', init, env(db));
+    }
+    async function expireLease() {
+        await db.prepare(`UPDATE recording_leases SET last_heartbeat_at = datetime('now', '-120 seconds') WHERE competition_id = 70`).run();
+    }
+
+    it('D1-1. stale receipt after takeover is rejected (verify→takeover→receipt race)', async () => {
+        const gen1 = await acquire(db, 70, 'a1b2c3d4');
+        const key = (((await (await register(db, 70, 1, 'sess-1', 'webm')).json()) as any).data.chunk_key) as string;
+        expect((await verifyKey(db, key)).valid).toBe(true); // verified under generation 1
+        await expireLease();
+        const gen2 = await acquire(db, 70, 'e5f6071829aa'); // takeover: generation 2
+        expect(gen2).toBe(gen1 + 1);
+        // The old holder's receipt lands after the takeover: rejected BEFORE
+        // any write — the new holder's index can never be published into.
+        const stale = await receiptRaw({
+            competition_id: 70, sequence: 1, status: 'stored',
+            bytes: 4096, object_hash: 'h1',
+            object_path: 'live/match_70/chunk_0001.mp4', lease_generation: gen1,
+        });
+        expect(stale.status).toBe(409);
+        expect(((await stale.json()) as any).code).toBe('stale_generation');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded'); // nothing confirmed
+    });
+
+    it('D1-2. the receipt generation must own the REGISTERED slot (lineage binding)', async () => {
+        await acquire(db, 70, 'a1b2c3d4'); // generation 1
+        await register(db, 70, 1);        // slot registered under generation 1
+        await expireLease();
+        await acquire(db, 70, 'e5f6071829aa'); // generation 2 holds the lease
+        // Lease pre-check passes (gen 2 holds), but the slot was registered
+        // under gen 1: the atomic slot binding must refuse the publication.
+        const wrongLineage = await receiptRaw({
+            competition_id: 70, sequence: 1, status: 'stored',
+            bytes: 4096, object_hash: 'h1',
+            object_path: 'live/match_70/chunk_0001.mp4', lease_generation: 2,
+        });
+        expect(wrongLineage.status).toBe(409);
+        expect(((await wrongLineage.json()) as any).code).toBe('stale_generation');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded');
+    });
+
+    it('D1-3. a released-lease drain tail still confirms under its own generation', async () => {
+        const gen1 = await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 1, 'sess-1', 'webm');
+        const end = await app.request('/api/competitions/70/end', authed('sess-1', 'POST', {}), env(db));
+        expect(end.status).toBe(200); // lease released
+        serveStoredObject(buildWebmObject([[0, [0]], [1500, [0]], [3000, [0]]]));
+        const tail = await receiptRaw({
+            competition_id: 70, sequence: 1, status: 'stored',
+            bytes: 4096, object_hash: 'h1',
+            object_path: 'live/match_70/chunk_0001.webm', lease_generation: gen1,
+        });
+        expect(((await tail.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 3000 });
+    });
+
+    it('D1-4. missing/invalid lease generation fails closed (400)', async () => {
+        await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 1);
+        for (const bad of [undefined, null, 0, '1', 1.5, -3]) {
+            const body: Record<string, unknown> = {
+                competition_id: 70, sequence: 1, status: 'stored',
+                bytes: 10, object_hash: 'h1', object_path: 'live/match_70/chunk_0001.mp4',
+            };
+            if (bad !== undefined) body.lease_generation = bad;
+            const r = await receiptRaw(body);
+            expect(r.status, `gen=${String(bad)}`).toBe(400);
+            expect(((await r.json()) as any).code).toBe('bad_generation');
+        }
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded');
+    });
+
+    it('D1-5. wrong competition / sequence / object are all rejected', async () => {
+        await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 5, 'sess-1', 'webm');
+        // Wrong competition: no slot registered under 71 at all.
+        const wrongComp = await receiptRaw({ competition_id: 71, sequence: 5, status: 'stored', bytes: 10, object_hash: 'h', lease_generation: 1 });
+        expect(wrongComp.status).toBe(404);
+        // Wrong sequence: never registered.
+        const wrongSeq = await receiptRaw({ competition_id: 70, sequence: 99, status: 'stored', bytes: 10, object_hash: 'h', lease_generation: 1 });
+        expect(wrongSeq.status).toBe(404);
+        // Wrong object: echoes a binding that is not the registered slot's.
+        const wrongObj = await receiptRaw({
+            competition_id: 70, sequence: 5, status: 'stored',
+            bytes: 10, object_hash: 'h', lease_generation: 1,
+            object_path: 'live/match_70/chunk_0006.webm',
+        });
+        expect(wrongObj.status).toBe(409);
+        expect(((await wrongObj.json()) as any).code).toBe('object_mismatch');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded');
+        // The correct binding still lands and measures.
+        serveStoredObject(buildWebmObject([[0, [0]], [500, [0]], [1000, [0]]]));
+        const ok = await receiptRaw({
+            competition_id: 70, sequence: 5, status: 'stored',
+            bytes: 10, object_hash: 'h', lease_generation: 1,
+            object_path: 'live/match_70/chunk_0005.webm',
+        });
+        expect(((await ok.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 1000 });
+    });
+
+    it('D1-6. identical receipt replay is idempotent; divergent facts conflict', async () => {
+        await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 3, 'sess-1', 'webm');
+        serveStoredObject(buildWebmObject([[0, [0]], [5000, [0]]]));
+        const first = await receipt(db, { competition_id: 70, sequence: 3, status: 'stored', bytes: 100, object_hash: 'h3' });
+        expect(((await first.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 5000 });
+        // Same identity again: idempotent retry, no rewrite, no conflict.
+        const replay = await receipt(db, { competition_id: 70, sequence: 3, status: 'stored', bytes: 100, object_hash: 'h3' });
+        expect(((await replay.json()) as any).data).toMatchObject({ state: 'ready', duration_ms: 5000 });
+        // Divergent bytes or hash on a confirmed slot: conflict, never overwrite.
+        const bytesClash = await receipt(db, { competition_id: 70, sequence: 3, status: 'stored', bytes: 999, object_hash: 'h3' });
+        expect(bytesClash.status).toBe(409);
+        expect(((await bytesClash.json()) as any).code).toBe('conflict');
+        const hashClash = await receipt(db, { competition_id: 70, sequence: 3, status: 'stored', bytes: 100, object_hash: 'hX' });
+        expect(hashClash.status).toBe(409);
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        const row = (await model.listOrdered(70))[0];
+        expect(row).toMatchObject({ state: 'ready', duration_ms: 5000, bytes: 100, object_hash: 'h3' });
+    });
+
+    it('D1-7. gen2 takeover DURING the measurement is refused atomically', async () => {
+        // The route's lease pre-check passes, the facts are noted, and THEN
+        // a takeover lands while the platform measures the stored bytes: the
+        // final publication must be refused INSIDE the critical UPDATE, and
+        // the stale receipt must not change state or facts.
+        await acquire(db, 70, 'a1b2c3d4'); // generation 1
+        await register(db, 70, 1, 'sess-1', 'webm');
+        // The served object performs the takeover before the bytes return.
+        streamObject = async () => {
+            await expireLease();
+            await acquire(db, 70, 'e5f6071829aa'); // generation 2 takes over
+            return buildWebmObject([[0, [0]], [1000, [0]], [2000, [0]], [3000, [0]]]);
+        };
+        const raced = await receiptRaw({
+            competition_id: 70, sequence: 1, status: 'stored',
+            bytes: 4096, object_hash: 'h1',
+            object_path: 'live/match_70/chunk_0001.webm', lease_generation: 1,
+        });
+        expect(raced.status).toBe(409);
+        expect(((await raced.json()) as any).code).toBe('stale_generation');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        const row = (await model.listOrdered(70))[0];
+        expect(row.state).toBe('uploaded'); // nothing published by the stale receipt
+        // The new holder re-registers the slot lineage: no slot exists for
+        // it (sequence 1 taken), so it must move on — the stale receipt can
+        // never confirm into its index either.
+        const again = await receiptRaw({
+            competition_id: 70, sequence: 1, status: 'stored',
+            bytes: 4096, object_hash: 'h1',
+            object_path: 'live/match_70/chunk_0001.webm', lease_generation: 1,
+        });
+        expect(again.status).toBe(409);
+        expect(((await model.listOrdered(70))[0].state)).toBe('uploaded');
+    });
+
+    it('D1-8. a takeover also fences the FAILED receipt (state unchanged)', async () => {
+        await acquire(db, 70, 'a1b2c3d4'); // generation 1
+        await register(db, 70, 2);
+        await expireLease();
+        await acquire(db, 70, 'e5f6071829aa'); // generation 2 holds
+        // A held gen-2 lease rejects the gen-1 failure at the pre-check.
+        const pre = await receiptRaw({
+            competition_id: 70, sequence: 2, status: 'failed', error: 'disk full',
+            lease_generation: 1, object_path: 'live/match_70/chunk_0002.mp4',
+        });
+        expect(pre.status).toBe(409);
+        expect(((await pre.json()) as any).code).toBe('stale_generation');
+        // Release the gen-2 lease (clean end) and retry the gen-1 failure:
+        // the generation was SUPERSEDED, so the atomic guard still refuses.
+        const end = await app.request('/api/competitions/70/end', authed('sess-1', 'POST', {}), env(db));
+        expect(end.status).toBe(200);
+        const post = await receiptRaw({
+            competition_id: 70, sequence: 2, status: 'failed', error: 'disk full',
+            lease_generation: 1, object_path: 'live/match_70/chunk_0002.mp4',
+        });
+        expect(post.status).toBe(409);
+        expect(((await post.json()) as any).code).toBe('stale_generation');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded'); // unchanged
+        // Even the CURRENT generation cannot fail a slot the superseded
+        // lineage registered: the slot's generation binding refuses it.
+        const current = await receiptRaw({
+            competition_id: 70, sequence: 2, status: 'failed', error: 'disk full',
+            lease_generation: 2, object_path: 'live/match_70/chunk_0002.mp4',
+        });
+        expect(current.status).toBe(409);
+        expect(((await current.json()) as any).code).toBe('stale_generation');
+        expect(((await model.listOrdered(70))[0].state)).toBe('uploaded');
+    });
+
+    it('D1-9. a superseded generation never drains after a takeover+release', async () => {
+        const gen1 = await acquire(db, 70, 'a1b2c3d4');
+        await register(db, 70, 1, 'sess-1', 'webm');
+        await expireLease();
+        await acquire(db, 70, 'e5f6071829aa'); // gen 2 supersedes gen 1
+        await app.request('/api/competitions/70/end', authed('sess-1', 'POST', {}), env(db)); // clean end at gen 2
+        streamObject = () => buildWebmObject([[0, [0]], [500, [0]], [1000, [0]]]);
+        const stale = await receiptRaw({
+            competition_id: 70, sequence: 1, status: 'stored',
+            bytes: 4096, object_hash: 'h1',
+            object_path: 'live/match_70/chunk_0001.webm', lease_generation: gen1,
+        });
+        expect(stale.status).toBe(409);
+        expect(((await stale.json()) as any).code).toBe('stale_generation');
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.listOrdered(70))[0].state).toBe('uploaded');
     });
 });
 
@@ -418,8 +753,14 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 PHP-harness order (documented double)', () => {
     });
     afterEach(() => { db.close(); });
 
-    /** The documented upload.php order: verify → save → DELETE → receipt. */
-    async function phpUpload(seq: number, key: string, bytes: number, opts?: { skipDelete?: boolean; reportDuration?: number | null }) {
+    /**
+     * The documented upload.php order: verify → save → DELETE → receipt.
+     * The host reports STORAGE FACTS ONLY (D3: it declares no duration);
+     * the platform then measures the served stored object itself. The
+     * optional `storedObject` drives the measurement double — omitting it
+     * leaves the chunk unverified (uploaded), like an unreachable host.
+     */
+    async function phpUpload(seq: number, key: string, bytes: number, opts?: { skipDelete?: boolean; storedObject?: Uint8Array | null }) {
         const v = await verifyKey(db, key);
         if (!v.valid) return { saved: false, reason: v.error };
         disk.set(`match_70/${seq}`, { bytes, hash: `h${seq}` });
@@ -427,42 +768,53 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 PHP-harness order (documented double)', () => {
             const { headers } = hmacGet('/api/chunks/verify');
             await app.request(`/api/chunks/${encodeURIComponent(key)}`, { method: 'DELETE', headers }, env(db));
         }
+        if (opts && 'storedObject' in opts) serveStoredObject(opts.storedObject ?? null);
+        else serveStoredObject(buildWebmObject([[0, [0]], [2500, [0]], [5000, [0]]]));
         const r = await receipt(db, {
             competition_id: 70, sequence: seq, status: 'stored',
             bytes, object_hash: `h${seq}`,
-            ...(opts?.reportDuration === null ? {} : { duration_ms: opts?.reportDuration ?? 5000 }),
         });
         return { saved: true, receipt: ((await r.json()) as any).data };
     }
 
-    it('15. full order lands ready with verified facts', async () => {
+    it('15. full order lands ready with platform-measured facts', async () => {
         await acquire(db, 70, 'a1b2c3d4');
-        const key = (((await (await register(db, 70, 1)).json()) as any).data.chunk_key) as string;
-        const out = await phpUpload(1, key, 4096, { reportDuration: 7000 });
+        const key = (((await (await register(db, 70, 1, 'sess-1', 'webm')).json()) as any).data.chunk_key) as string;
+        const out = await phpUpload(1, key, 4096);
         expect(out.saved).toBe(true);
-        expect(out.receipt).toMatchObject({ state: 'ready', duration_ms: 7000 });
+        expect(out.receipt).toMatchObject({ state: 'ready', duration_ms: 5000 }); // measured from the stored bytes
         const model = new ChunkIndexModel(db as unknown as D1Database);
-        expect((await model.timeline(70)).total_ready_ms).toBe(7000);
+        expect((await model.timeline(70)).total_ready_ms).toBe(5000);
+    });
+
+    it('15b. an unreachable upload host leaves the chunk uploaded (fail closed)', async () => {
+        await acquire(db, 70, 'a1b2c3d4');
+        const key = (((await (await register(db, 70, 1, 'sess-1', 'webm')).json()) as any).data.chunk_key) as string;
+        const out = await phpUpload(1, key, 4096, { storedObject: null });
+        expect(out.saved).toBe(true);
+        expect(out.receipt.state).toBe('uploaded'); // facts kept, never fabricated ready
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        expect((await model.timeline(70)).total_ready_ms).toBe(0);
     });
 
     it('16. failure-without-DELETE still recovers via re-register (same slot)', async () => {
         await acquire(db, 70, 'a1b2c3d4');
-        const key = (((await (await register(db, 70, 1)).json()) as any).data.chunk_key) as string;
+        const key = (((await (await register(db, 70, 1, 'sess-1', 'webm')).json()) as any).data.chunk_key) as string;
         const v = await verifyKey(db, key);
         expect(v.valid).toBe(true); // consumed by the failed attempt's verify...
         // ...but the host crashed before DELETE. Re-register is idempotent
         // (same slot, same identity) and yields a fresh single-use key.
-        const key2 = (((await (await register(db, 70, 1)).json()) as any).data.chunk_key) as string;
+        const key2 = (((await (await register(db, 70, 1, 'sess-1', 'webm')).json()) as any).data.chunk_key) as string;
         expect(key2).not.toBe(key);
-        const out = await phpUpload(1, key2, 4096, { reportDuration: 7000 });
+        const out = await phpUpload(1, key2, 4096);
         expect(out.saved).toBe(true);
         expect(out.receipt.state).toBe('ready');
     });
 
     it('17. replay-after-DELETE fails; wrong-slot key cannot cross slots', async () => {
         await acquire(db, 70, 'a1b2c3d4');
-        const key = (((await (await register(db, 70, 1)).json()) as any).data.chunk_key) as string;
-        await phpUpload(1, key, 4096, { reportDuration: 7000 });
+        const key = (((await (await register(db, 70, 1, 'sess-1', 'webm')).json()) as any).data.chunk_key) as string;
+        await phpUpload(1, key, 4096);
         expect((await verifyKey(db, key)).valid).toBe(false); // consumed
     });
 

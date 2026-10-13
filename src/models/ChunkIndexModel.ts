@@ -76,11 +76,13 @@ export interface RecordChunkInput {
     declared_duration_ms?: number | null;
 }
 
-/** Trusted measurement (a future SAFE28 receipt, never a client claim). */
+/** Trusted measurement (platform-measured from real stored bytes, D3). */
 export interface ChunkReceipt {
     duration_ms: number;
     bytes?: number | null;
     object_hash?: string | null;
+    /** D1: the verified lease generation that owns the slot (row 28). */
+    lease_generation?: number | null;
 }
 
 /**
@@ -96,12 +98,13 @@ export const MAX_GAP_SCAN = 10000;
 
 /**
  * ROW28.1 / R4-RELEASE-RECOVERY-C: sanity ceiling for a VERIFIED chunk
- * duration (ms). The trusted source is the HMAC-authenticated upload-host
- * receipt — never client-declared duration. Realistic segments are ~5–30s;
- * 10 minutes per chunk is already absurd for a single recorder segment.
- * confirmReceipt/confirmChunk reject a receipt duration above this bound
- * (fail-closed) so a corrupt or spoofed-but-signed oversized value cannot
- * silently poison the timeline (cursor += duration_ms on read).
+ * duration (ms). The trusted source is the PLATFORM MEASUREMENT of the
+ * real stored bytes (D3) — never client-declared duration, never a
+ * host-declared value. Realistic segments are ~5–30s; 10 minutes per
+ * chunk is already absurd for a single recorder segment. confirmChunk
+ * rejects a measured duration above this bound (fail-closed) so a corrupt
+ * or spoofed oversized value cannot silently poison the timeline
+ * (cursor += duration_ms on read).
  */
 export const MAX_DURATION_MS = 600000;
 
@@ -254,70 +257,80 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
     }
 
     /**
-     * R4-CHUNK-UPLOAD-SAFE-1 receipt interface: create-or-confirm from
-     * SERVER-measured facts (upload host receipt — never client data).
-     *  - no row + measured duration → INSERT ready (measured = verified);
-     *  - no row without duration → INSERT uploaded (facts kept, never ready);
-     *  - uploaded row + duration → confirm (same rules as confirmChunk);
-     *  - uploaded row without duration → facts noted, stays uploaded;
-     *  - ready row → idempotent same-identity, CONFLICT on divergent bytes;
-     *  - failed row → FINAL. Never overwrites, never invents.
+     * R4-CHUNK-UPLOAD-SAFE-1 receipt interface (ROW28 final form).
+     * D7 — REMOVED: the previous version INSERTED rows for unregistered
+     * sequences with a fabricated generation=1, container='mp4' and an
+     * invented object path. Nothing is fabricated here anymore: a receipt
+     * for a sequence that has no REGISTERED slot is a protocol violation
+     * (NOT_FOUND — only /register, authenticated + lease-bound +
+     * live-host-gated, creates slots). D1 — the receipt is bound to the
+     * verified generation AND the registered slot: the generation is
+     * required and must equal the slot's generation (takeover lineage
+     * rejected), and when the upload host echoes the server-verified
+     * object path it MUST equal the registered one (wrong object
+     * rejected). Facts noted here are never a readiness proof: `ready`
+     * is published exclusively through confirmChunk() from a MEASURED
+     * duration (never declared).
+     *  - no row → NOT_FOUND (never create, never fabricate);
+     *  - failed row → FINAL (terminal);
+     *  - generation mismatch → STALE_GENERATION (stale publication);
+     *  - object path mismatch → BAD_OBJECT (wrong object);
+     *  - uploaded row → facts noted, stays uploaded;
+     *  - ready row → idempotent same-identity retry, CONFLICT on
+     *    divergent bytes/hash (never overwrite).
      */
     async confirmReceipt(
         competitionId: number, sequence: number,
-        facts: { bytes?: number | null; object_hash?: string | null; duration_ms?: number | null }
+        facts: {
+            bytes?: number | null;
+            object_hash?: string | null;
+            object_path?: string | null;
+            lease_generation?: number | null;
+        }
     ): Promise<RecordingChunk> {
         const seq = asInt(sequence);
         if (!seq || seq < 1 || seq > MAX_SEQUENCE) {
             throw Object.assign(new Error('BAD_INPUT: sequence out of bounds'), { code: 'BAD_INPUT' });
         }
-        const dur = asInt(facts.duration_ms);
-        if (dur !== null && dur <= 0) {
-            throw Object.assign(new Error('BAD_INPUT: verified duration_ms must be positive'), { code: 'BAD_INPUT' });
-        }
-        if (dur !== null && dur > MAX_DURATION_MS) {
-            throw Object.assign(new Error(`BAD_INPUT: verified duration_ms exceeds sanity ceiling (${MAX_DURATION_MS}ms)`), { code: 'BAD_INPUT' });
+        // D1 identity binding: no verified generation → no receipt.
+        const generation = asInt(facts.lease_generation);
+        if (generation === null || generation < 1) {
+            throw Object.assign(
+                new Error('BAD_INPUT: receipt must carry the verified lease generation'),
+                { code: 'BAD_INPUT' }
+            );
         }
         const existing = await this.db.prepare(
             `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
         ).bind(competitionId, seq).first<Record<string, unknown> | null>();
         if (!existing) {
-            if (dur === null) {
-                const now = nowIso();
-                await this.db.prepare(
-                    `INSERT INTO ${this.tableName}
-                     (competition_id, generation, sequence, object_path, object_hash,
-                      container, codec_video, codec_audio, bytes, declared_duration_ms,
-                      duration_ms, state, created_at, updated_at)
-                     VALUES (?, 1, ?, ?, ?, 'mp4', NULL, NULL, ?, NULL, NULL, 'uploaded', ?, ?)`
-                ).bind(
-                    competitionId, seq,
-                    `live/match_${competitionId}/chunk_${String(seq).padStart(4, '0')}.mp4`,
-                    facts.object_hash ?? null, asInt(facts.bytes), now, now
-                ).run();
-            } else {
-                const now = nowIso();
-                await this.db.prepare(
-                    `INSERT INTO ${this.tableName}
-                     (competition_id, generation, sequence, object_path, object_hash,
-                      container, codec_video, codec_audio, bytes, declared_duration_ms,
-                      duration_ms, state, created_at, updated_at)
-                     VALUES (?, 1, ?, ?, ?, 'mp4', NULL, NULL, ?, NULL, ?, 'ready', ?, ?)`
-                ).bind(
-                    competitionId, seq,
-                    `live/match_${competitionId}/chunk_${String(seq).padStart(4, '0')}.mp4`,
-                    facts.object_hash ?? null, asInt(facts.bytes), dur, now, now
-                ).run();
-            }
-            const created = await this.db.prepare(
-                `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
-            ).bind(competitionId, seq).first<Record<string, unknown> | null>();
-            if (!created) throw new Error('Chunk record lost after receipt insert');
-            return this.row(created);
+            // D7: receipts confirm REGISTERED slots — they never create
+            // one (no fake generation/container/path can enter the index).
+            throw Object.assign(
+                new Error('NOT_FOUND: no registered slot for this sequence'),
+                { code: 'NOT_FOUND' }
+            );
         }
         const row = this.row(existing);
         if (row.state === 'failed') {
             throw Object.assign(new Error('FINAL: failed chunks stay failed'), { code: 'FINAL' });
+        }
+        // D1: the receipt must carry the generation that registered/verified
+        // the slot; a taken-over lineage can never publish into it.
+        if (row.generation !== generation) {
+            throw Object.assign(
+                new Error(`STALE_GENERATION: receipt generation ${generation} does not own slot generation ${row.generation}`),
+                { code: 'STALE_GENERATION', existing: row }
+            );
+        }
+        // D1/D7 object binding: when the host echoes the server-verified
+        // binding it must match the registered object identity exactly.
+        const echoPath = typeof facts.object_path === 'string' && facts.object_path !== '' ? facts.object_path : null;
+        if (echoPath !== null && echoPath !== row.object_path) {
+            throw Object.assign(
+                new Error('BAD_OBJECT: receipt object path does not match the registered slot'),
+                { code: 'BAD_OBJECT', existing: row }
+            );
         }
         // Identity check: NULL means "unknown" (compatible), never a fact.
         // Conflict ONLY when both sides know and disagree — never overwrite.
@@ -326,44 +339,64 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
         const clash = (row.bytes ?? null) !== null && factBytes !== null && row.bytes !== factBytes
             || (row.object_hash ?? null) !== null && factHash !== null && row.object_hash !== factHash;
         if (row.state === 'ready') {
-            if ((dur !== null && dur !== row.duration_ms) || clash) {
+            if (clash) {
                 throw Object.assign(new Error('CONFLICT: receipt disagrees with confirmed facts'), { code: 'CONFLICT', existing: row });
             }
-            return row;
+            return row; // idempotent identical retry — safe, no rewrite
         }
         if (clash) {
             throw Object.assign(new Error('CONFLICT: receipt disagrees with recorded facts'), { code: 'CONFLICT', existing: row });
         }
-        // Uploaded row: note facts; confirm only with a measured duration.
-        await this.db.prepare(
+        // Uploaded row: note storage facts. Readiness stays with the
+        // measured-duration transition in confirmChunk (D3). The note is
+        // ONE conditional UPDATE bound to the slot generation AND to the
+        // CURRENT lease generation (subquery — the database is the final
+        // arbiter, not the pre-read above): a takeover that landed between
+        // the lease status read and this write leaves changes=0, and the
+        // stale receipt must not even note facts into the new holder's
+        // index (ROW28 item 5).
+        const noted = await this.db.prepare(
             `UPDATE ${this.tableName}
              SET bytes = COALESCE(?, bytes),
                  object_hash = COALESCE(?, object_hash),
                  updated_at = ?
-             WHERE competition_id = ? AND sequence = ?`
-        ).bind(asInt(facts.bytes), facts.object_hash ?? null, nowIso(), competitionId, seq).run();
-        if (dur === null) {
-            const noted = await this.db.prepare(
-                `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
-            ).bind(competitionId, seq).first<Record<string, unknown> | null>();
-            return this.row(noted!);
+             WHERE competition_id = ? AND sequence = ? AND state = 'uploaded' AND generation = ?
+               AND EXISTS (
+                   SELECT 1 FROM recording_leases
+                    WHERE competition_id = ? AND generation = ?
+               )`
+        ).bind(
+            asInt(facts.bytes), facts.object_hash ?? null, nowIso(),
+            competitionId, seq, generation,
+            competitionId, generation
+        ).run();
+        if ((noted.meta.changes ?? 0) === 0) {
+            throw Object.assign(
+                new Error('STALE_GENERATION: lease generation changed before the receipt landed'),
+                { code: 'STALE_GENERATION', existing: row }
+            );
         }
-        return this.confirmChunk(competitionId, seq, {
-            duration_ms: dur,
-            bytes: asInt(facts.bytes),
-            object_hash: facts.object_hash ?? null,
-        });
+        const reread = await this.db.prepare(
+            `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
+        ).bind(competitionId, seq).first<Record<string, unknown> | null>();
+        if (!reread) throw new Error('Chunk record lost after receipt note');
+        return this.row(reread);
     }
 
     /**
-     * Receipt interface for SAFE28 (trusted measurer — storage proof +
-     * measured duration). Transitions uploaded → ready exactly once; a
-     * ready row stays ready (idempotent); a failed row is terminal (FINAL).
-     * Client data can never reach this path in INDEX (no route calls it).
+     * Receipt interface for SAFE28 (trusted MEASURER — the duration here is
+     * platform-measured from the real stored bytes, never declared).
+     * Transitions uploaded → ready exactly once; a ready row stays ready
+     * (idempotent); a failed row is terminal (FINAL). D1: the transition
+     * is one CONDITIONAL UPDATE (state='uploaded' AND the verified
+     * generation bound into the WHERE clause) so a stale publication can
+     * never win the race, and an explicit generation mismatch is rejected
+     * before any write.
      */
     async confirmChunk(
         competitionId: number, sequence: number,
-        receipt: ChunkReceipt, _source: 'receipt' = 'receipt'
+        receipt: ChunkReceipt & { lease_generation?: number | null },
+        _source: 'receipt' = 'receipt'
     ): Promise<RecordingChunk> {
         const dur = asInt(receipt.duration_ms);
         if (!dur || dur <= 0) {
@@ -383,35 +416,110 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
             throw Object.assign(new Error('FINAL: failed chunks stay failed'), { code: 'FINAL' });
         }
         if (row.state === 'ready') return row; // idempotent
+        // D1: bind the transition to the verified generation when supplied.
+        const generation = asInt(receipt.lease_generation);
+        if (generation !== null && row.generation !== generation) {
+            throw Object.assign(
+                new Error(`STALE_GENERATION: confirm generation ${generation} does not own slot generation ${row.generation}`),
+                { code: 'STALE_GENERATION', existing: row }
+            );
+        }
+        // ROW28 item 5: the final publication asserts the CURRENT lease
+        // generation INSIDE the critical UPDATE (subquery + conditional
+        // write). A takeover that lands between the route's lease pre-read
+        // (or during the measurement fetch) and this write is rejected by
+        // the database itself — changes=0 → STALE_GENERATION, the slot
+        // stays uploaded and the stale receipt publishes nothing.
+        const generationGuard = generation !== null
+            ? ' AND generation = ? AND EXISTS (SELECT 1 FROM recording_leases WHERE competition_id = ? AND generation = ?)'
+            : '';
+        const binds: unknown[] = [dur, asInt(receipt.bytes), receipt.object_hash ?? null, nowIso(), competitionId, sequence];
+        if (generation !== null) binds.push(generation, competitionId, generation);
         await this.db.prepare(
             `UPDATE ${this.tableName}
              SET state = 'ready', duration_ms = ?,
                  bytes = COALESCE(?, bytes),
                  object_hash = COALESCE(?, object_hash),
                  updated_at = ?
-             WHERE competition_id = ? AND sequence = ? AND state = 'uploaded'`
-        ).bind(dur, asInt(receipt.bytes), receipt.object_hash ?? null, nowIso(), competitionId, sequence).run();
+             WHERE competition_id = ? AND sequence = ? AND state = 'uploaded'${generationGuard}`
+        ).bind(...binds).run();
         const updated = await this.db.prepare(
             `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
         ).bind(competitionId, sequence).first<Record<string, unknown> | null>();
         if (!updated) throw new Error('Chunk record lost after confirm');
+        if (this.row(updated).state !== 'ready') {
+            throw Object.assign(
+                new Error('STALE_GENERATION: lease generation changed before the publication'),
+                { code: 'STALE_GENERATION', existing: this.row(updated) }
+            );
+        }
         return this.row(updated);
     }
 
     /** Terminal failure for one slot (keeps locator + declared facts). */
-    async failChunk(competitionId: number, sequence: number): Promise<RecordingChunk> {
-        await this.db.prepare(
-            `UPDATE ${this.tableName}
-             SET state = 'failed', updated_at = ?
-             WHERE competition_id = ? AND sequence = ? AND state = 'uploaded'`
-        ).bind(nowIso(), competitionId, sequence).run();
-        const row = await this.db.prepare(
+    /**
+     * Failure mutation (ROW28 item 5): a FAILED receipt is bound to the
+     * registered chunk exactly like a stored one — same slot, same
+     * generation, same object path — and the current lease generation is
+     * asserted INSIDE the conditional UPDATE (a takeover racing the write
+     * rejects it: changes=0 → STALE_GENERATION, the slot is untouched).
+     * Idempotent for an already-failed row of the same generation; a
+     * confirmed `ready` row is never demoted. Never creates a slot.
+     */
+    async failChunk(
+        competitionId: number, sequence: number,
+        binding?: { lease_generation?: number | null; object_path?: string | null }
+    ): Promise<RecordingChunk> {
+        const generation = asInt(binding?.lease_generation);
+        if (generation === null || generation < 1) {
+            throw Object.assign(
+                new Error('BAD_INPUT: failure receipt must carry the verified lease generation'),
+                { code: 'BAD_INPUT' }
+            );
+        }
+        const existing = await this.db.prepare(
             `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
         ).bind(competitionId, sequence).first<Record<string, unknown> | null>();
-        if (!row) {
+        if (!existing) {
             throw Object.assign(new Error('NOT_FOUND: no such chunk slot'), { code: 'NOT_FOUND' });
         }
-        return this.row(row);
+        const row = this.row(existing);
+        if (row.generation !== generation) {
+            throw Object.assign(
+                new Error(`STALE_GENERATION: failure generation ${generation} does not own slot generation ${row.generation}`),
+                { code: 'STALE_GENERATION', existing: row }
+            );
+        }
+        const echoPath = typeof binding?.object_path === 'string' && binding.object_path !== '' ? binding.object_path : null;
+        if (echoPath !== null && echoPath !== row.object_path) {
+            throw Object.assign(new Error('BAD_OBJECT: receipt object path does not match the registered slot'), { code: 'BAD_OBJECT', existing: row });
+        }
+        if (row.state === 'ready') {
+            throw Object.assign(new Error('FINAL: confirmed chunks are never demoted'), { code: 'FINAL', existing: row });
+        }
+        if (row.state === 'failed') return row; // idempotent for the same lineage
+        const res = await this.db.prepare(
+            `UPDATE ${this.tableName}
+             SET state = 'failed', updated_at = ?
+             WHERE competition_id = ? AND sequence = ? AND state = 'uploaded' AND generation = ?
+               AND EXISTS (
+                   SELECT 1 FROM recording_leases
+                    WHERE competition_id = ? AND generation = ?
+               )`
+        ).bind(nowIso(), competitionId, sequence, generation, competitionId, generation).run();
+        if ((res.meta.changes ?? 0) === 0) {
+            // The lease generation moved between the bind check and the
+            // write — the database refused the stale publication.
+            throw Object.assign(
+                new Error('STALE_GENERATION: lease generation changed before the failure landed'),
+                { code: 'STALE_GENERATION', existing: row }
+            );
+        }
+        const failed = await this.db.prepare(
+            `SELECT * FROM ${this.tableName} WHERE competition_id = ? AND sequence = ?`
+        ).bind(competitionId, sequence).first<Record<string, unknown> | null>();
+        if (!failed) throw new Error('Chunk record lost after failure');
+        return this.row(failed);
     }
 
     /** Ordered read (bounded LIMIT — callers page via limit/offset). */

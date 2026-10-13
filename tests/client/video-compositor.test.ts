@@ -123,8 +123,8 @@ function makeCompositor() {
 }
 
 describe('R4-CHUNK-PLAY-1 VideoCompositor drain', () => {
-    it('1. stop() uploads the final flush BEFORE finalize (tail never lost)', async () => {
-        uploadDelayMs = 30; // slow uploads force the stop/finalize race
+    it('1. stop() uploads the final flush BEFORE the drain completes (tail never lost)', async () => {
+        uploadDelayMs = 30; // slow uploads force the stop/drain race
         const comp = makeCompositor();
         comp.startCompositing();
         await comp.startRecording();
@@ -134,22 +134,26 @@ describe('R4-CHUNK-PLAY-1 VideoCompositor drain', () => {
 
         const uploads = calls.filter((c) => c.startsWith('upload:'));
         expect(uploads.length).toBeGreaterThanOrEqual(3);
-        expect(calls).toContain('finalize');
-        // finalize is strictly last: every upload (incl. the final flush)
-        // precedes it — nothing uploads after finalization.
-        expect(calls[calls.length - 1]).toBe('finalize');
+        // ROW28 D6: the legacy finalize.php trigger is RETIRED — nothing in
+        // this flow ever calls it (the server-side final marker derives from
+        // the receipts). Every upload (including the final flush) precedes
+        // the stop: nothing uploads after the drain either.
+        expect(calls.filter((c) => c === 'finalize').length).toBe(0);
+        expect(calls[calls.length - 1]).toMatch(/^upload:/); // final flush last
         // Dense numbering from 1 (no skips).
         expect(uploads).toEqual(uploads.slice().sort());
     });
 
-    it('2. destroy() is a single ordered teardown (stop → drain → finalize)', async () => {
+    it('2. destroy() is a single ordered teardown (stop → drain, no finalize.php)', async () => {
         const comp = makeCompositor();
         const events: string[] = [];
         comp.startCompositing();
         await comp.startRecording();
         await new Promise((r) => setTimeout(r, 120));
         await comp.destroy();
-        expect(calls).toContain('finalize');
+        // ROW28 D6: destroy drains through the uploader's idempotent
+        // finalize — the retired finalize.php endpoint is never called.
+        expect(calls.filter((c) => c === 'finalize').length).toBe(0);
         expect(comp.getStats().isRecording).toBe(false);
         expect(events).toEqual([]);
     });

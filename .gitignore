@@ -41,3 +41,4 @@ logs/
 # Backup files
 *.backup
 *.bak
+.php-test-state/
