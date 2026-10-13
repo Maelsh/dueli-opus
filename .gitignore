@@ -42,3 +42,6 @@ logs/
 *.backup
 *.bak
 .php-test-state/
+
+# Real hosting upload configuration (contains the upload secret) — never track.
+/dev-tools/php/upload-config.php

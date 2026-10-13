@@ -241,3 +241,54 @@ export function fragmentedMp4ChunkWindow(
         movieDurationUnits: staleMovieDurationUnits,
     });
 }
+
+export interface RealTrunOptions {
+    /** per-sample size units (parallel to durations; 0 when absent) */
+    sampleSizes?: number[];
+    /** first_sample_flags header value (present as 4 bytes in the trun header) */
+    firstSampleFlags?: number;
+    /** data_offset header value */
+    dataOffset?: number;
+    /** hidden default sample duration from tfhd (used when 0x100 is absent) */
+    defaultDuration?: number;
+}
+
+/**
+ * A fragmented object whose trun carries the REAL muxer header: flags,
+ * data_offset and (for 0x305) first_sample_flags, followed by per-sample
+ * duration (0x100) and size (0x200) fields. This is the exact byte layout
+ * the ROW28 production object used — where first_sample_flags lives under
+ * 0x000004 (ffmpeg/GPAC/ISO), NOT 0x000002: mis-reading that bit shifts
+ * every per-sample read by 4 bytes and sums the size fields as durations.
+ */
+export function buildRealTrunMp4(
+    mediaTimescale: number,
+    baseTime: number,
+    sampleDurations: number[],
+    trunFlags: number,
+    opts: RealTrunOptions = {},
+): Uint8Array {
+    const tkhd = fullBox('tkhd', 0, 0, [...be32(0), ...be32(0), ...be32(1), ...be32(0), ...be32(0)]);
+    const mdhd = fullBox('mdhd', 0, 0, [...be32(0), ...be32(0), ...be32(mediaTimescale), ...be32(0)]);
+    const trak = box('trak', [...tkhd, ...box('mdia', [...mdhd])]);
+    // The prepended init's movie duration grows with the session — stale.
+    const mvhd = fullBox('mvhd', 0, 0, [...be32(0), ...be32(0), ...be32(1000), ...be32(900000)]);
+    const moov = box('moov', [...mvhd, ...trak]);
+    let trunPayload: number[] = [...be32(sampleDurations.length)];
+    if (trunFlags & 0x000001) trunPayload = [...trunPayload, ...be32(opts.dataOffset ?? 0)];
+    if (trunFlags & 0x000004) trunPayload = [...trunPayload, ...be32(opts.firstSampleFlags ?? 0x02000000)];
+    for (let i = 0; i < sampleDurations.length; i++) {
+        if (trunFlags & 0x000100) trunPayload = [...trunPayload, ...be32(sampleDurations[i])];
+        if (trunFlags & 0x000200) trunPayload = [...trunPayload, ...be32(opts.sampleSizes?.[i] ?? 0)];
+    }
+    const trun = fullBox('trun', 0, trunFlags, trunPayload);
+    const tfhdFlags = opts.defaultDuration ? 0x08 : 0;
+    const tfhd = fullBox('tfhd', 0, tfhdFlags, [
+        ...be32(1),
+        ...(opts.defaultDuration ? be32(opts.defaultDuration) : []),
+    ]);
+    const tfdt = fullBox('tfdt', 0, 0, be32(baseTime));
+    const traf = box('traf', [...tfhd, ...tfdt, ...trun]);
+    const moof = box('moof', [...traf]);
+    return new Uint8Array([...box('ftyp', [0x69, 0x73, 0x6f, 0x6d]), ...moov, ...moof, ...box('mdat', [0x00])]);
+}

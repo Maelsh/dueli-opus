@@ -406,7 +406,7 @@ function fragmentedDurationMs(bytes: Uint8Array, moofs: Mp4Box[], tracks: Map<nu
                     const sampleCount = u32(bytes, child.bodyStart + 4);
                     let p = child.bodyStart + 8;
                     if (flags & 0x000001) p += 4; // data_offset
-                    if (flags & 0x000002) p += 4; // first_sample_flags
+                    if (flags & 0x000004) p += 4; // first_sample_flags (ROW28 production fix)
                     for (let i = 0; i < sampleCount && p + 4 <= child.bodyEnd; i++) {
                         if (flags & 0x000100) { sampleSum += u32(bytes, p); p += 4; }
                         else { sampleSum += defaultDuration; }

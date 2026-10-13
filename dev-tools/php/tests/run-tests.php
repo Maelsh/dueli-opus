@@ -68,8 +68,11 @@ file_put_contents(PHP_DIR . '/.env', implode("\n", [
 ]) . "\n");
 
 $serverLog = STATE_DIR . '/server.log';
-function start_server(string $cmd, string $log) {
-    $proc = proc_open($cmd, [1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']], $unused);
+function start_server(string $cmd, string $log, ?array $env = null) {
+    $spec = [1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']];
+    $proc = $env === null
+        ? proc_open($cmd, $spec, $unused)
+        : proc_open($cmd, $spec, $unused, null, $env);
     if (!is_resource($proc)) { fwrite(STDERR, "server start failed\n"); exit(2); }
     return $proc;
 }
@@ -360,6 +363,114 @@ check('T10 takeover: slot never confirmed by the stale receipt', $slot !== null 
 $r = upload(70, 3, 'webm', $KEY_A, 'CHUNK3-BYTES-' . str_repeat('z', 40));
 check('T11 consumed-key replay → 403', $r['code'] === 403, $r['raw']);
 check('T11 consumed-key replay: file untouched', stored_hash($obj3) === $hash3);
+
+// ===================================================================
+// 12. CONFIG COMPATIBILITY — the owner's upload-config.php ARRAY form
+//     (platform_url / upload_secret / browser_origins / storage_root).
+//     The artifact must be driven by the array with NO .env at all.
+// ===================================================================
+$writeArrayConfig = function (array $values) use ($mirror): void {
+    $lines = [];
+    foreach ($values as $k => $v) {
+        if (is_array($v)) {
+            $items = "[" . implode(', ', array_map(static fn($x) => "'" . $x . "'", $v)) . "]";
+            $lines[] = "    '" . $k . "' => " . $items . ",";
+        } else {
+            $lines[] = "    '" . $k . "' => '" . $v . "',";
+        }
+    }
+    file_put_contents(PHP_DIR . '/upload-config.php', "<?php\nreturn [\n" . implode("\n", $lines) . "\n];\n");
+};
+
+@unlink(PHP_DIR . '/.env');
+$writeArrayConfig([
+    'platform_url'    => $mirror,
+    'upload_secret'   => SECRET,
+    'browser_origins' => [$mirror],
+    'storage_root'    => STATE_DIR . '/live',
+]);
+seed($KEY_A, 70, 9, 1);
+$r = upload(70, 9, 'webm', $KEY_A, 'ARRAY-CONFIG-BYTES');
+check('T12 array upload-config.php drives the flow (no .env)', $r['code'] === 200 && ($r['json']['success'] ?? false) === true, $r['raw']);
+check('T12 artifact stored under the configured storage_root', stored_exists('live/match_70/chunk_0009.webm'));
+
+// browser_origins becomes the CORS allowlist (transport note only).
+$ctx = stream_context_create(['http' => [
+    'method' => 'OPTIONS', 'timeout' => 5, 'ignore_errors' => true,
+    'header' => "Origin: {$mirror}\r\nAccess-Control-Request-Method: POST\r\n",
+]]);
+@file_get_contents($base . '/upload.php', false, $ctx);
+$headers = implode("\n", (array)($http_response_header ?? []));
+check('T12b browser_origins drives the CORS preflight allowlist', str_contains($headers, 'Access-Control-Allow-Origin: ' . $mirror), $headers);
+
+// A partial array: .env fills ONLY the missing values (the array wins).
+$writeArrayConfig(['storage_root' => STATE_DIR . '/live']);
+file_put_contents(PHP_DIR . '/.env', implode("\n", [
+    'PLATFORM_BASE=' . $mirror,
+    'UPLOAD_SERVER_SECRET=' . SECRET,
+    'STORAGE_ROOT=' . STATE_DIR . '/live',
+    'ALLOWED_ORIGINS=' . $mirror,
+]) . "\n");
+seed($KEY_B, 70, 10, 1);
+$r = upload(70, 10, 'webm', $KEY_B, 'PARTIAL-CONFIG-BYTES');
+check('T13 partial array + .env fallback works', $r['code'] === 200 && ($r['json']['success'] ?? false) === true, $r['raw']);
+
+// No configuration at all → fail closed, nothing stored, no receipt.
+@unlink(PHP_DIR . '/upload-config.php');
+@unlink(PHP_DIR . '/.env');
+seed($KEY_C, 70, 11, 1);
+$r = upload(70, 11, 'webm', $KEY_C, 'NO-CONFIG-BYTES');
+check('T14 missing configuration → 503 fail-closed', $r['code'] === 503, $r['raw']);
+check('T14 missing configuration: nothing stored', !stored_exists('live/match_70/chunk_0011.webm'));
+
+// ===================================================================
+// 15. DUELI_UPLOAD_CONFIG override — a config OUTSIDE the artifact
+//     directory (the documented private path) is honored.
+// ===================================================================
+$external = STATE_DIR . '/external-upload-config.php';
+file_put_contents($external, "<?php\nreturn [\n    'platform_url' => '" . $mirror . "',\n    'upload_secret' => '" . SECRET . "',\n    'browser_origins' => ['" . $mirror . "'],\n    'storage_root' => '" . STATE_DIR . "/live',\n];\n");
+$overridePort = free_port();
+$overrideBase = "http://127.0.0.1:{$overridePort}";
+$overrideServer = start_server(
+    escapeshellarg(PHP_BINARY) . ' -S 127.0.0.1:' . $overridePort . ' -t ' . escapeshellarg(PHP_DIR),
+    $serverLog,
+    ['DUELI_UPLOAD_CONFIG' => $external] + getenv(),
+);
+$overrideReady = false;
+for ($i = 0; $i < 40; $i++) {
+    $probeCtx = stream_context_create(['http' => ['method' => 'POST', 'timeout' => 1, 'ignore_errors' => true]]);
+    if (@file_get_contents($overrideBase . '/upload.php', false, $probeCtx) !== false) { $overrideReady = true; break; }
+    usleep(150000);
+}
+$overrideUpload = function (string $bytes) use ($overrideBase, $mirror) {
+    $boundary = '----row28ov';
+    $body = '';
+    foreach (['competition_id' => '70', 'chunk_number' => '12', 'extension' => 'webm', 'offset' => '0', 'chunk_key' => str_repeat('a1b2', 12)] as $n => $v) {
+        $body .= "--{$boundary}\r\nContent-Disposition: form-data; name=\"{$n}\"\r\n\r\n{$v}\r\n";
+    }
+    $body .= "--{$boundary}\r\nContent-Disposition: form-data; name=\"chunk\"; filename=\"c.webm\"\r\nContent-Type: application/octet-stream\r\n\r\n{$bytes}\r\n--{$boundary}--\r\n";
+    $ctx = stream_context_create(['http' => [
+        'method' => 'POST', 'timeout' => 20, 'ignore_errors' => true,
+        'header' => "Content-Type: multipart/form-data; boundary={$boundary}\r\n",
+        'content' => $body,
+    ]]);
+    $raw = file_get_contents($overrideBase . '/upload.php', false, $ctx);
+    $code = 0;
+    foreach ($http_response_header ?? [] as $h) { if (preg_match('#HTTP/\S+ (\d+)#', $h, $m)) $code = (int)$m[1]; }
+    return ['code' => $code, 'json' => json_decode((string)$raw, true), 'raw' => (string)$raw];
+};
+if ($overrideReady) {
+    seed(str_repeat('a1b2', 12), 70, 12, 1);
+    $r = $overrideUpload('OVERRIDE-CONFIG-BYTES');
+    check('T15 DUELI_UPLOAD_CONFIG override honored', $r['code'] === 200 && ($r['json']['success'] ?? false) === true, $r['raw']);
+    check('T15 override config stored the artifact', stored_exists('live/match_70/chunk_0012.webm'));
+} else {
+    check('T15 override server ready', false, 'server did not start');
+}
+@proc_terminate($overrideServer, 15);
+for ($i = 0; $i < 50; $i++) { if (!proc_get_status($overrideServer)['running']) break; usleep(100000); }
+@proc_close($overrideServer);
+@unlink(PHP_DIR . '/upload-config.php');
 
 echo "\n{$passes} passed, " . count($failures) . " failed\n";
 exit($failures === [] ? 0 : 1);
