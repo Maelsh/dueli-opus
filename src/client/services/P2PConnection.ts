@@ -286,6 +286,41 @@ export class P2PConnection {
     }
 
     /**
+     * R4-LIVE-ENTRY-RECOVERY-1: replace the local preview stream (e.g. camera switch)
+     * before explicit publish. This updates the source that publishLocalStream()
+     * will attach to the peer connection. Does NOT add tracks to the PC.
+     * Stops the old video track to avoid leaking device access.
+     */
+    async replaceLocalStream(constraints?: MediaStreamConstraints): Promise<MediaStream> {
+        const defaultConstraints: MediaStreamConstraints = {
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 },
+                frameRate: { ideal: 30 }
+            },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
+        };
+        try {
+            const newStream = await navigator.mediaDevices.getUserMedia(
+                constraints || defaultConstraints
+            );
+            // Stop old video track to release the previous camera
+            if (this.localStream) {
+                this.localStream.getVideoTracks().forEach(t => t.stop());
+            }
+            this.localStream = newStream;
+            return this.localStream;
+        } catch (error) {
+            console.error('[P2P] Camera switch failed:', error);
+            throw new Error('Failed to switch camera');
+        }
+    }
+
+    /**
      * R4-LIVE-ENTRY-RECOVERY-1 (privacy contract): attach the local preview
      * tracks to the peer connection. This is the ONLY place local media becomes
      * an RTCRtpSender, and it must run solely after the party's explicit publish

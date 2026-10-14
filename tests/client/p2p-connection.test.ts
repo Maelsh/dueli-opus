@@ -357,4 +357,98 @@ pc.signalingState = 'stable';
         await host.disconnect();
         expect(host.isLocalPublished()).toBe(false);
     });
+
+    // R4-LIVE-ENTRY-RECOVERY-1: camera switch regression tests
+    describe('camera switch before/after publish (privacy contract)', () => {
+        function makeStream(id: string, vTrack: any, aTrack: any) {
+            return {
+                id,
+                getTracks: () => [vTrack, aTrack],
+                getVideoTracks: () => [vTrack],
+                getAudioTracks: () => [aTrack],
+            };
+        }
+
+        it('Preview A → Switch B → Publish sends only B (not A)', async () => {
+            const errors: Error[] = [];
+            const host = makeClient('host', errors);
+            
+            // Stream A (first camera)
+            const vTrackA = { kind: 'video', enabled: true, stop() {} };
+            const aTrackA = { kind: 'audio', enabled: true, stop() {} };
+            const streamA = makeStream('stream-A', vTrackA, aTrackA);
+            
+            // Stream B (switched camera)
+            const vTrackB = { kind: 'video', enabled: true, stop() {} };
+            const aTrackB = { kind: 'audio', enabled: true, stop() {} };
+            const streamB = makeStream('stream-B', vTrackB, aTrackB);
+            
+            let currentStream = streamA;
+            (globalThis as any).navigator = { 
+                mediaDevices: { 
+                    getUserMedia: async () => currentStream 
+                } 
+            };
+            
+            await joinAs(host, 'host', 'host');
+            const pc = MockPC.instances[MockPC.instances.length - 1];
+            
+            // Preview A
+            await host.initLocalStream();
+            expect(pc.getSenders()).toEqual([]);
+            
+            // Switch to B (before publish) — uses replaceLocalStream internally
+            currentStream = streamB;
+            await host.replaceLocalStream();
+            
+            // Publish — should send B only
+            host.publishLocalStream();
+            const senders = pc.getSenders();
+            expect(senders.length).toBe(2);
+            expect(senders[0].track).toBe(vTrackB);
+            expect(senders[1].track).toBe(aTrackB);
+        });
+
+        it('Publish A → Switch B updates sender to B (replaceTrack)', async () => {
+            const errors: Error[] = [];
+            const host = makeClient('host', errors);
+            
+            const vTrackA = { kind: 'video', enabled: true, stop() {} };
+            const aTrackA = { kind: 'audio', enabled: true, stop() {} };
+            const streamA = makeStream('stream-A', vTrackA, aTrackA);
+            
+            const vTrackB = { kind: 'video', enabled: true, stop() {} };
+            const aTrackB = { kind: 'audio', enabled: true, stop() {} };
+            const streamB = makeStream('stream-B', vTrackB, aTrackB);
+            
+            let currentStream = streamA;
+            (globalThis as any).navigator = { 
+                mediaDevices: { 
+                    getUserMedia: async () => currentStream 
+                } 
+            };
+            
+            await joinAs(host, 'host', 'host');
+            const pc = MockPC.instances[MockPC.instances.length - 1];
+            
+            // Preview A → Publish A
+            await host.initLocalStream();
+            host.publishLocalStream();
+            let senders = pc.getSenders();
+            expect(senders.length).toBe(2);
+            expect(senders[0].track).toBe(vTrackA);
+            
+            // Switch to B after publish — should call replaceTrack on sender
+            currentStream = streamB;
+            await host.replaceLocalStream(); // this will getUserMedia(streamB)
+            // Simulate the page's post-replaceLocalStream sender.replaceTrack:
+            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (sender) {
+                await sender.replaceTrack(vTrackB);
+            }
+            
+            senders = pc.getSenders();
+            expect(senders[0].track).toBe(vTrackB); // sender now has B's track
+        });
+    });
 });

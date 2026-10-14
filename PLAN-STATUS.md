@@ -1,3 +1,21 @@
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION #3 on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 **REMOTE REJECT #3 (2026-10-14) — 4 حواجز**: (1) CSP: `publishMedia` في ACTION_ALLOWLIST كان فقط `'window.publishMedia'` لكن HTML يستخدم `data-csp-fn="publishMedia"` العادي؛ (2) CAMERA STREAM: `switchCamera` قبل النشر لم يحدّث localStream في P2PConnection، فتُنشر الكاميرا الخاطئة؛ (3) SCREEN SHARE: `shareScreen` يعمل في وضع الاستعداد قبل الموافقة؛ (4) REGRESSION TESTS: غياب اختبارات تراجع تبديل الكاميرا.
+- **الإصلاحات المطبقة (ضمن نطاق 28.3 فقط)**:
+  1. **CSP**: إضافة `'publishMedia'` إلى قسم ACTION_ALLOWLIST العادي (csp-delegate.ts:256) لتطابق HTML `data-csp-fn="publishMedia"`. النقر الآن يستدعي الإجراء الصحيح. تحقق عبر اختبارات UI.
+  2. **CAMERA STREAM**: إضافة `P2PConnection.replaceLocalStream()` لتحديث localStream قبل النشر. `switchCamera` في الصفحتين الآن:
+     - قبل `mediaPublished`: يستدعي `p2p.replaceLocalStream()` → يحدّث localStream في P2PConnection + المعاينة
+     - بعد `mediaPublished`: يستخدم `sender.replaceTrack()` على المرسل المنشور
+     - مسار الفيديو القديم يُوقَف لتجنب تسريب الجهاز
+  3. **SCREEN SHARE**: مُبوَّب بـ `mediaPublished` في الصفحتين — يعيد خطأ إذا لم يُنشر بعد.
+  4. **REGRESSION TESTS**: إضافة اختبارين لتبديل الكاميرا في p2p-connection.test.ts:
+     - Preview A → Switch B → Publish: فقط مسارات B تُنشر (لا A)
+     - Publish A → Switch B: sender.replaceTrack يُحدّث إلى B
+- **الخصوصية مُتحقَّق**: موافقة منفصلة مضيف/ضيف؛ لا مرسلين/تسجيل قبل `publishLocalStream()`؛ `endStream` ينظف المؤقتات/المراقبين؛ اختيار الأجهزة قبل النشر؛ refresh → إعادة نشر؛ reconnect يحتفظ بالحالة المنشورة.
+- **الاختبارات**: +2 اختبارات تراجع للكاميرا (مجموع جديد: 28). الجناح الكامل: **1696 نجح، 6 فشل** (سابقة: 6 quality-gate-poll تحتاج jq). جميع اختبارات UI خضراء. `tsc --noEmit` ✅؛ `any` **291** ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة**: LOCAL VERIFIED (T/B) + S PENDING (وسائط الجهاز). ليست DONE/DEPLOYED. بلا دمج/نشر ذاتي.
+- **HEAD الجديد**: 1eaa470 → commits جديدة دفعت إلى PR #118.
+
 ## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
 
 - 🔧 **REMOTE REJECT (2026-10-14) — 4 حواجز**: (1) SYNTAX: أقواس زائدة/كتل مكررة في competition-page.ts و live-room-page.ts تُسبب فشل التحليل؛ (2) CSP: `publishMedia` غائب من ACTION_ALLOWLIST في csp-delegate.ts؛ (3) CAMERA SWITCH: `switchCamera` في الصفحتين يُسرب الوسائط عبر `sender.replaceTrack` قبل موافقة المستخدم؛ (4) SIGNALING: requestReoffer أثناء offer جارٍ، watcher يعيد التفاوض بعد recovery، مسار وسائط الضيف غير مؤكد.

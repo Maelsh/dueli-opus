@@ -1,3 +1,21 @@
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION #3 on PR #118 · branch feat/r4-live-entry-recovery-1 (from 23b8b69 = origin/main)
+
+- **REMOTE REJECT #3 (2026-10-14)**: 4 blockers — (1) CSP: `publishMedia` in ACTION_ALLOWLIST was only `'window.publishMedia'` but HTML uses plain `data-csp-fn="publishMedia"`; (2) CAMERA STREAM: `switchCamera` before publish did not update P2PConnection's localStream, so wrong camera published; (3) SCREEN SHARE: `shareScreen` allowed in prep mode before consent; (4) REGRESSION TESTS: missing camera-switch regression tests.
+- **Fixes applied (all within 28.3 scope)**:
+  1. **CSP**: added `'publishMedia'` to plain ACTION_ALLOWLIST section (csp-delegate.ts:256) matching HTML `data-csp-fn="publishMedia"`. Click now dispatches correctly. Verified via UI tests.
+  2. **CAMERA STREAM**: added `P2PConnection.replaceLocalStream()` to update localStream before publish. `switchCamera` in both pages now:
+     - Before `mediaPublished`: calls `p2p.replaceLocalStream()` → updates P2PConnection's localStream + preview
+     - After `mediaPublished`: uses `sender.replaceTrack()` on published sender
+     - Old video track stopped to avoid device leak
+  3. **SCREEN SHARE**: gated behind `mediaPublished` in both pages — returns error toast if not published.
+  4. **REGRESSION TESTS**: added 2 camera-switch tests in p2p-connection.test.ts:
+     - Preview A → Switch B → Publish: only B's tracks published (not A)
+     - Publish A → Switch B: sender.replaceTrack updates to B
+- **Privacy verified**: separate host/guest consent; no senders/recording before `publishLocalStream()`; `endStream` cleans timers/watchers; device selection before publish; refresh→re-publish; reconnect keeps published.
+- **Tests**: +2 camera-switch regression tests (total new: 28). Full suite: **1696 passed, 6 failed** (pre-existing: 6 quality-gate-poll need jq). All UI tests green. `tsc --noEmit` ✅; `any` **291** ≤ 310 base ✅; `npm run build` ✅; SEC-06 ✅.
+- **State**: LOCAL VERIFIED (T/B) + S PENDING (device media). Not DONE/DEPLOYED. No merge/self-deploy.
+- **HEAD**: 1eaa470 → new commits pushed to PR #118.
+
 ## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION on PR #118 · branch feat/r4-live-entry-recovery-1 (from 23b8b69 = origin/main)
 
 - **REMOTE REJECT (2026-10-14)**: 4 blockers — (1) SYNTAX: extra braces/duplicate blocks in competition-page.ts & live-room-page.ts causing parse failures; (2) CSP: `publishMedia` missing from ACTION_ALLOWLIST in csp-delegate.ts; (3) CAMERA SWITCH: `switchCamera` in both pages leaked media via `sender.replaceTrack` before user consent; (4) SIGNALING: requestReoffer during in-flight offer, watcher re-negotiation on recovery, guest media path uncertainty.

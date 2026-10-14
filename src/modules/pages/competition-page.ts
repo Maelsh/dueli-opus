@@ -2313,25 +2313,32 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         if (btn) btn.innerHTML = localVideoVisible ? '<i class="fas fa-user-circle"></i>' : '<i class="fas fa-user-slash"></i>';
       };
       
-      window.switchCamera = async function() {
+window.switchCamera = async function() {
         if (userRole === 'viewer' || !p2p) return;
         try {
           currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-          const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: currentFacingMode },
-            audio: true
-          });
           
-          // R4-LIVE-ENTRY-RECOVERY-1: before publish, only update local preview
-          // (no sender exists yet). After publish, replace the published track.
+          // R4-LIVE-ENTRY-RECOVERY-1: before publish, update P2PConnection's localStream
+          // so the selected camera is used on publish. After publish, use replaceTrack.
           if (mediaPublished) {
+            const newStream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: currentFacingMode },
+              audio: true
+            });
             const videoTrack = newStream.getVideoTracks()[0];
             const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
               await sender.replaceTrack(videoTrack);
             }
+            document.getElementById('localVideo').srcObject = newStream;
+          } else {
+            // Before publish: update P2PConnection's localStream so publishLocalStream uses the new camera
+            const newStream = await p2p.replaceLocalStream({
+              video: { facingMode: currentFacingMode },
+              audio: true
+            });
+            document.getElementById('localVideo').srcObject = newStream;
           }
-          document.getElementById('localVideo').srcObject = newStream;
         } catch (err) {
           log('Camera switch failed: ' + err.message, 'error');
         }
@@ -2339,6 +2346,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       
       window.shareScreen = async function() {
         if (!p2p) return;
+        // R4-LIVE-ENTRY-RECOVERY-1: screen share only after explicit publish consent
+        if (!mediaPublished) {
+          showToast(tr.camera_error || 'Must publish before screen sharing', 'error');
+          return;
+        }
         try {
           const screenStream = await navigator.mediaDevices.getDisplayMedia({
             video: { cursor: 'always' },

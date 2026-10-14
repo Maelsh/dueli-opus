@@ -981,22 +981,28 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
                     log('Switching to ' + currentFacingMode + ' camera...', 'info');
                     
-                    const newStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: currentFacingMode },
-                        audio: true
-                    });
-                    
-                    // R4-LIVE-ENTRY-RECOVERY-1: before publish, only update local preview
-                    // (no sender exists yet). After publish, replace the published track.
+                    // R4-LIVE-ENTRY-RECOVERY-1: before publish, update P2PConnection's localStream
+                    // so the selected camera is used on publish. After publish, use replaceTrack.
                     if (mediaPublished) {
+                        const newStream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: currentFacingMode },
+                            audio: true
+                        });
                         const videoTrack = newStream.getVideoTracks()[0];
                         const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
                         if (sender) {
                             await sender.replaceTrack(videoTrack);
                             log('Camera switched successfully', 'success');
                         }
+                        localVideo.srcObject = newStream;
+                    } else {
+                        // Before publish: update P2PConnection's localStream so publishLocalStream uses the new camera
+                        const newStream = await p2p.replaceLocalStream({
+                            video: { facingMode: currentFacingMode },
+                            audio: true
+                        });
+                        localVideo.srcObject = newStream;
                     }
-                    localVideo.srcObject = newStream;
                 } catch (err) {
                     log('Failed to switch camera: ' + err.message, 'error');
                 }
@@ -1056,6 +1062,11 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             window.shareScreen = async function() {
                 if (!p2p) {
                     log('P2P not initialized', 'error');
+                    return;
+                }
+                // R4-LIVE-ENTRY-RECOVERY-1: screen share only after explicit publish consent
+                if (!mediaPublished) {
+                    showMessage(tr.camera_error || 'Must publish before screen sharing', 'error');
                     return;
                 }
                 
