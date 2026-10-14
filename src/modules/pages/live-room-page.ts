@@ -80,6 +80,14 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             
                             <!-- Competitor-only controls -->
                             <div id="competitorControls" class="flex items-center gap-1">
+                                <!-- R4-LIVE-ENTRY-RECOVERY-1: explicit publish consent gate -->
+                                <button data-csp-on="click" data-csp-fn="publishMedia" data-csp-args='[]' id="publishBtn" class="px-3 py-2 rounded-lg bg-green-600/90 text-white hover:bg-green-700 transition-colors flex items-center gap-1" aria-label="${tr.prep_publish_host || 'Start Broadcast'}" title="${tr.prep_publish_host || 'Start Broadcast'}">
+                                    <i class="fas fa-broadcast-tower"></i>
+                                    <span class="hidden sm:inline text-sm">${tr.prep_publish_host || 'Start Broadcast'}</span>
+                                </button>
+                                <!-- Privacy hint (shown in prep state) -->
+                                <div id="prepHint" class="text-xs text-gray-300 dark:text-gray-400 hidden" aria-live="polite">${tr.prep_privacy_hint || 'Your audio/video is not sent until you press the publish button.'}</div>
+
                                 <!-- Hide My Video -->
                                 <button data-csp-on="click" data-csp-fn="toggleLocalVideo" data-csp-args='[]' id="localVideoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="${tr.toggle_my_video || 'Toggle My Video'}" title="${tr.toggle_my_video || 'Toggle My Video'}">
                                     <i class="fas fa-user-circle"></i>
@@ -256,6 +264,9 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             let commentsVisible = true;
             let localVideoVisible = true;
             let currentFacingMode = 'user'; // 'user' or 'environment'
+            // R4-LIVE-ENTRY-RECOVERY-1: consent gate state + duration ticker handle
+            let mediaPublished = false;
+            let durationTicker = null;
             
             // Simple console-only log
             function log(msg, type = 'info') {
@@ -415,6 +426,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 document.getElementById('audioBtn').classList.add('hidden');
                 document.getElementById('videoBtn').classList.add('hidden');
                 document.getElementById('endBtn').classList.add('hidden');
+                document.getElementById('publishBtn')?.classList.add('hidden');
                 // R1.7: comments have no visible target in viewer mode —
                 // hide the input bar so Send never promises what viewers cannot see.
                 document.getElementById('commentInputBar').classList.add('hidden');
@@ -508,13 +520,8 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         remoteVideo.srcObject = stream;
                         waitingOverlay.classList.add('hidden');
                         
-                        // If host, start recording after we have both streams
-                        if (userRole === 'host' && compositor) {
-                            log('Starting recording in 1 second...', 'info');
-                            setTimeout(() => {
-                                startRecording();
-                            }, 1000);
-                        }
+                        // R4-LIVE-ENTRY-RECOVERY-1: recording only after explicit host publish
+                        maybeStartRecording();
                     },
                     onConnectionStateChange: (state) => {
                         log('Connection state: ' + state, state === 'connected' ? 'success' : 'info');
@@ -558,21 +565,31 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         initCompositor();
                     }
                     
-                    // Check if opponent is already in room
+                    // Check if opponent is already in room (informational)
                     const status = await p2p.getRoomStatus();
                     log('Room status: Host=' + status?.host_joined + ', Opponent=' + status?.opponent_joined, 'info');
                     
-                    if (status) {
-                        if (userRole === 'host' && status.opponent_joined) {
-                            log('Opponent already in room! Creating offer...', 'info');
-                            await p2p.createOffer();
-                            log('Offer created and sent', 'success');
-                        } else if (userRole === 'opponent' && status.host_joined) {
-                            log('Host already in room. Waiting for offer...', 'info');
-                        }
+                    if (status && userRole === 'opponent' && status.host_joined) {
+                        log('Host already in room. Waiting for offer...', 'info');
                     }
                     
-                    // If host, watch for opponent
+                    // R4-LIVE-ENTRY-RECOVERY-1: show explicit publish consent UI
+                    // No offer/recording until the party explicitly publishes.
+                    const publishBtn = document.getElementById('publishBtn');
+                    const prepHint = document.getElementById('prepHint');
+                    if (publishBtn) {
+                        publishBtn.classList.remove('hidden');
+                        if (userRole === 'host') {
+                            publishBtn.innerHTML = '<i class="fas fa-broadcast-tower"></i><span class="hidden sm:inline text-sm">' + (tr.prep_publish_host || 'Start Broadcast') + '</span>';
+                            publishBtn.setAttribute('aria-label', tr.prep_publish_host || 'Start Broadcast');
+                        } else {
+                            publishBtn.innerHTML = '<i class="fas fa-share"></i><span class="hidden sm:inline text-sm">' + (tr.prep_publish_guest || 'Publish & Join') + '</span>';
+                            publishBtn.setAttribute('aria-label', tr.prep_publish_guest || 'Publish & Join');
+                        }
+                    }
+                    if (prepHint) prepHint.classList.remove('hidden');
+                    
+                    // If host, watch for opponent (but will only offer after publish)
                     if (userRole === 'host') {
                         log('Starting opponent watcher...', 'info');
                         watchForOpponent();
@@ -584,6 +601,76 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 }
             }
             
+            }
+            
+            // R4-LIVE-ENTRY-RECOVERY-1: explicit publish consent gate
+            async function publishMedia() {
+                if (!p2p || mediaPublished) return;
+                const publishBtn = document.getElementById('publishBtn');
+                const prepHint = document.getElementById('prepHint');
+                if (publishBtn) {
+                    publishBtn.disabled = true;
+                    publishBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span class="hidden sm:inline text-sm">' + (tr.prep_publishing || 'Publishing...') + '</span>';
+                }
+                try {
+                    const ok = p2p.publishLocalStream();
+                    if (!ok) {
+                        throw new Error('Failed to publish local media');
+                    }
+                    mediaPublished = true;
+                    log('Local media published', 'success');
+                    
+                    // Update UI to published state
+                    if (publishBtn) {
+                        publishBtn.classList.add('hidden');
+                    }
+                    if (prepHint) prepHint.classList.add('hidden');
+                    // Show published status (could be a toast or status element)
+                    showToast(tr.prep_published || 'Published — media is now live', 'success');
+                    
+                    if (userRole === 'host') {
+                        // Host: proceed to offer if opponent present, start watcher, maybe record
+                        const status = await p2p.getRoomStatus();
+                        if (status && status.opponent_joined) {
+                            log('Opponent present — creating offer', 'info');
+                            await p2p.createOffer();
+                        }
+                        watchForOpponent();
+                        maybeStartRecording();
+                    } else {
+                        // Guest: request host to re-offer so guest's media can flow
+                        await p2p.requestReoffer();
+                        // Show waiting state
+                        showToast(tr.prep_waiting_guest || 'Waiting for host to start...', 'info');
+                    }
+                } catch (err) {
+                    log('Publish failed: ' + err.message, 'error');
+                    showMessage(tr.camera_error || 'Failed to publish media', 'error');
+                    if (publishBtn) {
+                        publishBtn.disabled = false;
+                        if (userRole === 'host') {
+                            publishBtn.innerHTML = '<i class="fas fa-broadcast-tower"></i><span class="hidden sm:inline text-sm">' + (tr.prep_publish_host || 'Start Broadcast') + '</span>';
+                        } else {
+                            publishBtn.innerHTML = '<i class="fas fa-share"></i><span class="hidden sm:inline text-sm">' + (tr.prep_publish_guest || 'Publish & Join') + '</span>';
+                        }
+                    }
+                }
+            }
+            
+            // R4-LIVE-ENTRY-RECOVERY-1: recording only after host's explicit publish
+            function maybeStartRecording() {
+                if (userRole !== 'host' || !p2p || !compositor) return;
+                if (!p2p.isLocalPublished()) return; // host must publish first
+                if (compositor.getStats().isRecording) return;
+                log('Media ready check for recording...', 'info');
+                waitForMediaReady().then(function() {
+                    if (compositor && !compositor.getStats().isRecording && p2p.isLocalPublished()) {
+                        log('Starting recording', 'info');
+                        compositor.startRecording();
+                    }
+                });
+            }
+            
             // Watch for opponent to join (host only; restartable so a bounded
             // session reconnect can re-arm the offer without rebuilding P2P)
             let opponentWatcher = null;
@@ -591,6 +678,8 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 if (opponentWatcher) clearInterval(opponentWatcher);
                 opponentWatcher = setInterval(async () => {
                     if (!p2p) return;
+                    // R4-LIVE-ENTRY-RECOVERY-1: only offer after local media is published
+                    if (!p2p.isLocalPublished()) return;
                     const status = await p2p.getRoomStatus();
                     if (status && status.opponent_joined && !p2p.isP2PConnected()) {
                         console.log('[LiveRoom] Opponent joined, creating offer');
@@ -694,7 +783,8 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const secs = (elapsed % 60).toString().padStart(2, '0');
                 document.getElementById('streamDuration').textContent = mins + ':' + secs;
                 
-                setTimeout(updateDuration, 1000);
+                // R4-LIVE-ENTRY-RECOVERY-1: store handle for cleanup
+                durationTicker = setTimeout(updateDuration, 1000);
             }
             
             // Update connection status
@@ -1019,6 +1109,10 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 
                 log('Ending stream...', 'info');
                 const vodUrl = streamServerUrl + '/storage/vod/match_' + competitionId + '.mp4';
+                
+                // R4-LIVE-ENTRY-RECOVERY-1: cleanup self-rescheduling timers
+                if (durationTicker) { clearTimeout(durationTicker); durationTicker = null; }
+                if (opponentWatcher) { clearInterval(opponentWatcher); opponentWatcher = null; }
                 
                 try {
                     // Stop compositor if host — destroy() drains the final

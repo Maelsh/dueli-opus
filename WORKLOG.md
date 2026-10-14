@@ -1,4 +1,26 @@
-## 2026-10-12 — R4-CHUNK-PLAYER-UX-1 REMOTE-REJECT FIX on PR #113 (same branch, no merge/deploy)
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) private prep & explicit consent gate · branch feat/r4-live-entry-recovery-1 (from 23b8b69 = origin/main)
+
+- **Scope (15 §11 + Owner Decisions 08, defect classes C/D/E/F/G + privacy contract)**: private pre-broadcast preview for host & guest; getUserMedia ≠ publish consent; no media/recording before explicit per-party "publish" action; host starts competition with publish confirmation; guest confirms independently; clear waiting state for guest before host starts; refresh/reconnect do NOT expose new-session media without explicit action; no duplicate PC/recorder/lease/polling; lifecycle cleanup.
+- **Defect classification with evidence**:
+  - **Privacy contract (CONFIRMED)**: `initLocalStream()` immediately `addTrack`ed tracks on PC (P2PConnection.ts:248-252) at page load in both production pages (live-room-page.ts:551, competition-page.ts:2146) with no consent gate. Recording triggers on onRemoteStream/connected from the same un-consented stream (live-room-page.ts:512-517, competition-page.ts:2120-2128). No grep hits for consent/publish in src. **Fixed**: split media acquisition from publishing — `initLocalStream()` now only acquires self-preview; `publishLocalStream()` adds tracks to PC after explicit consent; host "Start Broadcast" / guest "Publish & Join" buttons wired; recording gated on `p2p.isLocalPublished()`.
+  - **C — stable-state race (CONFIRMED)**: `createOffer()` had no in-flight / `signalingState === 'stable'` guard; multiple triggers (initial, watcher, ICE-restart, recovery, request_offer) could race `setLocalDescription` → `InvalidStateError`. **Fixed**: in-flight flag + stable-state skip in `createOffer()`.
+  - **D — 429/Retry-After (CONFIRMED)**: `pollOnce()` swallowed 429 silently (SignalingManager.ts:434); no Retry-After/retryAfter handling in poll or reconnect; global limiter returns 429 with retryAfter body (security.ts:58-64). **Fixed**: `honorRateLimit()` reads header/body, sets `pollBackoffUntil`, skips poll ticks during backoff; reconnect uses max(policy, retryAfter). Heartbeat/TURN untouched.
+  - **E/F — lease divergence (CONFIRMED)**: /live wired `PlatformRecordingLease` (live-room-page.ts:618-620); competition page `initCompetitorCompositor` passed no lease (competition-page.ts:2018-2047) → un-fenced dual recording + two independent recording triggers (onRemoteStream + connected). **Fixed**: added lease wiring to competition page; single recording path via `maybeStartRecording()` gated on host publish + media-ready.
+  - **Lifecycle/cleanup (CONFIRMED)**: self-rescheduling `setTimeout` duration ticker never cleared (live-room-page.ts:697, competition-page.ts:2057); watchers could persist. **Fixed**: `durationTicker` handle stored + cleared in `endStream()`; `opponentWatcher`/`competitorWatcher` cleared.
+  - **Camera/audio (PENDING — S on device)**: sensory verification requires real hardware; marked PENDING.
+- **Files modified**:
+  - `src/client/services/P2PConnection.ts` — consent split, publishLocalStream, createOffer stable-state/in-flight guard
+  - `src/client/services/SignalingManager.ts` — 429 poll backoff + reconnect Retry-After
+  - `src/modules/pages/live-room-page.ts` — publish button + consent UI, gate offer/recording, duration cleanup, viewer-mode hide
+  - `src/modules/pages/competition-page.ts` — publish button + consent UI, gate offer/recording, lease wiring, duration cleanup
+  - `src/i18n/en.ts`, `src/i18n/ar.ts` — new keys: prep_privacy_hint, prep_publish_host, prep_publish_guest, prep_publishing, prep_published, prep_waiting_host, prep_waiting_guest
+  - `tests/client/signaling-harness.ts` — MockPC extended with signalingState, senders tracking, addTrack/getSenders
+  - `tests/client/p2p-connection.test.ts` — consent gate + stable-state guard tests
+  - `tests/client/signaling-manager.test.ts` — 429 backoff tests
+- **Tests**: 26 new tests pass (4 consent + 2 stable-state + 3 429 + existing 17). Full suite: 1690 passed, 10 failed (pre-existing: 6 quality-gate-poll require jq, 1 player-ux syntax, 3 unrelated).
+- **Gates**: `tsc --noEmit` ✅; `any` count 291 ≤ 310 base ✅; `npm run build` ✅; SEC-06 ✅.
+- **State**: LOCAL VERIFIED (T/B) + S PENDING (device media). Not DONE/DEPLOYED. No merge/self-deploy.
+- **ROLLBACK (G8)**: revert branch commits (service + page + i18n + tests; no migrations/data/flags/routes).
 
 - **REMOTE verdict**: REJECT — single blocker: `timeline_start_ms` is milliseconds (server/model domain) while every player time comparison runs in seconds, so indexed VOD seek resolved to chunk zero. My fixture 9 used seconds-scale values (0/12/24) and masked it.
 - **Fix (exclusive scope, 3 paths)**: (1) `SmartVodPlayer.buildTimeMap` divides ms→s once at the boundary (all seek/position math downstream stays seconds); (2) `ServedChunk.timeline_start_ms` contract documented (ms on the wire; seconds-domain consumers must convert — cites the root cause); (3) fixture 9 corrected to realistic 0/10000/20000 ms + seeks asserting chunks 1/2 + offset math. No model/route/contract change (server stays ms — stable for Recovery C/PHP).

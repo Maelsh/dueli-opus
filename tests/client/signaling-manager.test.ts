@@ -326,3 +326,96 @@ describe('signaling fetch timeout', () => {
         await mgr.disconnect();
     });
 });
+
+/* ---------- R4-LIVE-ENTRY-RECOVERY-1: 429/Retry-After (defect D) ---------- */
+
+describe('R4-LIVE-ENTRY-RECOVERY-1 429 backoff', () => {
+    it('pollOnce honors 429 with Retry-After body and backs off subsequent polls', async () => {
+        vi.useFakeTimers();
+        const { mgr } = await connectHost();
+        
+        // First poll: 429 with retryAfter in body
+        setFetchHandler(async (url) => {
+            if (url.includes('/poll')) {
+                return { ok: false, status: 429, headers: { get: () => null }, json: async () => ({ success: false, retryAfter: 3 }) };
+            }
+            return okJson({ success: true, data: {} });
+        });
+        
+        await mgr.pollOnce();
+        // Backoff should be set (~3s)
+        const backoff1 = mgr.pollBackoffRemainingMs();
+        expect(backoff1).toBeGreaterThan(2500);
+        expect(backoff1).toBeLessThanOrEqual(3000);
+        
+        // Second poll immediately — should be skipped (no fetch called)
+        fetchCalls.length = 0;
+        await mgr.pollOnce();
+        const polls = fetchCalls.filter(c => c.url.includes('/poll')).length;
+        expect(polls).toBe(0); // skipped due to backoff
+        
+        // Advance past backoff (3.5s > 3s retryAfter)
+        await vi.advanceTimersByTimeAsync(3500);
+        // Now the polling interval (1s) will fire and proceed since backoff expired
+        setFetchHandler(async (url) => {
+            if (url.includes('/poll')) return okJson({ success: true, data: { role: 'host', peer: 'host', signals: [] } });
+            return okJson({ success: true, data: {} });
+        });
+        // Let the interval fire once (1s tick)
+        await vi.advanceTimersByTimeAsync(1100);
+        
+        const pollsAfterBackoff = fetchCalls.filter(c => c.url.includes('/poll')).length;
+        expect(pollsAfterBackoff).toBeGreaterThanOrEqual(1); // interval fired and proceeded
+        
+        await mgr.disconnect();
+    });
+
+    it('pollOnce honors Retry-After header (seconds) over body default', async () => {
+        vi.useFakeTimers();
+        const { mgr } = await connectHost();
+        
+        setFetchHandler(async (url) => {
+            if (url.includes('/poll')) {
+                return { ok: false, status: 429, headers: { get: (h: string) => h === 'Retry-After' ? '5' : null }, json: async () => ({ success: false }) };
+            }
+            return okJson({ success: true, data: {} });
+        });
+        
+        await mgr.pollOnce();
+        const backoff = mgr.pollBackoffRemainingMs();
+        expect(backoff).toBeGreaterThan(4500);
+        expect(backoff).toBeLessThanOrEqual(5000);
+        
+        await mgr.disconnect();
+    });
+
+    it('reconnect honors 429 Retry-After (header or body) and uses max(policy, retryAfter)', async () => {
+        vi.useFakeTimers();
+        const errors: Error[] = [];
+        setFetchHandler(async (url) => {
+            if (url.includes('/api/signaling/verify')) return okJson({ valid: true });
+            if (url.includes('/session/join')) return okJson({ success: true, data: { role: 'host', peer: 'host' } });
+            if (url.includes('/signaling/reconnect')) {
+                return { ok: false, status: 429, headers: { get: (h: string) => h === 'Retry-After' ? '2' : null }, json: async () => ({ success: false }) };
+            }
+            if (url.includes('/poll')) return okJson({ success: true, data: { role: 'host', peer: 'host', signals: [] } });
+            return okJson({ success: true, data: {} });
+        });
+        const mgr = new SignalingManager({
+            roomId: 'comp_7201', role: 'host', token: 'test-sid', logger: () => {}, onError: (e) => errors.push(e),
+        });
+        await mgr.connect();
+        
+        // Trigger reconnect with 429
+        const recovered = mgr.reconnectAfterInterruption();
+        
+        // Wait for the attempt + backoff
+        await vi.advanceTimersByTimeAsync(3000); // 2s retryAfter dominates 1s base
+        
+        // The reconnect should have retried with the longer delay
+        const reconnectCalls = fetchCalls.filter(c => c.url.includes('/signaling/reconnect'));
+        expect(reconnectCalls.length).toBeGreaterThanOrEqual(2);
+        
+        await mgr.disconnect();
+    });
+});

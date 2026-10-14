@@ -214,6 +214,8 @@ export class SignalingManager {
     private pollInFlight = false;
     private heartbeatInterval: number | null = null;
     private lastTimestamp = 0;
+    /** ms epoch until which polling is suspended after a server 429 (defect D). */
+    private pollBackoffUntil = 0;
     private peerWasConnected = false;
     private isConnected = false;
     private serverRole: string | null = null;
@@ -418,6 +420,11 @@ export class SignalingManager {
     async pollOnce(endpoint?: string, peerLabel?: string, token?: string | null): Promise<void> {
         if (this.pollInFlight) return;
         if (!this.isConnected) return;
+        // R4-LIVE-ENTRY-RECOVERY-1 (defect D — 429/Retry-After): while the
+        // server has rate-limited this client, skip the poll instead of
+        // hammering the endpoint at the fixed 1s cadence. Heartbeat and TURN
+        // are untouched; only the poll cadence honors the rate-limit signal.
+        if (this.pollBackoffUntil && Date.now() < this.pollBackoffUntil) return;
         this.pollInFlight = true;
         try {
             const ep = endpoint ?? (this.mode === 'viewer' ? '/api/signaling/viewer/poll' : '/api/signaling/poll');
@@ -430,6 +437,12 @@ export class SignalingManager {
                 + '&since=' + encodeURIComponent(String(this.lastTimestamp || 0)),
                 { headers },
             );
+            if (res.status === 429) {
+                // Read body once for rate-limit handling
+                const body = (await res.json().catch(() => null)) as { retryAfter?: unknown; retryAfterSeconds?: unknown } | null;
+                this.honorRateLimit(res, body);
+                return;
+            }
             const data = (await res.json().catch(() => null)) as PollWire | null;
             if (!data || !data.success) return;
 
@@ -560,6 +573,7 @@ export class SignalingManager {
         this.onReconnecting();
         const maxAttempts = this.policy.limits.maxAttempts;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            let attemptDelay = this.policy.delayForAttempt(attempt);
             try {
                 const body: Record<string, unknown> = { competition_id: Number(this.competitionId) };
                 if (this.mode !== 'viewer' && this.role) body['claimed_role'] = this.role;
@@ -590,6 +604,29 @@ export class SignalingManager {
                     this.onReconnectFailed({ reason: 'unauthorized', status: res.status });
                     return null;
                 }
+                // R4-LIVE-ENTRY-RECOVERY-1 (defect D — 429/Retry-After on reconnect):
+                // if the reconnect itself is rate-limited, honor the Retry-After
+                // (header or body) by backing off this attempt. 429 is NOT
+                // terminal — we retry on the capped schedule, but with a delay
+                // that respects the server's signal.
+                if (res.status === 429) {
+                    let secs = 0;
+                    try {
+                        const ra = res.headers?.get?.('Retry-After');
+                        const n = Number(ra);
+                        if (Number.isFinite(n) && n > 0) secs = n;
+                    } catch { /* no headers */ }
+                    const body = data as unknown as { retryAfter?: unknown; retryAfterSeconds?: unknown } | null;
+                    if (secs <= 0 && body) {
+                        const n = typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds
+                            : typeof body.retryAfter === 'number' ? body.retryAfter : NaN;
+                        if (Number.isFinite(n) && n > 0) secs = n;
+                    }
+                    if (secs <= 0) secs = 5; // server default when absent
+                    const backoffMs = Math.min(30000, Math.max(1000, secs * 1000));
+                    this.log('Reconnect rate-limited (429) — backing off ' + backoffMs + 'ms', 'warn');
+                    attemptDelay = Math.max(attemptDelay, backoffMs);
+                }
             } catch {
                 // Transient network error → next bounded attempt.
             }
@@ -598,6 +635,36 @@ export class SignalingManager {
         this.reconnecting = false;
         this.onReconnectFailed({ reason: 'exhausted', attempts: maxAttempts });
         return null;
+    }
+
+    /**
+     * R4-LIVE-ENTRY-RECOVERY-1 (defect D): called when a 429 is received on a
+     * poll or reconnect. Extracts Retry-After from header (seconds) or JSON
+     * body (retryAfter/retryAfterSeconds), clamps to [1s, 30s], defaults 5s.
+     * Sets the poll backoff deadline so subsequent pollOnce calls return early
+     * instead of hammering the endpoint. Heartbeat/ICE/TURN are untouched.
+     */
+    private honorRateLimit(res: Response, body: { retryAfter?: unknown; retryAfterSeconds?: unknown } | null): void {
+        let secs = 0;
+        try {
+            const ra = res.headers?.get?.('Retry-After');
+            const n = Number(ra);
+            if (Number.isFinite(n) && n > 0) secs = n;
+        } catch { /* no headers */ }
+        if (secs <= 0 && body) {
+            const n = typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds
+                : typeof body.retryAfter === 'number' ? body.retryAfter : NaN;
+            if (Number.isFinite(n) && n > 0) secs = n;
+        }
+        if (secs <= 0) secs = 5;
+        const backoffMs = Math.min(30000, Math.max(1000, secs * 1000));
+        this.pollBackoffUntil = Date.now() + backoffMs;
+        this.log('Polling rate-limited (429) — backing off ' + backoffMs + 'ms', 'warn');
+    }
+
+    /** ms remaining until polling resumes after a 429 (0 if not backed off) — introspection for tests. */
+    pollBackoffRemainingMs(): number {
+        return Math.max(0, this.pollBackoffUntil - Date.now());
     }
 
     async disconnect(): Promise<void> {

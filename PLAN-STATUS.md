@@ -1,4 +1,21 @@
-## ROW28 hosting artifacts + production MP4 fix · فرع fix/row28-hosting-artifacts (من 19b686e = PR116 المدمج)
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) private prep & explicit consent gate · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/كتابة إنتاجية/PHP/أسرار/هجرات. تنفيذي في worktree منفصلة (بدون تعارض).
+- **النطاق (15 §11 + قرارات المالك 08، فئات العيوب C/D/E/F/G + عقد الخصوصية)**: معاينة محلية خاصة للمضيف والضيف؛ getUserMedia ≠ موافقة نشر؛ لا وسائط/تسجيل قبل إجراء "نشر" صريح لكل طرف؛ المضيف يبدأ المنافسة بتأكيد النشر؛ الضيف يوافق مستقلاً؛ حالة انتظار صريحة للضيف قبل بدء المضيف؛ refresh/reconnect لا يكشفان وسائط جلسة جديدة بلا إجراء صريح؛ لا PC/مسجل/lease/polling مكررين؛ تنظيف دورة الحياة.
+- **تصنيف العيوب مع دليل**:
+  - **عقد الخصوصية (مُثبَت)**: `initLocalStream()` تضيف المسارات للـPC فوراً (P2PConnection.ts:248-252) عند تحميل الصفحة في صفحتي الإنتاج (live-room-page.ts:551, competition-page.ts:2146) بلا بوابة موافقة. التسجيل يُشغَّل من onRemoteStream/connected من نفس التدفق غير المُوافَق عليه (live-room-page.ts:512-517, competition-page.ts:2120-2128). لا نتائج grep لـ consent/publish في src. **مُصلح**: فصل اكتساب الوسائط عن النشر — `initLocalStream()` يكتسب المعاينة فقط؛ `publishLocalStream()` تضيف المسارات للـPC بعد موافقة صريحة؛ أزرار "ابدأ البث" للمضيف / "انشر وانضم" للضيف مربوطة؛ التسجيل مُبوَّب بـ `p2p.isLocalPublished()`.
+  - **C — تنافس stable-state (مُثبَت)**: `createOffer()` بلا حارس in-flight / `signalingState === 'stable'`؛ محفزات متعددة (أولي، watcher، ICE-restart، recovery، request_offer) يمكن أن تتسابق على `setLocalDescription` → `InvalidStateError`. **مُصلح**: علم in-flight + تخطي عند stable-state في `createOffer()`.
+  - **D — 429/Retry-After (مُثبَت)**: `pollOnce()` تبتلع 429 بصمت (SignalingManager.ts:434)؛ لا معالجة Retry-After/retryAfter في poll ولا reconnect؛ المحدد العام يعيد 429 مع retryAfter في الجسم (security.ts:58-64). **مُصلح**: `honorRateLimit()` يقرأ الترويسة/الجسم، يضبِط `pollBackoffUntil`، يتجاوز نُدوب poll أثناء الرجوع؛ reconnect يستخدم max(السياسة، retryAfter). Heartbeat/TURN لم يُمسّا.
+  - **E/F — تباين lease (مُثبَت)**: /live سلك `PlatformRecordingLease` (live-room-page.ts:618-620)؛ صفحة المنافسة `initCompetitorCompositor` بلا lease (competition-page.ts:2018-2047) → تسجيل مزدوج غير مسيّج + محفّزان مستقلان للتسجيل (onRemoteStream + connected). **مُصلح**: إضافة توصيل lease لصفحة المنافسة؛ مسار تسجيل واحد عبر `maybeStartRecording()` مُبوَّب بنشر المضيف + جاهزية الوسائط.
+  - **دورة الحياة/تنظيف (مُثبَت)**: مؤقت `setTimeout` ذاتي للـduration لا يُمسح (live-room-page.ts:697, competition-page.ts:2057)؛ watchers يمكن أن تظل. **مُصلح**: مُقبض `durationTicker` مخزَّن + يُمسح في `endStream()`؛ `opponentWatcher`/`competitorWatcher` يُمسحان.
+  - **الكاميرا/الصوت (PENDING — S على الجهاز)**: التحقق الحسي يتطلب أجهزة حقيقية؛ مُعَلَّم PENDING.
+- **الملفات المعدّلة**: P2PConnection.ts, SignalingManager.ts, live-room-page.ts, competition-page.ts, i18n (ar/en), signaling-harness.ts, اختبارات p2p-connection + signaling-manager.
+- **الاختبارات**: 26 اختبار جديد يمر (4 موافقة + 2 stable-state + 3 تراجع 429 + 17 موجودة). الجناح الكامل: 1690 نجح، 10 فشل (سابقة: 6 quality-gate-poll تتطلب jq، 1 player-ux نحوية، 3 غير ذات صلة).
+- **البوابات**: `tsc --noEmit` ✅؛ `any` = 291 ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة**: LOCAL VERIFIED (T/B) + S PENDING (وسائط الجهاز). ليست DONE/DEPLOYED. بلا دمج/نشر ذاتي.
+- **التراجع (G8)**: revert التزامات الفرع (خدمات + صفحات + i18n + اختبارات؛ لا ترحيل/بيانات/أعلام/مسارات).
+
+## 2026-10-12 — R4-CHUNK-PLAYER-UX-1 REMOTE-REJECT FIX on PR #113 (same branch, no merge/deploy)
 
 - 🔧 نطاقَان في PR واحد، LOCAL T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/إنتاج/ROW30/تعديل D1 أو هجرات أو أسرار استضافة.
 - **النطاق أ — ملفات المالك (مُعتمدة كما هي):** `upload-config.php` يعيد **مصفوفة** (`platform_url`/`upload_secret`/`browser_origins`/`storage_root`) مع تجاوز `DUELI_UPLOAD_CONFIG` و`.env` يملأ الناقص فقط؛ مثال بلا أسرار + `README-AR.md` عربي. عُدِّل README ليطابق السلوك الفعلي للملف (شكل الرد، جدول حالات HTTP الحقيقي، DELETE بعد الحفظ، لا getID3/فحص ترويسات) دون تعديل PHP لمطابقة التوثيق؛ ملف المالك مُحافظ عليه. `upload-config.php` الحقيقي صار مُتجاهَلًا في Git (سر المضيف لا يُتبَّع أبدًا).

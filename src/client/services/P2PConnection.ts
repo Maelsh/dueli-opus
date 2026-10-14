@@ -88,6 +88,15 @@ export class P2PConnection {
      * never leak across sessions or connection attempts.
      */
     private sessionGeneration = 0;
+    /**
+     * R4-LIVE-ENTRY-RECOVERY-1 (privacy contract): local tracks are NOT added
+     * as senders on the peer connection until the party explicitly publishes.
+     * getUserMedia is only a self-preview permission — a muted/hidden track
+     * that still holds a sender is NOT consent. Publishing is idempotent.
+     */
+    private localPublished = false;
+    /** Serializes createOffer so concurrent triggers never race setLocalDescription. */
+    private offerInFlight = false;
 
     constructor(config: P2PConnectionConfig) {
         this.config = config;
@@ -129,6 +138,10 @@ export class P2PConnection {
         this.sessionGeneration++;
         this.pendingIce = [];
         this.hasRemoteDescription = false;
+        // A new peer connection has no senders — publishing must recur before
+        // any local media can flow on it.
+        this.localPublished = false;
+        this.offerInFlight = false;
 
         // Authenticated ICE (short-lived per-session TURN, STUN fallback).
         const ice = await fetchPlatformIceServers(this.sessionToken());
@@ -244,13 +257,12 @@ export class P2PConnection {
                 constraints || defaultConstraints
             );
 
-            // Add tracks to peer connection
-            if (this.pc && this.localStream) {
-                this.localStream.getTracks().forEach(track => {
-                    this.pc!.addTrack(track, this.localStream!);
-                });
-            }
-
+            // PRIVACY CONTRACT: acquiring a self-preview is NOT consent to
+            // publish. No track becomes an RTCRtpSender here — the caller keeps
+            // the stream for the local preview only. Tracks are attached to the
+            // peer connection solely in publishLocalStream(), after the party's
+            // explicit "start/publish" action. A muted or hidden track that
+            // still holds a sender does not satisfy this contract.
             return this.localStream;
         } catch (error) {
             console.error('[P2P] Camera/Mic access failed:', error);
@@ -274,12 +286,59 @@ export class P2PConnection {
     }
 
     /**
+     * R4-LIVE-ENTRY-RECOVERY-1 (privacy contract): attach the local preview
+     * tracks to the peer connection. This is the ONLY place local media becomes
+     * an RTCRtpSender, and it must run solely after the party's explicit publish
+     * consent — never automatically on stream acquisition. Idempotent: a second
+     * call is a no-op once published. Returns whether the local media is now
+     * published (a stream/peer connection must exist).
+     */
+    publishLocalStream(): boolean {
+        if (this.localPublished) return true;
+        if (!this.pc || !this.localStream) return false;
+        this.localStream.getTracks().forEach(track => {
+            this.pc!.addTrack(track, this.localStream!);
+        });
+        this.localPublished = true;
+        return true;
+    }
+
+    /** Whether this party has explicitly published its local media. */
+    isLocalPublished(): boolean {
+        return this.localPublished;
+    }
+
+    /**
+     * Guest/viewer late-join re-offer request via the existing request_offer
+     * transport hint. Used after a guest publishes so the host re-offers and
+     * the answer can now carry the guest's media (host remains the sole offerer).
+     */
+    async requestReoffer(): Promise<void> {
+        if (!this.signaling) return;
+        try { await this.signaling.requestOffer(); } catch { /* best effort — the host watcher also re-offers */ }
+    }
+
+    /**
      * Create and send offer (host only — the transport drops offers published
      * by any other role, and the server rejects them).
      */
     async createOffer(): Promise<void> {
-        if (!this.pc) return;
+        // R4-LIVE-ENTRY-RECOVERY-1 (defect C — stable-state race): several
+        // triggers (initial offer, presence watcher, ICE-restart, bounded
+        // recovery, request_offer) can reach here concurrently. Serialize them,
+        // and never start a second negotiation while one is already in progress
+        // (signalingState !== 'stable') — a concurrent setLocalDescription
+        // throws InvalidStateError. The running negotiation (or the next
+        // trigger) carries the offer to completion.
+        if (!this.pc || this.offerInFlight) return;
+        let signalingState = 'unknown';
+        try { signalingState = this.pc.signalingState || 'unknown'; } catch { /* closed pc */ }
+        if (signalingState !== 'stable') {
+            debugLog('Skipping offer: a negotiation is already in progress (' + signalingState + ')');
+            return;
+        }
 
+        this.offerInFlight = true;
         try {
             const offer = await this.pc.createOffer();
             await this.pc.setLocalDescription(offer);
@@ -287,6 +346,8 @@ export class P2PConnection {
         } catch (error) {
             console.error('Failed to create offer:', error);
             this.config.onError?.(error as Error);
+        } finally {
+            this.offerInFlight = false;
         }
     }
 
@@ -500,6 +561,10 @@ export class P2PConnection {
         }
 
         this.isConnected = false;
+        // Exiting preparation / ending the session stops local media and arms
+        // the contract gate again: nothing is published on a torn-down link.
+        this.localPublished = false;
+        this.offerInFlight = false;
     }
 }
 
