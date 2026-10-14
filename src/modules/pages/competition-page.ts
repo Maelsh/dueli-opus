@@ -2199,11 +2199,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       }
       
-      if (userRole === 'host') {
-          watchCompetitorOpponent();
-        }
-      }
-      
       // R4-LIVE-ENTRY-RECOVERY-1: explicit publish consent gate
       async function publishMedia() {
         if (!p2p || mediaPublished) return;
@@ -2326,12 +2321,17 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             video: { facingMode: currentFacingMode },
             audio: true
           });
-          const videoTrack = newStream.getVideoTracks()[0];
-          const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-          if (sender) {
-            await sender.replaceTrack(videoTrack);
-            document.getElementById('localVideo').srcObject = newStream;
+          
+          // R4-LIVE-ENTRY-RECOVERY-1: before publish, only update local preview
+          // (no sender exists yet). After publish, replace the published track.
+          if (mediaPublished) {
+            const videoTrack = newStream.getVideoTracks()[0];
+            const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+              await sender.replaceTrack(videoTrack);
+            }
           }
+          document.getElementById('localVideo').srcObject = newStream;
         } catch (err) {
           log('Camera switch failed: ' + err.message, 'error');
         }

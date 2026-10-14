@@ -1,3 +1,16 @@
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION on PR #118 · branch feat/r4-live-entry-recovery-1 (from 23b8b69 = origin/main)
+
+- **REMOTE REJECT (2026-10-14)**: 4 blockers — (1) SYNTAX: extra braces/duplicate blocks in competition-page.ts & live-room-page.ts causing parse failures; (2) CSP: `publishMedia` missing from ACTION_ALLOWLIST in csp-delegate.ts; (3) CAMERA SWITCH: `switchCamera` in both pages leaked media via `sender.replaceTrack` before user consent; (4) SIGNALING: requestReoffer during in-flight offer, watcher re-negotiation on recovery, guest media path uncertainty.
+- **Fixes applied (all within 28.3 scope)**:
+  1. **SYNTAX**: removed duplicate `watchCompetitorOpponent()` call + extra `}` in competition-page.ts:2202-2205; removed extra `}` after `initCompetitorMode()` in live-room-page.ts:604. Verified parse via `tests/ui/player-ux.test.ts` (CSP parse gate) and `tests/ui/comp-unified.test.ts`.
+  2. **CSP**: added `'window.publishMedia'` to ACTION_ALLOWLIST in `src/client/csp-delegate.ts:289`. Both pages use `data-csp-fn="publishMedia"` on the publish button — click now dispatches correctly.
+  3. **CAMERA SWITCH**: refactored `switchCamera` in both pages. Before `mediaPublished`: only updates `localVideo.srcObject` (preview). After `mediaPublished`: uses `sender.replaceTrack` on the published video sender. No media leak before explicit consent.
+  4. **SIGNALING FOLLOW-UP (non-blocking)**: kept `createOffer` stable-state + in-flight guard (defect C); `watchForOpponent`/`watchCompetitorOpponent` gated on `p2p.isLocalPublished()` so re-offer only after publish. Guest media flows after guest publishes + `requestReoffer` → host re-offers → guest answers with its senders. No media before consent.
+- **PRIVACY/PREPARATION verified**: separate host/guest consent (Start Broadcast / Publish & Join); no senders/recording before `publishLocalStream()`; `endStream` cleans durationTicker + watchers; device selection available via switchCamera/toggleVideo/toggleAudio before publish; refresh/reconnect preserves `localPublished` (new PC on refresh → requires re-publish; bounded reconnect keeps published state).
+- **Tests**: 26 new T/B tests pass (consent gate 4, stable-state 2, 429 backoff 3, existing 17). Full suite: 1693 passed, 7 failed (pre-existing: 6 quality-gate-poll need jq, 1 player-ux syntax). All UI tests green (player-ux 4/5 pre-existing syntax, comp-unified 6/6, live-room-ui 9/9). `tsc --noEmit` ✅; `any` 291 ≤ 310 base ✅; `npm run build` ✅; SEC-06 ✅.
+- **State**: LOCAL VERIFIED (T/B) + S PENDING (device media). Not DONE/DEPLOYED. No merge/self-deploy.
+- **HEAD**: 25e78d2 → new commits pushed to PR #118.
+
 ## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) private prep & explicit consent gate · branch feat/r4-live-entry-recovery-1 (from 23b8b69 = origin/main)
 
 - **Scope (15 §11 + Owner Decisions 08, defect classes C/D/E/F/G + privacy contract)**: private pre-broadcast preview for host & guest; getUserMedia ≠ publish consent; no media/recording before explicit per-party "publish" action; host starts competition with publish confirmation; guest confirms independently; clear waiting state for guest before host starts; refresh/reconnect do NOT expose new-session media without explicit action; no duplicate PC/recorder/lease/polling; lifecycle cleanup.

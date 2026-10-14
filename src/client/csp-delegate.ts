@@ -284,6 +284,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'window.connect',
     'window.disconnect',
     'window.joinRoom',
+    'window.publishMedia',
     'window.reconnect',
     'window.stopStream',
     'window.switchCamera',

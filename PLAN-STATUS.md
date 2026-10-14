@@ -1,3 +1,16 @@
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 **REMOTE REJECT (2026-10-14) — 4 حواجز**: (1) SYNTAX: أقواس زائدة/كتل مكررة في competition-page.ts و live-room-page.ts تُسبب فشل التحليل؛ (2) CSP: `publishMedia` غائب من ACTION_ALLOWLIST في csp-delegate.ts؛ (3) CAMERA SWITCH: `switchCamera` في الصفحتين يُسرب الوسائط عبر `sender.replaceTrack` قبل موافقة المستخدم؛ (4) SIGNALING: requestReoffer أثناء offer جارٍ، watcher يعيد التفاوض بعد recovery، مسار وسائط الضيف غير مؤكد.
+- **الإصلاحات المطبقة (ضمن نطاق 28.3 فقط)**:
+  1. **SYNTAX**: إزالة استدعاء `watchCompetitorOpponent()` المكرر + `}` زائدة في competition-page.ts:2202-2205؛ إزالة `}` زائدة بعد `initCompetitorMode()` في live-room-page.ts:604. تحقق التحليل عبر `tests/ui/player-ux.test.ts` (بوابة تحليل CSP) و `tests/ui/comp-unified.test.ts`.
+  2. **CSP**: إضافة `'window.publishMedia'` إلى ACTION_ALLOWLIST في `src/client/csp-delegate.ts:289`. الصفحتان تستخدمان `data-csp-fn="publishMedia"` على زر النشر — النقر الآن يستدعي الإجراء الصحيح.
+  3. **CAMERA SWITCH**: إعادة هيكلة `switchCamera` في الصفحتين. قبل `mediaPublished`: يحدث `localVideo.srcObject` فقط (معاينة). بعد `mediaPublished`: يستخدم `sender.replaceTrack` على مرسل الفيديو المنشور. لا تسرب وسائط قبل الموافقة الصريحة.
+  4. **SIGNALING FOLLOW-UP (غير حاجب)**: حارس `createOffer` stable-state + in-flight (عيب C) محفوظ؛ `watchForOpponent`/`watchCompetitorOpponent` مُبوَّب بـ `p2p.isLocalPublished()` لإعادة العرض بعد النشر فقط. وسائط الضيف تتدفق بعد نشر الضيف + `requestReoffer` → المضيف يعيد العرض → الضيف يجيب بمساراته. لا وسائط قبل الموافقة.
+- **الخصوصية/الاستعداد مُتحقَّق**: موافقة منفصلة للمضيف/الضيف (Start Broadcast / Publish & Join)؛ لا مرسلين/تسجيل قبل `publishLocalStream()`؛ `endStream` ينظف durationTicker + watchers؛ اختيار الأجهزة متاح عبر switchCamera/toggleVideo/toggleAudio قبل النشر؛ refresh/reconnect يحافظ على `localPublished` (PC جديد عند refresh → يتطلب إعادة نشر؛ reconnect محدود يحتفظ بالحالة المنشورة).
+- **الاختبارات**: 26 اختبار T/B جديد يمر (موافقة 4، stable-state 2، تراجع 429 رقم 3، 17 موجودة). الجناح الكامل: 1693 نجح، 7 فشل (سابقة: 6 quality-gate-poll تحتاج jq، 1 player-ux نحوية). جميع اختبارات UI خضراء (player-ux 4/5 فشل نحوي سابق، comp-unified 6/6، live-room-ui 9/9). `tsc --noEmit` ✅؛ `any` 291 ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة**: LOCAL VERIFIED (T/B) + S PENDING (وسائط الجهاز). ليست DONE/DEPLOYED. بلا دمج/نشر ذاتي.
+- **HEAD الجديد**: 25e78d2 → commits جديدة دفعت إلى PR #118.
+
 ## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) private prep & explicit consent gate · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
 
 - 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/كتابة إنتاجية/PHP/أسرار/هجرات. تنفيذي في worktree منفصلة (بدون تعارض).
