@@ -18,6 +18,10 @@ export function getClientSharedScript(lang: Language = 'en'): string {
     const tr = translations[getUILanguage(lang)];
     const TURN_UNAVAILABLE = tr.live_signaling.turn_unavailable;
     const NETWORK_RESTRICTED = tr.live_signaling.network_restricted;
+    // R4-CHUNK-VIEW-RECOVERY-1 (28.4): audience status shown when a recording
+    // finalized with no playable chunk (the LIVE initial wait ENDED — not a
+    // spinner, not a false error). Baked per language like the TURN messages.
+    const RECORDING_ENDED = tr.live_signaling.recording_ended;
 
     return `
 // ===== Utility Functions =====
@@ -55,6 +59,11 @@ function debugLog() {
     }
 }
 window.debugLog = debugLog;
+
+// ===== Audience recording-end message (R4-CHUNK-VIEW-RECOVERY-1, 28.4) =====
+// Shown by the live player when a recording finalized with no playable chunk:
+// a clear ended state (AR/EN baked per language), never an eternal spinner.
+const RECORDING_ENDED_MSG = '${RECORDING_ENDED}';
 
 // ===== Session & Authentication =====
 
@@ -428,6 +437,13 @@ class ChunkManager {
         // Consecutive missing indices tolerated while the server already
         // lists LATER chunks (a deep hole means a broken stream, not a gap).
         this.MAX_GAP_SKIP = 50;
+        // R4-CHUNK-VIEW-RECOVERY-1 (row 28.4): the recording's final marker rides
+        // on the playlist response as index_metadata.finalized. It is the ONLY
+        // positive end-of-recording signal: a live IN-VIDUAL wait consults it to
+        // END (never to time out) when a recording finalizes with nothing
+        // playable. Absence of chunks ALONE is never proof of end (a live
+        // broadcast legitimately has no chunk yet).
+        this.finalized = false;
         this.basePath = '${FFMPEG_URL}/stream.php?path=live/match_' + competitionId;
     }
 
@@ -440,6 +456,11 @@ class ChunkManager {
             const data = await res.json();
             if (!data || !Array.isArray(data.chunks)) return false;
             this.entries = data.chunks;
+            // R4-CHUNK-VIEW-RECOVERY-1 (28.4): final marker from the D1 index
+            // authority. Additive + optional (legacy proxies carry none) —
+            // anything other than an explicit true is treated as "not ended".
+            const meta = data.index_metadata;
+            this.finalized = !!(meta && meta.finalized === true);
             if (typeof data.extension === 'string' && data.extension && data.extension !== this.extension) {
                 testLog('🔎 Format detected: .' + data.extension + ' (was looking for .' + this.extension + ')', 'info');
                 this.extension = data.extension;
@@ -541,6 +562,19 @@ class ChunkManager {
                 this.currentIndex = targetIndex;
                 targetIndex++;
                 continue;
+            }
+
+            // R4-CHUNK-VIEW-RECOVERY-1 (28.4): the recording has FINALIZED and
+            // there is STILL nothing reachable to request (no entry at the
+            // target index, no later chunk to gap-skip to). This is the ONLY
+            // place a live wait may END on its own: a final, positive marker
+            // (index_metadata.finalized) means no chunk will ever arrive, so
+            // stop and let the consumer surface a clear ended state INSTEAD of
+            // an eternal spinner. A not-yet-finalized broadcast keeps waiting
+            // to the right — absence of chunks alone is never end, and a
+            // healthy-but-slow first chunk is never mistaken for an end.
+            if (this.finalized) {
+                throw new Error('RECORDING_ENDED');
             }
 
             localMisses++;
@@ -661,7 +695,21 @@ class LiveSequentialPlayer {
             }
         }
 
-        const firstChunk = await this.chunkManager.waitForNextChunk();
+        let firstChunk;
+        try {
+            firstChunk = await this.chunkManager.waitForNextChunk();
+        } catch (error) {
+            // R4-CHUNK-VIEW-RECOVERY-1 (28.4): the FIRST wait can now END when the
+            // recording finalized with nothing playable (RECORDING_ENDED). Stop
+            // cleanly with a clear AR/EN state and hand back to the consumer to
+            // re-evaluate (→ VOD / not-available). Never an eternal spinner; a
+            // healthy, not-yet-finalized broadcast never reaches this branch.
+            this.isRunning = false;
+            const recordingEnded = !!(error && error.message === 'RECORDING_ENDED');
+            this.onStatus && this.onStatus(recordingEnded ? RECORDING_ENDED_MSG : 'Stream ended');
+            this.onStreamEnd && this.onStreamEnd();
+            return;
+        }
         this.onStatus && this.onStatus('Found chunk: ' + (firstChunk + 1));
 
         await this.playChunk(firstChunk);
@@ -702,9 +750,13 @@ class LiveSequentialPlayer {
                 this.lastFailedIndex = null;
                 this.lastFailedCount = 0;
             } catch (error) {
-                if (error.message === 'STREAM_ENDED') {
+                if (error.message === 'STREAM_ENDED' || error.message === 'RECORDING_ENDED') {
                     this.isRunning = false;
-                    this.onStatus && this.onStatus('Stream ended');
+                    // R4-CHUNK-VIEW-RECOVERY-1 (28.4): a finalized recording with
+                    // nothing further to play is a CLEAN end (not a playback
+                    // error), so it must not count toward the consecutive-error
+                    // fatal bound — it transitions the consumer instead.
+                    this.onStatus && this.onStatus(error.message === 'RECORDING_ENDED' ? RECORDING_ENDED_MSG : 'Stream ended');
                     this.onStreamEnd && this.onStreamEnd();
                     break;
                 }

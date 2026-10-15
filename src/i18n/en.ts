@@ -20,6 +20,8 @@ export const en = {
         // R4-LIVE-INT-1: production live-room join failures (toast, not console)
         room_create_failed: 'Failed to create signaling room. Please reload and retry.',
         session_join_failed: 'Failed to join the live session. Please reload and retry.',
+        // R4-CHUNK-VIEW-RECOVERY-1 (28.4): recording ended with no playable clip
+        recording_ended: 'The recording has ended — no playable clips are available.',
     },
     recorded: 'Recorded',
     upcoming: 'Upcoming',

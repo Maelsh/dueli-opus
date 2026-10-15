@@ -115,12 +115,25 @@ export function getViewerScript(lang: Language): string {
                 onError: function(error) {
                     log('${tr.error}: ' + error.message, 'error');
                     updateStatus('${tr.error}', 'red');
+                },
+                // R4-CHUNK-VIEW-RECOVERY-1 (28.4): a finalized recording with no
+                // playable clip ends the live player cleanly (no eternal
+                // spinner). Reflect that here instead of flipping to LIVE.
+                onStreamEnd: function() {
+                    log('Recording ended', 'info');
+                    try { currentPlayer && currentPlayer.stop && currentPlayer.stop(); } catch (e) {}
                 }
             });
-            
+
             await currentPlayer.start();
-            updateStatus('🔴 ${tr.live}', 'green');
-            currentMode = 'live';
+            // Only claim LIVE when the player is actually still running; a
+            // recording that ended before any playable clip did NOT start live.
+            if (currentPlayer && currentPlayer.isRunning) {
+                updateStatus('🔴 ${tr.live}', 'green');
+                currentMode = 'live';
+            } else {
+                updateStatus('📼 ${tr.recorded}', 'yellow');
+            }
         }
         
         // ===== Load VOD =====
