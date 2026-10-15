@@ -114,17 +114,21 @@ describe('R4-CHUNK-VIEW-RECOVERY-1 — playlist authority / first failure point'
         expect(chunks.some((c) => c.url.includes('chunk_0002'))).toBe(false);
     });
 
-    it('ready/duration honesty: stored-but-unmeasured is served (ready:false) but NOT dropped', () => {
+    it('ready/duration honesty: stored-but-unmeasured is DISCOVERABLE (ready:false) — not dropped', () => {
         // receipt saved the bytes but the platform could not measure → slot
         // stays `uploaded` (fail-closed: never ready, never invented). The
-        // chunk is still DISCOVERABLE (url present) so a later identical receipt
-        // can promote it; it is only marked unready, never silently dropped.
+        // chunk is still DISCOVERABLE in the served list (url present, so a
+        // later identical receipt can promote it); it is only marked unready.
+        // DISCOVERABLE ≠ REQUESTED: whether the player FETCHES/plays it is a
+        // separate decision (isSkippable/nextPlayableIndex skip ready:false
+        // entries once confirmed content exists) — proven in
+        // tests/client/r4-chunk-view-live-end.test.ts, NOT claimed here.
         const proxyEntries = [proxy(0, 1), proxy(1, 2)];
         const indexRows = [row(1, 'uploaded', { declared_duration_ms: 5000 }), row(2, 'ready', { duration_ms: 4200 })];
         const { chunks, metadata } = mergePlaylistWithIndex(proxyEntries, indexRows, BASE, false);
         const first = chunks.find((c) => c.index === 0)!;
         expect(first.ready).toBe(false);
-        expect(first.url).toContain('chunk_0001.mp4'); // still requested, not dropped
+        expect(first.url).toContain('chunk_0001.mp4'); // discoverable (present + url)
         // verified duration (seconds-domain for the player) wins for the ready row
         expect(chunks.find((c) => c.index === 1)!.duration).toBe(4.2);
         expect(metadata.uploaded_count).toBe(2);
@@ -149,7 +153,14 @@ describe('R4-CHUNK-VIEW-RECOVERY-1 — playlist authority / first failure point'
         expect(mixed.metadata.total_ready_ms).toBe(5000); // uploaded 9999ms NOT counted
     });
 
-    it('finalized marker: a recorded end surfaces finalized=true to the player', () => {
+    it('finalized marker: the recorded end is EMITTED in index_metadata.finalized (producer)', () => {
+        // PRODUCER-LEVEL ONLY. This asserts the playlist route/merge EMITS the
+        // final marker as index_metadata.finalized — it does NOT prove the flag
+        // reaches the player. The CONSUMER-LEVEL proof (ChunkManager reads it →
+        // waitForNextChunk terminates instead of spinning) is in
+        // tests/client/r4-chunk-view-live-end.test.ts (this was the REMOTE #2
+        // correction: "finalized reaches the player" must be shown at the
+        // consumer, not inferred from the producer).
         const indexRows = [row(1, 'ready', { duration_ms: 5000 })];
         const { metadata } = mergePlaylistWithIndex([proxy(0, 1)], indexRows, BASE, true);
         expect(metadata.finalized).toBe(true);
