@@ -1,3 +1,25 @@
+## 2026-10-15 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) DOCUMENTATION REMEDIATION on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 **تصحيح توثيقي فقط** (رفض المراجع #2 — وثائقي فقط). لا تغييرات كود/اختبار/dependencies/workflows.
+- **CI Run**: 38644895769 | **HEAD**: 8728faed797b0b5ded67efc4068389d4f6682123 | **CI Result**: SUCCESS.
+- **مراجعة الكود**: المراجع #1: APPROVED. المراجع #2: REJECT (وثائقي فقط — مُصحح هنا).
+- **عدد الاختبارات الجديدة**: 9 (مُحقق من CI diff).
+- **البوابات**: `tsc --noEmit` ✅؛ `any` 291 ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة الدقيقة**:
+  - مراجعة الكود: APPROVED (المراجع #1).
+  - التوثيق: REJECT (المراجع #2) — مُصحح هنا.
+  - CI: SUCCESS على HEAD 8728fae.
+  - S: PENDING (اختبارات وسائط الجهاز).
+  - ROW28.3: ليست Production Accepted.
+  - PR #118: لم تُدمج بعد.
+- **التصحيحات المطبقة**:
+  - إزالة أرقام اختبارات مضللة (26، 28، 1690/10، 1693/7، 1696/6).
+  - إزالة ادعاءات "pre-existing" غير مُتحقق منها.
+  - إزالة وصف player-ux كفاشل (غير مُتحقق).
+  - توثيق CI run الفعلي، HEAD، نتائج البوابات، حالة المراجعة.
+  - الحالة تعكس: المراجع #1 APPROVED، المراجع #2 REJECT وثائقي (مُصحح)، CI SUCCESS، S PENDING، ليست Production Accepted، غير مدمجة.
+- **لا تغييرات كود/اختبار/dependencies/workflows**.
+
 ## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION #3 on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
 
 - 🔧 **REMOTE REJECT #3 (2026-10-14) — 4 حواجز**: (1) CSP: `publishMedia` في ACTION_ALLOWLIST كان فقط `'window.publishMedia'` لكن HTML يستخدم `data-csp-fn="publishMedia"` العادي؛ (2) CAMERA STREAM: `switchCamera` قبل النشر لم يحدّث localStream في P2PConnection، فتُنشر الكاميرا الخاطئة؛ (3) SCREEN SHARE: `shareScreen` يعمل في وضع الاستعداد قبل الموافقة؛ (4) REGRESSION TESTS: غياب اختبارات تراجع تبديل الكاميرا.

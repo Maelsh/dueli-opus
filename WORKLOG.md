@@ -1,3 +1,25 @@
+## 2026-10-15 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) DOCUMENTATION REMEDIATION on PR #118 · branch feat/r4-live-entry-recovery-1 (from 23b8b69 = origin/main)
+
+- **Scope**: documentation-only correction per REMOTE reviewer #2 (REJECT documentation only). No code changes.
+- **CI Run**: 38644895769 | **HEAD**: 8728faed797b0b5ded67efc4068389d4f6682123 | **CI Result**: SUCCESS.
+- **Code Review**: Reviewer #1: APPROVED. Reviewer #2: REJECT (documentation only).
+- **New Tests Count**: 9 (verified from CI diff).
+- **Gates**: `tsc --noEmit` ✅; `any` 291 ≤ 310 base ✅; `npm run build` ✅; SEC-06 ✅.
+- **State**: 
+  - Code review: APPROVED (reviewer #1).
+  - Documentation: REJECT (reviewer #2) — corrected here.
+  - CI: SUCCESS on HEAD 8728fae.
+  - S: PENDING (device media tests).
+  - ROW28.3: NOT Production Accepted.
+  - PR #118: NOT merged.
+- **Corrections Applied**:
+  - Removed misleading test counts (26, 28, 1690/10, 1693/7, 1696/6).
+  - Removed unverified "pre-existing" failure claims.
+  - Removed player-ux failure description (unverified).
+  - Recorded actual CI run, HEAD, gate results, review status.
+  - State reflects: reviewer #1 APPROVED, reviewer #2 documentation REJECT (now corrected), CI SUCCESS, S PENDING, not Production Accepted, not merged.
+- **No code/test/dependency/workflow changes**.
+
 ## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION #3 on PR #118 · branch feat/r4-live-entry-recovery-1 (from 23b8b69 = origin/main)
 
 - **REMOTE REJECT #3 (2026-10-14)**: 4 blockers — (1) CSP: `publishMedia` in ACTION_ALLOWLIST was only `'window.publishMedia'` but HTML uses plain `data-csp-fn="publishMedia"`; (2) CAMERA STREAM: `switchCamera` before publish did not update P2PConnection's localStream, so wrong camera published; (3) SCREEN SHARE: `shareScreen` allowed in prep mode before consent; (4) REGRESSION TESTS: missing camera-switch regression tests.
