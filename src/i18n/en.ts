@@ -759,6 +759,14 @@ export const en = {
     viewers_cannot_close_ads: 'Viewers cannot close ads',
     report_ad_confirm: 'Report this ad as inappropriate?',
     ad_reported: 'Ad reported. Thank you!',
+    // R4-LIVE-ENTRY-RECOVERY-1: private prep & explicit consent gate
+    prep_privacy_hint: 'Your audio/video is not sent until you press the publish button. This is a local preview only.',
+    prep_publish_host: 'Start Broadcast',
+    prep_publish_guest: 'Publish & Join',
+    prep_publishing: 'Publishing...',
+    prep_published: 'Published — media is now live',
+    prep_waiting_host: 'Waiting for opponent to publish...',
+    prep_waiting_guest: 'Waiting for host to start...',
 
     // Navigation (new)
     notifications: 'Notifications',

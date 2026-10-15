@@ -46,6 +46,9 @@ export class MockPC {
     createdAnswers = 0;
     closed = false;
     connectionState = 'new';
+    // R4-LIVE-ENTRY-RECOVERY-1 test support
+    signalingState = 'stable';
+    senders: any[] = [];
     constructor(config: any) {
         this.iceServers = config?.iceServers;
         MockPC.instances.push(this);
@@ -61,8 +64,11 @@ export class MockPC {
         if (c && c.candidate === 'bad') throw new Error('bad candidate');
         this.addedCandidates.push(c);
     }
-    addTrack(_t: any, _s: any) {}
-    getSenders() { return []; }
+    addTrack(track: any, stream: any) {
+        const sender = { track, stream, replaceTrack: async (nt: any) => { sender.track = nt; } };
+        this.senders.push(sender);
+    }
+    getSenders() { return this.senders.slice(); }
     close() { this.closed = true; }
 }
 
@@ -77,6 +83,12 @@ export function installGlobals() {
         clearInterval: (...a: any[]) => clearInterval(...(a as [any])),
     };
     (globalThis as any).localStorage = { getItem: () => null, setItem: () => {} };
+    // navigator mock for getUserMedia (writable in test context)
+    Object.defineProperty(globalThis, 'navigator', {
+        value: { mediaDevices: { getUserMedia: async () => ({ getTracks: () => [] }) } },
+        writable: true,
+        configurable: true,
+    });
     (globalThis as any).RTCPeerConnection = MockPC;
     (globalThis as any).RTCSessionDescription = MockSessionDescription;
     (globalThis as any).RTCIceCandidate = MockIceCandidate;

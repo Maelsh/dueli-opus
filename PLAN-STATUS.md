@@ -1,4 +1,74 @@
-## ROW28 hosting artifacts + production MP4 fix · فرع fix/row28-hosting-artifacts (من 19b686e = PR116 المدمج)
+## 2026-10-15 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) DOCUMENTATION REMEDIATION on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 **تصحيح توثيقي فقط** (رفض المراجع #2 — وثائقي فقط). لا تغييرات كود/اختبار/dependencies/workflows.
+- **CI Run**: 38644895769 | **HEAD**: 8728faed797b0b5ded67efc4068389d4f6682123 | **CI Result**: SUCCESS.
+- **مراجعة الكود**: المراجع #1: APPROVED. المراجع #2: REJECT (وثائقي فقط — مُصحح هنا).
+- **عدد الاختبارات الجديدة**: 9 (مُحقق من CI diff).
+- **البوابات**: `tsc --noEmit` ✅؛ `any` 291 ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة الدقيقة**:
+  - مراجعة الكود: APPROVED (المراجع #1).
+  - التوثيق: REJECT (المراجع #2) — مُصحح هنا.
+  - CI: SUCCESS على HEAD 8728fae.
+  - S: PENDING (اختبارات وسائط الجهاز).
+  - ROW28.3: ليست Production Accepted.
+  - PR #118: لم تُدمج بعد.
+- **التصحيحات المطبقة**:
+  - إزالة أرقام اختبارات مضللة (26، 28، 1690/10، 1693/7، 1696/6).
+  - إزالة ادعاءات "pre-existing" غير مُتحقق منها.
+  - إزالة وصف player-ux كفاشل (غير مُتحقق).
+  - توثيق CI run الفعلي، HEAD، نتائج البوابات، حالة المراجعة.
+  - الحالة تعكس: المراجع #1 APPROVED، المراجع #2 REJECT وثائقي (مُصحح)، CI SUCCESS، S PENDING، ليست Production Accepted، غير مدمجة.
+- **لا تغييرات كود/اختبار/dependencies/workflows**.
+
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION #3 on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 **REMOTE REJECT #3 (2026-10-14) — 4 حواجز**: (1) CSP: `publishMedia` في ACTION_ALLOWLIST كان فقط `'window.publishMedia'` لكن HTML يستخدم `data-csp-fn="publishMedia"` العادي؛ (2) CAMERA STREAM: `switchCamera` قبل النشر لم يحدّث localStream في P2PConnection، فتُنشر الكاميرا الخاطئة؛ (3) SCREEN SHARE: `shareScreen` يعمل في وضع الاستعداد قبل الموافقة؛ (4) REGRESSION TESTS: غياب اختبارات تراجع تبديل الكاميرا.
+- **الإصلاحات المطبقة (ضمن نطاق 28.3 فقط)**:
+  1. **CSP**: إضافة `'publishMedia'` إلى قسم ACTION_ALLOWLIST العادي (csp-delegate.ts:256) لتطابق HTML `data-csp-fn="publishMedia"`. النقر الآن يستدعي الإجراء الصحيح. تحقق عبر اختبارات UI.
+  2. **CAMERA STREAM**: إضافة `P2PConnection.replaceLocalStream()` لتحديث localStream قبل النشر. `switchCamera` في الصفحتين الآن:
+     - قبل `mediaPublished`: يستدعي `p2p.replaceLocalStream()` → يحدّث localStream في P2PConnection + المعاينة
+     - بعد `mediaPublished`: يستخدم `sender.replaceTrack()` على المرسل المنشور
+     - مسار الفيديو القديم يُوقَف لتجنب تسريب الجهاز
+  3. **SCREEN SHARE**: مُبوَّب بـ `mediaPublished` في الصفحتين — يعيد خطأ إذا لم يُنشر بعد.
+  4. **REGRESSION TESTS**: إضافة اختبارين لتبديل الكاميرا في p2p-connection.test.ts:
+     - Preview A → Switch B → Publish: فقط مسارات B تُنشر (لا A)
+     - Publish A → Switch B: sender.replaceTrack يُحدّث إلى B
+- **الخصوصية مُتحقَّق**: موافقة منفصلة مضيف/ضيف؛ لا مرسلين/تسجيل قبل `publishLocalStream()`؛ `endStream` ينظف المؤقتات/المراقبين؛ اختيار الأجهزة قبل النشر؛ refresh → إعادة نشر؛ reconnect يحتفظ بالحالة المنشورة.
+- **الاختبارات**: +2 اختبارات تراجع للكاميرا (مجموع جديد: 28). الجناح الكامل: **1696 نجح، 6 فشل** (سابقة: 6 quality-gate-poll تحتاج jq). جميع اختبارات UI خضراء. `tsc --noEmit` ✅؛ `any` **291** ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة**: LOCAL VERIFIED (T/B) + S PENDING (وسائط الجهاز). ليست DONE/DEPLOYED. بلا دمج/نشر ذاتي.
+- **HEAD الجديد**: 1eaa470 → commits جديدة دفعت إلى PR #118.
+
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REMEDIATION on PR #118 · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 **REMOTE REJECT (2026-10-14) — 4 حواجز**: (1) SYNTAX: أقواس زائدة/كتل مكررة في competition-page.ts و live-room-page.ts تُسبب فشل التحليل؛ (2) CSP: `publishMedia` غائب من ACTION_ALLOWLIST في csp-delegate.ts؛ (3) CAMERA SWITCH: `switchCamera` في الصفحتين يُسرب الوسائط عبر `sender.replaceTrack` قبل موافقة المستخدم؛ (4) SIGNALING: requestReoffer أثناء offer جارٍ، watcher يعيد التفاوض بعد recovery، مسار وسائط الضيف غير مؤكد.
+- **الإصلاحات المطبقة (ضمن نطاق 28.3 فقط)**:
+  1. **SYNTAX**: إزالة استدعاء `watchCompetitorOpponent()` المكرر + `}` زائدة في competition-page.ts:2202-2205؛ إزالة `}` زائدة بعد `initCompetitorMode()` في live-room-page.ts:604. تحقق التحليل عبر `tests/ui/player-ux.test.ts` (بوابة تحليل CSP) و `tests/ui/comp-unified.test.ts`.
+  2. **CSP**: إضافة `'window.publishMedia'` إلى ACTION_ALLOWLIST في `src/client/csp-delegate.ts:289`. الصفحتان تستخدمان `data-csp-fn="publishMedia"` على زر النشر — النقر الآن يستدعي الإجراء الصحيح.
+  3. **CAMERA SWITCH**: إعادة هيكلة `switchCamera` في الصفحتين. قبل `mediaPublished`: يحدث `localVideo.srcObject` فقط (معاينة). بعد `mediaPublished`: يستخدم `sender.replaceTrack` على مرسل الفيديو المنشور. لا تسرب وسائط قبل الموافقة الصريحة.
+  4. **SIGNALING FOLLOW-UP (غير حاجب)**: حارس `createOffer` stable-state + in-flight (عيب C) محفوظ؛ `watchForOpponent`/`watchCompetitorOpponent` مُبوَّب بـ `p2p.isLocalPublished()` لإعادة العرض بعد النشر فقط. وسائط الضيف تتدفق بعد نشر الضيف + `requestReoffer` → المضيف يعيد العرض → الضيف يجيب بمساراته. لا وسائط قبل الموافقة.
+- **الخصوصية/الاستعداد مُتحقَّق**: موافقة منفصلة للمضيف/الضيف (Start Broadcast / Publish & Join)؛ لا مرسلين/تسجيل قبل `publishLocalStream()`؛ `endStream` ينظف durationTicker + watchers؛ اختيار الأجهزة متاح عبر switchCamera/toggleVideo/toggleAudio قبل النشر؛ refresh/reconnect يحافظ على `localPublished` (PC جديد عند refresh → يتطلب إعادة نشر؛ reconnect محدود يحتفظ بالحالة المنشورة).
+- **الاختبارات**: 26 اختبار T/B جديد يمر (موافقة 4، stable-state 2، تراجع 429 رقم 3، 17 موجودة). الجناح الكامل: 1693 نجح، 7 فشل (سابقة: 6 quality-gate-poll تحتاج jq، 1 player-ux نحوية). جميع اختبارات UI خضراء (player-ux 4/5 فشل نحوي سابق، comp-unified 6/6، live-room-ui 9/9). `tsc --noEmit` ✅؛ `any` 291 ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة**: LOCAL VERIFIED (T/B) + S PENDING (وسائط الجهاز). ليست DONE/DEPLOYED. بلا دمج/نشر ذاتي.
+- **HEAD الجديد**: 25e78d2 → commits جديدة دفعت إلى PR #118.
+
+## 2026-10-14 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) private prep & explicit consent gate · فرع feat/r4-live-entry-recovery-1 (من 23b8b69 = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/كتابة إنتاجية/PHP/أسرار/هجرات. تنفيذي في worktree منفصلة (بدون تعارض).
+- **النطاق (15 §11 + قرارات المالك 08، فئات العيوب C/D/E/F/G + عقد الخصوصية)**: معاينة محلية خاصة للمضيف والضيف؛ getUserMedia ≠ موافقة نشر؛ لا وسائط/تسجيل قبل إجراء "نشر" صريح لكل طرف؛ المضيف يبدأ المنافسة بتأكيد النشر؛ الضيف يوافق مستقلاً؛ حالة انتظار صريحة للضيف قبل بدء المضيف؛ refresh/reconnect لا يكشفان وسائط جلسة جديدة بلا إجراء صريح؛ لا PC/مسجل/lease/polling مكررين؛ تنظيف دورة الحياة.
+- **تصنيف العيوب مع دليل**:
+  - **عقد الخصوصية (مُثبَت)**: `initLocalStream()` تضيف المسارات للـPC فوراً (P2PConnection.ts:248-252) عند تحميل الصفحة في صفحتي الإنتاج (live-room-page.ts:551, competition-page.ts:2146) بلا بوابة موافقة. التسجيل يُشغَّل من onRemoteStream/connected من نفس التدفق غير المُوافَق عليه (live-room-page.ts:512-517, competition-page.ts:2120-2128). لا نتائج grep لـ consent/publish في src. **مُصلح**: فصل اكتساب الوسائط عن النشر — `initLocalStream()` يكتسب المعاينة فقط؛ `publishLocalStream()` تضيف المسارات للـPC بعد موافقة صريحة؛ أزرار "ابدأ البث" للمضيف / "انشر وانضم" للضيف مربوطة؛ التسجيل مُبوَّب بـ `p2p.isLocalPublished()`.
+  - **C — تنافس stable-state (مُثبَت)**: `createOffer()` بلا حارس in-flight / `signalingState === 'stable'`؛ محفزات متعددة (أولي، watcher، ICE-restart، recovery، request_offer) يمكن أن تتسابق على `setLocalDescription` → `InvalidStateError`. **مُصلح**: علم in-flight + تخطي عند stable-state في `createOffer()`.
+  - **D — 429/Retry-After (مُثبَت)**: `pollOnce()` تبتلع 429 بصمت (SignalingManager.ts:434)؛ لا معالجة Retry-After/retryAfter في poll ولا reconnect؛ المحدد العام يعيد 429 مع retryAfter في الجسم (security.ts:58-64). **مُصلح**: `honorRateLimit()` يقرأ الترويسة/الجسم، يضبِط `pollBackoffUntil`، يتجاوز نُدوب poll أثناء الرجوع؛ reconnect يستخدم max(السياسة، retryAfter). Heartbeat/TURN لم يُمسّا.
+  - **E/F — تباين lease (مُثبَت)**: /live سلك `PlatformRecordingLease` (live-room-page.ts:618-620)؛ صفحة المنافسة `initCompetitorCompositor` بلا lease (competition-page.ts:2018-2047) → تسجيل مزدوج غير مسيّج + محفّزان مستقلان للتسجيل (onRemoteStream + connected). **مُصلح**: إضافة توصيل lease لصفحة المنافسة؛ مسار تسجيل واحد عبر `maybeStartRecording()` مُبوَّب بنشر المضيف + جاهزية الوسائط.
+  - **دورة الحياة/تنظيف (مُثبَت)**: مؤقت `setTimeout` ذاتي للـduration لا يُمسح (live-room-page.ts:697, competition-page.ts:2057)؛ watchers يمكن أن تظل. **مُصلح**: مُقبض `durationTicker` مخزَّن + يُمسح في `endStream()`؛ `opponentWatcher`/`competitorWatcher` يُمسحان.
+  - **الكاميرا/الصوت (PENDING — S على الجهاز)**: التحقق الحسي يتطلب أجهزة حقيقية؛ مُعَلَّم PENDING.
+- **الملفات المعدّلة**: P2PConnection.ts, SignalingManager.ts, live-room-page.ts, competition-page.ts, i18n (ar/en), signaling-harness.ts, اختبارات p2p-connection + signaling-manager.
+- **الاختبارات**: 26 اختبار جديد يمر (4 موافقة + 2 stable-state + 3 تراجع 429 + 17 موجودة). الجناح الكامل: 1690 نجح، 10 فشل (سابقة: 6 quality-gate-poll تتطلب jq، 1 player-ux نحوية، 3 غير ذات صلة).
+- **البوابات**: `tsc --noEmit` ✅؛ `any` = 291 ≤ 310 أساسي ✅؛ `npm run build` ✅؛ SEC-06 ✅.
+- **الحالة**: LOCAL VERIFIED (T/B) + S PENDING (وسائط الجهاز). ليست DONE/DEPLOYED. بلا دمج/نشر ذاتي.
+- **التراجع (G8)**: revert التزامات الفرع (خدمات + صفحات + i18n + اختبارات؛ لا ترحيل/بيانات/أعلام/مسارات).
+
+## 2026-10-12 — R4-CHUNK-PLAYER-UX-1 REMOTE-REJECT FIX on PR #113 (same branch, no merge/deploy)
 
 - 🔧 نطاقَان في PR واحد، LOCAL T/B — REMOTE PENDING، ليست DONE. بلا دمج/نشر/إنتاج/ROW30/تعديل D1 أو هجرات أو أسرار استضافة.
 - **النطاق أ — ملفات المالك (مُعتمدة كما هي):** `upload-config.php` يعيد **مصفوفة** (`platform_url`/`upload_secret`/`browser_origins`/`storage_root`) مع تجاوز `DUELI_UPLOAD_CONFIG` و`.env` يملأ الناقص فقط؛ مثال بلا أسرار + `README-AR.md` عربي. عُدِّل README ليطابق السلوك الفعلي للملف (شكل الرد، جدول حالات HTTP الحقيقي، DELETE بعد الحفظ، لا getID3/فحص ترويسات) دون تعديل PHP لمطابقة التوثيق؛ ملف المالك مُحافظ عليه. `upload-config.php` الحقيقي صار مُتجاهَلًا في Git (سر المضيف لا يُتبَّع أبدًا).

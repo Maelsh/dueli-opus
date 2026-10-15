@@ -735,6 +735,14 @@ export const ar = {
     viewers_cannot_close_ads: 'المشاهدون لا يمكنهم إغلاق الإعلانات',
     report_ad_confirm: 'الإبلاغ عن هذا الإعلان كمحتوى غير لائق؟',
     ad_reported: 'تم الإبلاغ عن الإعلان. شكراً لك!',
+    // R4-LIVE-ENTRY-RECOVERY-1: الاستعداد الخاص وبوابة الموافقة الصريحة
+    prep_privacy_hint: 'صوتك وصورتك لا يُرسلان حتى تضغط على زر النشر. هذه معاينة محلية فقط.',
+    prep_publish_host: 'ابدأ البث',
+    prep_publish_guest: 'انشر وانضم',
+    prep_publishing: 'جارٍ النشر...',
+    prep_published: 'تم النشر — الوسائط الآن على الهواء',
+    prep_waiting_host: 'بانتظار انضمام الخصم...',
+    prep_waiting_guest: 'بانتظار بدء المضيف...',
 
     // التنقل (جديد)
     notifications: 'الإشعارات',
