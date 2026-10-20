@@ -745,6 +745,22 @@ export const ar = {
     prep_published: 'تم النشر — الوسائط الآن على الهواء',
     prep_waiting_host: 'بانتظار انضمام الخصم...',
     prep_waiting_guest: 'بانتظار بدء المضيف...',
+    // R4-LIVE-ENTRY-RECOVERY-REM1: honest prep/publish + leave/stage controls
+    live_tools: 'أدوات البث',
+    start_competition: 'بدء المنافسة',
+    start_competition_failed: 'تعذّر بدء المنافسة',
+    publish_state_off: 'لم تُنشر وسائطك — هذه معاينة محلية فقط',
+    publish_state_on: 'أنت تنشر الآن — وسائطك تصل إلى الطرف الآخر',
+    nothing_to_publish: 'لا توجد وسائط للنشر. اسمح بالكاميرا أو الميكروفون أو شارك الشاشة أولاً.',
+    media_none: 'لا توجد كاميرا أو ميكروفون. يمكنك مشاركة الشاشة للاستعداد.',
+    waiting_peer_media: 'بانتظار وسائط الطرف الآخر...',
+    screen_share_stopped: 'تم إيقاف مشاركة الشاشة.',
+    leave_broadcast: 'مغادرة البث',
+    leave_broadcast_confirm: 'هل تريد مغادرة البث؟ المنافسة لن تنتهي، ويمكنك العودة لاحقاً.',
+    end_competition: 'إنهاء المنافسة',
+    end_competition_confirm: 'هل أنت متأكد من إنهاء المنافسة للجميع؟',
+    expand_stage: 'تكبير المسرح',
+    collapse_stage: 'تصغير المسرح',
 
     // التنقل (جديد)
     notifications: 'الإشعارات',

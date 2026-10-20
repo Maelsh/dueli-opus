@@ -312,7 +312,7 @@ app.get('/', (c) => {
 });
 
 // Import remaining page routes
-import { aboutPage, helpPage, docsIndexPage, docReaderPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, liveRoomPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
+import { aboutPage, helpPage, docsIndexPage, docReaderPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
 
 // Mount page routes
 app.get('/about', aboutPage);
@@ -331,7 +331,23 @@ app.get('/notifications', notificationsPage);
 app.get('/settings', settingsPage);
 app.get('/my-competitions', myCompetitionsPage);
 app.get('/my-requests', myRequestsPage);
-app.get('/live/:id', liveRoomPage);
+// R4-LIVE-ENTRY-RECOVERY-REM1: /competition/:id is the ONE production
+// broadcast UI (prep, publish, LIVE, recording, audience). Old /live/:id
+// links and bookmarks land there through this compatibility redirect instead
+// of a second, divergent room. The /live/host|guest|viewer test routes above
+// stay untouched, and /live/:id/finance is a separate route below.
+app.get('/live/:id', (c) => {
+  const lang = c.req.query('lang');
+  const id = c.req.param('id') ?? '';
+  // encodeURIComponent leaves !'()* raw (spec) — encode those too so no
+  // user-controlled JS-looking text survives in the Location header.
+  const enc = (v: string) =>
+    encodeURIComponent(v).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase());
+  return c.redirect(
+    `/competition/${enc(id)}${lang ? `?lang=${enc(lang)}` : ''}`,
+    302
+  );
+});
 app.get('/earnings', earningsPage);
 app.get('/reports', reportsPage);
 app.get('/donate', donatePage);

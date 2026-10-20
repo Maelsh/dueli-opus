@@ -27,6 +27,9 @@ import {
 
 export type SignalingRole = 'host' | 'opponent' | 'viewer';
 
+/** Where the current local preview came from (display only, never consent). */
+export type LocalMediaSource = 'camera' | 'screen' | 'none';
+
 export interface P2PConnectionConfig {
     /** Legacy 'comp_<id>' room label — kept for callers; the competition id is derived from it. */
     roomId: string;
@@ -95,6 +98,8 @@ export class P2PConnection {
      * that still holds a sender is NOT consent. Publishing is idempotent.
      */
     private localPublished = false;
+    /** Preview origin — display state only; publish still requires consent. */
+    private localSource: LocalMediaSource = 'none';
     /** Serializes createOffer so concurrent triggers never race setLocalDescription. */
     private offerInFlight = false;
 
@@ -256,6 +261,7 @@ export class P2PConnection {
             this.localStream = await navigator.mediaDevices.getUserMedia(
                 constraints || defaultConstraints
             );
+            this.localSource = 'camera';
 
             // PRIVACY CONTRACT: acquiring a self-preview is NOT consent to
             // publish. No track becomes an RTCRtpSender here — the caller keeps
@@ -289,7 +295,8 @@ export class P2PConnection {
      * R4-LIVE-ENTRY-RECOVERY-1: replace the local preview stream (e.g. camera switch)
      * before explicit publish. This updates the source that publishLocalStream()
      * will attach to the peer connection. Does NOT add tracks to the PC.
-     * Stops the old video track to avoid leaking device access.
+     * Stops old tracks that are not part of the new stream (device access is
+     * released, but no sender is ever created here).
      */
     async replaceLocalStream(constraints?: MediaStreamConstraints): Promise<MediaStream> {
         const defaultConstraints: MediaStreamConstraints = {
@@ -308,15 +315,103 @@ export class P2PConnection {
             const newStream = await navigator.mediaDevices.getUserMedia(
                 constraints || defaultConstraints
             );
-            // Stop old video track to release the previous camera
-            if (this.localStream) {
-                this.localStream.getVideoTracks().forEach(t => t.stop());
-            }
+            const old = this.localStream;
             this.localStream = newStream;
+            this.localSource = 'camera';
+            if (old && old !== newStream) {
+                const kept = newStream.getTracks();
+                old.getTracks().forEach(t => {
+                    if (!kept.includes(t)) t.stop();
+                });
+            }
             return this.localStream;
         } catch (error) {
             console.error('[P2P] Camera switch failed:', error);
             throw new Error('Failed to switch camera');
+        }
+    }
+
+    /**
+     * R4-LIVE-ENTRY-RECOVERY-REM1: install a prepared stream (camera, screen,
+     * or screen+mic mix) as the local preview. This is preview-only: it never
+     * creates an RTCRtpSender. The caller must invoke publishLocalStream()
+     * explicitly before anything can leave the device.
+     */
+    setLocalPreviewStream(
+        stream: MediaStream | null,
+        options: { stopPrevious?: boolean; source?: LocalMediaSource } = {}
+    ): void {
+        const previous = this.localStream;
+        if (options.stopPrevious !== false && previous && previous !== stream) {
+            previous.getTracks().forEach(track => track.stop());
+        }
+        this.localStream = stream;
+        this.localSource = stream ? (options.source ?? 'camera') : 'none';
+    }
+
+    /** Current preview origin (display only; never implies consent). */
+    getLocalSource(): LocalMediaSource {
+        return this.localSource;
+    }
+
+    /**
+     * R4-LIVE-ENTRY-RECOVERY-REM1: swap one published track (after explicit
+     * consent only). Returns:
+     *  - 'replaced' — an existing sender now carries the new track (no renegotiation),
+     *  - 'added' — a NEW sender was added; the caller must negotiate,
+     *  - 'none' — not published / no peer connection / nothing to do.
+     * Passing null detaches the sender without adding a hidden fallback track.
+     */
+    async setPublishedTrack(
+        kind: 'audio' | 'video',
+        track: MediaStreamTrack | null
+    ): Promise<'none' | 'replaced' | 'added'> {
+        if (!this.pc || !this.localPublished) return 'none';
+        const sender = this.findSender(kind);
+        if (sender) {
+            await sender.replaceTrack(track);
+            return 'replaced';
+        }
+        if (!track) return 'none';
+        const added = this.localStream
+            ? this.pc.addTrack(track, this.localStream)
+            : this.pc.addTrack(track);
+        if (added) this.tagSender(added, kind);
+        return 'added';
+    }
+
+    /** True when the published local media has at least one live track. */
+    hasPublishedTrack(kind?: 'audio' | 'video'): boolean {
+        if (!this.localPublished || !this.pc) return false;
+        return this.pc.getSenders().some(s =>
+            !!s.track && (kind ? s.track.kind === kind : true)
+        );
+    }
+
+    private findSender(kind: 'audio' | 'video'): RTCRtpSender | undefined {
+        if (!this.pc) return undefined;
+        const senders = this.pc.getSenders();
+        return senders.find(s => !!s.track && s.track.kind === kind)
+            ?? senders.find(s => (s as unknown as { __dueliKind?: string }).__dueliKind === kind);
+    }
+
+    private tagSender(sender: RTCRtpSender, kind: 'audio' | 'video'): void {
+        try {
+            (sender as unknown as { __dueliKind?: string }).__dueliKind = kind;
+        } catch { /* host object may be non-extensible; kind matching falls back to track.kind */ }
+    }
+
+    /**
+     * Renegotiate after a NEW track kind was added post-publish. The host is
+     * the sole offerer; the guest asks the host for a fresh offer through the
+     * existing request_offer transport hint.
+     */
+    async negotiateMediaChange(): Promise<void> {
+        if (!this.signaling) return;
+        if (this.signaling.effectiveRole() === 'host') {
+            await this.createOffer();
+        } else {
+            try { await this.signaling.requestOffer(); } catch { /* host watcher retries */ }
         }
     }
 
@@ -326,13 +421,14 @@ export class P2PConnection {
      * an RTCRtpSender, and it must run solely after the party's explicit publish
      * consent — never automatically on stream acquisition. Idempotent: a second
      * call is a no-op once published. Returns whether the local media is now
-     * published (a stream/peer connection must exist).
+     * published (a non-empty stream and peer connection must exist).
      */
     publishLocalStream(): boolean {
         if (this.localPublished) return true;
-        if (!this.pc || !this.localStream) return false;
+        if (!this.pc || !this.localStream || this.localStream.getTracks().length === 0) return false;
         this.localStream.getTracks().forEach(track => {
-            this.pc!.addTrack(track, this.localStream!);
+            const sender = this.pc!.addTrack(track, this.localStream!);
+            if (sender) this.tagSender(sender, track.kind === 'audio' ? 'audio' : 'video');
         });
         this.localPublished = true;
         return true;
@@ -341,6 +437,20 @@ export class P2PConnection {
     /** Whether this party has explicitly published its local media. */
     isLocalPublished(): boolean {
         return this.localPublished;
+    }
+
+    /**
+     * Stop and release local device tracks (never touches the competition).
+     * Stopping local media also re-arms the consent gate: a later track can
+     * only flow again through an explicit publishLocalStream().
+     */
+    stopLocalMedia(): void {
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+        this.localSource = 'none';
+        this.localPublished = false;
     }
 
     /**
@@ -584,10 +694,7 @@ export class P2PConnection {
         this.hasRemoteDescription = false;
 
         // Stop local tracks
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => track.stop());
-            this.localStream = null;
-        }
+        this.stopLocalMedia();
 
         // Close peer connection
         if (this.pc) {
@@ -599,6 +706,7 @@ export class P2PConnection {
         // Exiting preparation / ending the session stops local media and arms
         // the contract gate again: nothing is published on a torn-down link.
         this.localPublished = false;
+        this.localSource = 'none';
         this.offerInFlight = false;
     }
 }

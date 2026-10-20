@@ -39,8 +39,12 @@ export function resolveVideoSurface(comp: SurfaceCompetition | null | undefined,
 
     // Competitors run the in-page live flow (same classes as /live/:id).
     if ((isCreator || isOpponent) && comp.opponent_id && isLive) return 'competitor';
-    // Competitors before going live.
-    if ((isCreator || isOpponent) && comp.opponent_id && (isPending || isAccepted)) return 'golive';
+    // R4-LIVE-ENTRY-RECOVERY-REM1: accepted parties enter the private prep
+    // surface immediately (camera/screen preview + independent publish),
+    // never the old redirect-to-/live "Go Live" card.
+    if ((isCreator || isOpponent) && comp.opponent_id && isAccepted) return 'competitor';
+    // Legacy pending-with-opponent edge (race/backfill): keep the ready card.
+    if ((isCreator || isOpponent) && comp.opponent_id && isPending) return 'golive';
     if (comp.youtube_live_id && isLive) return 'youtube-live';
     if (comp.youtube_video_url) return 'youtube-vod';
     // Audience (anyone else, any auth state) watches chunks; completed

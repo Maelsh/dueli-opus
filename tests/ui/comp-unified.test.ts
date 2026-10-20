@@ -81,7 +81,11 @@ describe('R4-COMP-UNIFIED-1 page wiring pins', () => {
         ]) {
             expect(() => readSrc(rel)).not.toThrow();
         }
-        // /live/:id compat entry stays reachable from the unified page.
-        expect(readSrc(PAGE)).toContain('/live/');
+        // R4-LIVE-ENTRY-RECOVERY-REM1: /live/:id compat entry stays reachable
+        // through a route-level 302 in main.ts (the unified page no longer
+        // redirects to a second room).
+        const MAIN = readSrc('src/main.ts');
+        expect(MAIN).toContain("app.get('/live/:id'");
+        expect(MAIN).toContain('/competition/${enc(id)}');
     });
 });

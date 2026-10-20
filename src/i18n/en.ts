@@ -769,6 +769,22 @@ export const en = {
     prep_published: 'Published — media is now live',
     prep_waiting_host: 'Waiting for opponent to publish...',
     prep_waiting_guest: 'Waiting for host to start...',
+    // R4-LIVE-ENTRY-RECOVERY-REM1: honest prep/publish + leave/stage controls
+    live_tools: 'Broadcast tools',
+    start_competition: 'Start competition',
+    start_competition_failed: 'Could not start the competition',
+    publish_state_off: 'Your media is not published — local preview only',
+    publish_state_on: 'You are publishing — the other party receives your media',
+    nothing_to_publish: 'Nothing to publish. Allow camera/microphone or share your screen first.',
+    media_none: 'No camera or microphone. You can share your screen to prepare.',
+    waiting_peer_media: 'Waiting for the other party media...',
+    screen_share_stopped: 'Screen sharing stopped.',
+    leave_broadcast: 'Leave broadcast',
+    leave_broadcast_confirm: 'Leave the broadcast? The competition will not end, and you can come back later.',
+    end_competition: 'End competition',
+    end_competition_confirm: 'End the competition for everyone?',
+    expand_stage: 'Expand stage',
+    collapse_stage: 'Collapse stage',
 
     // Navigation (new)
     notifications: 'Notifications',

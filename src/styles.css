@@ -121,6 +121,122 @@ body.light {
     animation: pulse-live 2s infinite;
 }
 
+/* ===== R4-LIVE-ENTRY-RECOVERY-REM1: unified broadcast stage =====
+   Shapes/colors/sizes mirror the mandatory reference:
+   src/modules/pages/live/views/host.ts, guest.ts, styles/test.css */
+.live-stage {
+    position: relative;
+    background: #000;
+}
+
+.live-stage-main {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+}
+
+.live-stage-main video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.live-stage-pip {
+    position: absolute;
+    top: 0.75rem;
+    inset-inline-end: 0.75rem;
+    z-index: 20;
+    width: clamp(7rem, 22vw, 10rem);
+    aspect-ratio: 16 / 10;
+    touch-action: none;
+    cursor: grab;
+    transition: opacity 0.2s ease;
+}
+
+.live-stage-pip.is-dragging {
+    cursor: grabbing;
+}
+
+.live-stage.is-pip-hidden .live-stage-pip {
+    display: none;
+}
+
+/* Swap large/small by moving CSS roles, never by adding a third video. */
+.live-stage.is-swapped .live-stage-main {
+    inset-inline-end: 0.75rem;
+    top: 0.75rem;
+    left: auto;
+    bottom: auto;
+    width: clamp(7rem, 22vw, 10rem);
+    height: auto;
+    aspect-ratio: 16 / 10;
+    z-index: 20;
+}
+
+.live-stage.is-swapped .live-stage-pip {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    z-index: 10;
+    cursor: default;
+}
+
+.live-stage.is-swapped #remoteVideo {
+    border-radius: 0.75rem;
+    border: 2px solid #a855f7;
+}
+
+/* In-page expanded stage (theater): stays inside the document. */
+.live-stage.is-expanded {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+}
+
+.live-stage.is-expanded video {
+    object-fit: contain;
+}
+
+body.live-stage-locked {
+    overflow: hidden;
+}
+
+/* 40px round tools — same size/shape as test.css .control-btn. */
+.live-tool {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+    flex: 0 0 auto;
+}
+
+.live-tool:hover {
+    transform: translateY(-1px);
+}
+
+.live-tool:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(147, 51, 234, 0.6);
+}
+
+.live-tool:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.live-tool.is-active {
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
 .spinner {
     animation: spin 1s linear infinite;
 }

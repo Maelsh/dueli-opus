@@ -3,8 +3,9 @@
  * Like/Dislike pair, timed comments, single ad slot).
  *
  * Pins (ar/en, string-level — the page is a server-rendered JS template):
- * 1. Production room wiring: competitors join /live/:id (role resolved
- *    server-side); the /live/host|guest TEST pages are never the sole path.
+ * 1. Production room wiring: /competition/:id is the ONE broadcast UI;
+ *    legacy /live/:id links 302 into it (route level); the /live/host|guest
+ *    TEST pages are never the sole path.
  * 2. Media states: waiting/playing/error/processing/ready/unavailable with
  *    a manual retry; completed-without-recording is never VOD; readiness
  *    comes from the vod_url/youtube predicate (no HEAD probing).
@@ -26,11 +27,18 @@ import { en } from '../../src/i18n/en';
 
 const PAGE = readFileSync(resolve(__dirname, '../../src/modules/pages/competition-page.ts'), 'utf-8');
 const CSP = readFileSync(resolve(__dirname, '../../src/client/csp-delegate.ts'), 'utf-8');
+const MAIN = readFileSync(resolve(__dirname, '../../src/main.ts'), 'utf-8');
 
 describe('R2-L2 competition page UI contract', () => {
-    it('1. production room: every role enters /live/:id (test pages not the sole path)', () => {
-        expect(PAGE).toContain("window.location.href = '/live/' + competitionId + '?lang=' + lang");
-        expect(PAGE).toContain('<a href="/live/\\${competitionId}?lang=\\${lang}"');
+    it('1. production room: /competition/:id is the room; /live/:id 302-redirects to it', () => {
+        // R4-LIVE-ENTRY-RECOVERY-REM1: the unified page IS the broadcast room.
+        // The old in-page redirect to a second /live room is gone; legacy
+        // /live/:id links resolve through a route-level 302 in main.ts.
+        expect(MAIN).toContain("app.get('/competition/:id', competitionPage)");
+        expect(MAIN).toContain("app.get('/live/:id'");
+        expect(MAIN).toContain('/competition/${enc(id)}');
+        expect(MAIN).toContain('302');
+        expect(PAGE).not.toContain("window.location.href = '/live/' + competitionId");
         // No production href points at the test-only host/guest/viewer pages.
         expect(PAGE).not.toMatch(/href="\/live\/(host|guest|viewer)\?comp=/);
         expect(PAGE).not.toContain('/live/host?comp=');
