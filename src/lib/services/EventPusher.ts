@@ -87,10 +87,35 @@ export class EventPusher {
         channel: string,
         lastEventId: number
     ): Promise<string> {
-        const events = await this.eventLog.getAfter(channel, lastEventId);
-        return events
-            .map(e => EventPusher.formatSseMessage(e.id, e.event_type as SseEventType, JSON.parse(e.payload)))
-            .join('');
+        const page = await this.getCatchUpPage(channel, lastEventId);
+        return page.sseMessage;
+    }
+
+    /**
+     * FV20-REPLAY: bounded catch-up page + the cursor it actually reached.
+     * The cursor is the highest id in this page (or the incoming cursor when
+     * the page is empty). The SSE loop advances to it before its next poll,
+     * so the same missed events are never delivered twice; when more than one
+     * page was missed, the next poll continues from this cursor instead of
+     * re-reading history.
+     */
+    async getCatchUpPage(
+        channel: string,
+        lastEventId: number,
+        limit = 50
+    ): Promise<{ sseMessage: string; lastEventId: number }> {
+        const events = await this.eventLog.getAfter(channel, lastEventId, limit);
+        return {
+            sseMessage: events
+                .map(e => EventPusher.formatSseMessage(e.id, e.event_type as SseEventType, JSON.parse(e.payload)))
+                .join(''),
+            lastEventId: events.length > 0 ? events[events.length - 1].id : lastEventId,
+        };
+    }
+
+    /** Current channel high-water mark (fresh subscription start). */
+    async getLatestEventId(channel: string): Promise<number> {
+        return this.eventLog.getLatestId(channel);
     }
 
     // ----------------------------------------------------------

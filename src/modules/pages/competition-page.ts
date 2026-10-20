@@ -1719,6 +1719,45 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         console.log('[LiveStream]', type === 'error' ? '❌' : '📡', msg);
       }
 
+      // FV20-TOAST: page-local toast bridge. This page used bare showToast()
+      // in the publish/start flow while only window.dueli.showToast existed,
+      // so publishMedia threw ReferenceError AFTER attaching the local tracks
+      // and NEVER reached createOffer()/requestReoffer(). Delegate to the
+      // canonical client API, then legacy global, then a minimal DOM fallback;
+      // a toast failure must never break media or negotiation.
+      function showToast(message, type = 'info') {
+        const text = (message === undefined || message === null) ? '' : String(message);
+        const kind = type || 'info';
+        try {
+          const api = (typeof window !== 'undefined') ? window.dueli : null;
+          if (api && typeof api.showToast === 'function') {
+            api.showToast(text, kind);
+            return;
+          }
+        } catch (e) { /* bridge failure falls through, never breaks the caller */ }
+        try {
+          if (typeof window !== 'undefined' && typeof window.showToast === 'function' && window.showToast !== showToast) {
+            window.showToast(text, kind);
+            return;
+          }
+        } catch (e) { /* fall through to the DOM fallback */ }
+        try {
+          if (typeof document === 'undefined' || !document.body) return;
+          const existing = document.querySelector('.toast');
+          if (existing) existing.remove();
+          const toast = document.createElement('div');
+          toast.className = 'toast toast-' + kind;
+          toast.textContent = text;
+          toast.style.cssText = isRTL ? 'left: 24px;' : 'right: 24px;';
+          document.body.appendChild(toast);
+          setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(20px)';
+            setTimeout(function() { toast.remove(); }, 300);
+          }, 3000);
+        } catch (e) { /* the UI affordance is best-effort only */ }
+      }
+
       // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-21): ONE player badge.
       // LIVE is a playback-position fact (at the confirmed edge), REPLAY means
       // the audience rewound inside the recording, VOD means completed media.

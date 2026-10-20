@@ -187,6 +187,8 @@ interface PollWire {
             peer?: string | null;
             to?: string | null;
         }> | null;
+        /** Highest scanned event id (FV20-SIG cursor, incl. filtered events). */
+        cursor?: number | null;
     } | null;
 }
 
@@ -480,6 +482,16 @@ export class SignalingManager {
                     this.log('Peer connected', 'info');
                     this.onPeerJoined({ role: label });
                 }
+            }
+            // FV20-SIG: advance over EVERY event the server scanned, including
+            // presence events and signals filtered as invisible/to-another-peer.
+            // Signals above were processed first, so their ids are already
+            // honoured; this only moves the cursor past the invisible tail.
+            // A response without a cursor keeps the legacy visible-only advance.
+            const cursor = data.data && typeof data.data.cursor === 'number'
+                ? data.data.cursor : null;
+            if (cursor !== null && Number.isFinite(cursor) && cursor > this.lastTimestamp) {
+                this.lastTimestamp = cursor;
             }
         } catch (err) {
             console.error('Poll error:', err instanceof Error ? err.message : err);

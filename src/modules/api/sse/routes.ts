@@ -94,16 +94,25 @@ sseRoutes.get('/', async (c) => {
             // Send initial connection confirmation
             enqueue(`: connected to channel=${channel}\n\n`);
 
-            // Replay missed events (reconnect support)
+            // FV20-REPLAY: distinguish a fresh subscription from a reconnect.
+            //  - reconnect (Last-Event-Id): replay exactly the missed window,
+            //    then continue from the cursor that replay actually reached;
+            //  - fresh load: start at the channel's current high-water mark,
+            //    never at 0 — the log is reconnect support, not a history feed.
+            // The old code both replayed from 0 on load and left the cursor at
+            // lastEventId after catch-up, delivering the same page twice.
+            let latestId = lastEventId;
             if (lastEventId > 0) {
-                const catchUp = await pusher.getCatchUp(channel, lastEventId);
-                if (catchUp) enqueue(catchUp);
+                const catchUp = await pusher.getCatchUpPage(channel, lastEventId);
+                if (catchUp.sseMessage) enqueue(catchUp.sseMessage);
+                latestId = catchUp.lastEventId;
+            } else {
+                latestId = await pusher.getLatestEventId(channel);
             }
 
             // Poll for new events every POLL_INTERVAL_MS (10 seconds — SEC-14)
             // (In a Durable Objects setup this would be a push; here we use
             //  a polling loop backed by the D1 event log.)
-            let latestId = lastEventId;
             let pollCount = 0;
             const MAX_POLLS = 1500; // ~4 hours at 10s intervals, then reconnect hint
 
