@@ -544,3 +544,208 @@ describe('R4-CHUNK-VIEW-RECOVERY-1 REM1 — LIVE global timeline', () => {
         player.stop();
     });
 });
+
+describe('R4-CHUNK-VIEW-RECOVERY-1 REM1 — FV20-TIME absolute media timestamps', () => {
+    // Real production sample chunk_0050 (match_2230): MP4 tfdt starts at
+    // 15,532,306 / 30,000 = 517.743533s while the recording index start is
+    // 517.539s and the verified duration is 10.384s. Blink exposes that
+    // absolute media time as element.currentTime and element.duration =
+    // 528.127467; seeking below the origin clamps to 517.743533.
+    const RAW_ORIGIN = 517.743533;
+    const INDEX_START = 517.539;
+    const INDEX_DURATION = 10.384;
+
+    function absoluteMediaElement(base: any, origins: number[], durations: number[]) {
+        let loadIndex = 0;
+        let origin = origins[0];
+        let duration = durations[0];
+        let current = origin;
+        Object.defineProperty(base, 'currentTime', {
+            configurable: true,
+            get: () => current,
+            set: (value: number) => {
+                current = (!isFinite(value) || value < origin) ? origin : value;
+            },
+        });
+        base.duration = origin + duration;
+        base.readyState = 1;
+        const originalLoad = base.load;
+        base.load = async function (this: any) {
+            const i = Math.min(loadIndex, origins.length - 1);
+            origin = origins[i];
+            duration = durations[i];
+            loadIndex++;
+            current = origin;
+            this.duration = origin + duration;
+            if (this.onloadedmetadata) this.onloadedmetadata();
+            if (originalLoad) await originalLoad.call(this);
+        };
+        return base;
+    }
+
+    function absoluteLiveManager() {
+        const starts = [INDEX_START, 527.923, 538.172];
+        const durations = [INDEX_DURATION, 10.249, 10.398];
+        return {
+            currentIndex: -1,
+            entryFor: (i: number) => (i >= 0 && i < starts.length
+                ? { index: i, ready: true, duration: durations[i] } : null),
+            getUrl: (i: number) => url(i + 50),
+            getChunkStartTime: (i: number) => starts[i] ?? 0,
+            getChunkForTime: (t: number) => {
+                if (t >= starts[2]) return 2;
+                if (t >= starts[1]) return 1;
+                return 0;
+            },
+            getTotalDuration: () => 548.57,
+            getLiveEdgeTime: () => 548.57,
+            latestReadyIndex: () => 2,
+            maxIndex: () => 2,
+            waitForNextChunk: () => new Promise(() => {}),
+        };
+    }
+
+    it('12. VOD: index start + absolute currentTime is converted once (no double offset)', async () => {
+        playlist = {
+            chunks: [
+                { index: 49, url: url(50), duration: INDEX_DURATION, ready: true, timeline_start_ms: 517539 },
+                { index: 50, url: url(51), duration: 10.249, ready: true, timeline_start_ms: 527923 },
+                { index: 51, url: url(52), duration: 10.398, ready: true, timeline_start_ms: 538172 },
+            ],
+            index_metadata: meta(548570),
+        };
+        const { SmartVodPlayer } = loadClasses();
+        const el = absoluteMediaElement(
+            vodVideoStub(),
+            [RAW_ORIGIN, 528.131083, 538.5],
+            [INDEX_DURATION, 10.249, 10.398],
+        );
+        const player = new SmartVodPlayer({ videoElement: el, competitionId: 9 });
+        await player.start();
+
+        // Media time is 517.743, index time is 517.539: subtract the origin,
+        // never add the raw currentTime to the global start.
+        expect(player.getGlobalTime()).toBeCloseTo(INDEX_START, 6);
+        expect(el.currentTime).toBeCloseTo(RAW_ORIGIN, 6);
+
+        player.seekTo(520.039); // 2.5s into chunk 49
+        await wait();
+        expect(player.currentChunkIndex).toBe(0);
+        expect(el.currentTime).toBeCloseTo(RAW_ORIGIN + 2.5, 6);
+        expect(player.getGlobalTime()).toBeCloseTo(520.039, 6);
+
+        player.seekTo(527.923); // exact boundary -> chunk 50
+        await wait();
+        expect(player.currentChunkIndex).toBe(1);
+        expect(el.currentTime).toBeCloseTo(528.131083, 6);
+        expect(player.getGlobalTime()).toBeCloseTo(527.923, 6);
+
+        player.seekTo(538.172); // distant -> chunk 51
+        await wait();
+        expect(player.currentChunkIndex).toBe(2);
+        expect(el.currentTime).toBeCloseTo(538.5, 6);
+        expect(player.getGlobalTime()).toBeCloseTo(538.172, 6);
+        player.stop();
+    });
+
+    it('13. LIVE: rewind and edge use the same origin-corrected global timeline', async () => {
+        const { LiveSequentialPlayer } = loadClasses();
+        // The first play starts on element 1 (element 0 is the initial active).
+        const vids = [
+            // Element 0: chunk 49 for the in-chunk seek, then chunk 51 for edge.
+            absoluteMediaElement(liveVideoStub(), [RAW_ORIGIN, 538.5], [INDEX_DURATION, 10.398]),
+            // Element 1: chunk 49 on rewind, then chunk 50 at the boundary.
+            absoluteMediaElement(liveVideoStub(), [RAW_ORIGIN, 528.131083], [INDEX_DURATION, 10.249]),
+        ];
+        const updates: Array<[number, number, number]> = [];
+        const player = new LiveSequentialPlayer({
+            videoPlayers: vids,
+            chunkManager: absoluteLiveManager(),
+            onTimeUpdate: (t: number, total: number, idx: number) => updates.push([t, total, idx]),
+        });
+
+        await player.rewindTo(0); // chunk 49 at its start
+        expect(player.currentIndex).toBe(0);
+        expect(vids[player.activePlayerIndex].currentTime).toBeCloseTo(RAW_ORIGIN, 6);
+        expect(player.getGlobalTime()).toBeCloseTo(INDEX_START, 6);
+
+        await player.seekTo(520.039); // 2.5s into chunk 49
+        expect(player.currentIndex).toBe(0);
+        expect(vids[player.activePlayerIndex].currentTime).toBeCloseTo(RAW_ORIGIN + 2.5, 6);
+        expect(player.getGlobalTime()).toBeCloseTo(520.039, 6);
+
+        await player.seekTo(527.923); // boundary -> chunk 50
+        expect(player.currentIndex).toBe(1);
+        expect(vids[player.activePlayerIndex].currentTime).toBeCloseTo(528.131083, 6);
+        expect(player.getGlobalTime()).toBeCloseTo(527.923, 6);
+
+        // The active element's timeupdate publishes the origin-corrected
+        // global position, not the raw absolute media time.
+        const active = vids[player.activePlayerIndex];
+        active.ontimeupdate && active.ontimeupdate();
+        expect(updates[updates.length - 1][0]).toBeCloseTo(527.923, 6);
+        player.stop();
+    });
+
+    it('14. zero-origin media (MSE/WebM/other engines) keeps the legacy conversion', async () => {
+        playlist = {
+            chunks: [
+                { index: 0, url: url(1), duration: 10, ready: true, timeline_start_ms: 30000 },
+            ],
+            index_metadata: meta(40000),
+        };
+        const { SmartVodPlayer } = loadClasses();
+        const el = vodVideoStub(); // currentTime starts at 0
+        const player = new SmartVodPlayer({ videoElement: el, competitionId: 9 });
+        await player.start();
+        expect(player.getGlobalTime()).toBe(30);
+        player.seekTo(35);
+        await wait();
+        expect(el.currentTime).toBe(5);
+        expect(player.getGlobalTime()).toBe(35);
+        player.stop();
+    });
+
+    it('15. VOD: origin is read after loadedmetadata dispatch, before play() advances it', async () => {
+        playlist = {
+            chunks: [
+                { index: 49, url: url(50), duration: INDEX_DURATION, ready: true, timeline_start_ms: 517539 },
+            ],
+            index_metadata: meta(527923),
+        };
+        const { SmartVodPlayer } = loadClasses();
+        const el = vodVideoStub();
+        let current = 0;
+        const metadataListeners: Array<() => void> = [];
+        Object.defineProperty(el, 'currentTime', {
+            configurable: true,
+            get: () => current,
+            set: (value: number) => {
+                current = (!isFinite(value) || value < RAW_ORIGIN) ? RAW_ORIGIN : value;
+            },
+        });
+        el.readyState = 0;
+        el.duration = 0;
+        el.addEventListener = (name: string, cb: () => void) => {
+            if (name === 'loadedmetadata') metadataListeners.push(cb);
+        };
+        // Blink can report currentTime=0 AT the loadedmetadata callback and
+        // only expose the absolute origin immediately after dispatch. Play
+        // must not start until that origin is observable.
+        el.load = async function (this: any) {
+            setTimeout(() => {
+                this.readyState = 1;
+                this.duration = RAW_ORIGIN + INDEX_DURATION;
+                if (this.onloadedmetadata) this.onloadedmetadata();
+                metadataListeners.forEach((cb) => cb());
+                current = RAW_ORIGIN;
+            }, 0);
+        };
+
+        const player = new SmartVodPlayer({ videoElement: el, competitionId: 9 });
+        await player.start();
+        expect(player.getGlobalTime()).toBeCloseTo(INDEX_START, 6);
+        expect(el.currentTime).toBeCloseTo(RAW_ORIGIN, 6);
+        player.stop();
+    });
+});
