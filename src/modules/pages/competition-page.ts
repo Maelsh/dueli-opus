@@ -945,7 +945,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } catch (e) { /* realtime is optional; the page still works */ }
       }
 
-      // B2+B3: paged comments state (roots carry replies_count)      let commentsItems = [];
+      // B2+B3: paged comments state (roots carry replies_count)
+      let commentsItems = [];
       let commentsTotal = 0;
       const COMMENTS_PAGE = 20;
       function commentsEmptyText() {

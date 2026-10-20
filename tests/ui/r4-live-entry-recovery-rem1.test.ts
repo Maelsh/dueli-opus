@@ -385,4 +385,78 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
             db.close();
         }
     });
+
+    it('13. comments state is executable and an early comment event never throws (B-1 regression)', async () => {
+        // The declaration must be its own executable statement — a comment on
+        // the same line swallows it (ReferenceError on the first read).
+        expect(page).toMatch(/^\s*let commentsItems = \[\];\s*$/m);
+        expect(page).not.toMatch(/\/\/[^\r\n]*\blet commentsItems = \[\];/);
+        const declLine = page.split(/\r?\n/).find((line) => line.includes('let commentsItems = [];'));
+        expect(declLine, 'declaration line exists').toBeTruthy();
+        expect(declLine!.trim(), 'declaration is not behind a comment').toBe('let commentsItems = [];');
+
+        // Execute the REAL state + load + SSE slice from the page. Under the
+        // swallowed declaration, the first read throws ReferenceError and the
+        // SSE listener silently drops the comment (its try/catch hides it).
+        const slice = between(page, '// B2+B3: paged comments state', '// R2-L2: VOD timed comments');
+        expect(slice).toMatch(/^\s*let commentsItems = \[\];\s*$/m);
+
+        const box: Record<string, { innerHTML: string; textContent: string; classList: { toggle(): void } }> = {};
+        const element = () => ({ innerHTML: '', textContent: '', classList: { toggle() {} } });
+        const sseHandlers: Record<string, (ev: { data: string }) => void> = {};
+        class FakeEventSource {
+            constructor(_url: string) { /* channel is asserted below via fetch/URL stubs */ }
+            addEventListener(type: string, fn: (ev: { data: string }) => void) { sseHandlers[type] = fn; }
+            close() { /* no-op */ }
+        }
+        const requested: string[] = [];
+        const factory = new Function(
+            'window', 'document', 'fetch', 'EventSource', 'competitionId', 'tr', 'renderCommentsTree',
+            slice + `
+            return {
+                paintCommentsEmpty: paintCommentsEmpty,
+                loadCommentsInitial: loadCommentsInitial,
+                upsertLiveComment: upsertLiveComment,
+                subscribeCommentsLive: subscribeCommentsLive,
+                items: function() { return commentsItems; }
+            };`
+        );
+        const api = factory(
+            {},
+            { getElementById: (id: string) => (box[id] = box[id] || element()) },
+            (url: string) => {
+                requested.push(url);
+                return Promise.resolve({
+                    json: () => Promise.resolve({ success: true, data: { items: [{ id: 7, content: 'loaded' }], total: 1 } }),
+                });
+            },
+            FakeEventSource,
+            42,
+            {},
+            (items: Array<{ id: number }>) => items.map((c) => String(c.id)).join(',')
+        ) as {
+            paintCommentsEmpty(): void;
+            loadCommentsInitial(): Promise<void>;
+            upsertLiveComment(cm: { id: number; content: string }): void;
+            subscribeCommentsLive(): void;
+            items(): Array<{ id: number }>;
+        };
+
+        // Early paint BEFORE the initial GET resolves: reads commentsItems.
+        expect(() => api.paintCommentsEmpty()).not.toThrow();
+        // Early direct receipt (POST response / replay) BEFORE the initial GET.
+        expect(() => api.upsertLiveComment({ id: 1, content: 'early' })).not.toThrow();
+        expect(api.items().map((c) => c.id)).toEqual([1]);
+        // Early SSE event BEFORE the initial GET resolves: the handler must
+        // merge it, not swallow a ReferenceError.
+        api.subscribeCommentsLive();
+        expect(sseHandlers.comment_new, 'comment_new listener registered').toBeTruthy();
+        expect(() => sseHandlers.comment_new({ data: JSON.stringify({ comment: { id: 2, content: 'sse' } }) }))
+            .not.toThrow();
+        expect(api.items().map((c) => c.id)).toEqual([2, 1]);
+        // The load path itself still hydrates the first page.
+        await api.loadCommentsInitial();
+        expect(requested[0]).toBe('/api/competitions/42/comments?limit=20&offset=0');
+        expect(api.items().map((c) => c.id)).toEqual([7]);
+    });
 });
