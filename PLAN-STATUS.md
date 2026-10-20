@@ -1,3 +1,24 @@
+## 2026-10-20 — R4-CHUNK-VIEW-RECOVERY-1 REM1 (الصف 28.4.1 · O19-07/12/13/14/21) · فرع feat/r4-chunk-view-recovery-rem1-28-4-1 (من 2abf5ad = origin/main)
+
+- 🔧 تنفيذ LOCAL مكتمل T/B (12 اختبار سلوكي جديد) — ليست DONE/Production Accepted، بلا دمج/نشر. BASE `2abf5ade279804d1ec07a4ece22cbf810b4c50ba`؛ PR110 HOLD بلا مساس، وعقود PR116/117/118/119/120 محفوظة.
+- **التصنيف بعد تتبع المسار الحقيقي (`playlist → ready/index → fetch → decode → playback`):**
+  1. **CONFIRMED** — واجهة الجمهور كانت ترسم `media:<state>` في `#embeddedStateLabel`، وتُظهر `#embeddedChunkInfo` بعدّاد القطع (`onChunkChange`) وعدّاد التقدم (`onProgress`)؛ أي رمز تقني وعدّاد ملفات بدل حالة مترجمة ووقت تشغيل.
+  2. **CONFIRMED** — VOD كان يشتق المدة الإجمالية من `playlist.total_duration / chunks.length` (تقسيم متساوٍ)، ثم يعرض الشريط/الوقت/التعليقات المؤقتة من `videoEl.currentTime/duration` المحليين للقطعة؛ فتبدو مدة التسجيل مساوية لمدة القطعة المحمّلة.
+  3. **CONFIRMED** — LIVE لم يكن يملك خطًا زمنيًا موحّدًا (لا `onTimeUpdate`/`getGlobalTime`/`seekTo`/`jumpToLive`)، والـrewind كان ينتقل لفهرس قطعة فقط؛ كما كان `isLive` يغلب `completed` عند بقاء `stream_status='live'`، فيمكن رسم LIVE كاذب على تسجيل مكتمل.
+  4. **CONFIRMED** — `SmartVodPlayer` بلا generation token وبلا in-flight dedupe: طلبان متزامنان لنفس القطعة يكرران الـfetch، واستجابة seek قديم قد تستولي على العنصر أو تعيد نافذة قديمة بعد recenter.
+  5. **ALREADY DONE** — سلطة الفهرس/الـplaylist (`ready`/`failed`/`gaps`/`timeline_start_ms`/`total_ready_ms`/`finalized`) وتخطي غير المؤكد والنافذة المحدودة كانت صحيحة في `ChunkIndexPlaylist`/`routes`/المشغل؛ لم تُعَد كتابتها ولم يُفترض عيب فيها.
+  6. **NOT REPRODUCED** — لا دليل على قطع/فجوات/readiness مُفبركة من الخادم، ولا على حذف/كتابة فوق ملفات؛ التنزيلات تعمل (شهادة المالك). لم تُمسّ الهجرات أو D1 أو PHP/الاستضافة.
+  7. **BLOCKED** — S (صورة/صوت/سلاسة على جهاز حقيقي) غير متاح هنا، ولم يُشغَّل Playwright E2E الحقيقي على هذا المضيف؛ لا ادّعاء بصري/صوتي من mocks.
+- **الإصلاح (داخل 28.4.1 فقط):**
+  1. `shared.ts`: مفاتيح `playerStateLabel` AR/EN؛ `ChunkManager` يحسب بدايات/مدد/إجمالي/حافة LIVE من الفهرس (`timeline_start_ms/1000`, `total_ready_ms/1000`) مرة واحدة؛ `SmartVodPlayer` يبني مددًا حقيقية بلا تقسيم متساوٍ، ويكشف `getGlobalTime/getGlobalDuration/onTimeUpdate`، ويحمي seek بـ`opGen` + `inFlightLoads`، ويعيد توسيط النافذة قبل الإطلاق ويسقط الاستجابات المتأخرة خارجها؛ `LiveSequentialPlayer` يكشف خطًا زمنيًا كاملًا (`getGlobalTime/getAvailableDuration/getLiveEdgeTime/isBehindLive/seekTo/jumpToLive`) ويحافظ على `rewindTo(index)`، مع حارس generation وحلقة واحدة، وتصفير offset عند حافة LIVE.
+  2. `competition-page.ts`: حذف `#embeddedChunkInfo` وكل عدّاد تقني؛ عرض حالة مترجمة فقط؛ إضافة شريط LIVE زمني (`#embeddedLiveControls`/`#embeddedLiveSeekbar`/`#embeddedLiveTimeDisplay`) وشارة LIVE/REPLAY/VOD صادقة؛ `completed` يغلب `stream_status='live'` ويخفي شريط/شارة LIVE؛ VOD والتوقيت والتعليقات المؤقتة تستخدم الوقت العام نفسه.
+  3. `i18n`: `replay`, `live_timeline`, `player_state_waiting/playing/processing/error/ready/unavailable` في AR/EN.
+- **الاختبارات T/B:** جديد `tests/client/r4-chunk-view-recovery-rem1.test.ts` (12): مدد متغيرة/إجمالي من الفهرس لا `total_duration`؛ حدود دقيقة؛ فجوة/غير جاهز بلا تلفيق؛ seek عبر حدود/بعيد/عودة؛ seek سريع واستجابة متأخرة؛ dedupe/نافذة/عدم إعادة fetch؛ فصل وقت التشغيل عن عدّاد الملفات؛ حالات AR/EN؛ LIVE→rewind→edge وseek سريع؛ ذيل LIVE غير المؤكد يُقصّ إلى الحافة المؤكدة؛ حافة legacy بلا أعلام جاهزية. تحديث `tests/ui/player-ux.test.ts` (3 تثبيتات جديدة) وE2E `chunk-player-ux`/`chunk-audience` ليقرأ `__mediaState` ووقت المشغل العام بدل العدّاد المحذوف. الحزم المستهدفة: 7 ملفات/71 اختبارًا خضراء.
+- **البوابات:** `npx tsc --noEmit` نظيف؛ `npm run build` exit 0؛ `any` 299 (طريقة CI، = الأساس، ≤310)؛ الحزمة الكاملة 166 ملفًا/1759 اختبارًا: 1753 نجحت و6 فشلت فقط في `tests/dev-tools/quality-gate-poll.test.ts` لغياب `jq` على ويندوز (بيئي، الملف لم يُمسّ). لم يُنفَّذ E2E الحقيقي محليًا.
+- **الحالة:** LOCAL VERIFIED (T/B) فقط. غير مدمجة وغير منشورة، والصف 28.4.1 ليس Production Accepted. **S PENDING** — لا جلسة وسائط/جهاز حقيقية، فلا يُدّعى PASS بصري/صوتي/سلاسة.
+- **التراجع (G8):** revert `shared.ts` + `competition-page.ts` + `i18n`(x2) + `public/static/styles.css` + الاختبارات الثلاثة المحدّثة/الجديدة (لا هجرة/بيانات/أعلام/مسارات). لا بيانات إنتاجية كُتبت.
+- **NEXT:** فتح PR واحد من هذا الفرع إلى main (بلا دمج/نشر)، ثم مراجعة REMOTE مستقلة وتنفيذ قائمة S على جهاز حقيقي.
+
 ## 2026-10-20 — R4-LIVE-ENTRY-RECOVERY-1 (row 28.3) REM1 · إصلاح المانع B-1 في PR #120 · فرع feat/r4-live-entry-recovery-rem1-28-3-1 (HEAD المراجَع cc841b4)
 
 - 🔧 إصلاح مانع واحد على نفس الفرع/PR #120 — ليست DONE/Production Accepted، بلا دمج/نشر. BASE `ce5e0e7`؛ الكود+الاختبار `61a6e76`، ويليه كوميت التوثيق هذا.

@@ -324,7 +324,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           <div class="text-center text-white">
                             <i id="embeddedStatusIcon" class="fas fa-spinner fa-spin text-4xl mb-3"></i>
                             <p class="text-sm" id="embeddedStatusText">\${isLive ? (tr.connecting_to_stream || 'جاري الاتصال بالبث...') : (tr.loading_video || 'جاري تحميل الفيديو...')}</p>
-                            <p class="text-xs mt-1 opacity-70 hidden" id="embeddedStateLabel" data-media-state="waiting"></p>
+                            <p class="text-xs mt-1 opacity-70 hidden" id="embeddedStateLabel" data-media-state="waiting" role="status" aria-live="polite"></p>
                             <button id="embeddedRetryBtn" data-csp-on="click" data-csp-fn="embeddedRetryMedia" data-csp-args='[]'
                                     class="hidden mt-3 px-5 py-2 bg-purple-600 text-white rounded-full text-sm font-bold hover:bg-purple-700 transition-colors">
                               <i class="fas fa-redo me-1"></i>\${tr.retry || 'Retry'}
@@ -341,14 +341,23 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
 
                         <!-- Stream info bar -->
                         <div class="absolute bottom-3 left-3 z-30 flex items-center gap-2">
-                          \${isLive ? '<span class="flex items-center gap-1 bg-red-600 text-white text-xs px-2 py-1 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>' + (tr.status_live || 'مباشر') + '</span>' : ''}
-                          <span id="embeddedChunkInfo" class="text-xs text-white/70 bg-black/40 px-2 py-1 rounded-full hidden"></span>
+                          \${isLive ? '<span id="embeddedLiveChip" class="flex items-center gap-1 bg-red-600 text-white text-xs px-2 py-1 rounded-full"><span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>' + (tr.status_live || 'مباشر') + '</span>' : ''}
                           <!-- R4-CHUNK-PLAYER-UX-1: rewind-one-chunk + return-to-live
                                (live only; shown/hidden by playback position, RTL-safe flex). -->
                           \${isLive ? '<button id="embeddedRewindBtn" data-csp-on="click" data-csp-fn="embeddedRewindLive" data-csp-args="[]" class="hidden items-center gap-1 bg-black/50 text-white text-xs px-2 py-1 rounded-full hover:bg-black/70 backdrop-blur" title="' + (tr.live_rewind || 'Rewind') + '" aria-label="' + (tr.live_rewind || 'Rewind') + '"><i class="fas fa-backward text-[10px]"></i></button>' : ''}
                           \${isLive ? '<button id="embeddedLiveBtn" data-csp-on="click" data-csp-fn="embeddedReturnToLive" data-csp-args="[]" class="hidden items-center gap-1 bg-white/90 text-red-700 text-xs px-2 py-1 rounded-full font-bold hover:bg-white" title="' + (tr.return_to_live || 'Back to live') + '"><span class="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>' + (tr.return_to_live || 'Back to live') + '</button>' : ''}
                         </div>
                       </div>
+
+                      <!-- R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1): LIVE timeline.
+                           Range is the WHOLE available recording (index total),
+                           never the current chunk duration. Hidden for VOD. -->
+                      \${isLive ? '<div id="embeddedLiveControls" class="hidden bg-gray-900 p-3">' +
+                        '<div class="flex items-center gap-3">' +
+                          '<span id="embeddedLiveTimeDisplay" class="text-xs font-mono text-gray-300 w-20 flex-shrink-0">0:00 / 0:00</span>' +
+                          '<input type="range" id="embeddedLiveSeekbar" min="0" max="100" value="100" class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-red-500" aria-label="' + (tr.live_timeline || 'Live timeline') + '" />' +
+                        '</div>' +
+                      '</div>' : ''}
                       
                       <!-- VOD Controls (hidden by default, shown for recorded) -->
                       <div id="embeddedVodControls" class="hidden bg-gray-900 p-3">
@@ -1054,20 +1063,20 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       }
       function currentVodTime() {
         if (!competitionData || competitionData.status !== 'completed') return null;
-        const v = document.getElementById('embeddedVideoPlayer1');
-        if (!v || typeof v.currentTime !== 'number' || !isFinite(v.currentTime)) return null;
         const ctrls = document.getElementById('embeddedVodControls');
         if (ctrls && ctrls.classList.contains('hidden')) return null;
-        return Math.floor(v.currentTime);
+        // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1): the SAME global timeline as
+        // the seekbar/player (verified chunk start + offset). A chunk-local
+        // video.currentTime would misplace every timed comment.
+        if (!embeddedCurrentPlayer || typeof embeddedCurrentPlayer.getGlobalTime !== 'function') return null;
+        const t = embeddedCurrentPlayer.getGlobalTime();
+        return (typeof t === 'number' && isFinite(t)) ? Math.floor(Math.max(0, t)) : null;
       }
       window.seekToCommentOffset = function(sec) {
-        const v = document.getElementById('embeddedVideoPlayer1');
-        if (!v) return;
         const t = parseFloat(sec);
         if (isNaN(t) || t < 0) return;
-        if (embeddedCurrentPlayer && embeddedCurrentPlayer.seekTo) embeddedCurrentPlayer.seekTo(t);
-        else { try { v.currentTime = t; } catch (e) {} }
-        try { v.play(); } catch (e) {}
+        if (!embeddedCurrentPlayer || typeof embeddedCurrentPlayer.seekTo !== 'function') return;
+        embeddedCurrentPlayer.seekTo(t);
       };
       function commentOffsetOf(cm) {
         return (cm && typeof cm.video_offset === 'number' && isFinite(cm.video_offset)) ? cm.video_offset : null;
@@ -1709,6 +1718,28 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       function log(msg, type = 'info') {
         console.log('[LiveStream]', type === 'error' ? '❌' : '📡', msg);
       }
+
+      // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-21): ONE player badge.
+      // LIVE is a playback-position fact (at the confirmed edge), REPLAY means
+      // the audience rewound inside the recording, VOD means completed media.
+      // It is never derived from a printed in-video watermark.
+      function updateEmbeddedMode(mode) {
+        const badge = document.getElementById('embeddedModeBadge');
+        if (!badge) return;
+        badge.classList.remove('hidden', 'bg-red-600', 'bg-amber-500');
+        if (mode === 'live') {
+          badge.classList.add('bg-red-600');
+          badge.innerHTML = '<i class="fas fa-circle animate-pulse mr-1"></i>' + (tr.status_live || 'LIVE');
+        } else if (mode === 'replay') {
+          badge.classList.add('bg-amber-500');
+          badge.innerHTML = '<i class="fas fa-history mr-1"></i>' + (tr.replay || 'Replay');
+        } else if (mode === 'vod') {
+          badge.classList.add('bg-amber-500');
+          badge.innerHTML = '<i class="fas fa-film mr-1"></i>' + (tr.recorded || 'VOD');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
       
       // ===== Embedded Viewer: Auto-Start =====
       
@@ -1743,7 +1774,18 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           window.__mediaState = state;
           const label = document.getElementById('embeddedStateLabel');
           if (label) {
-            label.textContent = 'media:' + state;
+            // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-07, O19-21): the
+            // audience sees a translated state, never a raw 'media:*' token
+            // or a chunk counter. The machine state stays in data/__mediaState.
+            var labels = {
+              waiting: tr.player_state_waiting || 'Waiting for stream...',
+              playing: tr.player_state_playing || 'Playing',
+              error: tr.player_state_error || 'Error',
+              processing: tr.player_state_processing || 'Preparing the recording...',
+              ready: tr.player_state_ready || 'Ready',
+              unavailable: tr.player_state_unavailable || 'Media unavailable'
+            };
+            label.textContent = (window.playerStateLabel ? window.playerStateLabel(state) : labels[state]);
             label.setAttribute('data-media-state', state);
             label.classList.remove('hidden');
           }
@@ -1785,21 +1827,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           if (overlay) overlay.classList.remove('hidden');
         }
         
-        function updateEmbeddedMode(mode) {
-          const badge = document.getElementById('embeddedModeBadge');
-          if (!badge) return;
-          badge.classList.remove('hidden', 'bg-red-600', 'bg-amber-500');
-          if (mode === 'live') {
-            badge.classList.add('bg-red-600');
-            badge.innerHTML = '<i class="fas fa-circle animate-pulse mr-1"></i>LIVE';
-          } else if (mode === 'vod') {
-            badge.classList.add('bg-amber-500');
-            badge.innerHTML = '<i class="fas fa-film mr-1"></i>VOD';
-          } else {
-            badge.classList.add('hidden');
-          }
-        }
-        
         // R2-L2: VOD not ready → bounded auto-poll (8 × 15s) while the
         // ffmpeg server finalizes the merged recording, then the
         // unavailable state with a MANUAL retry (no endless spinner).
@@ -1828,12 +1855,21 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const freshData = await freshRes.json();
           const comp = freshData.data || freshData;
           
-          // Determine mode from both status and stream_status fields
+          // Determine mode from both status and stream_status fields.
+          // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-21): COMPLETED wins.
+          // A stale stream_status='live' on a completed DB row must never boot
+          // the live player or paint a false LIVE badge over a recording.
           const dbStatus = comp.status;            // 'live' | 'completed' | 'pending' | 'accepted'
           const streamSt = comp.stream_status;    // 'live' | 'ready' | 'idle' | undefined
+          if (competitionData) {
+            // Keep the page-level mode in sync when the viewer transitions
+            // live -> completed in place (timed comments/VOD gating).
+            competitionData.status = dbStatus;
+            if (streamSt !== undefined) competitionData.stream_status = streamSt;
+          }
           
-          const isLiveComp = (dbStatus === 'live') || (streamSt === 'live');
           const isCompletedComp = (dbStatus === 'completed') || (streamSt === 'ready');
+          const isLiveComp = !isCompletedComp && ((dbStatus === 'live') || (streamSt === 'live'));
           
           if (isLiveComp) {
             // === LIVE: Use ChunkManager + LiveSequentialPlayer ===
@@ -1847,15 +1883,29 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               return;
             }
 
+            const vodControls = document.getElementById('embeddedVodControls');
+            if (vodControls) vodControls.classList.add('hidden');
+            const liveControls = document.getElementById('embeddedLiveControls');
+            if (liveControls) liveControls.classList.remove('hidden');
+
             const chunkManager = new window.ChunkManager(competitionId, 'mp4');
             liveChunkManager = chunkManager;
             liveCurrentIndex = -1;
             embeddedCurrentPlayer = new window.LiveSequentialPlayer({
               videoPlayers: videoPlayers,
               chunkManager: chunkManager,
+              onTimeUpdate: function(globalTime, availableDuration) {
+                const bar = document.getElementById('embeddedLiveSeekbar');
+                const display = document.getElementById('embeddedLiveTimeDisplay');
+                if (display) display.textContent = formatClock(globalTime) + ' / ' + formatClock(availableDuration);
+                if (bar) bar.value = availableDuration > 0
+                  ? Math.max(0, Math.min(100, (globalTime / availableDuration) * 100))
+                  : 100;
+                syncLiveEdgeButtons();
+              },
               onChunkChange: function(index) {
-                const info = document.getElementById('embeddedChunkInfo');
-                if (info) { info.textContent = (tr.chunk || 'Chunk') + ' ' + (index + 1); info.classList.remove('hidden'); }
+                // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1): no chunk counter is
+                // shown to the audience; only real playback state.
                 setMediaState('playing');
                 hideStatusOverlay();
                 liveCurrentIndex = index;
@@ -1890,8 +1940,26 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 }
               }
             });
+
+            // LIVE timeline seek: percentage of the WHOLE available recording
+            // (index total), then the player converts global -> chunk offset.
+            const liveSeekbar = document.getElementById('embeddedLiveSeekbar');
+            if (liveSeekbar && !liveSeekbar.__dueliWired) {
+              liveSeekbar.__dueliWired = true;
+              liveSeekbar.addEventListener('input', function() {
+                if (!embeddedCurrentPlayer || typeof embeddedCurrentPlayer.seekTo !== 'function') return;
+                const dur = (typeof embeddedCurrentPlayer.getAvailableDuration === 'function')
+                  ? embeddedCurrentPlayer.getAvailableDuration() : 0;
+                if (!(dur > 0)) return;
+                const pct = parseFloat(liveSeekbar.value);
+                if (!isFinite(pct)) return;
+                embeddedCurrentPlayer.seekTo((pct / 100) * dur);
+              });
+            }
+
             // يبدأ من آخر قطعة متاحة حالياً لعدم التأخر عن البث
             await embeddedCurrentPlayer.start({ startFromLatest: true });
+            syncLiveEdgeButtons();
             
             // استطلاع حالة المنافسة كل 30 ثانية لاكتشاف نهاية البث فوراً
             window._statusPollInterval = setInterval(async function() {
@@ -1903,9 +1971,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   clearInterval(window._statusPollInterval);
                   if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
                   log('🏁 Competition completed - switching to VOD', 'success');
-                  // تحديث شارة الحالة في واجهة المنافسة
-                  const liveSpan = document.querySelector('.bg-red-600.text-white.text-xs');
-                  if (liveSpan) liveSpan.remove();
+                  updateEmbeddedMode('vod');
                   await initEmbeddedViewer();
                 }
               } catch(e) { /* تجاهل أخطاء الاستطلاع */ }
@@ -1923,6 +1989,16 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             setEmbeddedStatus(tr.loading_video || 'Loading video...');
             setMediaState('waiting');
             updateEmbeddedMode('vod');
+
+            // Completed recording: never keep live chrome / a false LIVE chip.
+            liveChunkManager = null;
+            liveCurrentIndex = -1;
+            const liveControls = document.getElementById('embeddedLiveControls');
+            if (liveControls) liveControls.classList.add('hidden');
+            const liveChip = document.getElementById('embeddedLiveChip');
+            if (liveChip) liveChip.classList.add('hidden');
+            setLiveBtnVisible('embeddedLiveBtn', false);
+            setLiveBtnVisible('embeddedRewindBtn', false);
 
             if (!window.SmartVodPlayer) {
               setMediaState('error');
@@ -1961,18 +2037,31 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               videoElement: videoPlayers[0],
               competitionId: competitionId,
               playlistData: playlistData,
-              onProgress: function(current, total) {
-                const info = document.getElementById('embeddedChunkInfo');
-                if (info) { info.textContent = current + '/' + total; info.classList.remove('hidden'); }
+              // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1): progress, seek and
+              // timed comments all consume the player's ONE global timeline.
+              onTimeUpdate: function(globalTime, totalDuration) {
+                const seekbar = document.getElementById('embeddedSeekbar');
+                const display = document.getElementById('embeddedTimeDisplay');
+                const total = (typeof totalDuration === 'number' && isFinite(totalDuration)) ? totalDuration : 0;
+                if (seekbar) {
+                  seekbar.value = total > 0
+                    ? Math.max(0, Math.min(100, (globalTime / total) * 100))
+                    : 0;
+                }
+                if (display) display.textContent = formatClock(globalTime) + ' / ' + formatClock(total);
+                const v = videoPlayers[0];
+                if (v && !v.paused) setMediaState('playing');
+                if (typeof syncTimedComments === 'function') syncTimedComments(globalTime);
+                const icon = document.getElementById('embeddedPlayPauseIcon');
+                if (icon) icon.className = (v && v.paused) ? 'fas fa-play text-sm' : 'fas fa-pause text-sm';
               },
-              onChunkLoaded: function(index, loaded) {},
-              onReady: function(info) {
+              onReady: function() {
                 setMediaState('ready');
                 hideStatusOverlay();
                 window._vodRetryCount = 0; // reset poll counter on success
                 const vodControls = document.getElementById('embeddedVodControls');
                 if (vodControls) vodControls.classList.remove('hidden');
-                embeddedSetupVodControls(videoPlayers[0], info.totalDuration);
+                embeddedSetupVodControls(videoPlayers[0], embeddedCurrentPlayer);
                 // إظهار زر التحميل بعد أن يكون المشغل جاهزاً
                 const dlBtn = document.getElementById('embeddedDownloadBtn');
                 if (dlBtn) dlBtn.classList.remove('hidden');
@@ -1998,30 +2087,24 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       }
       
       // ===== VOD Seekbar Controls =====
-      function embeddedSetupVodControls(videoEl, totalDuration) {
+      // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-12): the control surface
+      // ONLY talks to the player's global timeline. videoEl.duration is a
+      // current-chunk value and must never become the recording length.
+      function embeddedSetupVodControls(videoEl, player) {
         const seekbar = document.getElementById('embeddedSeekbar');
         const timeDisplay = document.getElementById('embeddedTimeDisplay');
-        
-        function formatTime(s) {
-          s = Math.floor(s);
-          const m = Math.floor(s / 60);
-          const sec = s % 60;
-          return m + ':' + (sec < 10 ? '0' : '') + sec;
+
+        const playerTime = (player && typeof player.getGlobalTime === 'function') ? player.getGlobalTime() : 0;
+        const playerDuration = (player && typeof player.getGlobalDuration === 'function') ? player.getGlobalDuration() : 0;
+        if (seekbar) {
+          seekbar.value = playerDuration > 0
+            ? Math.max(0, Math.min(100, (playerTime / playerDuration) * 100))
+            : 0;
         }
-        
-        if (videoEl) {
-          videoEl.addEventListener('timeupdate', function() {
-            const cur = videoEl.currentTime;
-            const total = videoEl.duration || totalDuration || 0;
-            if (seekbar) seekbar.value = total > 0 ? (cur / total * 100) : 0;
-            if (timeDisplay) timeDisplay.textContent = formatTime(cur) + ' / ' + formatTime(total);
-            // R2-L2: VOD is flowing → playing; timed comments sync off this.
-            if (!videoEl.paused) setMediaState('playing');
-            if (typeof syncTimedComments === 'function') syncTimedComments(cur);
-            // Update play/pause icon
-            const icon = document.getElementById('embeddedPlayPauseIcon');
-            if (icon) icon.className = videoEl.paused ? 'fas fa-play text-sm' : 'fas fa-pause text-sm';
-          });
+        if (timeDisplay) timeDisplay.textContent = formatClock(playerTime) + ' / ' + formatClock(playerDuration);
+
+        if (videoEl && !videoEl.__dueliVodWired) {
+          videoEl.__dueliVodWired = true;
           videoEl.addEventListener('play', function() {
             const icon = document.getElementById('embeddedPlayPauseIcon');
             if (icon) icon.className = 'fas fa-pause text-sm';
@@ -2031,32 +2114,35 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             if (icon) icon.className = 'fas fa-play text-sm';
           });
         }
-        
-        if (seekbar) {
+
+        if (seekbar && !seekbar.__dueliVodWired) {
+          seekbar.__dueliVodWired = true;
           seekbar.addEventListener('input', function() {
-            if (!embeddedCurrentPlayer || !videoEl) return;
+            if (!embeddedCurrentPlayer || typeof embeddedCurrentPlayer.seekTo !== 'function') return;
+            const dur = (typeof embeddedCurrentPlayer.getGlobalDuration === 'function')
+              ? embeddedCurrentPlayer.getGlobalDuration() : 0;
+            if (!(dur > 0)) return;
             const percent = parseFloat(seekbar.value);
-            const dur = videoEl.duration || totalDuration || 0;
-            const targetTime = (percent / 100) * dur;
-            if (embeddedCurrentPlayer.seekTo) {
-              embeddedCurrentPlayer.seekTo(targetTime);
-            } else {
-              videoEl.currentTime = targetTime;
-            }
+            if (!isFinite(percent)) return;
+            embeddedCurrentPlayer.seekTo((percent / 100) * dur);
           });
         }
       }
       
       // ===== Embedded Viewer Controls =====
       window.embeddedTogglePlayPause = function() {
+        if (embeddedCurrentPlayer && typeof embeddedCurrentPlayer.togglePlayPause === 'function') {
+          embeddedCurrentPlayer.togglePlayPause();
+          return;
+        }
         const v = document.getElementById('embeddedVideoPlayer1');
         if (!v) return;
         v.paused ? v.play() : v.pause();
       };
 
       // R4-CHUNK-PLAYER-UX-1: live-edge buttons. Rewind = one chunk back
-      // then forward flow resumes there; Return-to-Live restarts at the
-      // newest confirmed-ready edge. Buttons show by position only.
+      // then forward flow resumes there; Return-to-Live jumps to the newest
+      // confirmed-ready edge. Buttons show by real position only.
       function setLiveBtnVisible(id, show) {
         const btn = document.getElementById(id);
         if (!btn) return;
@@ -2065,15 +2151,41 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         else btn.classList.remove('inline-flex');
       }
       function syncLiveEdgeButtons() {
-        let edge = -1;
+        // VOD/completed: never paint live chrome from a stale player.
+        if (!liveChunkManager) return;
+        let behind = false;
         try {
-          edge = liveChunkManager && liveChunkManager.maxIndex ? liveChunkManager.maxIndex() : -1;
+          if (embeddedCurrentPlayer && typeof embeddedCurrentPlayer.isBehindLive === 'function') {
+            behind = embeddedCurrentPlayer.isBehindLive();
+          } else {
+            const edge = liveChunkManager.maxIndex ? liveChunkManager.maxIndex() : -1;
+            behind = edge >= 0 && liveCurrentIndex >= 0 && edge > liveCurrentIndex;
+          }
         } catch (e) {}
-        const behind = edge >= 0 && liveCurrentIndex >= 0 && edge > liveCurrentIndex + 1;
         setLiveBtnVisible('embeddedLiveBtn', behind);
-        setLiveBtnVisible('embeddedRewindBtn', liveCurrentIndex > 0);
+
+        let canRewind = liveCurrentIndex > 0;
+        try {
+          if (embeddedCurrentPlayer && typeof embeddedCurrentPlayer.getGlobalTime === 'function') {
+            canRewind = embeddedCurrentPlayer.getGlobalTime() > 0.5;
+          }
+        } catch (e) {}
+        setLiveBtnVisible('embeddedRewindBtn', canRewind);
+
+        // ONE player badge: LIVE only at the confirmed edge; REPLAY while
+        // rewound. A printed recording watermark is not a live indicator.
+        const chip = document.getElementById('embeddedLiveChip');
+        if (chip) chip.classList.toggle('hidden', behind);
+        updateEmbeddedMode(behind ? 'replay' : 'live');
       }
       window.embeddedReturnToLive = async function() {
+        if (embeddedCurrentPlayer && typeof embeddedCurrentPlayer.jumpToLive === 'function') {
+          try {
+            await embeddedCurrentPlayer.jumpToLive();
+            syncLiveEdgeButtons();
+            return;
+          } catch (e) { /* fall through to a clean restart */ }
+        }
         try {
           if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
         } catch (e) {}
@@ -2088,6 +2200,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             await embeddedCurrentPlayer.rewindTo(liveCurrentIndex - 1);
           }
         } catch (e) { /* player surfaces errors via onError */ }
+        syncLiveEdgeButtons();
       };
       
       window.embeddedToggleFullscreen = function() {

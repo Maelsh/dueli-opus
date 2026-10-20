@@ -200,7 +200,16 @@ test.describe('R4-CHUNK-PLAYER-UX-1 player UX in a real browser', () => {
       expect(liveProbe.width, 'live video width').toBeGreaterThan(0);
 
       // --- 4. rewind (UI wiring) + deterministic behind-state + return-to-live ---
-      const chunkInfo = () => vp.evaluate(() => (document.getElementById('embeddedChunkInfo')?.textContent || '').trim());
+      const liveTimeline = () => vp.evaluate(() => {
+        const p: any = typeof embeddedCurrentPlayer !== 'undefined' ? embeddedCurrentPlayer : null;
+        return {
+          display: (document.getElementById('embeddedLiveTimeDisplay')?.textContent || '').trim(),
+          globalTime: p && typeof p.getGlobalTime === 'function' ? p.getGlobalTime() : null,
+          available: p && typeof p.getAvailableDuration === 'function' ? p.getAvailableDuration() : null,
+          behind: p && typeof p.isBehindLive === 'function' ? p.isBehindLive() : null,
+          chip: (document.getElementById('embeddedLiveChip')?.textContent || '').trim(),
+        };
+      });
       const isVisible = (id: string) => vp.evaluate((sel) => {
         const el = document.getElementById(sel);
         return !!el && !el.classList.contains('hidden');
@@ -210,7 +219,7 @@ test.describe('R4-CHUNK-PLAYER-UX-1 player UX in a real browser', () => {
       // so record whatever transient position follows without asserting it.
       await vp.click('#embeddedRewindBtn');
       await vp.waitForTimeout(400);
-      leg('rewindUiClick', { infoAfterClick: await chunkInfo() });
+      leg('rewindUiClick', await liveTimeline());
       // Deterministic behind-state via the player API (same call the button
       // makes): rewind to 0, the loop replays 0→1→(skip 2)→3→4, and the
       // return-to-live button must appear while behind.
@@ -223,10 +232,15 @@ test.describe('R4-CHUNK-PLAYER-UX-1 player UX in a real browser', () => {
         return null;
       });
       await expect.poll(async () => isVisible('embeddedLiveBtn'), { timeout: 10000 }).toBe(true);
-      leg('behindState', { liveBtnVisible: true });
+      const behind = await liveTimeline();
+      expect(behind.behind, 'player reports behind the live edge').toBe(true);
+      leg('behindState', { liveBtnVisible: true, ...behind });
       await vp.click('#embeddedLiveBtn');
-      await expect.poll(chunkInfo, { timeout: 30000 }).toMatch(/chunk 5/i);
-      leg('returnToLive', { info: await chunkInfo() });
+      await expect.poll(async () => (await liveTimeline()).behind, { timeout: 30000 }).toBe(false);
+      const returned = await liveTimeline();
+      expect(returned.display, 'live timeline display').toMatch(/^\d+:\d\d \/ \d+:\d\d$/);
+      expect(returned.globalTime, 'global position after return').not.toBeNull();
+      leg('returnToLive', returned);
 
       // --- 5. end → VOD + seek + audio presence + guest still fine ---
       expect((await apiPost(`/api/competitions/${compId}/end`, {}, host.token)).status()).toBe(200);
@@ -234,30 +248,36 @@ test.describe('R4-CHUNK-PLAYER-UX-1 player UX in a real browser', () => {
       await expect.poll(async () => vp.evaluate(mediaState), { timeout: 90000 }).toBe('ready');
       const vodProbe = await vp.evaluate(async () => {
         const v = document.getElementById('embeddedVideoPlayer1') as HTMLVideoElement | null;
+        const p: any = typeof embeddedCurrentPlayer !== 'undefined' ? embeddedCurrentPlayer : null;
         if (!v) return null;
         await new Promise((r) => setTimeout(r, 2000));
         const q = (v as any).getVideoPlaybackQuality ? (v as any).getVideoPlaybackQuality() : {};
         const audioTracks = (v as any).audioTracks ? (v as any).audioTracks.length : -1;
         const before = q.totalVideoFrames || 0;
+        // Global recording length from the index timeline — never the loaded
+        // chunk element's own duration.
+        const globalDuration = p && typeof p.getGlobalDuration === 'function' ? p.getGlobalDuration() : 0;
         let seekOk = false;
-        if (v.duration && isFinite(v.duration) && v.duration > 2) {
-          await new Promise<void>((resolve) => {
-            const to = setTimeout(() => resolve(), 12000);
-            v.onseeked = () => { clearTimeout(to); resolve(); };
-            try { v.currentTime = v.duration / 2; } catch { clearTimeout(to); resolve(); }
-          });
-          await new Promise((r) => setTimeout(r, 1500));
+        if (globalDuration > 2 && p && typeof p.seekTo === 'function') {
+          p.seekTo(globalDuration / 2);
+          await new Promise((r) => setTimeout(r, 2500));
           const q2 = (v as any).getVideoPlaybackQuality ? (v as any).getVideoPlaybackQuality() : {};
-          seekOk = (q2.totalVideoFrames || 0) > before;
+          seekOk = (q2.totalVideoFrames || 0) > before
+            && typeof p.getGlobalTime === 'function' && p.getGlobalTime() > 0;
         }
         const mem = (performance as any).memory ? Math.round((performance as any).memory.usedJSHeapSize / 1048576) : -1;
-        return { duration: v.duration, width: v.videoWidth, frames: before, audioTracks, seekOk, heapMB: mem };
+        return {
+          duration: v.duration, globalDuration,
+          globalTime: p && typeof p.getGlobalTime === 'function' ? p.getGlobalTime() : null,
+          width: v.videoWidth, frames: before, audioTracks, seekOk, heapMB: mem,
+        };
       });
       leg('vod', vodProbe);
-      expect(vodProbe && vodProbe.duration > 0, 'VOD duration').toBe(true);
+      expect(vodProbe && vodProbe.duration > 0, 'VOD element duration').toBe(true);
+      expect(vodProbe && vodProbe.globalDuration > 0, 'VOD global duration').toBe(true);
       expect(vodProbe && vodProbe.frames > 0, 'VOD frames').toBe(true);
       expect(vodProbe && vodProbe.audioTracks > 0, 'VOD audio track present').toBe(true);
-      expect(vodProbe && vodProbe.seekOk, 'VOD seek works').toBe(true);
+      expect(vodProbe && vodProbe.seekOk, 'VOD global seek works').toBe(true);
 
       evidence.notes = notes.slice(-20);
       finish('PASS');
