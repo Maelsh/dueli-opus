@@ -818,8 +818,10 @@ class LiveSequentialPlayer {
     getGlobalTime() {
         if (typeof this.currentIndex !== 'number' || this.currentIndex < 0) return 0;
         var active = this.videoPlayers && this.videoPlayers[this.activePlayerIndex];
+        var origin = this.mediaOriginFor(active);
         var offset = (active && typeof active.currentTime === 'number' && isFinite(active.currentTime))
-            ? active.currentTime : 0;
+            ? active.currentTime - origin : 0;
+        if (!isFinite(offset) || offset < 0) offset = 0;
         return Math.max(0, this.chunkStart(this.currentIndex) + offset);
     }
 
@@ -830,6 +832,28 @@ class LiveSequentialPlayer {
             return (typeof start === 'number' && isFinite(start)) ? start : 0;
         }
         return 0;
+    }
+
+    /**
+     * R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / FV20-TIME): the media resource's
+     * own first presentation time. A standalone fragmented MP4 may expose an
+     * ABSOLUTE currentTime (real sample: 517.743s) while the recording index
+     * uses its own global start (517.539s). Other engines/MSE expose 0. The
+     * origin is captured from loadedmetadata, never assumed to be either.
+     */
+    mediaOriginFor(video) {
+        if (!video) return 0;
+        var origin = video.__dueliMediaOrigin;
+        return (typeof origin === 'number' && isFinite(origin) && origin >= 0) ? origin : 0;
+    }
+
+    captureMediaOrigin(video) {
+        if (!video) return 0;
+        var existing = video.__dueliMediaOrigin;
+        if (typeof existing === 'number' && isFinite(existing) && existing >= 0) return existing;
+        var t = video.currentTime;
+        if (typeof t === 'number' && isFinite(t) && t >= 0) video.__dueliMediaOrigin = t;
+        return this.mediaOriginFor(video);
     }
 
     /** Available recording duration for the live timeline (seconds). */
@@ -1051,10 +1075,36 @@ class LiveSequentialPlayer {
         // A newer seek/rewind may have retired this request before it even
         // started loading (rapid double-click / stale loop).
         if (gen !== undefined && gen !== this.loopGen) return;
+        var self = this;
         const url = this.chunkManager.getUrl(index);
         const nextPlayerIndex = (this.activePlayerIndex + 1) % 2;
         const nextPlayer = this.videoPlayers[nextPlayerIndex];
         const currentPlayer = this.videoPlayers[this.activePlayerIndex];
+
+        // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / FV20-TIME): capture the
+        // resource's own media origin before any seek. The offset supplied by
+        // seekTo() is CHUNK-LOCAL; the element may expect origin+offset (real
+        // MP4 sample starts at 517.743s). The loadedmetadata handler also
+        // repairs the seek if metadata arrives after load() returns.
+        nextPlayer.__dueliMediaOrigin = undefined;
+        var pendingOffset = (typeof offsetSeconds === 'number' && isFinite(offsetSeconds))
+            ? Math.max(0, offsetSeconds) : null;
+        var applyTarget = function() {
+            if (gen !== undefined && gen !== self.loopGen) return;
+            var origin = self.captureMediaOrigin(nextPlayer);
+            if (pendingOffset !== null) {
+                try { nextPlayer.currentTime = origin + pendingOffset; } catch (e) {}
+            }
+        };
+        nextPlayer.onloadedmetadata = function() {
+            // At the event itself currentTime can still read 0; defer one
+            // task so an absolute origin is visible before it is captured.
+            setTimeout(function() {
+                if (gen !== undefined && gen !== self.loopGen) return;
+                if (typeof nextPlayer.readyState === 'number' && nextPlayer.readyState < 1) return;
+                applyTarget();
+            }, 0);
+        };
 
         // R4-CHUNK-PLAYER-UX-1 handoff: arm the next element MUTED
         // (autoplay policy can block audible starts — a blocked audible
@@ -1082,6 +1132,11 @@ class LiveSequentialPlayer {
             throw new Error('Chunk playback failed');
         }
 
+        // canplay implies metadata; capture now too so a very fast
+        // loadedmetadata that preceded the listener cannot leave the origin
+        // unknown. The handler remains armed for engines that load later.
+        applyTarget();
+
         // Swap first, then silence + park the old element: no overlap
         // audio, no wasted buffering, and stale callbacks die here (the
         // historical double-buffer cleanup the current code was missing).
@@ -1094,16 +1149,13 @@ class LiveSequentialPlayer {
         currentPlayer.oncanplay = null;
         currentPlayer.onerror = null;
         currentPlayer.onended = null;
+        currentPlayer.onloadedmetadata = null;
 
         // Seek inside the newly active chunk (live timeline / rewind). The
-        // offset is chunk-local; the caller already converted global -> local
-        // using the verified chunk start. Offset 0 is written explicitly too:
-        // a reused double-buffer element must never keep the previous chunk's
-        // currentTime (that would report a false global position at the live
-        // edge after jumpToLive()).
-        if (typeof offsetSeconds === 'number' && isFinite(offsetSeconds)) {
-            try { nextPlayer.currentTime = Math.max(0, offsetSeconds); } catch (e) {}
-        }
+        // offset is chunk-local; applyTarget above already converted it with
+        // the captured media origin (origin + offset) and re-applies it when
+        // metadata arrives. Never write the bare local offset on an absolute
+        // media timeline: 0 would clamp to 517.743 instead of the chunk start.
 
         nextPlayer.play().then(function() {
             setTimeout(function() { try { nextPlayer.muted = false; } catch (e) {} }, 100);
@@ -1127,6 +1179,7 @@ class LiveSequentialPlayer {
             v.oncanplay = null;
             v.onerror = null;
             v.onended = null;
+            v.onloadedmetadata = null;
             v.ontimeupdate = null;
             v.src = '';
         });
@@ -1267,6 +1320,28 @@ class SmartVodPlayer {
         
         // للـ seeking
         this.seekPending = null;
+    }
+
+    /**
+     * R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / FV20-TIME): first presentation
+     * time of the loaded resource. Captured at loadedmetadata, never assumed:
+     * a standalone fragmented MP4 may report an absolute currentTime while
+     * the recording index uses a different global start; MSE/WebM may report
+     * 0. All seek/global conversions subtract/add exactly this origin once.
+     */
+    mediaOriginFor(video) {
+        if (!video) return 0;
+        var origin = video.__dueliMediaOrigin;
+        return (typeof origin === 'number' && isFinite(origin) && origin >= 0) ? origin : 0;
+    }
+
+    captureMediaOrigin(video) {
+        if (!video) return 0;
+        var existing = video.__dueliMediaOrigin;
+        if (typeof existing === 'number' && isFinite(existing) && existing >= 0) return existing;
+        var t = video.currentTime;
+        if (typeof t === 'number' && isFinite(t) && t >= 0) video.__dueliMediaOrigin = t;
+        return this.mediaOriginFor(video);
     }
 
     /**
@@ -1456,7 +1531,21 @@ class SmartVodPlayer {
         if (this.loadedChunks[index] === undefined) return;
         this.seekPending = null;
         this.currentChunkIndex = index;
-        
+
+        // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / FV20-TIME): resolve the
+        // chunk-local target BEFORE loading. The element may expose an
+        // absolute media timeline, so the actual currentTime is
+        // origin + local offset (origin captured at loadedmetadata below).
+        let localSeekOffset = null;
+        if (pendingSeek !== null && pendingSeek !== undefined) {
+            const chunkStartTime = this.getChunkStartTime(index);
+            const maxOffset = this.chunkDurations[index] || 0;
+            let timeInChunk = pendingSeek - chunkStartTime;
+            if (!isFinite(timeInChunk) || timeInChunk < 0) timeInChunk = 0;
+            if (maxOffset > 0 && timeInChunk > maxOffset) timeInChunk = maxOffset;
+            localSeekOffset = timeInChunk;
+        }
+
         // إنشاء Blob URL وتشغيل (السابق يُسحَب لتفادي تسرب الذاكرة —
         // كل chunk كانت تترك object URL خلفها).
         if (this.currentBlobUrl) {
@@ -1468,7 +1557,25 @@ class SmartVodPlayer {
         });
         const blobUrl = URL.createObjectURL(blob);
         this.currentBlobUrl = blobUrl;
-        
+
+        this.videoElement.__dueliMediaOrigin = undefined;
+        const applyTarget = () => {
+            if (gen !== this.opGen) return;
+            // Do not capture/seek before metadata exists: at the
+            // loadedmetadata EVENT currentTime can still read 0 even though
+            // the resource's origin (e.g. 517.743) is applied immediately
+            // after dispatch. The deferred handler below runs after that.
+            if (typeof this.videoElement.readyState === 'number'
+                && this.videoElement.readyState < 1) return;
+            const origin = this.captureMediaOrigin(this.videoElement);
+            if (localSeekOffset !== null) {
+                try { this.videoElement.currentTime = origin + localSeekOffset; } catch (e) {}
+            }
+        };
+        this.videoElement.onloadedmetadata = function() {
+            setTimeout(applyTarget, 0);
+        };
+
         this.videoElement.src = blobUrl;
         await this.videoElement.load();
         // A newer switch may have loaded while this one resolved.
@@ -1481,15 +1588,38 @@ class SmartVodPlayer {
             }
             return;
         }
-        
-        // القفز للوقت المحدد داخل الـ chunk (global -> chunk-local once)
-        if (pendingSeek !== null && pendingSeek !== undefined) {
-            const chunkStartTime = this.getChunkStartTime(index);
-            const maxOffset = this.chunkDurations[index] || 0;
-            let timeInChunk = pendingSeek - chunkStartTime;
-            if (!isFinite(timeInChunk) || timeInChunk < 0) timeInChunk = 0;
-            if (maxOffset > 0 && timeInChunk > maxOffset) timeInChunk = maxOffset;
-            try { this.videoElement.currentTime = timeInChunk; } catch (e) {}
+
+        // Wait (bounded) for metadata before starting playback. Otherwise
+        // play() can begin before loadedmetadata, advancing currentTime past
+        // the origin and making an absolute-timeline origin unknowable.
+        // Stubs/engines without readyState keep the legacy immediate path.
+        if (typeof this.videoElement.readyState === 'number' && this.videoElement.readyState < 1) {
+            await new Promise(function(resolve) {
+                var done = false;
+                var timer = null;
+                var finish = function() {
+                    if (done) return;
+                    done = true;
+                    if (timer !== null) clearTimeout(timer);
+                    resolve();
+                };
+                this.videoElement.addEventListener('loadedmetadata', function() {
+                    setTimeout(finish, 0);
+                }, { once: true });
+                timer = setTimeout(finish, 3000);
+            }.bind(this));
+            if (gen !== this.opGen) return;
+        }
+
+        // A cached/cold blob can already expose metadata. Otherwise keep the
+        // legacy chunk-local seek (engines whose origin is 0) and let the
+        // loadedmetadata handler re-apply origin+offset when it arrives.
+        if (this.videoElement.readyState >= 1
+            || (typeof this.videoElement.duration === 'number'
+                && isFinite(this.videoElement.duration) && this.videoElement.duration > 0)) {
+            applyTarget();
+        } else if (localSeekOffset !== null) {
+            try { this.videoElement.currentTime = localSeekOffset; } catch (e) {}
         }
         
         // حل مشكلة autoplay policy - البدء muted ثم محاولة unmute
@@ -1700,7 +1830,10 @@ class SmartVodPlayer {
             if (maxOffset > 0 && offset > maxOffset) offset = maxOffset;
             this.opGen++;
             this.seekPending = null;
-            try { this.videoElement.currentTime = offset; } catch (e) {}
+            // The element's media timeline may start at a non-zero origin;
+            // seek to origin + chunk-local offset, never the bare offset.
+            const origin = this.mediaOriginFor(this.videoElement);
+            try { this.videoElement.currentTime = origin + offset; } catch (e) {}
             try {
                 const p = this.videoElement.play();
                 if (p && typeof p.catch === 'function') p.catch(function() {});
@@ -1761,12 +1894,14 @@ class SmartVodPlayer {
         return start;
     }
 
-    /** One global position: verified chunk start + current offset (seconds). */
+    /** One global position: verified chunk start + local offset (seconds). */
     getGlobalTime() {
         if (typeof this.currentChunkIndex !== 'number' || this.currentChunkIndex < 0
             || this.currentChunkIndex >= this.chunks.length) return 0;
-        const offset = (this.videoElement && typeof this.videoElement.currentTime === 'number'
-            && isFinite(this.videoElement.currentTime)) ? this.videoElement.currentTime : 0;
+        const origin = this.mediaOriginFor(this.videoElement);
+        let offset = (this.videoElement && typeof this.videoElement.currentTime === 'number'
+            && isFinite(this.videoElement.currentTime)) ? this.videoElement.currentTime - origin : 0;
+        if (!isFinite(offset) || offset < 0) offset = 0;
         return Math.max(0, this.getChunkStartTime(this.currentChunkIndex) + offset);
     }
 
@@ -1974,6 +2109,7 @@ class SmartVodPlayer {
         this.videoElement.src = '';
         this.videoElement.onended = null;
         this.videoElement.ontimeupdate = null;
+        this.videoElement.onloadedmetadata = null;
         // R4-CHUNK-PLAYER-UX-1: revoke the blob URL (no leak across
         // switches — every chunk used to leave one behind).
         if (this.currentBlobUrl) {

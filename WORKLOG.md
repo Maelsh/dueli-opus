@@ -1,3 +1,22 @@
+## 2026-10-20 — R4-CHUNK-VIEW-RECOVERY-REM1 (unit 28.4.1) · FV20-TIME / FV20-START · branch feat/r4-chunk-view-recovery-rem1-28-4-1-fv20 (from 54a3380 = origin/main)
+
+- **SCOPE / PRESERVE:** unit 28.4.1 only; PR119/121/122 player, audio, cache, and recording contracts preserved. No codec/container redesign, server FFmpeg, historical chunk rewrite, media deletion, PHP/D1 migration, hosting change, or 28.5/ROW30/32.1/35 work. PR110 untouched.
+- **BASE / RED EVIDENCE (`54a3380`):** with only the source diff stashed, new behavioral tests 12, 13, and 15 fail (VOD reports `517.539 + 517.743533 = 1035.282533`; LIVE reports `1056.054` for chunk 50; the delayed-origin VOD test also double-counts) while the zero-origin regression test 14 passes. Restoring the diff gives 16/16 GREEN.
+- **FV20-TIME**
+  - `BEFORE`: a standalone fragmented MP4 exposes the resource's absolute media time (`currentTime=517.743533`), while the playlist index start is `517.539`; `getGlobalTime()` added both, and seeks wrote the bare chunk-local offset (`0`/`2.5`), which Blink clamped to the raw origin.
+  - `CAUSE`: double offset — index global start plus an absolute media timestamp. The media origin was never captured; `currentTime` was assumed to be chunk-local. Real sample `chunk_0050.mp4` (match 2230, index 49): video tfdt `15,532,306 / 30,000 = 517.743533s`, audio tfdt `24,852,933 / 48,000 = 517.769438s`, browser `duration=528.127467`, index `timeline_start_ms=517539`, `duration=10.384`.
+  - `PATCH`: `src/modules/pages/live/scripts/client/shared.ts` captures each element's per-resource media origin after `loadedmetadata`; global time is `chunkStart + (currentTime - origin)` and seeks are `origin + localOffset` in both `LiveSequentialPlayer` and `SmartVodPlayer`. Zero-origin media keeps the legacy arithmetic. VOD defers playback until metadata so `play()` cannot advance `currentTime` past the origin; both players clean up `onloadedmetadata` on switch/stop.
+  - `AFTER` (real chunk, emitted bundle, headless Chromium 153): VOD start `global=517.539`, `currentTime=517.743533`, total `527.923`; seek to `520.039` gives `global=520.038998`, `currentTime=520.243531`. LIVE `start({startFromLatest:true})` on chunk 51 (index 50): `global=527.923`, `currentTime=528.131083`, `videoWidth=1280`.
+  - `TEST`: `tests/client/r4-chunk-view-recovery-rem1.test.ts` 16/16; targeted player suites 60/60; `npx tsc --noEmit` clean; `npm run build` pass; full suite `1771 passed` with only the 6 known local `jq` environmental failures.
+  - `STATUS`: 🔧 LOCAL implementation/T-B complete — not DONE, not Production Accepted, no merge/deploy.
+- **FV20-START**
+  - `BEFORE / TRACE`: with ready chunks, `skipToLatest` → chunk request (206) → `loadedmetadata` at 32ms → `canplay` at 33ms → `onChunkChange` at 34ms → `playing` at 110ms; first frame `1280x…`. A transient `waiting` at 35ms resolved at 110ms. No indefinite "waiting with ready chunks" state reproduced with the real chunk/browser harness.
+  - `CAUSE / PATCH`: no proven cause; no speculative patch. The reported indefinite stall is `NOT REPRODUCED` in this environment; device-specific cause remains `UNKNOWN`.
+  - `AFTER / TEST`: start returns and reaches playback; no new start-path code. `STATUS`: 🔧 NOT REPRODUCED / UNKNOWN — needs a real-device trace if it recurs.
+- **S VALIDATION:** none claimed. The browser harness proves decode/first-frame and timeline arithmetic, not real camera/mic/screen visual+audio acceptance. No `✅`/S PASS.
+- **ROLLBACK:** revert this PR commit (two files, `shared.ts` + the REM1 test file); no schema/media migration involved.
+- **NEXT:** independent REMOTE review; do not merge or deploy from this session.
+
 ## 2026-10-20 — R4-LIVE-ENTRY-RECOVERY-REM1 (unit 28.3.1) · FV20 follow-ups (FV20-SIG / FV20-TOAST / FV20-OFFER / FV20-REPLAY) · branch fix/r4-live-entry-recovery-rem1-fv20 (from 38ffa57 = origin/main)
 
 - **SCOPE / PRESERVE:** unit 28.3.1 only; PR118–121 behavior, independent publish consent, local preview, screen share, design reference, signaling auth/targeting and recording rights untouched. No compositor/recorder rebuild, no codec/container change, no PHP/D1 migration/hosting change, no R2-V/H7/finance/ads/TURN/unit-35 work. PR110 untouched.
