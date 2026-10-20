@@ -1,3 +1,41 @@
+## 2026-10-20 — R4-LIVE-ENTRY-RECOVERY-REM1 (unit 28.3.1) · FV20 follow-ups (FV20-SIG / FV20-TOAST / FV20-OFFER / FV20-REPLAY) · branch fix/r4-live-entry-recovery-rem1-fv20 (from 38ffa57 = origin/main)
+
+- **SCOPE / PRESERVE:** unit 28.3.1 only; PR118–121 behavior, independent publish consent, local preview, screen share, design reference, signaling auth/targeting and recording rights untouched. No compositor/recorder rebuild, no codec/container change, no PHP/D1 migration/hosting change, no R2-V/H7/finance/ads/TURN/unit-35 work. PR110 untouched.
+- **PRE-FIX EVIDENCE (BASE `38ffa575`):** with only the source diff stashed, the new API+client files are 14/14 RED — signaling `cursor` is `undefined`; fresh SSE delivers `old-invite`; the page-local `showToast` marker is absent. Restoring the diff gives 14/14 GREEN.
+- **FV20-SIG**
+  - `BEFORE`: `/api/signaling/poll` and `/viewer/poll` returned only `visibleSignals(events)`; the client advanced `lastTimestamp` only over signals it processed.
+  - `ROOT CAUSE`: `getAfter(...,50)` pages are bounded. A full page of presence/other-peer events yields `signals: []`; with no visible id the client re-requested the same `since` forever, so a later offer/answer behind that page was unreadable.
+  - `CHANGE`: both polls return `cursor = last scanned event id` (or the normalized `since` on an empty page); `SignalingManager.pollOnce` processes the batch first, then advances to the server cursor, never rewinds, and ignores non-finite/absent cursors (backward compatible).
+  - `AFTER`: filtered pages advance once; the next poll reads the real offer/viewer signal; empty reads keep their cursor; participant/viewer role auth is unchanged.
+  - `TEST EVIDENCE`: API 3 tests (50 filtered presence → offer id 51; 50 other-viewer signals → own signal id 51; empty cursor 77 + 403 role boundaries); client 4 tests (zero-visible adoption, later signal reached, stale cursor 40 does not rewind 50, viewer `since=64`).
+  - `STATUS`: ✅ FIXED (T/B; RED→GREEN).
+- **FV20-TOAST**
+  - `BEFORE`: `competition-page.ts` called bare `showToast(...)` in `publishMedia` and adjacent flows while the bundle only defines `window.dueli.showToast`.
+  - `ROOT CAUSE`: undefined identifier → `ReferenceError` at exactly the post-publish toast, after tracks are attached and `mediaPublished=true`.
+  - `CHANGE`: page-local `showToast` bridge → `window.dueli.showToast` → legacy `window.showToast` → minimal DOM fallback; every layer is try/caught so a toast can never break media/negotiation.
+  - `AFTER`: publish success is announced and execution continues; a toast-bridge failure is contained and still surfaces the text through fallback.
+  - `TEST EVIDENCE`: client tests execute the REAL extracted `showToast` + `publishMedia` in one scope: host success, guest success, publish-false error path preserving `publishLocalStream returned false`, no-track refusal, and contained toast failures (5 tests).
+  - `STATUS`: ✅ FIXED (T/B; RED→GREEN).
+- **FV20-OFFER**
+  - `BEFORE`: host publish could leave attached tracks with no SDP offer; guest publish never called `requestReoffer()`.
+  - `ROOT CAUSE`: not a separate negotiation race — both were downstream of the same `showToast` ReferenceError thrown before `createOffer`/`requestReoffer`/watcher/recording. After the bridge, the existing offer/reoffer logic runs in the existing order.
+  - `CHANGE`: no new negotiation code; the FV20-TOAST bridge restores reachability of the existing `createOffer`/`requestReoffer` calls, which keep their prior order and guards.
+  - `AFTER`: host `createOffer()` exactly once after a successful publish when the opponent is present and P2P is not connected; guest `requestReoffer()` exactly once; neither fires on publish failure or missing tracks.
+  - `TEST EVIDENCE`: same 5 client tests assert offer/reoffer counts and ordering (`offers=1`, `reoffers=0` host; `reoffers=1`, `offers=0` guest; both 0 on error/no-track).
+  - `STATUS`: ✅ FIXED AS CONSEQUENCE (T/B). No independent offer race was reproduced; no separate fix claimed.
+- **FV20-REPLAY**
+  - `BEFORE`: SSE started at `latestId = 0`; after `Last-Event-Id` catch-up it kept the old cursor.
+  - `ROOT CAUSE`: fresh subscription replayed the whole persisted user-channel log (old invites/toasts on every load); reconnect re-read the same catch-up page on its next poll (duplicate delivery).
+  - `CHANGE`: `SseEventLogModel.getLatestId` (MAX(id) per channel via `idx_sse_channel_id`); `EventPusher.getCatchUpPage` returns a bounded 50-row page + reached cursor; fresh SSE starts at the channel high-water mark, reconnect advances to the catch-up page max before polling.
+  - `AFTER`: fresh load delivers only events after subscription; reconnect delivers the missed window exactly once; notification rows stay unread and undeleted (inbox is separate).
+  - `TEST EVIDENCE`: API 2 tests on real `SqliteD1` — fresh load: old invite absent, `id: 1` absent, post-subscribe `new-invite` delivered, unread count/row preserved; reconnect from id 1: ids 2–3 each exactly once and live id 4 once.
+  - `STATUS`: ✅ FIXED (T/B; RED→GREEN).
+- **GATES:** `npx tsc --noEmit` clean; `npm run build` exit 0; `any` 299 (CI grep method, = BASE, ≤310); new files 14/14 (API 5, client 9); targeted regressions 5 files/62 tests green; full suite 168 files/1773 tests → 1767 passed, 6 failed only in `tests/dev-tools/quality-gate-poll.test.ts` because `jq` is absent on this Windows host (environment-only, file untouched).
+- **State:** LOCAL VERIFIED (T/B + RED→GREEN) only. NOT merged, NOT deployed, unit 28.3.1 NOT Production Accepted. **S PENDING** — no real camera/mic/screen/device session available; mocks and D1 tests do not prove real-media success.
+- **S PENDING checklist:** filtered-page entry then real host offer/guest answer; publish toast does not block media; guest reoffer after host publish; fresh page load shows no historical invite toasts while the inbox still shows unread history; reconnect/resume delivers a missed notification once; AR/EN, RTL, dark, keyboard/aria.
+- **ROLLBACK (G8):** revert the 6 `src/` files + 2 new test files (no schema/migration/data/flags). No production data written.
+- **NEXT:** one PR from this branch to `main`; stop for independent REMOTE review; S remains pending.
+
 ## 2026-10-20 — R4-CHUNK-VIEW-RECOVERY-1 REM1 (row 28.4.1 · O19-07/12/13/14/21) — branch feat/r4-chunk-view-recovery-rem1-28-4-1 (from 2abf5ad = origin/main)
 
 - **BASE / PRESERVE:** `origin/main` = `2abf5ade279804d1ec07a4ece22cbf810b4c50ba`. Quality Gate + Deploy were SUCCESS on BASE; only PR110 was open (HOLD). PR116/117/118/119/120 contracts preserved; no reimplementation of 28.3.1 and no expansion into 28.5/30/32.1/35. No server FFmpeg, hosting/PHP/production D1 change, deletion/overwrite, or ROW30 download implementation.
