@@ -142,19 +142,24 @@ describe('post-#69: every affected surface serves canonical serialized language'
         }
     }
 
-    it('/live/801 renders valid + strict CSP with no raw lang sink', async () => {
-        // No competition row is fetchable in-process, so the room script is
-        // absent — the source-scan test above covers its fixed sink.
+    it('/live/801 is a compat redirect to the unified competition surface (no room script)', async () => {
+        // R4-LIVE-ENTRY-RECOVERY-REM1: /live/:id no longer renders a second
+        // broadcast room — it 302s to /competition/:id (the one production
+        // UI). The retained room implementation's fixed lang sink is covered
+        // by the source-scan test above.
+        // Mirrors main.ts: encodeURIComponent + !'()* hardening.
+        const enc = (v: string) =>
+            encodeURIComponent(v).replace(/[!'()*]/g, (ch) => '%' + ch.charCodeAt(0).toString(16).toUpperCase());
         for (const [query] of LANG_CASES) {
             const res = await app.request(`/live/801?lang=${query}`, {}, env(db));
-            expect(res.status).toBe(200);
-            assertStrictCsp(res);
-            const html = await res.text();
-            expect(html).not.toContain(`const lang = '`);
-            for (const body of inlineScripts(html)) {
-                expect(body).not.toContain('alert(document.domain)');
-                expect(body).not.toContain('__xss');
-            }
+            expect(res.status).toBe(302);
+            const loc = res.headers.get('location') || '';
+            expect(loc).toBe(`/competition/801?lang=${enc(decodeURIComponent(query))}`);
+            // Nothing that can act as a delimiter in a header/HTML/JS context
+            // survives in the redirect target raw: quotes, angle brackets,
+            // backticks, semicolons, parens, whitespace, backslashes.
+            expect(loc).not.toMatch(/['"<>`;()\s\\]/);
+            expect(loc).not.toMatch(/[\u0000-\u001f\u007f]/);
         }
     });
 

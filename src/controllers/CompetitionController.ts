@@ -709,6 +709,19 @@ export class CompetitionController extends BaseController {
                 reference_id: competitionId
             });
 
+            // R4-LIVE-ENTRY-RECOVERY-REM1: the creator and the accepted
+            // requester move to the private prep surface without a refresh.
+            // Best-effort: a realtime failure never rolls back acceptance.
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(competitionId, {
+                    status: 'accepted',
+                    opponent_id: request.requester_id,
+                    updated_at: new Date().toISOString(),
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus(accepted/request) failed:', pushError);
+            }
+
             return this.success(c, {
                 accepted: true,
                 otherDeclined: declinedCount,
@@ -815,6 +828,19 @@ export class CompetitionController extends BaseController {
 
             // Cancel the auto_delete task since it's now live
             await taskService.cancel(id, 'auto_delete_if_not_live');
+
+            // R4-LIVE-ENTRY-RECOVERY-REM1: both parties see LIVE without a
+            // refresh. The client keeps its prep PC/recorder/preview intact
+            // and only changes status chrome + recording eligibility.
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(id, {
+                    status: 'live',
+                    started_by: user.id,
+                    updated_at: new Date().toISOString(),
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus(live) failed:', pushError);
+            }
 
             return this.success(c, { started: true, status: 'live' });
         } catch (error) {
@@ -1710,6 +1736,19 @@ if (!invitation) {
                 });
             } catch (pushError) {
                 console.error('[CompetitionController] publishInviteResponse failed:', pushError);
+            }
+
+            // R4-LIVE-ENTRY-RECOVERY-REM1: both parties leave "pending" and
+            // enter private preparation on the SAME competition channel. The
+            // event is display metadata; the row above is already committed.
+            try {
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(competitionId, {
+                    status: 'accepted',
+                    opponent_id: user.id,
+                    updated_at: new Date().toISOString(),
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus(accepted/invite) failed:', pushError);
             }
 
             return this.success(c, { accepted: true, autoDeleted: deletedCount });

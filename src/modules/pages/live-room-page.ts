@@ -21,6 +21,13 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
     const rtl = checkRTL(lang);
     const competitionId = c.req.param('id');
 
+    // R4-LIVE-ENTRY-RECOVERY-REM1: /competition/:id is the ONE production
+    // broadcast UI (prep, publish, live, recording, audience); main.ts
+    // redirects /live/:id here, so this handler is the retained historical
+    // room implementation only (never routed in production). The compositor
+    // identity matches the unified page so the host-language app title and
+    // RTL direction are recorded, never a hardcoded fallback.
+
     // Fetch competition details
     let competition: any = null;
     try {
@@ -699,6 +706,10 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     canvas: canvas,
                     chunkDuration: 10000, // 10 seconds
                     serverUrl: streamServerUrl,
+                    // R4-LIVE-ENTRY-RECOVERY-REM1: recorded identity follows
+                    // the host UI language (never a hardcoded fallback).
+                    platformName: tr.app_title,
+                    rtl: isRTL,
                     // R4-RELEASE-RECOVERY-C: host-only lease wiring (minimum
                     // scoped change — opponent/viewer paths untouched).
                     // Absent PlatformRecordingLease = lease off (pre-cutover).

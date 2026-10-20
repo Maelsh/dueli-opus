@@ -22,13 +22,15 @@ describe('R4-COMP-UNIFIED-1 video surface matrix', () => {
     }> = [
         // creator (host side)
         { name: 'creator/live → competitor', comp: { ...base, status: 'live' }, userId: 1, want: 'competitor' },
-        { name: 'creator/accepted → golive', comp: { ...base, status: 'accepted' }, userId: 1, want: 'golive' },
-        { name: 'creator/pending → golive', comp: { ...base, status: 'pending' }, userId: 1, want: 'golive' },
+        // R4-LIVE-ENTRY-RECOVERY-REM1: accepted parties enter the prep surface
+        // immediately — no redirect gate, no "Go Live" card.
+        { name: 'creator/accepted → competitor (prep)', comp: { ...base, status: 'accepted' }, userId: 1, want: 'competitor' },
+        { name: 'creator/pending → golive (legacy race edge)', comp: { ...base, status: 'pending' }, userId: 1, want: 'golive' },
         { name: 'creator/completed → embedded (VOD surfaces)', comp: { ...base, status: 'completed' }, userId: 1, want: 'embedded' },
         // opponent (guest side)
         { name: 'opponent/live → competitor', comp: { ...base, status: 'live' }, userId: 2, want: 'competitor' },
-        { name: 'opponent/accepted → golive', comp: { ...base, status: 'accepted' }, userId: 2, want: 'golive' },
-        { name: 'opponent/pending → golive', comp: { ...base, status: 'pending' }, userId: 2, want: 'golive' },
+        { name: 'opponent/accepted → competitor (prep)', comp: { ...base, status: 'accepted' }, userId: 2, want: 'competitor' },
+        { name: 'opponent/pending → golive (legacy race edge)', comp: { ...base, status: 'pending' }, userId: 2, want: 'golive' },
         { name: 'opponent/completed → embedded', comp: { ...base, status: 'completed' }, userId: 2, want: 'embedded' },
         // other authenticated user (audience)
         { name: 'viewer/live → embedded (chunks, never P2P)', comp: { ...base, status: 'live' }, userId: 9, want: 'embedded' },

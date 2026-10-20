@@ -169,14 +169,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               </a>
               <div>
                 <div class="flex items-center gap-2 mb-1">
-                  <span class="\${
+                  <span id="competitionStatusBadge" class="\${
                     isLive ? 'badge-live' :
                     isPending ? 'badge-pending' :
                     isAccepted ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-bold' :
                     'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400 px-3 py-1 rounded-full text-xs font-bold'
                   } flex items-center gap-1">
-                    \${isLive ? '<span class="w-1.5 h-1.5 rounded-full bg-red-500 live-pulse"></span>' : ''}
-                    \${isLive ? tr.status_live : isPending ? tr.status_pending : isAccepted ? (tr.status_accepted || 'Ready') : tr.status_completed}
+                    <span id="competitionStatusDot" class="\${isLive ? 'w-1.5 h-1.5 rounded-full bg-red-500 live-pulse' : 'hidden'}"></span>
+                    <span id="competitionStatusText">\${isLive ? tr.status_live : isPending ? tr.status_pending : isAccepted ? (tr.status_accepted || 'Ready') : tr.status_completed}</span>
                   </span>
                   <span class="text-sm text-gray-500 dark:text-gray-400">
                     <i class="\${comp.category_icon} me-1"></i>
@@ -196,18 +196,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   
                   <!-- ===== R4-COMP-UNIFIED-1: in-page competitor live (unified) ===== -->
                   \${(window.resolveVideoSurface ? window.resolveVideoSurface(comp, window.currentUser && window.currentUser.id) : 'embedded') === 'competitor' ? \`
-                    <div id="competitorView" class="relative bg-black aspect-video overflow-hidden">
-                      <div id="remoteVideoWrapper" class="absolute inset-0 z-10">
+                    <div id="competitorView" class="live-stage relative bg-black aspect-video overflow-hidden" aria-label="\${tr.live_tools}">
+                      <div id="remoteVideoWrapper" class="live-stage-main">
                         <video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video>
                       </div>
-                      <div id="waitingOverlay" class="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-20">
-                        <div class="text-center text-white">
+                      <div id="waitingOverlay" class="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-10">
+                        <div class="text-center text-white px-4">
                           <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
                           <p class="text-lg">\${tr.waiting_opponent}</p>
+                          <p class="text-xs mt-2 opacity-80">\${tr.waiting_peer_media}</p>
                         </div>
                       </div>
-                      <div id="localVideoWrapper" class="absolute ${rtl ? 'left-4' : 'right-4'} top-4 z-20">
-                        <div class="relative w-28 h-20 md:w-40 md:h-28 rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500">
+                      <div id="localVideoWrapper" class="live-stage-pip" aria-label="\${tr.toggle_my_video}">
+                        <div class="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500">
                           <video id="localVideo" class="w-full h-full object-cover" autoplay muted playsinline></video>
                           <div class="absolute bottom-1 ${rtl ? 'right-1' : 'left-1'} bg-black/60 px-2 py-0.5 rounded text-white text-xs">
                             \${tr.you}
@@ -222,53 +223,73 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       </div>
                       <canvas id="compositeCanvas" class="hidden" width="1280" height="720"></canvas>
                     </div>
-                    <div id="streamStats" class="hidden bg-gray-800 dark:bg-gray-900 px-4 py-2 text-sm text-gray-400 dark:text-gray-300 flex items-center justify-between">
-                      <div><span id="chunkCount">0</span> \${tr.chunks_uploaded}</div>
-                      <div><span id="streamDuration">00:00</span></div>
+                    <!-- R4-LIVE-ENTRY-RECOVERY-REM1: icon-only tools, same
+                         sizes/colors as the mandatory host/guest reference.
+                         Publish is an explicit consent action; LIVE alone never
+                         publishes, and every source change is visible here. -->
+                    <div id="competitorControls" class="flex flex-wrap items-center justify-center gap-2 py-3 px-1" role="toolbar" aria-label="\${tr.live_tools}">
+                      <button data-csp-on="click" data-csp-fn="startCompetition" data-csp-args='[]' id="startBtn" class="live-tool bg-green-600 hover:bg-green-700 text-white hidden" aria-label="\${tr.start_competition}" title="\${tr.start_competition}">
+                        <i class="fas fa-play" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="publishMedia" data-csp-args='[]' id="publishBtn" class="live-tool bg-green-600 hover:bg-green-700 text-white hidden" aria-label="\${tr.prep_publish_host}" title="\${tr.prep_publish_host}">
+                        <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="shareScreen" data-csp-args='[]' id="screenBtn" class="live-tool bg-blue-600 hover:bg-blue-700 text-white" aria-label="\${tr.share_screen}" title="\${tr.share_screen}">
+                        <i class="fas fa-desktop" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleVideo" data-csp-args='[]' id="videoBtn" class="live-tool bg-purple-600 hover:bg-purple-700 text-white" aria-label="\${tr.toggle_camera}" title="\${tr.toggle_camera}">
+                        <i class="fas fa-video" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="switchCamera" data-csp-args='[]' id="switchCamBtn" class="live-tool bg-indigo-600 hover:bg-indigo-700 text-white" aria-label="\${tr.switch_camera}" title="\${tr.switch_camera}">
+                        <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleAudio" data-csp-args='[]' id="audioBtn" class="live-tool bg-green-600 hover:bg-green-700 text-white" aria-label="\${tr.toggle_mic}" title="\${tr.toggle_mic}">
+                        <i class="fas fa-microphone" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleSpeaker" data-csp-args='[]' id="speakerBtn" class="live-tool bg-teal-600 hover:bg-teal-700 text-white" aria-label="\${tr.toggle_speaker}" title="\${tr.toggle_speaker}">
+                        <i class="fas fa-volume-up" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleLocalVideo" data-csp-args='[]' id="localVideoBtn" class="live-tool bg-gray-600 hover:bg-gray-700 text-white" aria-label="\${tr.toggle_my_video}" title="\${tr.toggle_my_video}">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="swapVideos" data-csp-args='[]' id="swapBtn" class="live-tool bg-indigo-600 hover:bg-indigo-700 text-white" aria-label="\${tr.swap_videos}" title="\${tr.swap_videos}">
+                        <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleExpandStage" data-csp-args='[]' id="expandBtn" class="live-tool bg-indigo-600 hover:bg-indigo-700 text-white" aria-label="\${tr.expand_stage}" title="\${tr.expand_stage}">
+                        <i class="fas fa-up-right-and-down-left-from-center" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="toggleFullscreen" data-csp-args='[]' id="fullscreenBtn" class="live-tool bg-gray-600 hover:bg-gray-700 text-white" aria-label="\${tr.fullscreen}" title="\${tr.fullscreen}">
+                        <i class="fas fa-expand" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="leaveBroadcast" data-csp-args='[]' id="leaveBtn" class="live-tool bg-amber-600 hover:bg-amber-700 text-white" aria-label="\${tr.leave_broadcast}" title="\${tr.leave_broadcast}">
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
+                      </button>
+                      <button data-csp-on="click" data-csp-fn="endStream" data-csp-args='[]' id="endBtn" class="live-tool bg-red-600 hover:bg-red-700 text-white hidden" aria-label="\${tr.end_competition}" title="\${tr.end_competition}">
+                        <i class="fas fa-stop-circle" aria-hidden="true"></i>
+                      </button>
                     </div>
-                    <div id="competitorControls" class="flex items-center justify-center gap-1 py-2 overflow-x-auto">
-                      <!-- R4-LIVE-ENTRY-RECOVERY-1: explicit publish consent gate -->
-                      <button data-csp-on="click" data-csp-fn="publishMedia" data-csp-args='[]' id="publishBtn" class="px-3 py-2 rounded-lg bg-green-600/90 text-white hover:bg-green-700 transition-colors flex items-center gap-1" aria-label="\${tr.prep_publish_host}" title="\${tr.prep_publish_host}">
-                          <i class="fas fa-broadcast-tower"></i>
-                          <span class="hidden sm:inline text-sm">\${tr.prep_publish_host}</span>
-                      </button>
-                      <!-- Privacy hint (shown in prep state) -->
-                      <div id="prepHint" class="text-xs text-gray-300 dark:text-gray-400 hidden" aria-live="polite">\${tr.prep_privacy_hint}</div>
-
-                      <button data-csp-on="click" data-csp-fn="toggleLocalVideo" data-csp-args='[]' id="localVideoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.toggle_my_video}" title="\${tr.toggle_my_video}">
-                        <i class="fas fa-user-circle"></i>
-                      </button>
-                      <button data-csp-on="click" data-csp-fn="switchCamera" data-csp-args='[]' id="switchCamBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.switch_camera}" title="\${tr.switch_camera}">
-                        <i class="fas fa-sync-alt"></i>
-                      </button>
-                      <button data-csp-on="click" data-csp-fn="shareScreen" data-csp-args='[]' id="screenBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.share_screen}" title="\${tr.share_screen}">
-                        <i class="fas fa-desktop"></i>
-                      </button>
-                      <button data-csp-on="click" data-csp-fn="toggleAudio" data-csp-args='[]' id="audioBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.toggle_mic}" title="\${tr.toggle_mic}">
-                        <i class="fas fa-microphone"></i>
-                      </button>
-                      <button data-csp-on="click" data-csp-fn="toggleVideo" data-csp-args='[]' id="videoBtn" class="p-2 rounded-lg bg-gray-800/80 text-white hover:bg-gray-700 transition-colors" aria-label="\${tr.toggle_camera}" title="\${tr.toggle_camera}">
-                        <i class="fas fa-video"></i>
-                      </button>
-                      <button data-csp-on="click" data-csp-fn="endStream" data-csp-args='[]' id="endBtn" class="px-3 py-2 rounded-lg bg-red-600/90 text-white hover:bg-red-700 transition-colors flex items-center gap-1" aria-label="\${tr.end_stream}" title="\${tr.end_stream}">
-                        <i class="fas fa-stop-circle"></i>
-                        <span class="hidden sm:inline text-sm">\${tr.end}</span>
-                      </button>
-                    </div>
-                    <div class="text-center pb-2">
-                      <a href="/live/\${competitionId}?lang=\${lang}" class="text-xs text-gray-500 dark:text-gray-400 hover:underline">\${tr.join_stream} · /live</a>
+                    <p id="publishState" class="text-center text-xs text-gray-500 dark:text-gray-400 pb-2 px-4" aria-live="polite">\${tr.prep_privacy_hint}</p>
+                    <!-- R4-LIVE-ENTRY-RECOVERY-REM1: in-page leave warning.
+                         No beforeunload, no navigation trap: leaving cleans up
+                         locally and never ends the competition. -->
+                    <div id="leaveConfirm" class="hidden fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="\${tr.leave_broadcast}">
+                      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-sm w-full p-5 text-center mx-auto">
+                        <i class="fas fa-sign-out-alt text-amber-500 text-3xl mb-3" aria-hidden="true"></i>
+                        <p class="text-gray-800 dark:text-gray-100 text-sm mb-5">\${tr.leave_broadcast_confirm}</p>
+                        <div class="flex gap-3 justify-center">
+                          <button data-csp-on="click" data-csp-fn="cancelLeaveCompetition" data-csp-args='[]' id="leaveConfirmStay" class="px-4 py-2 rounded-full text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100" aria-label="\${tr.cancel}" title="\${tr.cancel}">\${tr.cancel}</button>
+                          <button data-csp-on="click" data-csp-fn="confirmLeaveCompetition" data-csp-args='[]' id="leaveConfirmLeave" class="px-4 py-2 rounded-full text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white" aria-label="\${tr.leave_broadcast}" title="\${tr.leave_broadcast}">\${tr.leave_broadcast}</button>
+                        </div>
+                      </div>
                     </div>
                     
-                  \` : (isCreator || isOpponent) && comp.opponent_id && (isPending || comp.status === 'accepted') ? \`
-                    <!-- Ready to Go Live -->
+                  \` : (isCreator || isOpponent) && comp.opponent_id && isPending ? \`
+                    <!-- Ready to Go Live (legacy pending-with-opponent edge;
+                         accepted parties render the prep surface above) -->
                     <div class="bg-gradient-to-br \${bgColor} aspect-video flex items-center justify-center">
                       <div class="text-center text-white">
                         <i class="fas fa-video text-6xl opacity-80 mb-4"></i>
-                        <p class="mb-4">\${tr.competitors} \${tr.status_accepted}</p>
-                        <button data-csp-on="click" data-csp-fn="goLive" data-csp-args='[]' class="px-6 py-3 bg-green-600 rounded-full font-bold hover:bg-green-700 transition-all inline-flex items-center gap-2">
-                          <i class="fas fa-broadcast-tower"></i>
-                          \${tr.status_live || 'Go Live'}
-                        </button>
+                        <p>\${tr.competitors} \${tr.status_accepted}</p>
                       </div>
                     </div>
 
@@ -618,44 +639,49 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         \`;
       }
       
-      // Go Live - start P2P streaming
-      async function goLive() {
+      // R4-LIVE-ENTRY-RECOVERY-REM1: start the competition IN PLACE. The old
+      // flow redirected to /live/:id, which tore down the preview/PC and made
+      // the audience surface the source of truth. /competition/:id now stays
+      // mounted; status chrome, recording eligibility and both parties update
+      // from the same call + SSE, never from a navigation.
+      async function startCompetition() {
         if (!window.currentUser) { showLoginModal(); return; }
-        
-        const isCreator = window.currentUser.id === competitionData.creator_id;
-        const isOpponent = window.currentUser.id === competitionData.opponent_id;
-        
-        if (!isCreator && !isOpponent) {
-          showToast(tr.not_authorized || 'Not authorized', 'error');
-          return;
-        }
-        
-        const streamServerUrl = 'https://maelshpro.com/ffmpeg';
+        if (!competitionData || competitionData.status !== 'accepted') return;
+        if (startInFlight) return;
+        startInFlight = true;
+        const btn = document.getElementById('startBtn');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'; }
         const liveUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
-        
         try {
           const res = await fetch('/api/competitions/' + competitionId + '/start', {
             method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
-              'Content-Type': 'application/json'
-            },
+            headers: competitorAuthHeaders(),
             body: JSON.stringify({ live_url: liveUrl })
           });
-          
-          const data = await res.json();
-          if (data.success) {
-            // R2-L2: production room for every role — /live/:id resolves
-            // host/opponent/viewer from the session (same guards as start).
-            window.location.href = '/live/' + competitionId + '?lang=' + lang;
+          const data = await res.json().catch(function() { return null; });
+          if (res.ok && data && data.success) {
+            competitionData.status = 'live';
+            paintCompetitionChrome();
+            paintCompetitorControls();
+            maybeStartRecording();
+            scheduleStatusResync(0);
+            showToast(tr.status_live || 'LIVE', 'success');
           } else {
-            showToast(data.error || 'Failed to start', 'error');
+            showToast((data && data.error) || tr.start_competition_failed, 'error');
           }
         } catch (err) {
           console.error(err);
-          showToast(tr.error_occurred || 'Error', 'error');
+          showToast(tr.start_competition_failed, 'error');
+        } finally {
+          startInFlight = false;
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-play" aria-hidden="true"></i>';
+          }
+          paintCompetitorControls();
         }
       }
+      window.startCompetition = startCompetition;
       
       async function requestJoin() {
         if (!window.currentUser) { showLoginModal(); return; }
@@ -781,6 +807,142 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           es.addEventListener('rating_updated', function() { loadRatingSummary(); });
           es.addEventListener('competition_status', function() { loadRatingSummary(); });
         } catch (e) {}
+      }
+
+      // ===== R4-LIVE-ENTRY-RECOVERY-REM1: status without refresh =====
+      // One SSE subscription on the EXISTING competition channel + a bounded
+      // GET resync. No WebSocket, no polling loop. A status event is applied
+      // in place: an already-running prep PC/recorder/preview is never
+      // recreated, and LIVE never implies publish consent.
+      let competitionStatusES = null;
+      let statusResyncTimer = null;
+      let statusResyncAttempts = 0;
+
+      function statusLabel(status) {
+        if (status === 'live') return tr.status_live;
+        if (status === 'pending') return tr.status_pending;
+        if (status === 'accepted') return tr.status_accepted || 'Ready';
+        if (status === 'completed') return tr.status_completed;
+        return tr['status_' + status] || status;
+      }
+
+      function paintCompetitionChrome() {
+        if (!competitionData) return;
+        const badge = document.getElementById('competitionStatusBadge');
+        const dot = document.getElementById('competitionStatusDot');
+        const text = document.getElementById('competitionStatusText');
+        const status = competitionData.status;
+        if (badge) {
+          const base = 'flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ';
+          const tone = status === 'live'
+            ? 'badge-live'
+            : status === 'pending'
+              ? 'badge-pending'
+              : status === 'accepted'
+                ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+                : 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400';
+          badge.className = base + tone;
+        }
+        if (dot) dot.className = status === 'live'
+          ? 'w-1.5 h-1.5 rounded-full bg-red-500 live-pulse'
+          : 'hidden';
+        if (text) text.textContent = statusLabel(status);
+        paintCompetitorControls();
+      }
+
+      function paintCompetitionTimer() {
+        if (!competitionData || !competitionData.timer || !competitionData.timer.deadline) return;
+        if (typeof window.createCountdownTimer !== 'function') return;
+        const host = document.getElementById('countdownTimerHost');
+        if (!host) return;
+        host.innerHTML = '';
+        window.createCountdownTimer({
+          competitionId: competitionId,
+          deadline: competitionData.timer.deadline,
+          type: competitionData.timer.type,
+          labelKey: competitionData.timer.labelKey
+        });
+      }
+
+      function applyCompetitionState(next) {
+        if (!next) return;
+        const prev = competitionData || {};
+        const userId = window.currentUser && window.currentUser.id;
+        const resolve = window.resolveVideoSurface;
+        const prevSurface = resolve ? resolve(prev, userId) : 'waiting';
+        const nextSurface = resolve ? resolve(Object.assign({}, prev, next), userId) : 'waiting';
+        competitionData = Object.assign({}, prev, next);
+
+        // Only structural changes re-render; accepted→live is chrome-only so
+        // the PC, recorder and local preview stay exactly as they are.
+        if (!competitorStarted && nextSurface !== prevSurface) {
+          renderCompetition(competitionData);
+          paintCompetitionTimer();
+          initCompetitionDynamics();
+          return;
+        }
+        paintCompetitionChrome();
+        paintCompetitionTimer();
+        if (nextSurface === 'competitor' && !competitorStarted) {
+          checkAndInitStream();
+        } else if (nextSurface === 'embedded' && prevSurface !== 'embedded') {
+          checkAndInitStream();
+        }
+        if (competitionData.status === 'live') maybeStartRecording();
+      }
+
+      async function syncCompetitionFromServer() {
+        try {
+          const res = await fetch('/api/competitions/' + competitionId);
+          const data = await res.json();
+          if (data && data.success && data.data) {
+            applyCompetitionState(data.data);
+            return true;
+          }
+        } catch (e) { /* bounded retry below */ }
+        return false;
+      }
+
+      // Bounded resync: 0 / 1.5s / 4s / 8s. EventSource recovery and the
+      // status event both call this; failures never create a polling loop.
+      function scheduleStatusResync(attempt) {
+        const tries = typeof attempt === 'number' ? attempt : 0;
+        if (tries > 3 || statusResyncTimer) return;
+        const delay = [0, 1500, 4000, 8000][tries] || 8000;
+        statusResyncTimer = setTimeout(async function() {
+          statusResyncTimer = null;
+          const ok = await syncCompetitionFromServer();
+          if (!ok) scheduleStatusResync(tries + 1);
+        }, delay);
+      }
+
+      function subscribeCompetitionStatus() {
+        try {
+          if (competitionStatusES) {
+            try { competitionStatusES.close(); } catch (e) {}
+            competitionStatusES = null;
+          }
+          if (typeof EventSource === 'undefined') return;
+          const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
+          competitionStatusES = es;
+          es.addEventListener('competition_status', function(ev) {
+            let payload = null;
+            try { payload = JSON.parse(ev.data); } catch (e) { payload = null; }
+            if (payload && competitionData) {
+              const patch = {};
+              if (payload.status) patch.status = payload.status;
+              if (payload.opponent_id !== undefined) patch.opponent_id = payload.opponent_id;
+              if (payload.started_at) patch.started_at = payload.started_at;
+              applyCompetitionState(patch);
+            }
+            scheduleStatusResync(0);
+          });
+          es.onerror = function() {
+            // EventSource reconnects on its own; the bounded GET keeps state
+            // correct even when the stream is unavailable.
+            scheduleStatusResync(0);
+          };
+        } catch (e) { /* realtime is optional; the page still works */ }
       }
 
       // B2+B3: paged comments state (roots carry replies_count)
@@ -1044,17 +1206,23 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // here, once the box, stats and competitionData exist.
       // B2+B3: hydrate paged comments + live subscription after first render.
       let watchTimers = [];
+      let watchIntentRecorded = false;
       async function initCompetitionDynamics() {
         loadCommentsInitial();
         subscribeCommentsLive();
         loadRatingSummary();
         subscribeRatingsLive();
+        subscribeCompetitionStatus();
         loadReactionStatus();
         loadCompetitionAd();
         // Sequential: the heartbeat must see the guest token the intent may
         // have just issued — concurrent first-view calls issued two day-rows
-        // for one anonymous viewer.
-        await recordWatchIntent();
+        // for one anonymous viewer. Status-driven re-renders must NOT count a
+        // second view, so the intent runs once per page load.
+        if (!watchIntentRecorded) {
+          watchIntentRecorded = true;
+          await recordWatchIntent();
+        }
         sendWatchHeartbeat();
         refreshPresence();
         for (const t of watchTimers) {
@@ -1969,8 +2137,18 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       var competitorStarted = false;
       var competitorWatcher = null;
       var competitorStartTime = null;
-      // R4-LIVE-ENTRY-RECOVERY-1: consent gate state + duration ticker handle
+      // R4-LIVE-ENTRY-RECOVERY-REM1: independent source/publish/control state.
+      // None of these are derived from the competition being LIVE.
       var mediaPublished = false;
+      var startInFlight = false;
+      var hadCameraBeforeScreen = false;
+      var localMediaAvailable = false;
+      var prepReady = false;
+      var leftBroadcast = false;
+      var speakerMuted = false;
+      var stageExpanded = false;
+      // Declared here (was an undeclared reference in the end path): both
+      // leave and end clear this single timer before tearing anything down.
       var durationTicker = null;
 
       function competitorAuthHeaders() {
@@ -2012,6 +2190,162 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       }
 
+      // R4-LIVE-ENTRY-RECOVERY-REM1: the prep/publish line tells the truth.
+      // Being LIVE is not publishing; the gateway is mediaPublished + a live
+      // RTCRtpSender on the peer connection.
+      function setPublishState(message) {
+        const el = document.getElementById('publishState');
+        if (el) el.textContent = message;
+      }
+
+      function localTrackOf(kind) {
+        if (!p2p) return null;
+        const stream = p2p.getLocalStream();
+        if (!stream) return null;
+        return stream.getTracks().find(function(t) { return t.kind === kind; }) || null;
+      }
+
+      function paintCompetitorControls() {
+        if (!document.getElementById('competitorControls')) return;
+        const status = competitionData ? competitionData.status : null;
+        const canStart = status === 'accepted' && !!competitionData.opponent_id && !startInFlight;
+        const setHidden = function(id, hidden) {
+          const el = document.getElementById(id);
+          if (el) el.classList.toggle('hidden', !!hidden);
+        };
+        setHidden('startBtn', !canStart);
+        setHidden('endBtn', status !== 'live');
+        // Publish appears only once a real local source exists and consent has
+        // not been given yet; the end button never shows before LIVE.
+        const preview = p2p ? p2p.getLocalStream() : null;
+        const hasMedia = !!(preview && preview.getTracks().length > 0);
+        setHidden('publishBtn', !p2p || mediaPublished || !hasMedia);
+        setHidden('screenBtn', !supportsScreenShare());
+
+        const publishBtn = document.getElementById('publishBtn');
+        if (publishBtn && !mediaPublished) {
+          const label = userRole === 'host' ? tr.prep_publish_host : tr.prep_publish_guest;
+          publishBtn.setAttribute('aria-label', label);
+          publishBtn.setAttribute('title', label);
+        }
+
+        const screenBtn = document.getElementById('screenBtn');
+        if (screenBtn) screenBtn.classList.toggle('is-active', isScreenSharing);
+
+        const videoBtn = document.getElementById('videoBtn');
+        if (videoBtn) {
+          const videoTrack = localTrackOf('video');
+          const videoOn = !!(videoTrack && videoTrack.enabled) || isScreenSharing;
+          videoBtn.classList.toggle('is-active', videoOn);
+          videoBtn.innerHTML = videoOn
+            ? '<i class="fas fa-video" aria-hidden="true"></i>'
+            : '<i class="fas fa-video-slash" aria-hidden="true"></i>';
+        }
+
+        const audioBtn = document.getElementById('audioBtn');
+        if (audioBtn) {
+          const audioTrack = localTrackOf('audio');
+          const audioOn = !!(audioTrack && audioTrack.enabled);
+          audioBtn.classList.toggle('is-active', audioOn);
+          audioBtn.innerHTML = audioOn
+            ? '<i class="fas fa-microphone" aria-hidden="true"></i>'
+            : '<i class="fas fa-microphone-slash" aria-hidden="true"></i>';
+        }
+
+        const speakerBtn = document.getElementById('speakerBtn');
+        if (speakerBtn) {
+          speakerBtn.innerHTML = speakerMuted
+            ? '<i class="fas fa-volume-mute" aria-hidden="true"></i>'
+            : '<i class="fas fa-volume-up" aria-hidden="true"></i>';
+        }
+
+        const localBtn = document.getElementById('localVideoBtn');
+        if (localBtn) {
+          localBtn.classList.toggle('is-active', !localVideoVisible);
+          localBtn.innerHTML = localVideoVisible
+            ? '<i class="fas fa-eye" aria-hidden="true"></i>'
+            : '<i class="fas fa-eye-slash" aria-hidden="true"></i>';
+        }
+
+        // The prep/publish line never claims publishing because the
+        // competition is LIVE — only because this party consented.
+        if (mediaPublished) setPublishState(tr.publish_state_on);
+        else if (prepReady && !localMediaAvailable) setPublishState(tr.media_none);
+        else if (prepReady) setPublishState(tr.publish_state_off);
+      }
+
+      function applyStageVisibility() {
+        const stage = document.getElementById('competitorView');
+        const localWrapper = document.getElementById('localVideoWrapper');
+        if (stage) {
+          stage.classList.toggle('is-swapped', videosSwapped);
+          stage.classList.toggle('is-expanded', stageExpanded);
+        }
+        if (localWrapper) localWrapper.style.display = localVideoVisible ? '' : 'none';
+        document.body.classList.toggle('live-stage-locked', stageExpanded);
+        const expandBtn = document.getElementById('expandBtn');
+        if (expandBtn) {
+          const label = stageExpanded ? tr.collapse_stage : tr.expand_stage;
+          expandBtn.setAttribute('aria-label', label);
+          expandBtn.setAttribute('title', label);
+        }
+      }
+
+      // The small pane (whichever side is small) is draggable inside the
+      // stage bounds; its position resets when the layout role changes.
+      function makePipDraggable(el) {
+        if (!el || el.dataset.pipBound === '1') return;
+        el.dataset.pipBound = '1';
+        el.addEventListener('pointerdown', function(ev) {
+          if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+          const stage = document.getElementById('competitorView');
+          if (!stage) return;
+          // Only the CURRENT small pane is draggable: local in normal mode,
+          // remote after a swap. The large pane never moves.
+          const pipId = videosSwapped ? 'remoteVideoWrapper' : 'localVideoWrapper';
+          if (el.id !== pipId) return;
+          const stageRect = stage.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const startLeft = elRect.left - stageRect.left;
+          const startTop = elRect.top - stageRect.top;
+          const startX = ev.clientX;
+          const startY = ev.clientY;
+          el.setPointerCapture(ev.pointerId);
+          el.classList.add('is-dragging');
+          function onMove(moveEv) {
+            const maxLeft = Math.max(0, stageRect.width - elRect.width);
+            const maxTop = Math.max(0, stageRect.height - elRect.height);
+            const left = Math.min(Math.max(0, startLeft + (moveEv.clientX - startX)), maxLeft);
+            const top = Math.min(Math.max(0, startTop + (moveEv.clientY - startY)), maxTop);
+            el.style.insetInlineEnd = 'auto';
+            el.style.left = left + 'px';
+            el.style.top = top + 'px';
+          }
+          function onUp() {
+            el.classList.remove('is-dragging');
+            el.removeEventListener('pointermove', onMove);
+            el.removeEventListener('pointerup', onUp);
+            el.removeEventListener('pointercancel', onUp);
+          }
+          el.addEventListener('pointermove', onMove);
+          el.addEventListener('pointerup', onUp);
+          el.addEventListener('pointercancel', onUp);
+        });
+      }
+
+      function setupCompetitorStage() {
+        applyStageVisibility();
+        makePipDraggable(document.getElementById('localVideoWrapper'));
+        makePipDraggable(document.getElementById('remoteVideoWrapper'));
+        const remote = document.getElementById('remoteVideo');
+        if (remote) remote.muted = speakerMuted;
+        // Fullscreen icon/aria stays truthful for the in-page and expanded
+        // stage alike; the label follows the actual fullscreen element.
+        document.addEventListener('fullscreenchange', function() {
+          if (document.getElementById('competitorView')) paintFullscreenChrome();
+        });
+      }
+
       function watchCompetitorOpponent() {
         if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
         competitorWatcher = setInterval(async function() {
@@ -2051,15 +2385,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               compositor.abortOnLeaseLost();
             }
           },
-          onChunkUploaded: function(num) {
-            const cc = document.getElementById('chunkCount');
-            if (cc) cc.textContent = num;
-          },
+          onChunkUploaded: function() { /* diagnostics removed from the UI */ },
           onRecordingStarted: function() {
-            const stats = document.getElementById('streamStats');
-            if (stats) stats.classList.remove('hidden');
             competitorStartTime = Date.now();
-            updateCompetitorDuration();
           },
           onRecordingStopped: function() {},
           onError: function(error) {
@@ -2067,18 +2395,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         });
         compositor.startCompositing();
-      }
-
-      function updateCompetitorDuration() {
-        if (!competitorStartTime) return;
-        const el = document.getElementById('streamDuration');
-        if (!el) return;
-        const elapsed = Math.floor((Date.now() - competitorStartTime) / 1000);
-        const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
-        const secs = (elapsed % 60).toString().padStart(2, '0');
-        el.textContent = mins + ':' + secs;
-        // R4-LIVE-ENTRY-RECOVERY-1: store handle for cleanup
-        durationTicker = setTimeout(updateCompetitorDuration, 1000);
       }
 
       function waitCompetitorMediaReady(localVideo, remoteVideo) {
@@ -2093,20 +2409,144 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         });
       }
 
-      function startCompetitorRecording() {
-        if (compositor && !compositor.getStats().isRecording) {
-          const localVideo = document.getElementById('localVideo');
-          const remoteVideo = document.getElementById('remoteVideo');
-          waitCompetitorMediaReady(localVideo, remoteVideo).then(function() {
-            if (compositor && !compositor.getStats().isRecording) {
-              compositor.startRecording();
-            }
-          });
+      // R4-LIVE-ENTRY-RECOVERY-REM1: preview-source bookkeeping. A source tag
+      // records where a track came from; the competition state never decides a
+      // source, and none of these helpers creates an RTCRtpSender.
+      function tagTrackSource(track, source) {
+        try { if (track) track.__dueliSource = source; } catch (e) { /* frozen track */ }
+      }
+      function trackSource(track) {
+        try { return (track && track.__dueliSource) ? track.__dueliSource : null; } catch (e) { return null; }
+      }
+      function currentPreviewStream() {
+        return p2p ? p2p.getLocalStream() : null;
+      }
+      function ensurePreviewStream() {
+        let stream = currentPreviewStream();
+        if (!stream) {
+          stream = new MediaStream();
+          if (p2p) p2p.setLocalPreviewStream(stream, { stopPrevious: false, source: 'none' });
+        }
+        return stream;
+      }
+      function removePreviewTracks(predicate) {
+        const stream = currentPreviewStream();
+        if (!stream) return;
+        stream.getTracks().slice().forEach(function(track) {
+          if (!predicate(track)) return;
+          if (typeof stream.removeTrack === 'function') stream.removeTrack(track);
+          try { track.stop(); } catch (e) { /* already ended */ }
+        });
+      }
+      function attachPreviewTrackEvents(track) {
+        if (!track || track.__dueliEndBound === '1') return;
+        try { track.__dueliEndBound = '1'; } catch (e) { /* frozen track */ }
+        if (track.kind !== 'video') return;
+        track.onended = function() {
+          // Device revocation or the browser's own "Stop sharing" button.
+          // Never publishes and never silently re-acquires: only the preview
+          // and the honest state line change.
+          if (trackSource(track) === 'screen' && isScreenSharing) {
+            stopScreenShare('ended');
+          } else {
+            paintCompetitorControls();
+          }
+        };
+      }
+      // After explicit publish only: same-kind source swaps use replaceTrack
+      // (no renegotiation); a NEW sender kind triggers one renegotiation.
+      async function syncPublishedTrack(kind, track) {
+        if (!p2p || !p2p.isLocalPublished()) return;
+        try {
+          const mode = await p2p.setPublishedTrack(kind, track);
+          if (mode === 'added') await p2p.negotiateMediaChange();
+        } catch (err) {
+          log('Published track update failed: ' + (err && err.message ? err.message : err), 'error');
         }
       }
+      function supportsScreenShare() {
+        return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
+      }
+      async function acquireCameraVideo() {
+        try {
+          const got = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+          const track = got.getVideoTracks()[0];
+          if (!track) throw new Error('no video track');
+          tagTrackSource(track, 'camera');
+          const stream = ensurePreviewStream();
+          if (typeof stream.addTrack === 'function') stream.addTrack(track);
+          const localVideo = document.getElementById('localVideo');
+          if (localVideo) localVideo.srcObject = stream;
+          attachPreviewTrackEvents(track);
+          localMediaAvailable = true;
+          videoMuted = false;
+          return track;
+        } catch (err) {
+          log('Camera unavailable: ' + (err && err.message ? err.message : err), 'warn');
+          showToast(tr.camera_error, 'error');
+          return null;
+        }
+      }
+      async function acquireMicAudio() {
+        try {
+          const got = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const track = got.getAudioTracks()[0];
+          if (!track) throw new Error('no audio track');
+          tagTrackSource(track, 'mic');
+          const stream = ensurePreviewStream();
+          if (typeof stream.addTrack === 'function') stream.addTrack(track);
+          attachPreviewTrackEvents(track);
+          localMediaAvailable = true;
+          audioMuted = false;
+          return track;
+        } catch (err) {
+          log('Microphone unavailable: ' + (err && err.message ? err.message : err), 'warn');
+          showToast(tr.camera_error, 'error');
+          return null;
+        }
+      }
+      // Stop screen sharing (button, browser "Stop sharing", or source switch).
+      // Restores a camera preview only when a camera was prepared before the
+      // share; otherwise the video source is released. After explicit publish
+      // the sibling sender is updated (replaceTrack/detach) — a stopped source
+      // is never left behind a hidden sender.
+      async function stopScreenShare(reason) {
+        if (!isScreenSharing) return;
+        isScreenSharing = false;
+        const stream = currentPreviewStream();
+        const hadScreenAudio = !!(stream && stream.getTracks().some(function(t) {
+          return t.kind === 'audio' && trackSource(t) === 'screen';
+        }));
+        removePreviewTracks(function(track) {
+          return trackSource(track) === 'screen' || track.kind === 'video';
+        });
+        let restored = null;
+        if (hadCameraBeforeScreen) {
+          try {
+            const got = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+            restored = got.getVideoTracks()[0];
+            tagTrackSource(restored, 'camera');
+          } catch (err) { restored = null; }
+        }
+        hadCameraBeforeScreen = false;
+        if (restored) {
+          const preview = ensurePreviewStream();
+          if (typeof preview.addTrack === 'function') preview.addTrack(restored);
+          attachPreviewTrackEvents(restored);
+        }
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = currentPreviewStream();
+        if (p2p && p2p.isLocalPublished()) {
+          await syncPublishedTrack('video', restored);
+          if (hadScreenAudio) await syncPublishedTrack('audio', localTrackOf('audio'));
+        }
+        if (reason !== 'switch-camera') showToast(tr.screen_share_stopped, 'info');
+        paintCompetitorControls();
+      }
+      window.stopScreenShare = stopScreenShare;
 
       async function initCompetitorStream() {
-        if (competitorStarted) return;
+        if (competitorStarted || leftBroadcast) return;
         competitorStarted = true;
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
@@ -2115,6 +2555,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           log('Competitor stream unavailable (missing media/bundle)', 'error');
           return;
         }
+        setupCompetitorStage();
         const me = window.currentUser.id;
         userRole = (me === competitionData.creator_id) ? 'host' : 'opponent';
 
@@ -2161,12 +2602,22 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           return;
         }
 
+        // Prep media is offered, never required: a denied camera/mic keeps the
+        // signaling session alive, leaves every tool usable and lets the party
+        // prepare a screen source instead. Acquiring here creates NO sender.
         try {
-          localVideo.srcObject = await p2p.initLocalStream();
+          const preview = await p2p.initLocalStream();
+          localVideo.srcObject = preview;
+          preview.getTracks().forEach(function(track) {
+            tagTrackSource(track, track.kind === 'audio' ? 'mic' : 'camera');
+            attachPreviewTrackEvents(track);
+          });
+          localMediaAvailable = true;
         } catch (err) {
-          showToast(tr.camera_error, 'error');
-          return;
+          localMediaAvailable = false;
+          log('Camera/mic unavailable — a screen source can still be prepared', 'warn');
         }
+        prepReady = true;
 
         if (userRole === 'host') {
           initCompetitorCompositor();
@@ -2179,48 +2630,40 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         } catch (e) { /* presence read is best-effort; watcher covers it */ }
 
-        // R4-LIVE-ENTRY-RECOVERY-1: show explicit publish consent UI
-        const publishBtn = document.getElementById('publishBtn');
-        const prepHint = document.getElementById('prepHint');
-        if (publishBtn) {
-          publishBtn.classList.remove('hidden');
-          if (userRole === 'host') {
-            publishBtn.innerHTML = '<i class="fas fa-broadcast-tower"></i><span class="hidden sm:inline text-sm">' + tr.prep_publish_host + '</span>';
-            publishBtn.setAttribute('aria-label', tr.prep_publish_host);
-          } else {
-            publishBtn.innerHTML = '<i class="fas fa-share"></i><span class="hidden sm:inline text-sm">' + tr.prep_publish_guest + '</span>';
-            publishBtn.setAttribute('aria-label', tr.prep_publish_guest);
-          }
-        }
-        if (prepHint) prepHint.classList.remove('hidden');
+        paintCompetitorControls();
 
         if (userRole === 'host') {
           watchCompetitorOpponent();
         }
       }
       
-      // R4-LIVE-ENTRY-RECOVERY-1: explicit publish consent gate
+      // R4-LIVE-ENTRY-RECOVERY-REM1: explicit publish consent gate. Nothing
+      // here runs from acquisition, invite acceptance, LIVE state or refresh —
+      // only this handler attaches local tracks to the peer connection.
       async function publishMedia() {
         if (!p2p || mediaPublished) return;
+        const stream = p2p.getLocalStream();
+        const hasTracks = !!(stream && stream.getTracks().length > 0);
+        if (!hasTracks) {
+          // Honest refusal: there is nothing to publish yet.
+          showToast(tr.nothing_to_publish, 'error');
+          setPublishState(tr.media_none);
+          return;
+        }
         const publishBtn = document.getElementById('publishBtn');
-        const prepHint = document.getElementById('prepHint');
         if (publishBtn) {
           publishBtn.disabled = true;
-          publishBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span class="hidden sm:inline text-sm">' + tr.prep_publishing + '</span>';
+          setPublishState(tr.prep_publishing);
         }
         try {
           const ok = p2p.publishLocalStream();
-          if (!ok) throw new Error('Failed to publish local media');
+          if (!ok) throw new Error('publishLocalStream returned false');
           mediaPublished = true;
-          log('Local media published', 'success');
-          
-          if (publishBtn) publishBtn.classList.add('hidden');
-          if (prepHint) prepHint.classList.add('hidden');
+          log('Local media published after explicit consent', 'success');
           showToast(tr.prep_published, 'success');
-          
           if (userRole === 'host') {
-            const status = await p2p.getRoomStatus();
-            if (status && status.opponent_joined) {
+            const status = await p2p.getRoomStatus().catch(function() { return null; });
+            if (status && status.opponent_joined && !p2p.isP2PConnected()) {
               log('Opponent present — creating offer', 'info');
               await p2p.createOffer();
             }
@@ -2231,69 +2674,77 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             showToast(tr.prep_waiting_guest, 'info');
           }
         } catch (err) {
-          log('Publish failed: ' + err.message, 'error');
+          log('Publish failed: ' + (err && err.message ? err.message : err), 'error');
           showToast(tr.camera_error, 'error');
-          if (publishBtn) {
-            publishBtn.disabled = false;
-            if (userRole === 'host') {
-              publishBtn.innerHTML = '<i class="fas fa-broadcast-tower"></i><span class="hidden sm:inline text-sm">' + tr.prep_publish_host + '</span>';
-            } else {
-              publishBtn.innerHTML = '<i class="fas fa-share"></i><span class="hidden sm:inline text-sm">' + tr.prep_publish_guest + '</span>';
-            }
-          }
+        } finally {
+          if (publishBtn) publishBtn.disabled = false;
+          paintCompetitorControls();
         }
       }
+      window.publishMedia = publishMedia;
       
-      // R4-LIVE-ENTRY-RECOVERY-1: recording only after host's explicit publish
+      // Recording stays host-only AND requires both the explicit publish and
+      // the competition actually being LIVE. LIVE alone never records (there
+      // would be no local media), and publish alone never records a prep call.
       function maybeStartRecording() {
         if (userRole !== 'host' || !p2p || !compositor) return;
         if (!p2p.isLocalPublished()) return;
+        if (!competitionData || competitionData.status !== 'live') return;
         if (compositor.getStats().isRecording) return;
-        log('Media ready check for recording...', 'info');
         waitCompetitorMediaReady(document.getElementById('localVideo'), document.getElementById('remoteVideo')).then(function() {
-          if (compositor && !compositor.getStats().isRecording && p2p.isLocalPublished()) {
+          if (compositor && !compositor.getStats().isRecording && p2p && p2p.isLocalPublished()
+              && competitionData && competitionData.status === 'live') {
             log('Starting recording', 'info');
             compositor.startRecording();
           }
         });
       }
       
-      // Control Functions
-      window.toggleFullscreen = function() {
-        const container = document.querySelector('.aspect-video');
-        if (!isFullscreen) {
-          if (container.requestFullscreen) container.requestFullscreen();
-          else if (container.webkitRequestFullscreen) container.webkitRequestFullscreen();
-          isFullscreen = true;
-        } else {
-          if (document.exitFullscreen) document.exitFullscreen();
-          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-          isFullscreen = false;
-        }
+      // ========== R4-LIVE-ENTRY-RECOVERY-REM1: stage + tools ==========
+      // Icon-only 40px tools in the mandatory reference palette; every state
+      // change reads real tracks/senders — never the competition status.
+      function resetPipPosition() {
+        ['localVideoWrapper', 'remoteVideoWrapper'].forEach(function(id) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.style.left = '';
+          el.style.top = '';
+          el.style.insetInlineEnd = '';
+        });
+      }
+      function paintFullscreenChrome() {
         const btn = document.getElementById('fullscreenBtn');
-        if (btn) btn.innerHTML = isFullscreen ? '<i class="fas fa-compress"></i>' : '<i class="fas fa-expand"></i>';
+        if (!btn) return;
+        const full = !!document.fullscreenElement;
+        const label = full ? (tr.exit_fullscreen || tr.fullscreen) : tr.fullscreen;
+        btn.innerHTML = full
+          ? '<i class="fas fa-compress" aria-hidden="true"></i>'
+          : '<i class="fas fa-expand" aria-hidden="true"></i>';
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('title', label);
+      }
+      window.toggleFullscreen = function() {
+        const stage = document.getElementById('competitorView');
+        if (!stage) return;
+        if (!document.fullscreenElement) {
+          const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+          if (req) { try { req.call(stage); } catch (e) { /* denied */ } }
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        }
+        isFullscreen = !!document.fullscreenElement;
+        paintFullscreenChrome();
       };
       
+      // Swap large/small by moving CSS roles between the SAME two video
+      // elements — the stage never gains a third video.
       window.swapVideos = function() {
-        const localWrapper = document.getElementById('localVideoWrapper');
-        const remoteVideo = document.getElementById('remoteVideo');
-        const localVideo = document.getElementById('localVideo');
-        if (!localWrapper) return;
-        
+        if (!document.getElementById('competitorView')) return;
         videosSwapped = !videosSwapped;
-        
-        if (videosSwapped) {
-          localWrapper.style.cssText = 'position:absolute;inset:0;z-index:10;';
-          localVideo.classList.add('w-full', 'h-full');
-          remoteVideo.style.cssText = 'position:absolute;top:1rem;' + (isRTL ? 'left' : 'right') + ':1rem;z-index:20;width:8rem;height:6rem;border-radius:0.75rem;';
-        } else {
-          localWrapper.style.cssText = 'position:absolute;top:1rem;' + (isRTL ? 'left' : 'right') + ':1rem;z-index:20;';
-          localVideo.classList.remove('w-full', 'h-full');
-          remoteVideo.style.cssText = '';
-        }
-        
-        const btn = document.getElementById('swapBtn');
-        if (btn) btn.classList.toggle('bg-purple-500', videosSwapped);
+        resetPipPosition();
+        applyStageVisibility();
       };
       
       window.toggleComments = function() {
@@ -2307,107 +2758,209 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       window.toggleLocalVideo = function() {
         if (userRole === 'viewer') return;
         localVideoVisible = !localVideoVisible;
-        const wrapper = document.getElementById('localVideoWrapper');
-        if (wrapper) wrapper.style.display = localVideoVisible ? 'block' : 'none';
-        const btn = document.getElementById('localVideoBtn');
-        if (btn) btn.innerHTML = localVideoVisible ? '<i class="fas fa-user-circle"></i>' : '<i class="fas fa-user-slash"></i>';
+        applyStageVisibility();
+        paintCompetitorControls();
       };
       
-window.switchCamera = async function() {
-        if (userRole === 'viewer' || !p2p) return;
+      // Front/back switch never touches the microphone and never publishes:
+      // the same kind keeps the existing sender (replaceTrack, no renegotiation).
+      window.switchCamera = async function() {
+        if (userRole === 'viewer' || !p2p || isScreenSharing) return;
+        currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
         try {
-          currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-          
-          // R4-LIVE-ENTRY-RECOVERY-1: before publish, update P2PConnection's localStream
-          // so the selected camera is used on publish. After publish, use replaceTrack.
-          if (mediaPublished) {
-            const newStream = await navigator.mediaDevices.getUserMedia({
-              video: { facingMode: currentFacingMode },
-              audio: true
-            });
-            const videoTrack = newStream.getVideoTracks()[0];
-            const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender) {
-              await sender.replaceTrack(videoTrack);
+          const got = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+          const track = got.getVideoTracks()[0];
+          if (!track) throw new Error('no video track');
+          tagTrackSource(track, 'camera');
+          const stream = ensurePreviewStream();
+          stream.getTracks().slice().forEach(function(t) {
+            if (t.kind === 'video') {
+              if (typeof stream.removeTrack === 'function') stream.removeTrack(t);
+              try { t.stop(); } catch (e) { /* already ended */ }
             }
-            document.getElementById('localVideo').srcObject = newStream;
-          } else {
-            // Before publish: update P2PConnection's localStream so publishLocalStream uses the new camera
-            const newStream = await p2p.replaceLocalStream({
-              video: { facingMode: currentFacingMode },
-              audio: true
-            });
-            document.getElementById('localVideo').srcObject = newStream;
-          }
+          });
+          if (typeof stream.addTrack === 'function') stream.addTrack(track);
+          const localVideo = document.getElementById('localVideo');
+          if (localVideo) localVideo.srcObject = stream;
+          attachPreviewTrackEvents(track);
+          localMediaAvailable = true;
+          videoMuted = false;
+          await syncPublishedTrack('video', track);
+          paintCompetitorControls();
         } catch (err) {
-          log('Camera switch failed: ' + err.message, 'error');
+          log('Camera switch failed: ' + (err && err.message ? err.message : err), 'error');
         }
       };
       
+      // Screen-source selection is available during PREPARATION: it never
+      // requires the camera/mic and never publishes by itself. Screen audio is
+      // used when the browser offers it. Stopping a share restores the camera
+      // preview only when a camera was prepared before, and updates the
+      // sibling sender after explicit publish — a stopped source is never
+      // left behind an active sender.
       window.shareScreen = async function() {
         if (!p2p) return;
-        // R4-LIVE-ENTRY-RECOVERY-1: screen share only after explicit publish consent
-        if (!mediaPublished) {
-          showToast(tr.camera_error || 'Must publish before screen sharing', 'error');
+        if (isScreenSharing) { await stopScreenShare('toggle'); return; }
+        if (!supportsScreenShare()) {
+          showToast(tr.camera_error, 'error');
           return;
         }
+        let screenStream = null;
         try {
-          const screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { cursor: 'always' },
-            audio: true
+          screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: true });
+        } catch (err) {
+          const cancelled = err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError');
+          if (cancelled) { log('Screen share cancelled', 'warn'); return; }
+          try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: 'always' }, audio: false });
+          } catch (err2) {
+            log('Screen share failed: ' + (err2 && err2.message ? err2.message : err2), 'error');
+            return;
+          }
+        }
+        const screenVideo = screenStream.getVideoTracks()[0];
+        if (!screenVideo) { log('Screen share failed: no video track', 'error'); return; }
+        const screenAudio = screenStream.getAudioTracks()[0] || null;
+        tagTrackSource(screenVideo, 'screen');
+        if (screenAudio) tagTrackSource(screenAudio, 'screen');
+
+        // The camera is released while the screen is the video source (same
+        // as the reference test surface). The microphone keeps the audio slot
+        // unless the screen shares its own audio, which then takes it.
+        const prev = currentPreviewStream();
+        hadCameraBeforeScreen = !!(prev && prev.getTracks().some(function(t) { return t.kind === 'video'; }));
+        if (prev) {
+          prev.getTracks().slice().forEach(function(t) {
+            if (t.kind === 'video' || (screenAudio && t.kind === 'audio')) {
+              if (typeof prev.removeTrack === 'function') prev.removeTrack(t);
+              try { t.stop(); } catch (e) { /* already ended */ }
+            }
           });
-          const videoTrack = screenStream.getVideoTracks()[0];
-          const sender = p2p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-          if (sender) {
-            await sender.replaceTrack(videoTrack);
-            document.getElementById('localVideo').srcObject = screenStream;
-            isScreenSharing = true;
-            document.getElementById('screenBtn').classList.add('bg-green-600');
-            
-            videoTrack.onended = () => {
-              isScreenSharing = false;
-              document.getElementById('screenBtn').classList.remove('bg-green-600');
-            };
+        }
+        const stream = ensurePreviewStream();
+        if (typeof stream.addTrack === 'function') stream.addTrack(screenVideo);
+        if (screenAudio && typeof stream.addTrack === 'function') stream.addTrack(screenAudio);
+        p2p.setLocalPreviewStream(stream, { stopPrevious: false, source: 'screen' });
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = stream;
+        attachPreviewTrackEvents(screenVideo);
+        isScreenSharing = true;
+        screenVideo.onended = function() { if (isScreenSharing) stopScreenShare('ended'); };
+        if (p2p.isLocalPublished()) {
+          await syncPublishedTrack('video', screenVideo);
+          if (screenAudio) await syncPublishedTrack('audio', screenAudio);
+        }
+        paintCompetitorControls();
+      };
+      
+      // Mic/camera toggles ACQUIRE the device when it was never granted and
+      // toggle the live track otherwise — during preparation or after consent.
+      // Neither ever publishes.
+      window.toggleAudio = async function() {
+        if (!p2p) return;
+        let track = localTrackOf('audio');
+        if (!track) {
+          track = await acquireMicAudio();
+          if (!track) return;
+        } else {
+          track.enabled = !track.enabled;
+          audioMuted = !track.enabled;
+        }
+        await syncPublishedTrack('audio', track);
+        paintCompetitorControls();
+      };
+      
+      window.toggleVideo = async function() {
+        if (!p2p) return;
+        if (isScreenSharing) {
+          await stopScreenShare('switch-camera');
+          if (!localTrackOf('video')) await acquireCameraVideo();
+        } else if (localTrackOf('video')) {
+          const track = localTrackOf('video');
+          track.enabled = !track.enabled;
+          videoMuted = !track.enabled;
+        } else {
+          await acquireCameraVideo();
+        }
+        await syncPublishedTrack('video', localTrackOf('video'));
+        paintCompetitorControls();
+      };
+      
+      window.toggleSpeaker = function() {
+        speakerMuted = !speakerMuted;
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) remoteVideo.muted = speakerMuted;
+        paintCompetitorControls();
+      };
+      
+      window.toggleExpandStage = function() {
+        stageExpanded = !stageExpanded;
+        applyStageVisibility();
+      };
+      
+      // ========== leave / end ==========
+      // Leaving is a warning + LOCAL cleanup only: the competition is never
+      // ended, the recorder is finalized through the single destroy() path,
+      // and navigation is never trapped (no beforeunload handler anywhere).
+      function setLeaveConfirmVisible(visible) {
+        const overlay = document.getElementById('leaveConfirm');
+        if (!overlay) return;
+        overlay.classList.toggle('hidden', !visible);
+      }
+      window.leaveBroadcast = function() {
+        if (!competitorStarted) return;
+        setLeaveConfirmVisible(true);
+        const confirmBtn = document.getElementById('leaveConfirmLeave');
+        if (confirmBtn && typeof confirmBtn.focus === 'function') confirmBtn.focus();
+      };
+      window.cancelLeaveCompetition = function() {
+        setLeaveConfirmVisible(false);
+      };
+      window.confirmLeaveCompetition = async function() {
+        setLeaveConfirmVisible(false);
+        leftBroadcast = true;
+        if (durationTicker) { clearTimeout(durationTicker); durationTicker = null; }
+        if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
+        try {
+          // Explicit leave stops the host recorder through the single
+          // finalize path; it never calls /end.
+          if (userRole === 'host' && compositor) {
+            try { await compositor.destroy(); } catch (e) { /* best effort */ }
+            compositor = null;
+          }
+          // Withdraw presence (never touches started_at/chunks/competition).
+          try {
+            await fetch('/api/signaling/session/leave', {
+              method: 'POST',
+              headers: competitorAuthHeaders(),
+              body: JSON.stringify({ competition_id: Number(competitionId) })
+            });
+          } catch (e) { /* best effort */ }
+          if (p2p) {
+            try { await p2p.disconnect(); } catch (e) { /* best effort */ }
+            p2p = null;
           }
         } catch (err) {
-          log('Screen share failed: ' + err.message, 'error');
+          log('Leave cleanup error: ' + (err && err.message ? err.message : err), 'error');
         }
-      };
-      
-      window.toggleAudio = function() {
-        if (!p2p) return;
-        const stream = p2p.getLocalStream();
-        if (!stream) return;
-        const track = stream.getAudioTracks()[0];
-        if (track) {
-          audioMuted = !audioMuted;
-          track.enabled = !audioMuted;
-          const btn = document.getElementById('audioBtn');
-          if (btn) {
-            btn.classList.toggle('bg-red-600', audioMuted);
-            btn.innerHTML = audioMuted ? '<i class="fas fa-microphone-slash"></i>' : '<i class="fas fa-microphone"></i>';
-          }
-        }
-      };
-      
-      window.toggleVideo = function() {
-        if (!p2p) return;
-        const stream = p2p.getLocalStream();
-        if (!stream) return;
-        const track = stream.getVideoTracks()[0];
-        if (track) {
-          videoMuted = !videoMuted;
-          track.enabled = !videoMuted;
-          const btn = document.getElementById('videoBtn');
-          if (btn) {
-            btn.classList.toggle('bg-red-600', videoMuted);
-            btn.innerHTML = videoMuted ? '<i class="fas fa-video-slash"></i>' : '<i class="fas fa-video"></i>';
-          }
-        }
+        mediaPublished = false;
+        isScreenSharing = false;
+        localMediaAvailable = false;
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = null;
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) remoteVideo.srcObject = null;
+        const waitingOverlay = document.getElementById('waitingOverlay');
+        if (waitingOverlay) waitingOverlay.classList.remove('hidden');
+        setPublishState(tr.leave_broadcast_confirm);
+        paintCompetitorControls();
       };
       
       window.endStream = async function() {
-        if (!confirm(tr.end_stream_confirm || 'End the stream?')) return;
+        // The end button only renders while LIVE; this guard keeps the handler
+        // honest for any race (a non-live end would orphan the state).
+        if (!competitionData || competitionData.status !== 'live') return;
+        if (!confirm(tr.end_competition_confirm || tr.end_stream_confirm)) return;
 
         log('Ending stream...', 'info');
 
@@ -2432,10 +2985,7 @@ window.switchCamera = async function() {
           const vodUrl = streamServerUrl + '/storage/vod/match_' + competitionId + '.mp4';
           const endRes = await fetch('/api/competitions/' + competitionId + '/end', {
             method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || ''),
-              'Content-Type': 'application/json'
-            },
+            headers: competitorAuthHeaders(),
             body: JSON.stringify({ vod_url: vodUrl })
           });
           const endData = await endRes.json().catch(function() { return null; });
@@ -2466,6 +3016,16 @@ window.switchCamera = async function() {
 
         location.reload();
       };
+      
+      // Navigation away never ends the competition and never finalizes a
+      // recording: subscriptions close by themselves, an explicit endStream
+      // is the only end path, and refresh re-enters preparation (never
+      // publishes).
+      window.addEventListener('pagehide', function() {
+        try { if (competitionStatusES) competitionStatusES.close(); } catch (e) {}
+        try { if (commentsLiveES) commentsLiveES.close(); } catch (e) {}
+        try { if (ratingsLiveES) ratingsLiveES.close(); } catch (e) {}
+      });
       
       // Check if competition needs embedded viewer and start it
       function checkAndInitStream() {

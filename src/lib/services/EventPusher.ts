@@ -178,6 +178,28 @@ export class EventPusher {
         return this.publish(`user:${inviterId}`, type, { ...response });
     }
 
+    /**
+     * R4-LIVE-ENTRY-RECOVERY-REM1: lifecycle changes (invite accepted, live,
+     * later end) ride the EXISTING competition channel. Both parties update
+     * their prep/live surface from this event plus one bounded GET resync —
+     * no WebSocket, no polling loop, and no refresh. The payload is display
+     * metadata only; the competitions row stays authoritative.
+     */
+    async publishCompetitionStatus(
+        competitionId: number,
+        change: {
+            status: string;
+            opponent_id?: number | null;
+            started_by?: number | null;
+            updated_at?: string;
+        }
+    ) {
+        return this.publish(`competition:${competitionId}`, 'competition_status', {
+            competition_id: competitionId,
+            ...change,
+        });
+    }
+
     async publishCompetitionSuspended(
         competitionId: number,
         adminName: string,
