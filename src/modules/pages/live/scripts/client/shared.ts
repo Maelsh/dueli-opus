@@ -22,6 +22,17 @@ export function getClientSharedScript(lang: Language = 'en'): string {
     // finalized with no playable chunk (the LIVE initial wait ENDED — not a
     // spinner, not a false error). Baked per language like the TURN messages.
     const RECORDING_ENDED = tr.live_signaling.recording_ended;
+    // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-07, O19-21): audience
+    // player states are translated here — the page never paints a raw
+    // technical token such as 'media:waiting' or a chunk counter.
+    const PLAYER_STATE_LABELS: Record<string, string> = {
+        waiting: tr.player_state_waiting,
+        playing: tr.player_state_playing,
+        processing: tr.player_state_processing,
+        error: tr.player_state_error,
+        ready: tr.player_state_ready,
+        unavailable: tr.player_state_unavailable,
+    };
 
     return `
 // ===== Utility Functions =====
@@ -64,6 +75,15 @@ window.debugLog = debugLog;
 // Shown by the live player when a recording finalized with no playable chunk:
 // a clear ended state (AR/EN baked per language), never an eternal spinner.
 const RECORDING_ENDED_MSG = '${RECORDING_ENDED}';
+
+// R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1): localized player-state labels baked
+// per UI language (same pattern as TURN/RECORDING_ENDED). Consumers call
+// window.playerStateLabel(state); the machine state stays in __mediaState.
+const PLAYER_STATE_LABELS = ${JSON.stringify(PLAYER_STATE_LABELS)};
+function playerStateLabel(state) {
+    return PLAYER_STATE_LABELS[state] || PLAYER_STATE_LABELS.waiting || '';
+}
+window.playerStateLabel = playerStateLabel;
 
 // ===== Session & Authentication =====
 
@@ -444,6 +464,14 @@ class ChunkManager {
         // playable. Absence of chunks ALONE is never proof of end (a live
         // broadcast legitimately has no chunk yet).
         this.finalized = false;
+        // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-12, O19-13): the same
+        // playlist response carries the recording index timeline metadata
+        // (ms). Parsed once here so LIVE and VOD share ONE global time
+        // reference: verified per-entry starts, total_ready_ms total, real
+        // per-entry durations. No equal-split / no current-chunk duration
+        // masquerading as the recording length.
+        this.indexMetadata = null;
+        this.defaultChunkDuration = 10;
         this.basePath = '${FFMPEG_URL}/stream.php?path=live/match_' + competitionId;
     }
 
@@ -461,6 +489,10 @@ class ChunkManager {
             // anything other than an explicit true is treated as "not ended".
             const meta = data.index_metadata;
             this.finalized = !!(meta && meta.finalized === true);
+            this.indexMetadata = (meta && typeof meta === 'object') ? meta : null;
+            if (typeof data.chunk_duration === 'number' && isFinite(data.chunk_duration) && data.chunk_duration > 0) {
+                this.defaultChunkDuration = data.chunk_duration;
+            }
             if (typeof data.extension === 'string' && data.extension && data.extension !== this.extension) {
                 testLog('🔎 Format detected: .' + data.extension + ' (was looking for .' + this.extension + ')', 'info');
                 this.extension = data.extension;
@@ -503,12 +535,105 @@ class ChunkManager {
         return top;
     }
 
+    /**
+     * Edge index for playback/progress. With readiness info this is exactly
+     * the newest confirmed-ready chunk; a legacy list (NO readiness flags)
+     * still has a real edge at its newest listed chunk. Kept separate from
+     * latestReadyIndex() because skipToLatest() must preserve its historical
+     * penultimate fallback for legacy lists (last file may be partial).
+     */
+    liveEdgeIndex() {
+        const top = this.latestReadyIndex();
+        if (top >= 0) return top;
+        return this.hasReadyInfo() ? -1 : this.maxIndex();
+    }
+
     maxIndex() {
         let top = -1;
         for (const entry of this.entries) {
             if (entry && typeof entry.index === 'number' && entry.index > top) top = entry.index;
         }
         return top;
+    }
+
+    /**
+     * R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1): real per-entry duration — the
+     * verified duration when the index supplied one, otherwise the entry's
+     * own duration, never total/count equal splitting.
+     */
+    getChunkDuration(index) {
+        const entry = this.entryFor(index);
+        if (entry && typeof entry.duration === 'number' && isFinite(entry.duration) && entry.duration > 0) {
+            return entry.duration;
+        }
+        return this.defaultChunkDuration;
+    }
+
+    /**
+     * Verified global start (seconds) for an entry. D1 timeline_start_ms wins
+     * (ms -> s exactly once here). Legacy lists without it accumulate REAL
+     * durations of the entries before this one, maintaining gaps as gaps.
+     */
+    getChunkStartTime(index) {
+        const entry = this.entryFor(index);
+        if (entry && typeof entry.timeline_start_ms === 'number'
+            && isFinite(entry.timeline_start_ms) && entry.timeline_start_ms >= 0) {
+            return entry.timeline_start_ms / 1000;
+        }
+        const sorted = this.entries
+            .filter(function(e) { return e && typeof e.index === 'number'; })
+            .sort(function(a, b) { return a.index - b.index; });
+        let start = 0;
+        for (const e of sorted) {
+            if (e.index >= index) break;
+            start += (typeof e.duration === 'number' && isFinite(e.duration) && e.duration > 0)
+                ? e.duration
+                : this.defaultChunkDuration;
+        }
+        return start;
+    }
+
+    /** Entry index whose verified interval contains globalTime. */
+    getChunkForTime(globalTime) {
+        const sorted = this.entries
+            .filter(function(e) { return e && typeof e.index === 'number'; })
+            .sort(function(a, b) { return a.index - b.index; });
+        if (sorted.length === 0) return 0;
+        let chosen = sorted[0].index;
+        for (const e of sorted) {
+            if (globalTime >= this.getChunkStartTime(e.index)) chosen = e.index;
+            else break;
+        }
+        return chosen;
+    }
+
+    /**
+     * Recording total (seconds). The D1 index total_ready_ms is the authority;
+     * a legacy list falls back to the sum of REAL durations / verified end.
+     * Never videoEl.duration and never an equal split of total/count.
+     */
+    getTotalDuration() {
+        const meta = this.indexMetadata;
+        if (meta && typeof meta.total_ready_ms === 'number'
+            && isFinite(meta.total_ready_ms) && meta.total_ready_ms > 0) {
+            return meta.total_ready_ms / 1000;
+        }
+        const sorted = this.entries
+            .filter(function(e) { return e && typeof e.index === 'number'; })
+            .sort(function(a, b) { return a.index - b.index; });
+        let sum = 0;
+        for (const e of sorted) sum += this.getChunkDuration(e.index);
+        if (sorted.length === 0) return 0;
+        const last = sorted[sorted.length - 1];
+        const end = this.getChunkStartTime(last.index) + this.getChunkDuration(last.index);
+        return Math.max(sum, end);
+    }
+
+    /** End of the newest playable chunk (the live edge on the timeline). */
+    getLiveEdgeTime() {
+        const top = this.liveEdgeIndex();
+        if (top < 0) return 0;
+        return this.getChunkStartTime(top) + this.getChunkDuration(top);
     }
 
     getUrl(index) {
@@ -652,9 +777,16 @@ class LiveSequentialPlayer {
         this.onStatus = options.onStatus;
         this.onError = options.onError;
         this.onStreamEnd = options.onStreamEnd; // يُستدعى عند انتهاء البث
+        // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-12, O19-14): one global
+        // timeline shared by progress, seeking and rewind. The callback fires
+        // from the ACTIVE element only, so handoff leftovers never move the
+        // audience bar backwards.
+        this.onTimeUpdate = options.onTimeUpdate;
 
         this.activePlayerIndex = 0;
         this.isRunning = false;
+        this.currentIndex = -1;
+        this.loopGen = 0;
         this.preloadedChunks = new Map();
         this.MAX_MISSES = 25; // ~25 * متوسط 3ث = ~75ث بدون قطعة جديدة = انتهى البث
         // R4-CHUNK-PLAY-1: consecutive chunk-playback failures are bounded —
@@ -668,6 +800,141 @@ class LiveSequentialPlayer {
         this.lastFailedIndex = null;
         this.lastFailedCount = 0;
         this.MAX_CHUNK_RETRIES = 3;
+
+        var self = this;
+        (this.videoPlayers || []).forEach(function(v) {
+            v.ontimeupdate = function() {
+                if (self.videoPlayers[self.activePlayerIndex] !== v) return;
+                self.emitTimeUpdate();
+            };
+        });
+    }
+
+    /**
+     * Global playback position = verified chunk start + offset inside the
+     * current chunk (seconds). Never a chunk-local currentTime sold as the
+     * recording position.
+     */
+    getGlobalTime() {
+        if (typeof this.currentIndex !== 'number' || this.currentIndex < 0) return 0;
+        var active = this.videoPlayers && this.videoPlayers[this.activePlayerIndex];
+        var offset = (active && typeof active.currentTime === 'number' && isFinite(active.currentTime))
+            ? active.currentTime : 0;
+        return Math.max(0, this.chunkStart(this.currentIndex) + offset);
+    }
+
+    chunkStart(index) {
+        var cm = this.chunkManager;
+        if (cm && typeof cm.getChunkStartTime === 'function') {
+            var start = cm.getChunkStartTime(index);
+            return (typeof start === 'number' && isFinite(start)) ? start : 0;
+        }
+        return 0;
+    }
+
+    /** Available recording duration for the live timeline (seconds). */
+    getAvailableDuration() {
+        var cm = this.chunkManager;
+        if (cm && typeof cm.getTotalDuration === 'function') {
+            var total = cm.getTotalDuration();
+            return (typeof total === 'number' && isFinite(total) && total > 0) ? total : 0;
+        }
+        return this.getLiveEdgeTime();
+    }
+
+    getLiveEdgeTime() {
+        var cm = this.chunkManager;
+        if (cm && typeof cm.getLiveEdgeTime === 'function') {
+            var end = cm.getLiveEdgeTime();
+            return (typeof end === 'number' && isFinite(end) && end > 0) ? end : 0;
+        }
+        return 0;
+    }
+
+    latestReadyIndex() {
+        var cm = this.chunkManager;
+        if (cm && typeof cm.liveEdgeIndex === 'function') return cm.liveEdgeIndex();
+        if (cm && typeof cm.latestReadyIndex === 'function') return cm.latestReadyIndex();
+        if (cm && typeof cm.maxIndex === 'function') return cm.maxIndex();
+        return -1;
+    }
+
+    isBehindLive() {
+        var edge = this.latestReadyIndex();
+        return edge >= 0 && typeof this.currentIndex === 'number' && this.currentIndex >= 0
+            && this.currentIndex < edge;
+    }
+
+    emitTimeUpdate() {
+        if (typeof this.onTimeUpdate !== 'function') return;
+        this.onTimeUpdate(this.getGlobalTime(), this.getAvailableDuration(), this.currentIndex);
+    }
+
+    /**
+     * Seek anywhere inside the AVAILABLE live recording. Recenters forward
+     * flow at the target chunk and resumes from the offset inside it.
+     */
+    async seekTo(globalTime) {
+        if (typeof globalTime !== 'number' || !isFinite(globalTime)) return;
+        var total = this.getAvailableDuration();
+        if (globalTime < 0) globalTime = 0;
+        if (total > 0 && globalTime > total) globalTime = total;
+        var cm = this.chunkManager;
+        var target = (cm && typeof cm.getChunkForTime === 'function') ? cm.getChunkForTime(globalTime) : 0;
+        if (target === null || target === undefined) return;
+        // Never land on an unconfirmed slot while confirmed content exists.
+        var entry = (cm && typeof cm.entryFor === 'function') ? cm.entryFor(target) : null;
+        if (entry && entry.ready === false) {
+            var edge = this.latestReadyIndex();
+            var foundReady = false;
+            for (var i = target + 1; i <= edge; i++) {
+                var nextEntry = (cm && typeof cm.entryFor === 'function') ? cm.entryFor(i) : null;
+                if (nextEntry && nextEntry.ready !== false) {
+                    target = i;
+                    globalTime = this.chunkStart(i);
+                    foundReady = true;
+                    break;
+                }
+            }
+            // An unconfirmed TAIL beyond the newest ready chunk cannot be
+            // played: clamp the seek to the confirmed live edge. Never attempt
+            // to decode readiness the index has not confirmed.
+            if (!foundReady) {
+                if (edge < 0) return;
+                target = edge;
+                globalTime = this.chunkStart(edge);
+            }
+        }
+        var offset = globalTime - this.chunkStart(target);
+        if (!isFinite(offset) || offset < 0) offset = 0;
+        await this._startAt(target, offset);
+    }
+
+    /** Return to the newest confirmed-ready chunk (live edge). */
+    async jumpToLive() {
+        var edge = this.latestReadyIndex();
+        if (edge < 0) return;
+        await this._startAt(edge, 0);
+    }
+
+    async _startAt(index, offsetSeconds) {
+        if (!this.videoPlayers || this.videoPlayers.length === 0) return;
+        if (typeof index !== 'number' || !isFinite(index) || index < 0) return;
+        index = Math.floor(index);
+        this.loopGen = (this.loopGen || 0) + 1;
+        var gen = this.loopGen;
+        this.isRunning = false;
+        try {
+            await this.playChunk(index, offsetSeconds, gen);
+        } catch (e) {
+            if (gen === this.loopGen) this.onError && this.onError(e);
+            return;
+        }
+        // A newer seek/rewind retired this request while it was loading.
+        if (gen !== this.loopGen) return;
+        if (this.chunkManager) this.chunkManager.currentIndex = index;
+        this.isRunning = true;
+        this.runLoop(gen);
     }
 
     async start(options) {
@@ -689,7 +956,7 @@ class LiveSequentialPlayer {
             // the playlist is still empty.
             if (edge > 0 || this.chunkManager.entryFor(edge)) {
                 this.onStatus && this.onStatus('Found chunk: ' + (edge + 1));
-                await this.playChunk(edge);
+                await this.playChunk(edge, 0, this.loopGen);
                 this.runLoop(this.loopGen);
                 return;
             }
@@ -712,7 +979,7 @@ class LiveSequentialPlayer {
         }
         this.onStatus && this.onStatus('Found chunk: ' + (firstChunk + 1));
 
-        await this.playChunk(firstChunk);
+        await this.playChunk(firstChunk, 0, this.loopGen);
         this.runLoop(this.loopGen);
     }
 
@@ -723,20 +990,9 @@ class LiveSequentialPlayer {
      * fight the new one; the next wait continues after the target.
      */
     async rewindTo(index) {
-        if (!this.videoPlayers || this.videoPlayers.length === 0) return;
-        if (typeof index !== 'number' || !isFinite(index) || index < 0) return;
-        this.loopGen = (this.loopGen || 0) + 1;
-        const gen = this.loopGen;
-        this.isRunning = false;
-        try {
-            await this.playChunk(Math.floor(index));
-        } catch (e) {
-            this.onError && this.onError(e);
-            return;
-        }
-        this.chunkManager.currentIndex = Math.floor(index);
-        this.isRunning = true;
-        this.runLoop(gen);
+        // Preserved API (row 29 consumers): rewind to the START of a chunk.
+        // Arbitrary in-recording positions use seekTo(globalTime) instead.
+        await this._startAt(index, 0);
     }
 
     async runLoop(gen) {
@@ -745,7 +1001,7 @@ class LiveSequentialPlayer {
             var target = null;
             try {
                 target = await this.chunkManager.waitForNextChunk(this.MAX_MISSES);
-                await this.playChunk(target);
+                await this.playChunk(target, 0, myGen);
                 this.consecutiveErrors = 0;
                 this.lastFailedIndex = null;
                 this.lastFailedCount = 0;
@@ -791,7 +1047,10 @@ class LiveSequentialPlayer {
         }
     }
 
-    async playChunk(index) {
+    async playChunk(index, offsetSeconds, gen) {
+        // A newer seek/rewind may have retired this request before it even
+        // started loading (rapid double-click / stale loop).
+        if (gen !== undefined && gen !== this.loopGen) return;
         const url = this.chunkManager.getUrl(index);
         const nextPlayerIndex = (this.activePlayerIndex + 1) % 2;
         const nextPlayer = this.videoPlayers[nextPlayerIndex];
@@ -806,6 +1065,10 @@ class LiveSequentialPlayer {
         nextPlayer.src = url;
         await nextPlayer.load();
 
+        // Stale response guard: the load above may resolve after the user
+        // sought elsewhere. Never swap/play the superseded chunk.
+        if (gen !== undefined && gen !== this.loopGen) return;
+
         const settled = await new Promise(function(resolve) {
             var done = false;
             var timer = setTimeout(function() { if (!done) { done = true; resolve('timeout'); } }, 3000);
@@ -814,6 +1077,7 @@ class LiveSequentialPlayer {
             // log a meaningful message instead of 'undefined'.
             nextPlayer.onerror = function() { if (!done) { done = true; clearTimeout(timer); resolve('error'); } };
         });
+        if (gen !== undefined && gen !== this.loopGen) return;
         if (settled === 'error') {
             throw new Error('Chunk playback failed');
         }
@@ -831,6 +1095,16 @@ class LiveSequentialPlayer {
         currentPlayer.onerror = null;
         currentPlayer.onended = null;
 
+        // Seek inside the newly active chunk (live timeline / rewind). The
+        // offset is chunk-local; the caller already converted global -> local
+        // using the verified chunk start. Offset 0 is written explicitly too:
+        // a reused double-buffer element must never keep the previous chunk's
+        // currentTime (that would report a false global position at the live
+        // edge after jumpToLive()).
+        if (typeof offsetSeconds === 'number' && isFinite(offsetSeconds)) {
+            try { nextPlayer.currentTime = Math.max(0, offsetSeconds); } catch (e) {}
+        }
+
         nextPlayer.play().then(function() {
             setTimeout(function() { try { nextPlayer.muted = false; } catch (e) {} }, 100);
         }).catch(function() {
@@ -838,18 +1112,22 @@ class LiveSequentialPlayer {
             testLog('Muted playback continues (autoplay policy)', 'warn');
         });
         this.activePlayerIndex = nextPlayerIndex;
+        this.currentIndex = index;
 
         this.onChunkChange && this.onChunkChange(index, -1);
+        this.emitTimeUpdate();
     }
 
     stop() {
         this.isRunning = false;
+        this.currentIndex = -1;
         this.loopGen = (this.loopGen || 0) + 1;
         this.videoPlayers.forEach(function(v) {
             try { v.pause(); } catch (e) {}
             v.oncanplay = null;
             v.onerror = null;
             v.onended = null;
+            v.ontimeupdate = null;
             v.src = '';
         });
     }
@@ -953,11 +1231,21 @@ class SmartVodPlayer {
         this.onReady = options.onReady;
         this.onError = options.onError;
         this.onChunkLoaded = options.onChunkLoaded;
+        // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1): progress/timed comments use
+        // this ONE global timeline (verified start + offset), never the raw
+        // element currentTime/duration of the currently loaded chunk.
+        this.onTimeUpdate = options.onTimeUpdate;
         
         // حالة المشغل
         this.playlist = null;
         this.chunks = [];           // metadata
         this.loadedChunks = {};     // ArrayBuffer مخزنة
+        // In-flight request registry: concurrent window/seek requests for the
+        // same chunk share ONE fetch (no duplicate bytes, no double-store).
+        this.inFlightLoads = {};
+        // Generation token: a seek/switch retires older async loads so a late
+        // response can never steal the element from the newest target.
+        this.opGen = 0;
         this.totalDuration = 0;
         this.chunkDurations = [];   // مدة كل chunk
         this.extension = 'webm';
@@ -1018,10 +1306,10 @@ class SmartVodPlayer {
             
             testLog('📊 Found ' + this.chunks.length + ' chunks (' + this.extension + ')', 'success');
             
-            // 2. حساب المدة الإجمالية
-            this.calculateDurations();
-            // 2b. verified time map (D1 authority wins per entry)
+            // 2. verified time map FIRST (D1 authority wins per entry; ms -> s
+            // exactly once), then real per-entry durations + total.
             this.buildTimeMap();
+            this.calculateDurations();
             
             // 3. تحميل أول chunk قابلة للتشغيل (الأولى المؤكدة عند توفر
             // الفهرس، وإلا الأولى — توافق القديم محفوظ).
@@ -1051,21 +1339,54 @@ class SmartVodPlayer {
      * حساب مدة كل chunk والمدة الإجمالية
      */
     calculateDurations() {
-        // استخدام total_duration من playlist إذا موجود
-        if (this.playlist.total_duration && this.playlist.total_duration > 0) {
-            this.totalDuration = this.playlist.total_duration;
-            // توزيع المدة على الـ chunks بالتساوي
-            const perChunk = this.totalDuration / this.chunks.length;
-            this.chunkDurations = this.chunks.map(function() { return perChunk; });
-        } else {
-            // حساب من duration كل chunk
-            const defaultDuration = this.playlist.chunk_duration || 10; // ثواني
-            this.chunkDurations = this.chunks.map(function(chunk) {
-                return chunk.duration || defaultDuration;
-            });
-            this.totalDuration = this.chunkDurations.reduce(function(sum, d) { return sum + d; }, 0);
+        // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-13): REAL durations only.
+        // - verified timeline boundary (next_start - start) wins because it is
+        //   the recording index truth for variable-length chunks;
+        // - otherwise the entry's own verified duration;
+        // - otherwise the configured per-chunk fallback (never total/count).
+        const defaultDuration = (this.playlist && this.playlist.chunk_duration > 0)
+            ? this.playlist.chunk_duration
+            : 10;
+        const n = this.chunks.length;
+        this.chunkDurations = [];
+        for (let i = 0; i < n; i++) {
+            const entry = this.chunks[i] || {};
+            const own = (typeof entry.duration === 'number' && isFinite(entry.duration) && entry.duration > 0)
+                ? entry.duration
+                : null;
+            const start = this.verifiedStarts[i];
+            const next = this.verifiedStarts[i + 1];
+            let duration;
+            if (typeof start === 'number' && typeof next === 'number' && next > start) {
+                duration = next - start;
+            } else if (own !== null) {
+                duration = own;
+            } else {
+                duration = defaultDuration;
+            }
+            this.chunkDurations.push(duration);
         }
-        
+
+        // Total from the recording index (ms -> s once). The route's
+        // total_duration is deliberately NOT used: it can be a sum of served
+        // entries and hides gaps/readiness.
+        const meta = this.playlist && this.playlist.index_metadata;
+        if (meta && typeof meta.total_ready_ms === 'number'
+            && isFinite(meta.total_ready_ms) && meta.total_ready_ms > 0) {
+            this.totalDuration = meta.total_ready_ms / 1000;
+        } else {
+            let sum = 0;
+            for (let i = 0; i < this.chunkDurations.length; i++) sum += this.chunkDurations[i] || 0;
+            let verifiedEnd = 0;
+            for (const key in this.verifiedStarts) {
+                const idx = parseInt(key, 10);
+                const end = this.verifiedStarts[key] + (this.chunkDurations[idx] || 0);
+                if (end > verifiedEnd) verifiedEnd = end;
+            }
+            this.totalDuration = Math.max(sum, verifiedEnd);
+        }
+        if (!isFinite(this.totalDuration) || this.totalDuration < 0) this.totalDuration = 0;
+
         testLog('⏱️ Total duration: ' + Math.round(this.totalDuration) + 's (' + this.chunks.length + ' chunks)', 'info');
     }
 
@@ -1114,18 +1435,27 @@ class SmartVodPlayer {
     /**
      * تحميل وتشغيل chunk معينة
      */
-    async loadAndPlayChunk(index) {
+    async loadAndPlayChunk(index, globalSeekTime) {
         if (index < 0 || index >= this.chunks.length) return;
-        
-        this.currentChunkIndex = index;
+        // Every switch gets a fresh generation: a late load/seek for an older
+        // target is dropped instead of stealing the element (rapid seek).
+        const gen = ++this.opGen;
         const chunk = this.chunks[index];
+        const pendingSeek = (typeof globalSeekTime === 'number' && isFinite(globalSeekTime))
+            ? globalSeekTime
+            : this.seekPending;
         
         testLog('▶️ Playing chunk ' + (index + 1) + '/' + this.chunks.length, 'info');
         
         // تحميل إذا لم تكن محملة
-        if (!this.loadedChunks[index]) {
+        if (this.loadedChunks[index] === undefined) {
             await this.loadChunk(index);
         }
+        // Superseded while fetching — never apply this target.
+        if (gen !== this.opGen) return;
+        if (this.loadedChunks[index] === undefined) return;
+        this.seekPending = null;
+        this.currentChunkIndex = index;
         
         // إنشاء Blob URL وتشغيل (السابق يُسحَب لتفادي تسرب الذاكرة —
         // كل chunk كانت تترك object URL خلفها).
@@ -1139,18 +1469,27 @@ class SmartVodPlayer {
         const blobUrl = URL.createObjectURL(blob);
         this.currentBlobUrl = blobUrl;
         
-        // حفظ الوقت الحالي إذا كان هناك seek pending
-        const seekTime = this.seekPending;
-        this.seekPending = null;
-        
         this.videoElement.src = blobUrl;
         await this.videoElement.load();
+        // A newer switch may have loaded while this one resolved.
+        if (gen !== this.opGen) {
+            if (this.currentBlobUrl === blobUrl) {
+                try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+                this.currentBlobUrl = null;
+            } else {
+                try { URL.revokeObjectURL(blobUrl); } catch (e) {}
+            }
+            return;
+        }
         
-        // القفز للوقت المحدد داخل الـ chunk
-        if (seekTime !== null) {
+        // القفز للوقت المحدد داخل الـ chunk (global -> chunk-local once)
+        if (pendingSeek !== null && pendingSeek !== undefined) {
             const chunkStartTime = this.getChunkStartTime(index);
-            const timeInChunk = seekTime - chunkStartTime;
-            this.videoElement.currentTime = Math.max(0, timeInChunk);
+            const maxOffset = this.chunkDurations[index] || 0;
+            let timeInChunk = pendingSeek - chunkStartTime;
+            if (!isFinite(timeInChunk) || timeInChunk < 0) timeInChunk = 0;
+            if (maxOffset > 0 && timeInChunk > maxOffset) timeInChunk = maxOffset;
+            try { this.videoElement.currentTime = timeInChunk; } catch (e) {}
         }
         
         // حل مشكلة autoplay policy - البدء muted ثم محاولة unmute
@@ -1175,6 +1514,8 @@ class SmartVodPlayer {
             document.addEventListener('click', playOnInteraction, { once: true });
             document.addEventListener('touchstart', playOnInteraction, { once: true });
         }
+        // The play() promise may resolve after a newer seek took over.
+        if (gen !== this.opGen) return;
         
         // عند انتهاء الـ chunk، انتقل للتالية القابلة للتشغيل (تخطي
         // غير المؤكدة عند توفر المؤكدة — نفس قاعدة البدء).
@@ -1190,16 +1531,34 @@ class SmartVodPlayer {
             }
         }.bind(this);
         
+        // Chunk-switch progress only (which file is now playing), never the
+        // playback position: global seconds/total go through onTimeUpdate.
+        // onChunkLoaded owns the loaded-file count.
         this.onProgress && this.onProgress(index + 1, this.chunks.length);
     }
 
     /**
      * تحميل chunk وتخزينها
      */
-    async loadChunk(index) {
-        if (this.loadedChunks[index]) return; // محملة مسبقاً
+    loadChunk(index) {
+        if (this.loadedChunks[index] !== undefined) return Promise.resolve(); // محملة مسبقاً
+        // In-flight dedupe: a preload window and a seek can request the same
+        // chunk together; both await the SAME fetch.
+        if (this.inFlightLoads[index]) return this.inFlightLoads[index];
+        const self = this;
+        const request = this._loadChunk(index);
+        this.inFlightLoads[index] = request;
+        return request.then(
+            function() { delete self.inFlightLoads[index]; },
+            function(err) { delete self.inFlightLoads[index]; throw err; }
+        );
+    }
 
+    async _loadChunk(index) {
         const chunk = this.chunks[index];
+        if (!chunk || typeof chunk.url !== 'string' || !chunk.url) {
+            throw new Error('Chunk has no URL');
+        }
 
         try {
             const response = await fetch(chunk.url);
@@ -1246,15 +1605,18 @@ class SmartVodPlayer {
         var self = this;
         var lo = Math.max(0, centerIndex - 1);
         var hi = Math.min(this.chunks.length - 1, centerIndex + this.PRELOAD_AHEAD);
-        for (let i = lo; i <= hi; i++) {
-            if (!this.loadedChunks[i]) {
-                this.loadChunk(i).catch(function() {});
-            }
-        }
+        // Move the retention bounds FIRST: a fetch that resolves after this
+        // seek belongs to the new window, and anything evicted stays evicted
+        // (late responses must not restore the old window).
         var keepLo = Math.max(0, centerIndex - this.RETAIN_DISTANCE);
         var keepHi = Math.min(this.chunks.length - 1, centerIndex + this.RETAIN_DISTANCE + 1);
         this.windowLo = keepLo;
         this.windowHi = keepHi;
+        for (let i = lo; i <= hi; i++) {
+            if (this.loadedChunks[i] === undefined) {
+                this.loadChunk(i).catch(function() {});
+            }
+        }
         for (const k in this.loadedChunks) {
             const n = parseInt(k, 10);
             if (n < keepLo || n > keepHi) delete this.loadedChunks[k];
@@ -1267,21 +1629,27 @@ class SmartVodPlayer {
     setupSeekbar() {
         const self = this;
         
-        // تحديث الـ seekbar أثناء التشغيل
+        // تحديث الـ seekbar أثناء التشغيل — ONE global timeline
         this.videoElement.ontimeupdate = function() {
-            const chunkStart = self.getChunkStartTime(self.currentChunkIndex);
-            const currentGlobalTime = chunkStart + self.videoElement.currentTime;
+            const currentGlobalTime = self.getGlobalTime();
+            const total = self.totalDuration;
             
             // تحديث الـ seekbar إذا موجود
             const seekbar = document.getElementById('vodSeekbar');
             if (seekbar) {
-                seekbar.value = (currentGlobalTime / self.totalDuration) * 100;
+                seekbar.value = total > 0
+                    ? Math.max(0, Math.min(100, (currentGlobalTime / total) * 100))
+                    : 0;
             }
             
             // تحديث عرض الوقت
             const timeDisplay = document.getElementById('vodTimeDisplay');
             if (timeDisplay) {
-                timeDisplay.textContent = self.formatTime(currentGlobalTime) + ' / ' + self.formatTime(self.totalDuration);
+                timeDisplay.textContent = self.formatTime(currentGlobalTime) + ' / ' + self.formatTime(total);
+            }
+
+            if (typeof self.onTimeUpdate === 'function') {
+                self.onTimeUpdate(currentGlobalTime, total, self.currentChunkIndex);
             }
         };
     }
@@ -1291,25 +1659,58 @@ class SmartVodPlayer {
      * غير المؤكدة عند توفر المؤكدة).
      */
     seekTo(globalTime) {
+        if (typeof globalTime !== 'number' || !isFinite(globalTime)) return;
         if (globalTime < 0) globalTime = 0;
-        if (globalTime > this.totalDuration) globalTime = this.totalDuration;
+        if (this.totalDuration > 0 && globalTime > this.totalDuration) globalTime = this.totalDuration;
         
         // حساب الـ chunk المناسبة
         let targetChunk = this.getChunkForTime(globalTime);
-        const playable = this.nextPlayableIndex(targetChunk);
-        if (playable !== null) targetChunk = playable;
-        
-        testLog('🎯 Seeking to ' + this.formatTime(globalTime) + ' (chunk ' + (targetChunk + 1) + ')', 'info');
-        
-        if (targetChunk === this.currentChunkIndex) {
-            // نفس الـ chunk - seek مباشر
-            const chunkStart = this.getChunkStartTime(targetChunk);
-            this.videoElement.currentTime = globalTime - chunkStart;
+        let playable = this.nextPlayableIndex(targetChunk);
+        let targetTime;
+        if (playable === null) {
+            // Target is an unconfirmed TAIL with nothing playable after it:
+            // clamp to the END of the previous confirmed chunk (seek-to-end),
+            // never play undecoded bytes and never no-op silently.
+            for (let i = targetChunk - 1; i >= 0; i--) {
+                const e = this.chunks[i];
+                if (!e || (this.hasReadyInfo() && e.ready === false)) continue;
+                playable = i;
+                break;
+            }
+            if (playable === null) return;
+            targetTime = this.getChunkStartTime(playable) + (this.chunkDurations[playable] || 0);
+        } else if (playable !== targetChunk) {
+            // Target landed on an unconfirmed slot: play the next confirmed
+            // chunk from ITS REAL start, never pretending the skipped bytes
+            // exist.
+            targetTime = this.getChunkStartTime(playable);
         } else {
-            // chunk مختلفة - تحميل وتشغيل
-            this.seekPending = globalTime;
+            targetTime = globalTime;
+        }
+        targetChunk = playable;
+        
+        testLog('🎯 Seeking to ' + this.formatTime(targetTime) + ' (chunk ' + (targetChunk + 1) + ')', 'info');
+        
+        if (targetChunk === this.currentChunkIndex && this.videoElement.src) {
+            // نفس الـ chunk - seek مباشر (يحبط أي تبديل قديم معلّق)
+            const chunkStart = this.getChunkStartTime(targetChunk);
+            const maxOffset = this.chunkDurations[targetChunk] || 0;
+            let offset = targetTime - chunkStart;
+            if (!isFinite(offset) || offset < 0) offset = 0;
+            if (maxOffset > 0 && offset > maxOffset) offset = maxOffset;
+            this.opGen++;
+            this.seekPending = null;
+            try { this.videoElement.currentTime = offset; } catch (e) {}
+            try {
+                const p = this.videoElement.play();
+                if (p && typeof p.catch === 'function') p.catch(function() {});
+            } catch (e) {}
+        } else {
+            // chunk مختلفة - تحميل وتشغيل. The generation token + recentered
+            // window make late responses from an older seek harmless.
+            this.seekPending = targetTime;
             this.ensureWindow(targetChunk);
-            this.loadAndPlayChunk(targetChunk).catch(function(err) {
+            this.loadAndPlayChunk(targetChunk, targetTime).catch(function(err) {
                 this.onError && this.onError(err);
             }.bind(this));
         }
@@ -1343,11 +1744,44 @@ class SmartVodPlayer {
         if (this.verifiedStarts && this.verifiedStarts[chunkIndex] !== undefined) {
             return this.verifiedStarts[chunkIndex];
         }
+        // Anchor on the nearest VERIFIED earlier start, then add only the
+        // real intervening durations. Legacy lists (no verified starts at all)
+        // accumulate their own real per-entry durations.
+        for (let i = chunkIndex - 1; i >= 0; i--) {
+            if (this.verifiedStarts && this.verifiedStarts[i] !== undefined) {
+                let anchored = this.verifiedStarts[i];
+                for (let j = i; j < chunkIndex; j++) anchored += this.chunkDurations[j] || 0;
+                return anchored;
+            }
+        }
         let start = 0;
         for (let i = 0; i < chunkIndex; i++) {
             start += this.chunkDurations[i] || 0;
         }
         return start;
+    }
+
+    /** One global position: verified chunk start + current offset (seconds). */
+    getGlobalTime() {
+        if (typeof this.currentChunkIndex !== 'number' || this.currentChunkIndex < 0
+            || this.currentChunkIndex >= this.chunks.length) return 0;
+        const offset = (this.videoElement && typeof this.videoElement.currentTime === 'number'
+            && isFinite(this.videoElement.currentTime)) ? this.videoElement.currentTime : 0;
+        return Math.max(0, this.getChunkStartTime(this.currentChunkIndex) + offset);
+    }
+
+    /** Recording length from the index timeline, never element.duration. */
+    getGlobalDuration() {
+        return this.totalDuration;
+    }
+
+    async togglePlayPause() {
+        const v = this.videoElement;
+        if (!v) return;
+        try {
+            if (v.paused) await v.play();
+            else v.pause();
+        } catch (e) { /* autoplay policy / detached element */ }
     }
 
     /**
@@ -1534,6 +1968,8 @@ class SmartVodPlayer {
      * إيقاف المشغل
      */
     stop() {
+        this.opGen++;
+        this.seekPending = null;
         this.videoElement.pause();
         this.videoElement.src = '';
         this.videoElement.onended = null;
@@ -1552,6 +1988,7 @@ class SmartVodPlayer {
     destroy() {
         this.stop();
         this.loadedChunks = {};
+        this.inFlightLoads = {};
         this.chunks = [];
     }
 }

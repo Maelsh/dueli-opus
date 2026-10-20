@@ -68,7 +68,56 @@ describe('R4-CHUNK-PLAYER-UX-1 live-edge UI contract', () => {
         expect(page).toContain('window.LiveSequentialPlayer');
     });
 
-    it('5. live guest page renders the viewer + edge buttons with parseable scripts', async () => {
+    it('5. one global timeline surface for LIVE + VOD, no technical chunk counters', () => {
+        const page = readSrc(PAGE);
+        // LIVE progress/seek controls exist on the SAME recording timeline.
+        expect(page).toContain('id="embeddedLiveControls"');
+        expect(page).toContain('id="embeddedLiveSeekbar"');
+        expect(page).toContain('id="embeddedLiveTimeDisplay"');
+        expect(page).toContain('id="embeddedSeekbar"');
+        expect(page).toContain('id="embeddedTimeDisplay"');
+        // Both controls speak global player time, never element.duration.
+        expect(page).toContain('getGlobalDuration');
+        expect(page).toContain('getAvailableDuration');
+        expect(page).toContain('getGlobalTime');
+        expect(page).toContain('isBehindLive');
+        expect(page).toContain('jumpToLive');
+        // The old raw counter is gone, and no state paints a media:* token.
+        expect(page).not.toContain('embeddedChunkInfo');
+        expect(page).not.toMatch(/textContent\s*=\s*['"]media:/);
+        expect(page).toContain('playerStateLabel(state)');
+        // Completed recordings never keep LIVE chrome or a false LIVE chip.
+        expect(page).toContain('liveChip.classList.add(\'hidden\')');
+        expect(page).toContain('liveControls.classList.add(\'hidden\')');
+        // Timed comments consume the same global clock as the controls.
+        expect(page).toContain('syncTimedComments(globalTime)');
+    });
+
+    it('6. player state + replay + live timeline labels translated ar/en', () => {
+        for (const key of [
+            'replay', 'live_timeline',
+            'player_state_waiting', 'player_state_playing', 'player_state_processing',
+            'player_state_error', 'player_state_ready', 'player_state_unavailable',
+        ] as const) {
+            const arText = (translations.ar as Record<string, unknown>)[key];
+            const enText = (translations.en as Record<string, unknown>)[key];
+            expect(typeof arText, `ar.${key}`).toBe('string');
+            expect(typeof enText, `en.${key}`).toBe('string');
+            expect((arText as string).length, `ar.${key} non-empty`).toBeGreaterThan(0);
+            expect((enText as string).length, `en.${key} non-empty`).toBeGreaterThan(0);
+            expect(arText, `${key} translated`).not.toBe(enText);
+        }
+    });
+
+    it('7. emitted bundle exposes ONE shared player state label (never media:*)', async () => {
+        const { getClientSharedScript } = await import('../../src/modules/pages/live/scripts/client/shared');
+        const src = getClientSharedScript('en');
+        expect(src).toContain('function playerStateLabel');
+        expect(src).not.toContain('media:waiting');
+        expect(src).not.toContain('media:playing');
+    });
+
+    it('8. live guest page renders the viewer + edge buttons with parseable scripts', async () => {
         // Render gate: a template/JS slip here kills the whole inline
         // script in the browser (viewer never boots, no state set).
         const db = new SqliteD1();

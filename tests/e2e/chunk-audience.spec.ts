@@ -239,7 +239,8 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
         const vs = ['embeddedVideoPlayer1', 'embeddedVideoPlayer2']
           .map((id) => document.getElementById(id) as HTMLVideoElement | null)
           .filter((v) => !!v) as HTMLVideoElement[];
-        const info = document.getElementById('embeddedChunkInfo');
+        const p: any = typeof embeddedCurrentPlayer !== 'undefined' ? embeddedCurrentPlayer : null;
+        const controls = document.getElementById('embeddedLiveControls');
         let frames = 0;
         let readyState = -1;
         let width = 0;
@@ -254,14 +255,29 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
           paused = paused === null ? v.paused : (paused && v.paused);
         }
         return {
-          chunkInfo: info?.textContent || '',
+          timeline: (document.getElementById('embeddedLiveTimeDisplay')?.textContent || '').trim(),
+          timelineVisible: !!controls && !controls.classList.contains('hidden'),
+          stateLabel: (document.getElementById('embeddedStateLabel')?.textContent || '').trim(),
+          chip: (document.getElementById('embeddedLiveChip')?.textContent || '').trim(),
+          globalTime: p && typeof p.getGlobalTime === 'function' ? p.getGlobalTime() : null,
+          available: p && typeof p.getAvailableDuration === 'function' ? p.getAvailableDuration() : null,
+          behindLive: p && typeof p.isBehindLive === 'function' ? p.isBehindLive() : null,
+          legacyCounterPresent: !!document.getElementById('embeddedChunkInfo'),
           readyState, width, frames, muted,
           volume: 1,
           paused,
         };
       });
       evidence.liveAudience = liveInfo;
-      expect(/\d+/.test(liveInfo.chunkInfo), 'chunk counter advances').toBe(true);
+      // ONE global timeline, translated state, no legacy chunk counter.
+      expect(liveInfo.timeline, 'live timeline clock').toMatch(/^\d+:\d\d \/ \d+:\d\d$/);
+      expect(liveInfo.timelineVisible, 'live timeline visible').toBe(true);
+      expect(liveInfo.stateLabel, 'localized player state').not.toContain('media:');
+      expect(liveInfo.stateLabel.length, 'state label not empty').toBeGreaterThan(0);
+      expect(liveInfo.chip, 'live chip is explicit').toMatch(/live|مباشر/i);
+      expect(liveInfo.globalTime, 'global position exposed').not.toBeNull();
+      expect(liveInfo.available, 'available recording length').toBeGreaterThan(0);
+      expect(liveInfo.legacyCounterPresent, 'technical chunk counter removed').toBe(false);
       expect(liveInfo.readyState, 'live readyState').toBeGreaterThanOrEqual(2);
       expect(liveInfo.width, 'composite width proves BOTH competitors (1280 canvas)').toBe(1280);
       expect(liveInfo.frames, 'decoded live frames').toBeGreaterThan(0);
@@ -324,14 +340,28 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
       await expect.poll(async () => vp.evaluate(mediaState), { timeout: 60000 }).toBe('ready');
       const totalChunks = (afterEnd.chunks as number[]).length;
       const probe = async (fraction: number, label: string) => {
-        // Default 10s/chunk timeline (stub omits durations — honest fallback).
-        const target = Math.max(0, (10 * totalChunks * fraction) - 1);
-        await vp.evaluate((t: number) => embeddedCurrentPlayer?.seekTo(t), target);
+        // The recording index timeline is the only length source; the stub
+        // omits durations so this exercises the honest legacy fallback too.
+        const target = await vp.evaluate((f: number) => {
+          const p: any = typeof embeddedCurrentPlayer !== 'undefined' ? embeddedCurrentPlayer : null;
+          const total = p && typeof p.getGlobalDuration === 'function' ? p.getGlobalDuration() : 0;
+          return total > 0 ? total * f : 0;
+        }, fraction);
+        await vp.evaluate((t: number) => {
+          const p: any = typeof embeddedCurrentPlayer !== 'undefined' ? embeddedCurrentPlayer : null;
+          if (p && typeof p.seekTo === 'function') p.seekTo(t);
+        }, target);
         await vp.waitForTimeout(2500);
         const read = () => vp.evaluate(() => {
           const v = document.getElementById('embeddedVideoPlayer1') as HTMLVideoElement | null;
+          const p: any = typeof embeddedCurrentPlayer !== 'undefined' ? embeddedCurrentPlayer : null;
           const q = v && (v as any).getVideoPlaybackQuality ? (v as any).getVideoPlaybackQuality() : {};
-          return { currentTime: v?.currentTime ?? -1, frames: q.totalVideoFrames || 0 };
+          return {
+            currentTime: v?.currentTime ?? -1,
+            globalTime: p && typeof p.getGlobalTime === 'function' ? p.getGlobalTime() : null,
+            total: p && typeof p.getGlobalDuration === 'function' ? p.getGlobalDuration() : null,
+            frames: q.totalVideoFrames || 0,
+          };
         });
         let m = await read();
         if (m.frames === 0) {
@@ -368,7 +398,7 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
           } catch { /* analyser unavailable — report 0 */ }
           return peak;
         });
-        return { label, ...m, audioPeak };
+        return { label, target, ...m, audioPeak };
       };
       // NOTE: evaluate callbacks must be CSP-safe functions (no strings).
       const beginning = await probe(0.02, 'beginning');
@@ -377,8 +407,14 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
       evidence.vod = { beginning, middle, end, totalChunks };
       for (const m of [beginning, middle, end]) {
         expect((m as any).currentTime, `${(m as any).label} currentTime`).toBeGreaterThanOrEqual(0);
+        expect((m as any).globalTime, `${(m as any).label} global position`).not.toBeNull();
+        expect((m as any).total, `${(m as any).label} global duration`).toBeGreaterThan(0);
         expect((m as any).frames, `${(m as any).label} decoded frames`).toBeGreaterThan(0);
       }
+      // Beginning→middle→end must advance on the GLOBAL timeline, not reset
+      // to a per-chunk currentTime.
+      expect((beginning as any).globalTime, 'middle ahead of beginning').toBeLessThan((middle as any).globalTime);
+      expect((middle as any).globalTime, 'end ahead of middle').toBeLessThan((end as any).globalTime);
       // Audio, two levels (honest split):
       // (a) BYTE level (deterministic): a stored chunk carries a 'soun' track
       //     with non-trivial media payload — the recording mixer works.

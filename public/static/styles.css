@@ -2651,6 +2651,9 @@
   .accent-purple-600 {
     accent-color: var(--color-purple-600);
   }
+  .accent-red-500 {
+    accent-color: var(--color-red-500);
+  }
   .opacity-0 {
     opacity: 0%;
   }
