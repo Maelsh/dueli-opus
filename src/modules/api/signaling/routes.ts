@@ -180,10 +180,11 @@ async function handleSignal(
     const model = new SseEventLogModel(c.env.DB);
 
     if (kind === 'poll') {
-        const since = Number(body.since ?? 0);
+        const sinceRaw = Number(body.since ?? 0);
+        const since = Number.isFinite(sinceRaw) && sinceRaw > 0 ? sinceRaw : 0;
         let events: SseEventLog[];
         try {
-            events = await model.getAfter(channel, Number.isFinite(since) && since > 0 ? since : 0, 50);
+            events = await model.getAfter(channel, since, 50);
         } catch {
             return serviceUnavailable(c, lang);
         }
@@ -194,6 +195,12 @@ async function handleSignal(
                 peer: gate.peer,
                 competition_id: gate.competitionId,
                 signals: visibleSignals(events, null, gate.peer),
+                // FV20-SIG: the cursor is the highest event id this bounded read
+                // actually scanned — including presence/other-peer events that
+                // visibleSignals filters out. Without it, a full 50-event page
+                // of filtered events pins the client to the same `since` forever
+                // and a later signal can never arrive.
+                cursor: events.length > 0 ? events[events.length - 1].id : since,
             },
         });
     }
@@ -563,12 +570,13 @@ signalingRoutes.get('/viewer/poll', authMiddleware({ required: true }), async (c
         return c.json({ success: false, error: t('forbidden', lang), code: 'viewer_required' }, 403);
     }
 
-    const since = Number(c.req.query('since') ?? 0);
+    const sinceRaw = Number(c.req.query('since') ?? 0);
+    const since = Number.isFinite(sinceRaw) && sinceRaw > 0 ? sinceRaw : 0;
     let events: SseEventLog[];
     try {
         events = await new SseEventLogModel(c.env.DB).getAfter(
             SignalingSessionService.channelFor(gate.competitionId),
-            Number.isFinite(since) && since > 0 ? since : 0,
+            since,
             50
         );
     } catch {
@@ -582,6 +590,9 @@ signalingRoutes.get('/viewer/poll', authMiddleware({ required: true }), async (c
             peer: gate.peer,
             competition_id: gate.competitionId,
             signals: visibleSignals(events, gate.peer, gate.peer),
+            // FV20-SIG: same cursor contract as participant /poll — advance over
+            // every scanned event, not only the ones addressed to this viewer.
+            cursor: events.length > 0 ? events[events.length - 1].id : since,
         },
     });
 });

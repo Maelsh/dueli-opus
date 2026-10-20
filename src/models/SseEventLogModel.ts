@@ -116,6 +116,22 @@ export class SseEventLogModel extends BaseModel<SseEventLog> {
     }
 
     /**
+     * FV20-REPLAY: current high-water mark of a channel.
+     * A fresh SSE subscription starts here instead of at 0 — the persisted
+     * log exists for reconnect catch-up (Last-Event-Id), not for replaying
+     * yesterday's notifications as new toasts on every page load.
+     * Uses the existing (channel, id) index; no history scan.
+     */
+    async getLatestId(channel: string): Promise<number> {
+        const row = await this.db.prepare(`
+            SELECT COALESCE(MAX(id), 0) AS id FROM ${this.tableName}
+            WHERE channel = ?
+        `).bind(channel).first<{ id: number }>();
+
+        return row && Number.isFinite(Number(row.id)) ? Number(row.id) : 0;
+    }
+
+    /**
      * 7.B: read the newest events of a channel (newest first).
      * Used for live session presence/state — same table, no new storage.
      */
