@@ -49,6 +49,13 @@ export interface IndexMetadata {
     gaps: number[];
     total_ready_ms: number;
     finalized: boolean;
+    /**
+     * A28-TIME-3: when the final marker was written. `/end` writes the marker
+     * BEFORE the authorized drain tail is published, so finalized=true does
+     * not prove the snapshot already contains the tail. The client uses this
+     * server timestamp to bound its post-finalization recheck window.
+     */
+    finalized_at: string | null;
 }
 
 /**
@@ -94,7 +101,8 @@ export function mergePlaylistWithIndex(
     proxy: ProxyChunk[],
     indexRows: RecordingChunk[],
     base: string,
-    finalized: boolean
+    finalized: boolean,
+    finalizedAt: string | null = null
 ): { chunks: ServedChunk[]; metadata: IndexMetadata } {
     const bySequence = new Map<number, RecordingChunk>();
     for (const row of indexRows) {
@@ -191,6 +199,7 @@ export function mergePlaylistWithIndex(
             gaps,
             total_ready_ms: cursor,
             finalized,
+            finalized_at: finalized ? finalizedAt : null,
         },
     };
 }
