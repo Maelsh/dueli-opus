@@ -54,10 +54,47 @@ export interface ChunkUploaderConfig {
      * platform-side regardless of client.
      */
     lease?: RecordingLeaseHandle;
-    /** Fired once when this session loses the lease (takeover/release). */
-    onLeaseLost?: (info: { generation: number }) => void;
+    /**
+     * A28-LEASE: fired ONCE when this session stops being the recorder. The
+     * `reason` distinguishes an official end/clean release (the authorized
+     * drain tail keeps uploading) from a real takeover (fenced).
+     */
+    onLeaseLost?: (info: LeaseLossInfo) => void;
     /** Heartbeat period while holding the lease (default 10000ms). */
     heartbeatIntervalMs?: number;
+    /** A28-LEASE: first retry delay while ownership is unknown (default 2000ms). */
+    leaseRetryBaseMs?: number;
+    /** A28-LEASE: backoff ceiling while ownership is unknown (default 30000ms). */
+    leaseRetryMaxMs?: number;
+    /** A28-LEASE: bounded retries before the recorder stops honestly (default 6). */
+    maxLeaseRetries?: number;
+}
+
+/** A28-LEASE: why recording stopped (never collapsed into one state). */
+export interface LeaseLossInfo {
+    generation: number;
+    /**
+     * takeover   → another holder/generation owns the lease (fenced);
+     * ended      → the competition officially ended; drain tail survives;
+     * released   → clean handover by this holder; drain tail survives;
+     * unverified → the bounded retry window expired without server proof.
+     */
+    reason: 'takeover' | 'ended' | 'released' | 'unverified';
+}
+
+/**
+ * A28-LEASE: explicit ownership outcomes. UNKNOWN-TRANSIENT is NOT a loss —
+ * uploads pause (nothing is published while ownership is unproven) and the
+ * bounded queue is preserved until the server re-verifies.
+ */
+export type LeaseStatus = 'HELD' | 'UNKNOWN-TRANSIENT' | 'EXPIRED' | 'LOST-TAKEN-OVER';
+
+export interface LeaseBeatAnswer {
+    held: boolean;
+    generation: number;
+    reason?: 'transient' | 'expired' | 'released' | 'ended' | 'lost';
+    expires_in_seconds?: number;
+    draining?: boolean;
 }
 
 /**
@@ -73,7 +110,7 @@ export interface RecordingLeaseHandle {
         | { ok: true; generation: number; took_over: boolean }
         | { ok: false; reason: 'held' | 'unavailable' | 'error'; generation?: number; expires_in_seconds?: number }
     >;
-    heartbeat(generation: number): Promise<{ held: boolean; generation: number }>;
+    heartbeat(generation: number): Promise<LeaseBeatAnswer>;
     release(): Promise<void>;
 }
 
@@ -142,7 +179,7 @@ export class PlatformRecordingLease implements RecordingLeaseHandle {
         }
     }
 
-    async heartbeat(generation: number): Promise<{ held: boolean; generation: number }> {
+    async heartbeat(generation: number): Promise<LeaseBeatAnswer> {
         try {
             const res = await fetch('/api/chunks/lease/heartbeat', {
                 method: 'POST',
@@ -150,14 +187,32 @@ export class PlatformRecordingLease implements RecordingLeaseHandle {
                 body: JSON.stringify({ competition_id: this.competitionId, holder_nonce: this.holderNonce, generation }),
             });
             const data = await res.json().catch(() => ({})) as {
-                success?: boolean; data?: { held?: boolean; generation?: number };
+                success?: boolean; data?: {
+                    held?: boolean; generation?: number;
+                    reason?: LeaseBeatAnswer['reason']; expires_in_seconds?: number; draining?: boolean;
+                };
             };
             if (res.ok && data?.success) {
-                return { held: data.data?.held === true, generation: data.data?.generation ?? generation };
+                const answer: LeaseBeatAnswer = {
+                    held: data.data?.held === true,
+                    generation: data.data?.generation ?? generation,
+                    reason: data.data?.reason,
+                    expires_in_seconds: data.data?.expires_in_seconds,
+                    draining: data.data?.draining,
+                };
+                // A28-LEASE: an HTTP-OK heartbeat that carries NO verdict
+                // (legacy/partial server) is a TRANSIENT network-class answer,
+                // never a takeover: the server did not say we lost the row.
+                if (answer.held === false && answer.reason === undefined) answer.reason = 'transient';
+                return answer;
             }
-            return { held: false, generation };
+            // A28-LEASE: non-2xx (503 lease store unavailable, 5xx, proxy
+            // HTML) says NOTHING about ownership — report it as transient so
+            // the client pauses instead of aborting a healthy recording.
+            return { held: false, generation, reason: 'transient' };
         } catch {
-            return { held: false, generation };
+            // Network failure/timeout: ownership is UNKNOWABLE here.
+            return { held: false, generation, reason: 'transient' };
         }
     }
 
@@ -178,6 +233,19 @@ export interface ChunkUploadStats {
     dropped: number;
     failed: number;
     nextNumber: number;
+    /** A28-LEASE: chunks discarded because the lease was lost (fenced). */
+    fenced: number;
+}
+
+/** Public lease state (A28-LEASE) — honest, never a collapsed boolean. */
+export interface ChunkUploadLeaseState {
+    mode: 'off' | 'enforced';
+    active: boolean;
+    generation: number;
+    unknown: boolean;
+    draining: boolean;
+    status: LeaseStatus;
+    fenced: number;
 }
 
 /**
@@ -230,15 +298,42 @@ export class ChunkUploader {
     }
 
     /**
-     * R4-RELEASE-RECOVERY-C: lease lifecycle (acquire → heartbeat →
-     * expiry/takeover → reconnect → release). No-op when no lease handle is
-     * configured (lease off — pre-cutover behavior unchanged).
+     * A28-LEASE: lease lifecycle (acquire → heartbeat → expiry/takeover →
+     * reconnect → release). No-op when no lease handle is configured (lease
+     * off — pre-cutover behavior unchanged).
+     *
+     * The four outcomes are DISTINCT and observable:
+     *  - HELD               → uploads flow;
+     *  - UNKNOWN-TRANSIENT  → ownership unproven: uploads pause, queue kept,
+     *                         bounded backoff re-verifies (never a takeover);
+     *  - EXPIRED            → same holder lost liveness: bounded re-acquire
+     *                         with server verification, then append at the
+     *                         new authorized generation;
+     *  - LOST-TAKEN-OVER    → another holder/generation owns the row: stop
+     *                         once, fence the pending queue, refuse finalize.
+     * A released/ended row is a clean end: the authorized drain tail keeps
+     * uploading under the released generation (no false takeover).
      */
     private leaseGeneration = 0;
     private leaseActive = false;
     private leaseMode: 'off' | 'enforced' = 'off';
     private leaseTimer: ReturnType<typeof setInterval> | null = null;
     private leaseLostFired = false;
+    private leaseStatus: LeaseStatus = 'HELD';
+    private leaseUnknown = false;
+    private leaseDraining = false;
+    private leaseFencedCount = 0;
+    private leaseRetryTimer: ReturnType<typeof setTimeout> | null = null;
+    private leaseRetryAttempt = 0;
+    /**
+     * Response-epoch guard: bumped on every re-acquire and loss so a slow
+     * heartbeat that resolves afterwards can never rewind a newer generation
+     * or resurrect a fenced session.
+     */
+    private leaseEpoch = 0;
+    /** In-flight fence: bumped on loss so abandoned uploads are not counted. */
+    private uploadFence = 0;
+    private activeUploadAbort: (() => void) | null = null;
 
     /** Claim the recorder lease before recording. Returns false when held. */
     async acquireLease(): Promise<boolean> {
@@ -247,14 +342,37 @@ export class ChunkUploader {
         this.leaseMode = 'enforced';
         const r = await handle.acquire();
         if (r.ok) {
-            this.leaseGeneration = r.generation;
-            this.leaseActive = true;
-            this.leaseLostFired = false;
-            this.startHeartbeat();
+            this.applyHeld(r.generation);
             return true;
         }
         this.leaseActive = false;
+        if (r.reason === 'held') {
+            // Someone else owns the row: honest takeover state, no heartbeat.
+            this.leaseStatus = 'LOST-TAKEN-OVER';
+            this.leaseUnknown = false;
+            this.leaseDraining = false;
+            this.stopHeartbeat();
+            this.stopRetry();
+        } else {
+            // Store unavailable/error: ownership is UNKNOWN, not lost.
+            this.enterUnknown();
+        }
         return false;
+    }
+
+    /** Adopt a proven (holder, generation) and resume the pipeline. */
+    private applyHeld(generation: number): void {
+        this.leaseEpoch++;
+        this.leaseGeneration = generation;
+        this.leaseActive = true;
+        this.leaseUnknown = false;
+        this.leaseDraining = false;
+        this.leaseStatus = 'HELD';
+        this.leaseLostFired = false;
+        this.leaseRetryAttempt = 0;
+        this.stopRetry();
+        this.startHeartbeat();
+        void this.pump();
     }
 
     private startHeartbeat(): void {
@@ -270,22 +388,183 @@ export class ChunkUploader {
         }
     }
 
-    /** One heartbeat tick: a lost lease stops uploads and fires onLeaseLost. */
+    private stopRetry(): void {
+        if (this.leaseRetryTimer !== null) {
+            clearTimeout(this.leaseRetryTimer);
+            this.leaseRetryTimer = null;
+        }
+    }
+
+    /**
+     * UNKNOWN-TRANSIENT entry: never a loss. Uploads pause (see canUpload)
+     * and a bounded exponential retry re-verifies ownership server-side.
+     */
+    private enterUnknown(): void {
+        if (this.leaseStatus === 'LOST-TAKEN-OVER') return;
+        this.leaseUnknown = true;
+        this.leaseDraining = false;
+        this.leaseStatus = 'UNKNOWN-TRANSIENT';
+        if (this.leaseRetryAttempt >= (this.config.maxLeaseRetries ?? 6)) {
+            // The bounded window expired without server proof: stop honestly
+            // instead of recording forever with unverifiable ownership.
+            this.loseLease('unverified');
+            return;
+        }
+        this.scheduleLeaseRetry();
+    }
+
+    private scheduleLeaseRetry(): void {
+        if (this.leaseRetryTimer !== null) return;
+        const base = this.config.leaseRetryBaseMs ?? 2000;
+        const max = this.config.leaseRetryMaxMs ?? 30000;
+        const delay = Math.min(max, base * Math.pow(2, this.leaseRetryAttempt));
+        this.leaseRetryAttempt++;
+        this.leaseRetryTimer = setTimeout(() => {
+            this.leaseRetryTimer = null;
+            void this.beatLease();
+        }, delay);
+    }
+
+    /**
+     * Terminal loss: stop once, fence the pending queue (counted, never
+     * silently dropped), never upload again, refuse finalize.
+     */
+    private loseLease(reason: LeaseLossInfo['reason'], generation?: number): void {
+        if (this.leaseStatus === 'LOST-TAKEN-OVER') return;
+        this.leaseEpoch++;
+        this.uploadFence++;
+        if (typeof generation === 'number' && isFinite(generation) && generation > this.leaseGeneration) {
+            this.leaseGeneration = generation;
+        }
+        this.leaseActive = false;
+        this.leaseUnknown = false;
+        this.leaseDraining = false;
+        this.leaseStatus = 'LOST-TAKEN-OVER';
+        this.stopHeartbeat();
+        this.stopRetry();
+        const abandoned = this.queue.length;
+        this.queue.length = 0;
+        this.leaseFencedCount += abandoned;
+        if (this.activeUploadAbort) {
+            try { this.activeUploadAbort(); } catch { /* already settled */ }
+            this.activeUploadAbort = null;
+        }
+        if (!this.leaseLostFired) {
+            this.leaseLostFired = true;
+            this.config.onLeaseLost?.({ generation: this.leaseGeneration, reason });
+        }
+    }
+
+    /**
+     * Clean end/handover: the lease is no longer held but the recording may
+     * still have an authorized final flush. Keep uploading that bounded tail
+     * under the released generation, and never report a takeover.
+     */
+    private enterDrain(reason: 'released' | 'ended', generation: number): void {
+        if (this.leaseStatus === 'LOST-TAKEN-OVER') return;
+        this.leaseEpoch++;
+        if (Number.isFinite(generation) && generation > this.leaseGeneration) {
+            this.leaseGeneration = generation;
+        }
+        this.leaseActive = true;
+        this.leaseUnknown = false;
+        this.leaseDraining = true;
+        this.leaseStatus = 'EXPIRED';
+        this.leaseRetryAttempt = 0;
+        this.stopRetry();
+        this.stopHeartbeat();
+        if (reason === 'ended' && !this.leaseLostFired) {
+            this.leaseLostFired = true;
+            this.config.onLeaseLost?.({ generation: this.leaseGeneration, reason: 'ended' });
+        }
+        void this.pump();
+    }
+
+    /** One heartbeat tick — outcome-specific, never a collapsed boolean. */
     async beatLease(): Promise<boolean> {
         const handle = this.config.lease;
-        if (!handle || this.leaseMode !== 'enforced' || !this.leaseActive) return this.leaseActive;
-        const r = await handle.heartbeat(this.leaseGeneration);
-        if (!r.held) {
-            this.leaseActive = false;
-            this.stopHeartbeat();
-            this.queue.length = 0;
-            if (!this.leaseLostFired) {
-                this.leaseLostFired = true;
-                this.config.onLeaseLost?.({ generation: r.generation });
+        if (!handle || this.leaseMode !== 'enforced') return this.leaseActive;
+        if (this.leaseStatus === 'LOST-TAKEN-OVER') return false;
+        if (this.leaseDraining) return true; // drain-only: nothing to refresh
+        if (!this.leaseActive && !this.leaseUnknown) return false;
+        if (this.leaseUnknown && !this.leaseActive) {
+            // A retry while still unproven: re-verify first.
+            return this.tryReacquire();
+        }
+
+        const epoch = this.leaseEpoch;
+        const generation = this.leaseGeneration;
+        const answer = await handle.heartbeat(generation);
+        // A re-acquire/loss landed while this beat was in flight: the newer
+        // state wins, the stale answer is discarded (no generation rewind).
+        // (Every terminal/re-acquire transition bumps leaseEpoch.)
+        if (epoch !== this.leaseEpoch) {
+            return this.leaseStatus === 'HELD' || this.leaseDraining;
+        }
+
+        if (answer.held) {
+            if (Number.isFinite(answer.generation) && answer.generation > this.leaseGeneration) {
+                this.leaseGeneration = answer.generation;
             }
+            if (this.leaseUnknown) {
+                this.leaseUnknown = false;
+                this.leaseStatus = 'HELD';
+                this.leaseRetryAttempt = 0;
+                this.stopRetry();
+                void this.pump();
+            }
+            return true;
+        }
+
+        switch (answer.reason) {
+            case 'expired':
+                return this.tryReacquire();
+            case 'released':
+                this.enterDrain('released', answer.generation);
+                return true;
+            case 'ended':
+                this.enterDrain('ended', answer.generation);
+                return true;
+            case 'lost':
+                this.loseLease('takeover', answer.generation);
+                return false;
+            case 'transient':
+            default:
+                // Legacy fakes/older servers answer {held:false} with no
+                // reason on a takeover: treat only that shape as lost, and
+                // everything explicitly transient as unknown.
+                if (answer.reason === undefined) {
+                    this.loseLease('takeover', answer.generation);
+                    return false;
+                }
+                this.enterUnknown();
+                return true;
+        }
+    }
+
+    /**
+     * EXPIRED: bounded re-acquire with server verification. A real other
+     * holder is a loss; store/network failure keeps the session UNKNOWN
+     * (queue preserved) instead of pretending a takeover.
+     */
+    private async tryReacquire(): Promise<boolean> {
+        const handle = this.config.lease;
+        if (!handle || this.leaseMode !== 'enforced') return false;
+        if (this.leaseStatus === 'LOST-TAKEN-OVER') return false;
+        const epoch = this.leaseEpoch;
+        const r = await handle.acquire();
+        if (epoch !== this.leaseEpoch) return this.leaseStatus === 'HELD' || this.leaseDraining;
+        if (r.ok) {
+            // Our own session re-acquired (possibly at a bumped generation):
+            // resume appends, never report a takeover.
+            this.applyHeld(r.generation);
+            return true;
+        }
+        if (r.reason === 'held') {
+            this.loseLease('takeover', r.generation);
             return false;
         }
-        this.leaseGeneration = r.generation;
+        this.enterUnknown();
         return true;
     }
 
@@ -299,12 +578,31 @@ export class ChunkUploader {
     /** Voluntary handover (clean stop / end). Best-effort. */
     async releaseLease(): Promise<void> {
         this.stopHeartbeat();
+        this.stopRetry();
         this.leaseActive = false;
+        this.leaseUnknown = false;
+        this.leaseDraining = false;
+        this.leaseLostFired = true; // an explicit release is not a loss
+        if (this.leaseStatus !== 'LOST-TAKEN-OVER') this.leaseStatus = 'EXPIRED';
         try { await this.config.lease?.release(); } catch { /* best-effort */ }
     }
 
-    getLeaseState(): { mode: 'off' | 'enforced'; active: boolean; generation: number } {
-        return { mode: this.leaseMode, active: this.leaseActive, generation: this.leaseGeneration };
+    getLeaseState(): ChunkUploadLeaseState {
+        return {
+            mode: this.leaseMode,
+            active: this.leaseActive,
+            generation: this.leaseGeneration,
+            unknown: this.leaseUnknown,
+            draining: this.leaseDraining,
+            status: this.leaseStatus,
+            fenced: this.leaseFencedCount,
+        };
+    }
+
+    /** Uploads are allowed only while ownership is proven (or draining). */
+    private canUpload(): boolean {
+        if (this.leaseMode !== 'enforced') return true;
+        return this.leaseActive && !this.leaseUnknown;
     }
 
     /**
@@ -449,10 +747,16 @@ export class ChunkUploader {
         this.pumping = true;
         try {
             while (this.queue.length > 0) {
+                // A28-LEASE: nothing is published while ownership is unproven
+                // (UNKNOWN-TRANSIENT) or fenced out (LOST). The queue stays
+                // bounded and intact until the server re-verifies.
+                if (!this.canUpload()) break;
                 const item = this.queue[0];
+                const fence = this.uploadFence;
                 item.attempts++;
                 try {
                     const payload = await this.preparePayload(item.blob);
+                    if (fence !== this.uploadFence) continue;
                     if (payload === null) {
                         // Pure-init first blob held as the init source: no
                         // number consumed, no failure counted — numbering
@@ -465,11 +769,22 @@ export class ChunkUploader {
                     // and a failed chunk retries with the SAME number
                     // (idempotent server overwrite) — dense, no gaps.
                     if (item.number < 0) item.number = this.nextNumber++;
+                    const genAtUpload = this.leaseGeneration;
                     await this.doUpload(payload, item.number);
+                    // The lease was lost while this upload was in flight: the
+                    // result is abandoned (never counted, never renumbered).
+                    if (fence !== this.uploadFence) continue;
+                    // A re-acquire bumped the generation: the key issued before
+                    // it is stale server-side, so this chunk must retry under
+                    // the current generation (same number, idempotent).
+                    if (this.leaseMode === 'enforced' && this.leaseGeneration !== genAtUpload) {
+                        throw new Error('lease generation changed during upload');
+                    }
                     this.queue.shift();
                     this.uploadedCount++;
                     this.config.onChunkUploaded?.(item.number);
                 } catch (error) {
+                    if (fence !== this.uploadFence || this.leaseStatus === 'LOST-TAKEN-OVER') continue;
                     if (item.attempts >= this.maxAttempts) {
                         this.queue.shift();
                         this.failedChunks++;
@@ -541,6 +856,12 @@ export class ChunkUploader {
                 competition_id: this.config.competitionId,
                 chunk_index: chunkNumber,
                 extension: this.extension,
+                // A28-LEASE: bind key issuance to THIS tab/session holder, so
+                // a stale tab can never obtain a key under a successor's
+                // generation (the server compares it to the lease row).
+                ...(this.config.lease?.holderNonce
+                    ? { holder_nonce: this.config.lease.holderNonce }
+                    : {}),
             }),
         });
         const data = await res.json().catch(() => ({})) as {
@@ -554,7 +875,9 @@ export class ChunkUploader {
     }
 
     /**
-     * Perform the actual upload
+     * Perform the actual upload. A28-LEASE: the request carries an abort
+     * handle so a mid-flight lease loss can cancel it; either way the result
+     * is fenced by the caller and never counted after a loss.
      */
     private async doUpload(blob: Blob, chunkNumber: number): Promise<void> {
         // Mandatory authorization first (fail-closed — see fetchChunkKey).
@@ -570,11 +893,17 @@ export class ChunkUploader {
         formData.append('offset', this.getOffset().toString());
         formData.append('chunk_key', chunkKey);
 
+        let controller: AbortController | null = null;
+        if (typeof AbortController !== 'undefined') {
+            controller = new AbortController();
+            this.activeUploadAbort = () => controller?.abort();
+        }
         try {
             const response = await fetch(`${this.config.serverUrl}/upload.php`, {
                 method: 'POST',
-                body: formData
-            });
+                body: formData,
+                ...(controller ? { signal: controller.signal } : {}),
+            } as RequestInit);
 
             if (!response.ok) {
                 throw new Error(`Upload failed: ${response.status}`);
@@ -590,6 +919,8 @@ export class ChunkUploader {
         } catch (error) {
             console.error(`[ChunkUploader] Failed to upload chunk ${chunkNumber}:`, error);
             throw error;
+        } finally {
+            this.activeUploadAbort = null;
         }
     }
 
@@ -599,6 +930,10 @@ export class ChunkUploader {
      */
     async waitForUploads(): Promise<void> {
         while (this.queue.length > 0 || this.pumping) {
+            // A28-LEASE: while ownership is unproven the pipeline is paused by
+            // design — never spin forever waiting for a queue that cannot
+            // legally drain. Finalize reports the pending work honestly.
+            if (!this.canUpload() && !this.pumping) return;
             await Promise.allSettled([new Promise((r) => setTimeout(r, 100))]);
             // Give a scheduled-but-waiting pump a chance to start.
             if (this.queue.length > 0 && !this.pumping) {
@@ -631,14 +966,21 @@ export class ChunkUploader {
             debugLog('[ChunkUploader] Finalize refused (lease lost)');
             return false;
         }
+        // A28-LEASE: ownership unproven (UNKNOWN-TRANSIENT) is NOT a loss and
+        // NOT a green light: report honestly, keep the bounded pending tail,
+        // and let the retry window resolve ownership first.
+        if (this.leaseMode === 'enforced' && this.leaseUnknown) {
+            debugLog('[ChunkUploader] Finalize deferred (lease ownership unverified)');
+            return false;
+        }
         // Wait for pending uploads (each posts its own HMAC receipt).
         await this.waitForUploads();
 
         // The authoritative final marker is derived server-side from receipts;
         // the client reports only that its upload pipeline drained while the
-        // lease was still held. No finalize.php call, no fabricated vod_url.
+        // lease was still held (or while its authorized drain tail was valid).
         this.finalized = true;
-        this.finalizeResult = this.leaseMode !== 'enforced' || this.leaseActive;
+        this.finalizeResult = this.leaseMode !== 'enforced' || this.leaseActive || this.leaseDraining;
         debugLog('[ChunkUploader] Upload pipeline drained; server-side final marker derives from receipts (legacy finalize.php retired)');
         return this.finalizeResult;
     }
@@ -652,7 +994,8 @@ export class ChunkUploader {
             pending: this.queue.length,
             dropped: this.droppedChunks,
             failed: this.failedChunks,
-            nextNumber: this.nextNumber
+            nextNumber: this.nextNumber,
+            fenced: this.leaseFencedCount
         };
     }
 }

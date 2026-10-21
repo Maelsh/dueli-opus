@@ -37,10 +37,18 @@ export interface VideoCompositorConfig {
      * Passed straight to the ChunkUploader (lease off when absent).
      */
     lease?: import('./ChunkUploader').RecordingLeaseHandle;
-    /** Fired once when this session loses the lease (takeover/release). */
-    onLeaseLost?: (info: { generation: number }) => void;
+    /**
+     * A28-LEASE: fired ONCE when this session stops being the recorder. The
+     * reason separates a real takeover (fenced) from a clean end/release
+     * whose authorized drain tail must still land.
+     */
+    onLeaseLost?: (info: import('./ChunkUploader').LeaseLossInfo) => void;
     /** Heartbeat period while holding the lease (default 10000ms). */
     heartbeatIntervalMs?: number;
+    /** A28-LEASE: bounded retry/backoff while ownership is unverified. */
+    leaseRetryBaseMs?: number;
+    leaseRetryMaxMs?: number;
+    maxLeaseRetries?: number;
     /**
      * R4-COMP-UNIFIED-1: original test-page identity, drawn INSIDE the
      * recorded frames (not a page overlay). platformName is the host-language
@@ -128,8 +136,11 @@ export class VideoCompositor {
             competitionId: config.competitionId,
             serverUrl: this.config.serverUrl!,
             lease: (config as { lease?: import('./ChunkUploader').RecordingLeaseHandle }).lease,
-            onLeaseLost: (config as { onLeaseLost?: (info: { generation: number }) => void }).onLeaseLost,
+            onLeaseLost: (config as { onLeaseLost?: (info: import('./ChunkUploader').LeaseLossInfo) => void }).onLeaseLost,
             heartbeatIntervalMs: (config as { heartbeatIntervalMs?: number }).heartbeatIntervalMs,
+            leaseRetryBaseMs: (config as { leaseRetryBaseMs?: number }).leaseRetryBaseMs,
+            leaseRetryMaxMs: (config as { leaseRetryMaxMs?: number }).leaseRetryMaxMs,
+            maxLeaseRetries: (config as { maxLeaseRetries?: number }).maxLeaseRetries,
             onChunkUploaded: (num) => {
                 this.chunksUploaded++;
                 this.config.onChunkUploaded?.(num);
@@ -523,7 +534,7 @@ export class VideoCompositor {
     }
 
     /** Expose the uploader lease state for page-level wiring/tests. */
-    getLeaseState(): { mode: 'off' | 'enforced'; active: boolean; generation: number } {
+    getLeaseState(): import('./ChunkUploader').ChunkUploadLeaseState {
         return this.uploader.getLeaseState();
     }
 

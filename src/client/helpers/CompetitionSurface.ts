@@ -38,7 +38,10 @@ export function resolveVideoSurface(comp: SurfaceCompetition | null | undefined,
     const isAccepted = status === 'accepted';
 
     // Competitors run the in-page live flow (same classes as /live/:id).
-    if ((isCreator || isOpponent) && comp.opponent_id && isLive) return 'competitor';
+    // A28-SURFACE: a completed competition WINS over a stale stream_status
+    // 'live' — the terminal decision must reach the VOD/processing surface,
+    // never keep the finished competitors on the live stage.
+    if ((isCreator || isOpponent) && comp.opponent_id && isLive && !isCompleted) return 'competitor';
     // R4-LIVE-ENTRY-RECOVERY-REM1: accepted parties enter the private prep
     // surface immediately (camera/screen preview + independent publish),
     // never the old redirect-to-/live "Go Live" card.
