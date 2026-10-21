@@ -767,6 +767,66 @@ class ChunkManager {
 window.ChunkManager = ChunkManager;
 
 /**
+ * A28-TIME: the media resource's OWN first presentation time (seconds).
+ *
+ * A standalone fragmented MP4 can present an ABSOLUTE timeline (real sample:
+ * first frame at 517.743s) while the verified recording index has its own
+ * global start (517.539s). Adding the absolute currentTime to the index start
+ * double-counts and the player clock runs past the recording length.
+ *
+ * The origin is therefore DERIVED from the resource, in this order:
+ *   1. the seekable range start (direct proof, covers a racy currentTime=0);
+ *   2. duration minus the verified chunk duration (only when the duration
+ *      clearly exceeds the chunk: a zero-origin file keeps the legacy math);
+ *   3. a parked element's absolute currentTime at metadata;
+ *   4. otherwise 0 (zero-origin resources are unchanged).
+ * Every conversion (position/seek) subtracts or adds this origin exactly once.
+ */
+function dueliMediaOrigin(video, expectedDuration) {
+    if (!video) return 0;
+    var stored = video.__dueliMediaOrigin;
+    if (typeof stored === 'number' && isFinite(stored) && stored >= 0) return stored;
+
+    var origin = 0;
+    var seekStart = null;
+    try {
+        var sk = video.seekable;
+        if (sk && typeof sk.length === 'number' && sk.length > 0
+            && typeof sk.start === 'function') {
+            var s = sk.start(0);
+            if (typeof s === 'number' && isFinite(s) && s >= 0) seekStart = s;
+        }
+    } catch (e) { seekStart = null; }
+    if (seekStart !== null) origin = Math.max(origin, seekStart);
+
+    var dur = video.duration;
+    var expected = (typeof expectedDuration === 'number' && isFinite(expectedDuration) && expectedDuration > 0)
+        ? expectedDuration : 0;
+    if (typeof dur === 'number' && isFinite(dur) && dur > 0 && expected > 0) {
+        var diff = dur - expected;
+        // Only a CLEAR excess proves an absolute timeline; a zero-origin
+        // resource's duration matches its chunk length (tiny encoder slack).
+        if (diff > Math.max(1, expected * 0.05)) origin = Math.max(origin, diff);
+    }
+    if (origin > 0) {
+        video.__dueliMediaOrigin = origin;
+        return origin;
+    }
+
+    // Only a parked element at metadata: a playing element's currentTime is a
+    // POSITION, not an origin — freezing it would silently zero the clock.
+    var t = video.currentTime;
+    var parked = video.paused === true || (typeof video.readyState === 'number' && video.readyState < 2);
+    if (typeof t === 'number' && isFinite(t) && t > 0 && parked) {
+        video.__dueliMediaOrigin = t;
+        return t;
+    }
+
+    video.__dueliMediaOrigin = 0;
+    return 0;
+}
+
+/**
  * LiveSequentialPlayer - مشغل البث المباشر
  */
 class LiveSequentialPlayer {
@@ -818,11 +878,20 @@ class LiveSequentialPlayer {
     getGlobalTime() {
         if (typeof this.currentIndex !== 'number' || this.currentIndex < 0) return 0;
         var active = this.videoPlayers && this.videoPlayers[this.activePlayerIndex];
-        var origin = this.mediaOriginFor(active);
+        var origin = this.captureMediaOrigin(active, this.expectedChunkDuration(this.currentIndex));
         var offset = (active && typeof active.currentTime === 'number' && isFinite(active.currentTime))
             ? active.currentTime - origin : 0;
         if (!isFinite(offset) || offset < 0) offset = 0;
         return Math.max(0, this.chunkStart(this.currentIndex) + offset);
+    }
+
+    /** A28-TIME: the verified duration of the loaded chunk (origin derivation). */
+    expectedChunkDuration(index) {
+        var cm = this.chunkManager;
+        if (!cm || typeof cm.entryFor !== 'function') return 0;
+        var entry = cm.entryFor(index);
+        var d = entry && entry.duration;
+        return (typeof d === 'number' && isFinite(d) && d > 0) ? d : 0;
     }
 
     chunkStart(index) {
@@ -847,13 +916,11 @@ class LiveSequentialPlayer {
         return (typeof origin === 'number' && isFinite(origin) && origin >= 0) ? origin : 0;
     }
 
-    captureMediaOrigin(video) {
+    captureMediaOrigin(video, expectedDuration) {
         if (!video) return 0;
         var existing = video.__dueliMediaOrigin;
         if (typeof existing === 'number' && isFinite(existing) && existing >= 0) return existing;
-        var t = video.currentTime;
-        if (typeof t === 'number' && isFinite(t) && t >= 0) video.__dueliMediaOrigin = t;
-        return this.mediaOriginFor(video);
+        return dueliMediaOrigin(video, expectedDuration);
     }
 
     /** Available recording duration for the live timeline (seconds). */
@@ -1091,7 +1158,7 @@ class LiveSequentialPlayer {
             ? Math.max(0, offsetSeconds) : null;
         var applyTarget = function() {
             if (gen !== undefined && gen !== self.loopGen) return;
-            var origin = self.captureMediaOrigin(nextPlayer);
+            var origin = self.captureMediaOrigin(nextPlayer, self.expectedChunkDuration(index));
             if (pendingOffset !== null) {
                 try { nextPlayer.currentTime = origin + pendingOffset; } catch (e) {}
             }
@@ -1335,13 +1402,11 @@ class SmartVodPlayer {
         return (typeof origin === 'number' && isFinite(origin) && origin >= 0) ? origin : 0;
     }
 
-    captureMediaOrigin(video) {
+    captureMediaOrigin(video, expectedDuration) {
         if (!video) return 0;
         var existing = video.__dueliMediaOrigin;
         if (typeof existing === 'number' && isFinite(existing) && existing >= 0) return existing;
-        var t = video.currentTime;
-        if (typeof t === 'number' && isFinite(t) && t >= 0) video.__dueliMediaOrigin = t;
-        return this.mediaOriginFor(video);
+        return dueliMediaOrigin(video, expectedDuration);
     }
 
     /**
@@ -1567,7 +1632,9 @@ class SmartVodPlayer {
             // after dispatch. The deferred handler below runs after that.
             if (typeof this.videoElement.readyState === 'number'
                 && this.videoElement.readyState < 1) return;
-            const origin = this.captureMediaOrigin(this.videoElement);
+            const origin = this.captureMediaOrigin(
+                this.videoElement, this.chunkDurations[index] || 0
+            );
             if (localSeekOffset !== null) {
                 try { this.videoElement.currentTime = origin + localSeekOffset; } catch (e) {}
             }
@@ -1832,7 +1899,9 @@ class SmartVodPlayer {
             this.seekPending = null;
             // The element's media timeline may start at a non-zero origin;
             // seek to origin + chunk-local offset, never the bare offset.
-            const origin = this.mediaOriginFor(this.videoElement);
+            const origin = this.captureMediaOrigin(
+                this.videoElement, this.chunkDurations[targetChunk] || 0
+            );
             try { this.videoElement.currentTime = origin + offset; } catch (e) {}
             try {
                 const p = this.videoElement.play();
@@ -1898,7 +1967,9 @@ class SmartVodPlayer {
     getGlobalTime() {
         if (typeof this.currentChunkIndex !== 'number' || this.currentChunkIndex < 0
             || this.currentChunkIndex >= this.chunks.length) return 0;
-        const origin = this.mediaOriginFor(this.videoElement);
+        const origin = this.captureMediaOrigin(
+            this.videoElement, this.chunkDurations[this.currentChunkIndex] || 0
+        );
         let offset = (this.videoElement && typeof this.videoElement.currentTime === 'number'
             && isFinite(this.videoElement.currentTime)) ? this.videoElement.currentTime - origin : 0;
         if (!isFinite(offset) || offset < 0) offset = 0;

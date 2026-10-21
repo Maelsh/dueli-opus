@@ -128,8 +128,10 @@ async function acquire(db: SqliteD1, compId: number, nonce: string, token = 'ses
     currentGen = generation; // the host binds subsequent receipts to this generation
     return generation;
 }
-async function register(db: SqliteD1, compId: number, seq: number, token = 'sess-1', ext = 'mp4') {
-    const res = await app.request('/api/chunks/register', authed(token, 'POST', { competition_id: compId, chunk_index: seq, extension: ext }), env(db));
+async function register(db: SqliteD1, compId: number, seq: number, token = 'sess-1', ext = 'mp4', nonce = 'a1b2c3d4') {
+    // A28-LEASE: key issuance is bound to the holder identity, so the helper
+    // sends the same per-tab nonce that acquired the lease by default.
+    const res = await app.request('/api/chunks/register', authed(token, 'POST', { competition_id: compId, chunk_index: seq, extension: ext, holder_nonce: nonce }), env(db));
     const body: any = await res.clone().json().catch(() => null);
     if (res.status === 200 && body?.data?.object_path) lastRegisteredPath = body.data.object_path as string;
     return res;
@@ -278,7 +280,7 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 register (mandatory bound keys)', () => {
         await acquire(db, 70, 'a1b2c3d4');
         const frozenEnv = { DB: db, UPLOAD_SERVER_SECRET: SECRET, UPLOADS_FROZEN: '1' } as unknown as Parameters<typeof app.request>[2];
         const res = await app.request('/api/chunks/register',
-            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4' }), frozenEnv);
+            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4', holder_nonce: 'a1b2c3d4' }), frozenEnv);
         expect(res.status).toBe(503);
         expect(((await res.json()) as any).code).toBe('uploads_frozen');
         // No key was issued while frozen (fail-closed, never keyless).
@@ -287,7 +289,7 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 register (mandatory bound keys)', () => {
         // Unfrozen (explicit falsy) resumes normally — barrier is not sticky.
         const okEnv = { DB: db, UPLOAD_SERVER_SECRET: SECRET, UPLOADS_FROZEN: 'false' } as unknown as Parameters<typeof app.request>[2];
         const ok = await app.request('/api/chunks/register',
-            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4' }), okEnv);
+            authed('sess-1', 'POST', { competition_id: 70, chunk_index: 1, extension: 'mp4', holder_nonce: 'a1b2c3d4' }), okEnv);
         expect(ok.status).toBe(200);
     });
 });
@@ -327,7 +329,7 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 verify (atomic consume + fencing)', () => {
         const stale = await verifyKey(db, key);
         expect(stale.valid).toBe(false);
         expect(stale.error).toMatch(/Stale/);
-        const fresh = (((await (await register(db, 70, 3)).json()) as any).data.chunk_key) as string;
+        const fresh = (((await (await register(db, 70, 3, 'sess-1', 'mp4', 'e5f6071829aa')).json()) as any).data.chunk_key) as string;
         expect((await verifyKey(db, fresh)).valid).toBe(true); // new generation works
     });
 

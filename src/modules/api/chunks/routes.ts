@@ -157,7 +157,7 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
 
     try {
         const body = await c.req.json().catch(() => ({})) as {
-            competition_id?: unknown; chunk_index?: unknown; extension?: unknown;
+            competition_id?: unknown; chunk_index?: unknown; extension?: unknown; holder_nonce?: unknown;
         };
         const competitionId = Number(body?.competition_id);
         const chunkIndex = Number(body?.chunk_index);
@@ -173,12 +173,14 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
             return c.json({ success: false, error: 'extension must be mp4 or webm', code: 'bad_container' }, 400);
         }
 
-        // Verify user is host of a live competition (unchanged gates).
+        // Host + lifecycle gate. Completed is allowed ONLY for the already
+        // authorized holder's bounded drain tail (checked against the lease
+        // identity below); pending/accepted remain closed.
         const competition = await DB.prepare(
-            'SELECT creator_id FROM competitions WHERE id = ? AND status = ?'
-        ).bind(competitionId, 'live').first() as any;
+            'SELECT creator_id, status FROM competitions WHERE id = ?'
+        ).bind(competitionId).first() as { creator_id: number; status: string } | null;
 
-        if (!competition) {
+        if (!competition || (competition.status !== 'live' && competition.status !== 'completed')) {
             return c.json({ success: false, error: 'Competition not found or not live' }, 404);
         }
 
@@ -186,15 +188,32 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
             return c.json({ success: false, error: 'Only host can register chunk keys' }, 403);
         }
 
-        // Lease REQUIRED (fail closed — no recording without proven
-        // ownership; missing 0040 store is a 503, never a legacy bypass).
+        // Lease REQUIRED (fail closed) AND bound to THIS holder. A28-LEASE:
+        // merely "some lease exists" is not enough — a stale tab/device must
+        // never obtain a fresh key under a successor's generation.
         let generation: number;
+        let endedDrain = false;
         try {
-            const lease = await new RecordingLeaseModel(DB).status(competitionId);
-            if (!lease.held) {
+            const leases = new RecordingLeaseModel(DB);
+            const row = await leases.get(competitionId);
+            const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
+            if (!row || row.holder_hash !== holder) {
                 return c.json({ success: false, error: 'No active recorder lease for this competition', code: 'lease_not_held' }, 409);
             }
-            generation = lease.generation;
+            const lease = await leases.status(competitionId);
+            if (lease.held) {
+                generation = lease.generation;
+            } else if (competition.status === 'completed' && row.released_at) {
+                // Authorized post-end drain: the same holder may still land
+                // the final flush under the released generation. Fencing
+                // stays intact (holder identity + generation).
+                generation = row.generation;
+                endedDrain = true;
+            } else {
+                // Expired (or released while still live): re-verify/re-acquire
+                // first; never issue keys on an unproven ownership.
+                return c.json({ success: false, error: 'Recorder lease must be re-acquired before upload', code: 'lease_not_held' }, 409);
+            }
         } catch (error: unknown) {
             if (leaseUnavailable(error)) {
                 return c.json({ success: false, error: 'Recorder lease store unavailable', code: 'lease_unavailable' }, 503);
@@ -229,14 +248,16 @@ chunksRoutes.post('/register', authMiddleware({ required: true }), async (c) => 
         }
 
         // Index the slot immediately (uploaded, unverified) so order/gaps
-        // are live before bytes land; readiness waits for receipts.
+        // are live before bytes land; readiness waits for receipts. A28-LEASE:
+        // the authorized post-end drain (same holder + released generation)
+        // may still open its final slots — completed only, never pending.
         try {
             await new ChunkIndexModel(DB).recordChunk(competitionId, {
                 sequence: chunkIndex,
                 generation,
                 object_path: objectPath,
                 container: extension as 'mp4' | 'webm',
-            }, user?.id as number);
+            }, user?.id as number, { allowEndedDrain: endedDrain });
         } catch (error: unknown) {
             const code = (error as { code?: string })?.code;
             if (code === 'CONFLICT') {
@@ -1038,13 +1059,45 @@ chunksRoutes.post('/lease/heartbeat', authMiddleware({ required: true }), async 
         if (!Number.isFinite(competitionId) || competitionId <= 0 || !Number.isFinite(generation)) {
             return c.json({ success: false, error: 'Invalid competition_id or generation' }, 400);
         }
-        const gate = await requireLiveHost(c, competitionId);
-        if (!gate.ok) {
-            // Ended (or never-live) competition: recording must stop anyway.
-            return c.json({ success: true, data: { held: false, generation: 0, reason: 'not_live' } });
+        const { DB } = c.env;
+        const user = c.get('user');
+        const competition = await DB.prepare(
+            'SELECT creator_id, status FROM competitions WHERE id = ?'
+        ).bind(competitionId).first() as { creator_id: number; status: string } | null;
+        if (!competition) {
+            return c.json({ success: false, error: 'Competition not found or not live' }, 404);
+        }
+        if (competition.creator_id !== user?.id) {
+            return c.json({ success: false, error: 'Only the host can hold the recording lease' }, 403);
         }
         const holder = leaseHolderHash(c, validNonce(body?.holder_nonce));
-        const result = await new RecordingLeaseModel(c.env.DB).heartbeat(competitionId, holder, generation);
+        const model = new RecordingLeaseModel(DB);
+
+        // A28-SURFACE/A28-LEASE: after an official end the lease is released,
+        // but the final recorder flush may still be landing. Report the
+        // released row honestly (same holder → drainable) instead of a bare
+        // "not live" that the client would mistake for a takeover.
+        if (competition.status !== 'live') {
+            const row = await model.get(competitionId);
+            if (!row) {
+                return c.json({ success: true, data: { held: false, generation: 0, expires_in_seconds: 0, reason: 'expired' } });
+            }
+            if (row.holder_hash !== holder) {
+                return c.json({ success: true, data: { held: false, generation: row.generation, expires_in_seconds: 0, reason: 'lost' } });
+            }
+            return c.json({
+                success: true,
+                data: {
+                    held: false,
+                    generation: row.generation,
+                    expires_in_seconds: 0,
+                    reason: row.released_at ? 'released' : 'ended',
+                    draining: true,
+                },
+            });
+        }
+
+        const result = await model.heartbeat(competitionId, holder, generation);
         return c.json({ success: true, data: result });
     } catch (error: any) {
         if (leaseUnavailable(error)) {

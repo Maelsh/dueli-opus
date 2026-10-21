@@ -46,6 +46,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       const competitionId = ${JSON.stringify(id ?? '')};
       const tr = ${JSON.stringify(tr)};
       let competitionData = null;
+      // A28-SURFACE: which completed surface has actually been PAINTED. State
+      // may be "completed" while a cleanup/render failure left the live DOM
+      // in place; this key is only set after a successful render, so the next
+      // completed event (duplicate SSE / GET resync) retries the surface
+      // instead of doing nothing forever.
+      let completedSurfaceKey = null;
       
       // Client-side getCategoryName function (mirrors src/i18n/index.ts):
       // explicit DB fields (category_name_<lang>/name_<lang>) first, then
@@ -959,23 +965,62 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const nextSurface = resolve ? resolve(nextComp, userId) : 'waiting';
         const becameCompleted = prev.status !== 'completed' && nextComp.status === 'completed';
         const wasParticipant = !!userId && (userId === nextComp.creator_id || userId === nextComp.opponent_id);
+        // The truthful surface marker for THIS competition's completed state
+        // (id-based: unrelated fields arriving later never invalidate it).
+        const completionKey = nextComp.status === 'completed'
+          ? String(nextComp.id || competitionId) + ':completed'
+          : null;
         competitionData = nextComp;
 
+        // A28-SURFACE: cleanup/teardown are best-effort steps on the way to
+        // the terminal surface. Each is isolated so a rating-DOM or device
+        // release failure can NEVER strand the page on the live DOM with a
+        // completed state. The recorder drain is explicitly NOT aborted here:
+        // beginTerminalTeardown() bounds its wait and lets the authorized
+        // tail keep draining in the background.
         if (becameCompleted) {
-          closeRatingUi();
+          try {
+            closeRatingUi();
+          } catch (err) {
+            log('Rating cleanup failed: ' + (err && err.message ? err.message : err), 'error');
+          }
           // Competitors stop broadcasting and become viewers of their own
           // recording. Both roles then boot the completed surface in place.
-          if (wasParticipant) beginTerminalTeardown();
+          if (wasParticipant) {
+            try {
+              beginTerminalTeardown();
+            } catch (err) {
+              log('Terminal teardown failed: ' + (err && err.message ? err.message : err), 'error');
+            }
+          }
         }
 
         // Structural changes re-render. Completed is structural for every
         // role (live stage/player -> embedded recording) even when the old
         // surface was already running; accepted→live remains chrome-only so
-        // the PC/recorder/preview stay mounted.
-        if (becameCompleted || (!competitorStarted && nextSurface !== prevSurface)) {
-          renderCompetition(nextComp);
+        // the PC/recorder/preview stay mounted. completedNeedsRender retries a
+        // completed surface whose previous render threw (state is already
+        // completed, so becameCompleted is false on the retry).
+        const completedNeedsRender = completionKey !== null && completedSurfaceKey !== completionKey;
+        if (becameCompleted || (!competitorStarted && nextSurface !== prevSurface) || completedNeedsRender) {
+          try {
+            renderCompetition(nextComp);
+            if (completionKey !== null) completedSurfaceKey = completionKey;
+          } catch (err) {
+            // The failed surface stays retryable: keep the marker clear so
+            // the next event/resync repaints it instead of trusting a DOM
+            // that never rendered this state.
+            if (completionKey !== null) completedSurfaceKey = null;
+            log('Surface render failed: ' + (err && err.message ? err.message : err), 'error');
+          }
           paintCompetitionTimer();
-          initCompetitionDynamics();
+          try {
+            initCompetitionDynamics();
+          } catch (err) {
+            // Realtime/dynamics failures are isolated: they must not undo or
+            // block the surface that is already painted.
+            log('Dynamics init failed: ' + (err && err.message ? err.message : err), 'error');
+          }
           return;
         }
         paintCompetitionChrome();
@@ -2656,8 +2701,18 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           lease: (window.PlatformRecordingLease
               ? new window.PlatformRecordingLease(Number(competitionId))
               : undefined),
-          onLeaseLost: function() {
-            log('Recording stopped - another session took over', 'error');
+          onLeaseLost: function(info) {
+            // A28-LEASE: a clean end/release is NOT a takeover — the recorder
+            // may still be flushing its authorized tail. Only a real
+            // takeover/unverified loss aborts the recorder once.
+            const reason = info && info.reason;
+            if (reason === 'ended' || reason === 'released') {
+              log('Recording ended - final tail continuing to drain', 'warn');
+              return;
+            }
+            log(reason === 'unverified'
+              ? 'Recording stopped - recorder ownership could not be verified'
+              : 'Recording stopped - another session took over', 'error');
             if (compositor && compositor.abortOnLeaseLost) {
               compositor.abortOnLeaseLost();
             }

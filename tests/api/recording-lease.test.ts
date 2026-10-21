@@ -133,6 +133,21 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 recording lease (model)', () => {
         expect(st.held).toBe(true);
         expect(st.generation).toBe(1);
     });
+
+    it('9. heartbeat failures are explicit: expired / released / lost (never a bare false)', async () => {
+        await model.acquire(7, 'hash-A', 45);
+        // Same holder+generation but past TTL → EXPIRED (re-acquire is allowed).
+        await db.prepare(`UPDATE recording_leases SET last_heartbeat_at = datetime('now', '-120 seconds') WHERE competition_id = 7`).run();
+        expect(await model.heartbeat(7, 'hash-A', 1)).toMatchObject({ held: false, reason: 'expired', generation: 1 });
+
+        // A different holder/generation → LOST-TAKEN-OVER.
+        await model.acquire(7, 'hash-B');
+        expect(await model.heartbeat(7, 'hash-A', 1)).toMatchObject({ held: false, reason: 'lost', generation: 2 });
+
+        // A clean release by the owner → RELEASED (drain tail remains valid).
+        await model.release(7, 'hash-B');
+        expect(await model.heartbeat(7, 'hash-B', 2)).toMatchObject({ held: false, reason: 'released', generation: 2 });
+    });
 });
 
 describe('R4-CHUNK-UPLOAD-SAFE-1 recording lease (routes)', () => {
@@ -189,5 +204,63 @@ describe('R4-CHUNK-UPLOAD-SAFE-1 recording lease (routes)', () => {
         // A post-end acquire starts a fresh generation (recovery path).
         const reacquire = await app.request('/api/chunks/lease/acquire', authed('sess-1', 'POST', { competition_id: 50, holder_nonce: 'a1b2c3d4' }), env(db));
         expect(reacquire.status).toBe(404); // competition no longer live — fail closed
+    });
+
+    it('13. heartbeat after end reports released for the owner, lost for another holder', async () => {
+        await seedComp(db, 50, 'live', 2);
+        await app.request('/api/chunks/lease/acquire', authed('sess-1', 'POST', { competition_id: 50, holder_nonce: 'a1b2c3d4' }), env(db));
+        await app.request('/api/competitions/50/end', authed('sess-1', 'POST', {}), env(db));
+
+        const owner = await app.request('/api/chunks/lease/heartbeat', authed('sess-1', 'POST', { competition_id: 50, holder_nonce: 'a1b2c3d4', generation: 1 }), env(db));
+        expect(owner.status).toBe(200);
+        expect(((await owner.json()) as any).data).toMatchObject({ held: false, reason: 'released', generation: 1 });
+
+        const other = await app.request('/api/chunks/lease/heartbeat', authed('sess-1', 'POST', { competition_id: 50, holder_nonce: 'e5f6071829aa', generation: 1 }), env(db));
+        expect(((await other.json()) as any).data).toMatchObject({ held: false, reason: 'lost' });
+    });
+
+    it('14. the authorized post-end drain tail can still register its key; another holder cannot', async () => {
+        await seedComp(db, 50, 'live', 2);
+        await app.request('/api/chunks/lease/acquire', authed('sess-1', 'POST', { competition_id: 50, holder_nonce: 'a1b2c3d4' }), env(db));
+        await app.request('/api/competitions/50/end', authed('sess-1', 'POST', {}), env(db));
+
+        // The final recorder flush lands after /end: same holder + released
+        // generation must append (no overwrite, no lost tail).
+        const tail = await app.request('/api/chunks/register', authed('sess-1', 'POST', {
+            competition_id: 50, chunk_index: 5, extension: 'mp4', holder_nonce: 'a1b2c3d4',
+        }), env(db));
+        expect(tail.status).toBe(200);
+        const tailBody: any = await tail.json();
+        expect(tailBody.data).toMatchObject({ sequence: 5, lease_generation: 1 });
+
+        // A second tab (different nonce) is fenced out even though the
+        // competition is completed and the lease is released.
+        const fenced = await app.request('/api/chunks/register', authed('sess-1', 'POST', {
+            competition_id: 50, chunk_index: 6, extension: 'mp4', holder_nonce: 'e5f6071829aa',
+        }), env(db));
+        expect(fenced.status).toBe(409);
+        expect(((await fenced.json()) as any).code).toBe('lease_not_held');
+    });
+
+    it('15. a stale writer cannot register after a takeover', async () => {
+        await seedComp(db, 50, 'live', 2);
+        await app.request('/api/chunks/lease/acquire', authed('sess-1', 'POST', { competition_id: 50, holder_nonce: 'a1b2c3d4' }), env(db));
+        // Force expiry, then a second holder takes over at generation 2.
+        await db.prepare(`UPDATE recording_leases SET last_heartbeat_at = datetime('now', '-120 seconds') WHERE competition_id = 50`).run();
+        const takeover = await app.request('/api/chunks/lease/acquire', authed('sess-1', 'POST', { competition_id: 50, holder_nonce: 'e5f6071829aa' }), env(db));
+        expect(takeover.status).toBe(200);
+        expect(((await takeover.json()) as any).data.generation).toBe(2);
+
+        const stale = await app.request('/api/chunks/register', authed('sess-1', 'POST', {
+            competition_id: 50, chunk_index: 7, extension: 'mp4', holder_nonce: 'a1b2c3d4',
+        }), env(db));
+        expect(stale.status).toBe(409);
+        expect(((await stale.json()) as any).code).toBe('lease_not_held');
+
+        const current = await app.request('/api/chunks/register', authed('sess-1', 'POST', {
+            competition_id: 50, chunk_index: 7, extension: 'mp4', holder_nonce: 'e5f6071829aa',
+        }), env(db));
+        expect(current.status).toBe(200);
+        expect(((await current.json()) as any).data.lease_generation).toBe(2);
     });
 });

@@ -42,7 +42,20 @@ export type LeaseAcquireResult =
 
 export type LeaseHeartbeatResult =
     | { held: true; generation: number }
-    | { held: false; generation: number; expires_in_seconds: number };
+    | {
+        held: false;
+        generation: number;
+        expires_in_seconds: number;
+        /**
+         * A28-LEASE: why the beat failed. The client must not collapse these
+         * into one "lost" state:
+         *  - expired  → no active owner; the same holder may re-acquire;
+         *  - released → clean end/handover; the authorized drain tail stays
+         *               valid under the released generation;
+         *  - lost     → another holder/generation owns the row (fenced).
+         */
+        reason: 'expired' | 'released' | 'lost';
+    };
 
 /**
  * SQLite datetime('now') yields UTC text 'YYYY-MM-DD HH:MM:SS'. Parsing it
@@ -182,15 +195,29 @@ export class RecordingLeaseModel extends BaseModel<RecordingLease> {
             `UPDATE ${this.tableName}
              SET last_heartbeat_at = datetime('now')
              WHERE competition_id = ? AND holder_hash = ?
-               AND generation = ? AND released_at IS NULL`
+               AND generation = ? AND released_at IS NULL
+               AND last_heartbeat_at >= datetime('now', '-' || ttl_seconds || ' seconds')`
         ).bind(competitionId, holderHash, generation).run();
         if (res.meta.changes === 1) {
             return { held: true, generation };
         }
         const row = await this.get(competitionId);
-        if (!row) return { held: false, generation: 0, expires_in_seconds: 0 };
+        if (!row) return { held: false, generation: 0, expires_in_seconds: 0, reason: 'expired' };
         const state = this.rowState(row);
-        return { held: false, generation: row.generation, expires_in_seconds: state.expires_in_seconds };
+        // Identity/generation mismatch is a REAL loss: another session owns
+        // the row (takeover) or this session already re-acquired under a
+        // newer generation. Never report it as a retryable expiry.
+        if (row.holder_hash !== holderHash || row.generation !== generation) {
+            return { held: false, generation: row.generation, expires_in_seconds: state.expires_in_seconds, reason: 'lost' };
+        }
+        // Same holder+generation but the row is released: clean end. The
+        // bounded drain tail remains valid under this generation.
+        if (row.released_at) {
+            return { held: false, generation: row.generation, expires_in_seconds: 0, reason: 'released' };
+        }
+        // Same owner, heartbeat aged past TTL: EXPIRED, not silently renewed.
+        // The client must re-acquire (generation-checked) before uploading.
+        return { held: false, generation: row.generation, expires_in_seconds: state.expires_in_seconds, reason: 'expired' };
     }
 
     /** Voluntary handover by the holder (clean stop / end). */

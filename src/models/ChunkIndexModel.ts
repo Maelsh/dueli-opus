@@ -168,8 +168,19 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
      * its creator (host-only recording, 08). Idempotent: same sequence with
      * identical (object_path, bytes) returns the existing row; different
      * bytes for the same sequence is a CONFLICT (never overwrites).
+     *
+     * A28-LEASE: `allowEndedDrain` opens the slot ONLY for an already
+     * completed competition. The route sets it when the caller proved the
+     * SAME lease holder identity that owns the released generation, so the
+     * final recorder flush can still land. Pending/accepted stay closed, and
+     * the default (no option) remains live-only.
      */
-    async recordChunk(competitionId: number, input: RecordChunkInput, writerUserId: number): Promise<RecordingChunk> {
+    async recordChunk(
+        competitionId: number,
+        input: RecordChunkInput,
+        writerUserId: number,
+        options?: { allowEndedDrain?: boolean }
+    ): Promise<RecordingChunk> {
         const seq = asInt(input.sequence);
         if (!seq || seq < 1 || seq > MAX_SEQUENCE) {
             throw Object.assign(new Error('BAD_INPUT: sequence must be a positive integer within bounds'), { code: 'BAD_INPUT' });
@@ -190,7 +201,8 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
         if (!comp) {
             throw Object.assign(new Error('NO_COMPETITION'), { code: 'NO_COMPETITION' });
         }
-        if (comp.status !== 'live') {
+        const endedDrain = options?.allowEndedDrain === true && comp.status === 'completed';
+        if (comp.status !== 'live' && !endedDrain) {
             throw Object.assign(new Error('NOT_LIVE'), { code: 'NOT_LIVE' });
         }
         if (comp.creator_id !== writerUserId) {
