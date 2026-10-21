@@ -261,27 +261,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <button data-csp-on="click" data-csp-fn="toggleFullscreen" data-csp-args='[]' id="fullscreenBtn" class="live-tool bg-gray-600 hover:bg-gray-700 text-white" aria-label="\${tr.fullscreen}" title="\${tr.fullscreen}">
                         <i class="fas fa-expand" aria-hidden="true"></i>
                       </button>
-                      <button data-csp-on="click" data-csp-fn="leaveBroadcast" data-csp-args='[]' id="leaveBtn" class="live-tool bg-amber-600 hover:bg-amber-700 text-white" aria-label="\${tr.leave_broadcast}" title="\${tr.leave_broadcast}">
-                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
-                      </button>
                       <button data-csp-on="click" data-csp-fn="endStream" data-csp-args='[]' id="endBtn" class="live-tool bg-red-600 hover:bg-red-700 text-white hidden" aria-label="\${tr.end_competition}" title="\${tr.end_competition}">
                         <i class="fas fa-stop-circle" aria-hidden="true"></i>
                       </button>
                     </div>
                     <p id="publishState" class="text-center text-xs text-gray-500 dark:text-gray-400 pb-2 px-4" aria-live="polite">\${tr.prep_privacy_hint}</p>
-                    <!-- R4-LIVE-ENTRY-RECOVERY-REM1: in-page leave warning.
-                         No beforeunload, no navigation trap: leaving cleans up
-                         locally and never ends the competition. -->
-                    <div id="leaveConfirm" class="hidden fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="\${tr.leave_broadcast}">
-                      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-sm w-full p-5 text-center mx-auto">
-                        <i class="fas fa-sign-out-alt text-amber-500 text-3xl mb-3" aria-hidden="true"></i>
-                        <p class="text-gray-800 dark:text-gray-100 text-sm mb-5">\${tr.leave_broadcast_confirm}</p>
-                        <div class="flex gap-3 justify-center">
-                          <button data-csp-on="click" data-csp-fn="cancelLeaveCompetition" data-csp-args='[]' id="leaveConfirmStay" class="px-4 py-2 rounded-full text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100" aria-label="\${tr.cancel}" title="\${tr.cancel}">\${tr.cancel}</button>
-                          <button data-csp-on="click" data-csp-fn="confirmLeaveCompetition" data-csp-args='[]' id="leaveConfirmLeave" class="px-4 py-2 rounded-full text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white" aria-label="\${tr.leave_broadcast}" title="\${tr.leave_broadcast}">\${tr.leave_broadcast}</button>
-                        </div>
-                      </div>
-                    </div>
                     
                   \` : (isCreator || isOpponent) && comp.opponent_id && isPending ? \`
                     <!-- Ready to Go Live (legacy pending-with-opponent edge;
@@ -873,19 +857,123 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         });
       }
 
+      // R4-LIVE-END-RECOVERY-1 (28.5): bounded promises. Recorder drain must
+      // never delay the official end transition or the terminal UI.
+      function waitBounded(promise, ms) {
+        return Promise.race([
+          Promise.resolve(promise).then(function(value) { return value; }, function() { return false; }),
+          new Promise(function(resolve) { setTimeout(function() { resolve(null); }, ms); })
+        ]);
+      }
+
+      // Stop the ONE host recorder exactly once. The compositor reference is
+      // cleared immediately, so an SSE end racing the local end can never
+      // start a second finalize/drain. The returned promise keeps draining in
+      // the background if the bounded wait expires (clean-end keys stay valid).
+      function stopRecorderForEnd() {
+        if (recordingStopPromise) return recordingStopPromise;
+        if (!compositor) return Promise.resolve(true);
+        const active = compositor;
+        compositor = null;
+        try { active.stopCompositing(); } catch (e) { /* already stopped */ }
+        recordingStopPromise = Promise.resolve()
+          .then(function() { return active.destroy(); })
+          .then(function() { return true; }, function(err) {
+            log('Recorder stop error: ' + (err && err.message ? err.message : err), 'error');
+            return false;
+          });
+        return recordingStopPromise;
+      }
+
+      // Official completed state only: release camera/mic/screen tracks,
+      // timers and peer connection; never POST /end and never finalize twice.
+      function beginTerminalTeardown() {
+        if (terminalTeardownStarted) return;
+        terminalTeardownStarted = true;
+        if (durationTicker) { clearTimeout(durationTicker); durationTicker = null; }
+        if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
+
+        const stopPromise = stopRecorderForEnd();
+        const activeP2P = p2p;
+        p2p = null;
+        if (activeP2P) {
+          // Release devices synchronously; disconnect() also withdraws presence
+          // and closes the PC, but must not gate camera/mic off on the network
+          // round-trip inside signaling.disconnect().
+          try { activeP2P.stopLocalMedia(); } catch (e) { /* already stopped */ }
+          Promise.resolve()
+            .then(function() { return activeP2P.disconnect(); })
+            .catch(function(err) {
+              log('Peer teardown error: ' + (err && err.message ? err.message : err), 'error');
+            });
+        }
+
+        mediaPublished = false;
+        isScreenSharing = false;
+        localMediaAvailable = false;
+        prepReady = false;
+        const localVideo = document.getElementById('localVideo');
+        if (localVideo) localVideo.srcObject = null;
+        const remoteVideo = document.getElementById('remoteVideo');
+        if (remoteVideo) remoteVideo.srcObject = null;
+
+        waitBounded(stopPromise, 12000).then(function(result) {
+          if (result === null) log('Recording drain exceeded the end bound; valid drain tail continues', 'warn');
+        });
+      }
+
+      // Completed closes rating writes immediately, before the structural
+      // re-render replaces the live DOM; the final tally stays visible.
+      function closeRatingUi() {
+        const stars = document.getElementById('rateStars');
+        if (stars) stars.classList.add('hidden');
+        const hint = document.getElementById('rateEligibleHint');
+        if (hint) hint.classList.add('hidden');
+        const msg = document.getElementById('rateMsg');
+        if (msg) msg.classList.add('hidden');
+        const state = document.getElementById('rateStateLine');
+        const finalText = (tr.ratings && tr.ratings.final_readonly) || 'Final result';
+        if (state) {
+          state.textContent = finalText;
+          state.className = 'text-xs font-semibold mb-4 text-gray-500 dark:text-gray-400';
+        }
+        const card = document.getElementById('rateCard');
+        let note = document.getElementById('rateFinalNote');
+        if (!note && card) {
+          note = document.createElement('p');
+          note.id = 'rateFinalNote';
+          note.className = 'mt-3 text-xs text-gray-500 dark:text-gray-400';
+          card.appendChild(note);
+        }
+        if (note) note.textContent = finalText;
+        loadRatingSummary();
+      }
+
       function applyCompetitionState(next) {
         if (!next) return;
         const prev = competitionData || {};
         const userId = window.currentUser && window.currentUser.id;
         const resolve = window.resolveVideoSurface;
         const prevSurface = resolve ? resolve(prev, userId) : 'waiting';
-        const nextSurface = resolve ? resolve(Object.assign({}, prev, next), userId) : 'waiting';
-        competitionData = Object.assign({}, prev, next);
+        const nextComp = Object.assign({}, prev, next);
+        const nextSurface = resolve ? resolve(nextComp, userId) : 'waiting';
+        const becameCompleted = prev.status !== 'completed' && nextComp.status === 'completed';
+        const wasParticipant = !!userId && (userId === nextComp.creator_id || userId === nextComp.opponent_id);
+        competitionData = nextComp;
 
-        // Only structural changes re-render; accepted→live is chrome-only so
-        // the PC, recorder and local preview stay exactly as they are.
-        if (!competitorStarted && nextSurface !== prevSurface) {
-          renderCompetition(competitionData);
+        if (becameCompleted) {
+          closeRatingUi();
+          // Competitors stop broadcasting and become viewers of their own
+          // recording. Both roles then boot the completed surface in place.
+          if (wasParticipant) beginTerminalTeardown();
+        }
+
+        // Structural changes re-render. Completed is structural for every
+        // role (live stage/player -> embedded recording) even when the old
+        // surface was already running; accepted→live remains chrome-only so
+        // the PC/recorder/preview stay mounted.
+        if (becameCompleted || (!competitorStarted && nextSurface !== prevSurface)) {
+          renderCompetition(nextComp);
           paintCompetitionTimer();
           initCompetitionDynamics();
           return;
@@ -942,6 +1030,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               if (payload.status) patch.status = payload.status;
               if (payload.opponent_id !== undefined) patch.opponent_id = payload.opponent_id;
               if (payload.started_at) patch.started_at = payload.started_at;
+              if (payload.ended_at) patch.ended_at = payload.ended_at;
               applyCompetitionState(patch);
             }
             scheduleStatusResync(0);
@@ -1709,6 +1798,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // ===== Embedded Viewer State =====
       let embeddedCurrentPlayer = null;
       let embeddedFullscreen = false;
+      // R4-LIVE-END-RECOVERY-1 (28.5): one player/listener set per surface.
+      // Status transitions can arrive from SSE, the 30s check and the end
+      // handler at once; overlapping inits are queued, never duplicated.
+      let embeddedInitInFlight = false;
+      let embeddedReloadQueued = false;
       // R4-CHUNK-PLAYER-UX-1: live-edge bookkeeping for rewind/return-live
       // (manager ref + last played index; reset whenever the player is torn
       // down so stale positions never drive the buttons).
@@ -1781,8 +1875,35 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       }
       
       // ===== Embedded Viewer: Auto-Start =====
+
+      // One playback surface at a time. A status transition (SSE, end click,
+      // 30s check) must stop the live player/listeners before VOD starts.
+      function stopEmbeddedPlayback() {
+        if (window._statusPollInterval) {
+          clearInterval(window._statusPollInterval);
+          window._statusPollInterval = null;
+        }
+        if (window._vodRetryTimer) {
+          clearTimeout(window._vodRetryTimer);
+          window._vodRetryTimer = null;
+        }
+        if (embeddedCurrentPlayer && typeof embeddedCurrentPlayer.stop === 'function') {
+          try { embeddedCurrentPlayer.stop(); } catch (e) { /* best effort */ }
+        }
+        embeddedCurrentPlayer = null;
+        liveChunkManager = null;
+        liveCurrentIndex = -1;
+      }
       
       async function initEmbeddedViewer() {
+        // Overlapping status/SSE/retry calls are coalesced into one re-init.
+        if (embeddedInitInFlight) {
+          embeddedReloadQueued = true;
+          return;
+        }
+        embeddedInitInFlight = true;
+        try {
+        stopEmbeddedPlayback();
         const viewerSection = document.getElementById('embeddedViewerSection');
         if (!viewerSection) return; // not shown (competitor or no stream)
         
@@ -1833,16 +1954,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const retry = document.getElementById('embeddedRetryBtn');
           if (retry) retry.classList.toggle('hidden', !(state === 'error' || state === 'unavailable'));
         }
-        // R2-L2: client mirror of the server playableRecording predicate
-        // (vod_url OR youtube_video_url trimmed non-empty). This is the ONLY
-        // readiness source — no HEAD request per discovery. completed without
-        // a recording is NOT recorded (processing/unavailable, never VOD).
-        function hasPlayableRecording(comp) {
-          if (!comp) return false;
-          const vod = (comp.vod_url || '').trim();
-          const yt = (comp.youtube_video_url || '').trim();
-          return vod !== '' || yt !== '';
-        }
+        // R4-LIVE-END-RECOVERY-1 (28.5): completed readiness is decided by
+        // the verified playlist/index below (real receivable chunks), never by
+        // vod_url alone. An end click or attempted upload is not evidence.
         // R2-L2: manual retry from error/unavailable states.
         window.embeddedRetryMedia = function() {
           window._vodRetryCount = 0;
@@ -1866,8 +1980,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           if (overlay) overlay.classList.remove('hidden');
         }
         
-        // R2-L2: VOD not ready → bounded auto-poll (8 × 15s) while the
-        // ffmpeg server finalizes the merged recording, then the
+        // R2-L2 / 28.5: VOD not ready → bounded auto-poll (8 × 15s) while
+        // verified chunks/index drain into the playlist, then the
         // unavailable state with a MANUAL retry (no endless spinner).
         var VOD_MAX_RETRIES = 8;
         function handleVodNotReady() {
@@ -1876,7 +1990,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             window._vodRetryCount++;
             setMediaState('processing');
             showStatusOverlay(tr.recording_processing || 'جاري تجهيز التسجيل...');
-            setTimeout(function() { initEmbeddedViewer(); }, 15000);
+            if (window._vodRetryTimer) clearTimeout(window._vodRetryTimer);
+            window._vodRetryTimer = setTimeout(function() {
+              window._vodRetryTimer = null;
+              initEmbeddedViewer();
+            }, 15000);
           } else {
             setMediaState('unavailable');
             showStatusOverlay(tr.recording_not_ready || 'Recording not available');
@@ -2018,13 +2136,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             
           } else if (isCompletedComp) {
             // === VOD: Use SmartVodPlayer ===
-            // R2-L2: completed WITHOUT a recording is NOT recorded — route
-            // to processing/unavailable (bounded poll + manual retry), never
-            // the VOD badge/controls.
-            if (!hasPlayableRecording(comp)) {
-              handleVodNotReady();
-              return;
-            }
+            // Completed WITHOUT verified chunks is NOT recorded — the
+            // playlist fetch below routes to processing/unavailable (bounded
+            // poll + manual retry), never the VOD badge/controls.
             setEmbeddedStatus(tr.loading_video || 'Loading video...');
             setMediaState('waiting');
             updateEmbeddedMode('vod');
@@ -2049,8 +2163,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             // sends no CORS headers — direct browser calls were blocked)
             const playlistRes = await fetch('/api/chunks/playlist/' + competitionId);
             
-            // T1.3 FIX: playlist may not be ready right after the stream ends
-            // (ffmpeg merge takes time) — poll instead of dead-ending.
+            // 28.5: the playlist may lag the end while the authorized drain
+            // tail lands — bounded poll instead of dead-ending.
             if (!playlistRes.ok) {
                 handleVodNotReady();
                 return;
@@ -2122,6 +2236,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           log('Embedded viewer error: ' + ((err && err.message) || err), 'error');
           setMediaState('error');
           showStatusOverlay(tr.error_occurred || 'An error occurred');
+        }
+        } finally {
+          embeddedInitInFlight = false;
+          if (embeddedReloadQueued) {
+            embeddedReloadQueued = false;
+            setTimeout(function() { initEmbeddedViewer(); }, 0);
+          }
         }
       }
       
@@ -2296,7 +2417,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       var hadCameraBeforeScreen = false;
       var localMediaAvailable = false;
       var prepReady = false;
-      var leftBroadcast = false;
+      // R4-LIVE-END-RECOVERY-1 (28.5): terminal teardown and recorder drain
+      // are single-shot. The competition is never ended here — only an
+      // official completed state triggers cleanup.
+      var terminalTeardownStarted = false;
+      var recordingStopPromise = null;
       var speakerMuted = false;
       var stageExpanded = false;
       // Declared here (was an undeclared reference in the end path): both
@@ -2622,6 +2747,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       async function acquireCameraVideo() {
         try {
           const got = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+          if (terminalTeardownStarted) {
+            got.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
+            return null;
+          }
           const track = got.getVideoTracks()[0];
           if (!track) throw new Error('no video track');
           tagTrackSource(track, 'camera');
@@ -2642,6 +2771,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       async function acquireMicAudio() {
         try {
           const got = await navigator.mediaDevices.getUserMedia({ audio: true });
+          if (terminalTeardownStarted) {
+            got.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
+            return null;
+          }
           const track = got.getAudioTracks()[0];
           if (!track) throw new Error('no audio track');
           tagTrackSource(track, 'mic');
@@ -2673,11 +2806,16 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           return trackSource(track) === 'screen' || track.kind === 'video';
         });
         let restored = null;
-        if (hadCameraBeforeScreen) {
+        if (hadCameraBeforeScreen && !terminalTeardownStarted) {
           try {
             const got = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
-            restored = got.getVideoTracks()[0];
-            tagTrackSource(restored, 'camera');
+            if (terminalTeardownStarted) {
+              got.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
+              restored = null;
+            } else {
+              restored = got.getVideoTracks()[0];
+              tagTrackSource(restored, 'camera');
+            }
           } catch (err) { restored = null; }
         }
         hadCameraBeforeScreen = false;
@@ -2698,7 +2836,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       window.stopScreenShare = stopScreenShare;
 
       async function initCompetitorStream() {
-        if (competitorStarted || leftBroadcast) return;
+        if (competitorStarted || terminalTeardownStarted) return;
         competitorStarted = true;
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
@@ -2721,6 +2859,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             const data = await res.json().catch(function() { return null; });
             return (res.ok && data && data.success) ? data : false;
           });
+          // The competition may end while room/create is in flight.
+          if (terminalTeardownStarted) return;
           if (created === false) {
             showToast(tr.live_signaling.room_create_failed, 'error');
             return;
@@ -2747,8 +2887,21 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
         });
 
-        await p2p.initialize();
-        const joined = await withCompetitorRetry('session/join', function() { return p2p.joinRoom(); });
+        // Keep the session captured locally: terminal teardown may null the
+        // page-level reference while an await is in flight.
+        const session = p2p;
+        await session.initialize();
+        if (terminalTeardownStarted) {
+          try { await session.disconnect(); } catch (e) { /* best effort */ }
+          if (p2p === session) p2p = null;
+          return;
+        }
+        const joined = await withCompetitorRetry('session/join', function() { return session.joinRoom(); });
+        if (terminalTeardownStarted) {
+          try { await session.disconnect(); } catch (e) { /* best effort */ }
+          if (p2p === session) p2p = null;
+          return;
+        }
         if (joined === false) {
           showToast(tr.live_signaling.session_join_failed, 'error');
           return;
@@ -2758,7 +2911,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         // signaling session alive, leaves every tool usable and lets the party
         // prepare a screen source instead. Acquiring here creates NO sender.
         try {
-          const preview = await p2p.initLocalStream();
+          const preview = await session.initLocalStream();
+          if (terminalTeardownStarted) {
+            try { await session.disconnect(); } catch (e) { /* best effort */ }
+            if (p2p === session) p2p = null;
+            return;
+          }
           localVideo.srcObject = preview;
           preview.getTracks().forEach(function(track) {
             tagTrackSource(track, track.kind === 'audio' ? 'mic' : 'camera');
@@ -2771,17 +2929,20 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
         prepReady = true;
 
+        if (terminalTeardownStarted) return;
         if (userRole === 'host') {
           initCompetitorCompositor();
         }
 
         try {
-          const status = await p2p.getRoomStatus();
+          const status = await session.getRoomStatus();
+          if (terminalTeardownStarted) return;
           if (status && userRole === 'opponent' && status.host_joined) {
             log('Host already in room. Waiting for offer...', 'info');
           }
         } catch (e) { /* presence read is best-effort; watcher covers it */ }
 
+        if (terminalTeardownStarted) return;
         paintCompetitorControls();
 
         if (userRole === 'host') {
@@ -2921,6 +3082,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
         try {
           const got = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
+          if (terminalTeardownStarted) {
+            got.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
+            return;
+          }
           const track = got.getVideoTracks()[0];
           if (!track) throw new Error('no video track');
           tagTrackSource(track, 'camera');
@@ -2969,6 +3134,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             log('Screen share failed: ' + (err2 && err2.message ? err2.message : err2), 'error');
             return;
           }
+        }
+        if (terminalTeardownStarted) {
+          screenStream.getTracks().forEach(function(t) { try { t.stop(); } catch (e) {} });
+          return;
         }
         const screenVideo = screenStream.getVideoTracks()[0];
         if (!screenVideo) { log('Screen share failed: no video track', 'error'); return; }
@@ -3050,64 +3219,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         applyStageVisibility();
       };
       
-      // ========== leave / end ==========
-      // Leaving is a warning + LOCAL cleanup only: the competition is never
-      // ended, the recorder is finalized through the single destroy() path,
-      // and navigation is never trapped (no beforeunload handler anywhere).
-      function setLeaveConfirmVisible(visible) {
-        const overlay = document.getElementById('leaveConfirm');
-        if (!overlay) return;
-        overlay.classList.toggle('hidden', !visible);
-      }
-      window.leaveBroadcast = function() {
-        if (!competitorStarted) return;
-        setLeaveConfirmVisible(true);
-        const confirmBtn = document.getElementById('leaveConfirmLeave');
-        if (confirmBtn && typeof confirmBtn.focus === 'function') confirmBtn.focus();
-      };
-      window.cancelLeaveCompetition = function() {
-        setLeaveConfirmVisible(false);
-      };
-      window.confirmLeaveCompetition = async function() {
-        setLeaveConfirmVisible(false);
-        leftBroadcast = true;
-        if (durationTicker) { clearTimeout(durationTicker); durationTicker = null; }
-        if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
-        try {
-          // Explicit leave stops the host recorder through the single
-          // finalize path; it never calls /end.
-          if (userRole === 'host' && compositor) {
-            try { await compositor.destroy(); } catch (e) { /* best effort */ }
-            compositor = null;
-          }
-          // Withdraw presence (never touches started_at/chunks/competition).
-          try {
-            await fetch('/api/signaling/session/leave', {
-              method: 'POST',
-              headers: competitorAuthHeaders(),
-              body: JSON.stringify({ competition_id: Number(competitionId) })
-            });
-          } catch (e) { /* best effort */ }
-          if (p2p) {
-            try { await p2p.disconnect(); } catch (e) { /* best effort */ }
-            p2p = null;
-          }
-        } catch (err) {
-          log('Leave cleanup error: ' + (err && err.message ? err.message : err), 'error');
-        }
-        mediaPublished = false;
-        isScreenSharing = false;
-        localMediaAvailable = false;
-        const localVideo = document.getElementById('localVideo');
-        if (localVideo) localVideo.srcObject = null;
-        const remoteVideo = document.getElementById('remoteVideo');
-        if (remoteVideo) remoteVideo.srcObject = null;
-        const waitingOverlay = document.getElementById('waitingOverlay');
-        if (waitingOverlay) waitingOverlay.classList.remove('hidden');
-        setPublishState(tr.leave_broadcast_confirm);
-        paintCompetitorControls();
-      };
-      
+      // ========== end ==========
+      // Voluntary leave-and-return is deliberately gone (owner decision):
+      // the only terminal action is the existing End button. Navigation gets
+      // a browser warning while live, but never ends/finalizes the competition.
       window.endStream = async function() {
         // The end button only renders while LIVE; this guard keeps the handler
         // honest for any race (a non-live end would orphan the state).
@@ -3116,63 +3231,48 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
 
         log('Ending stream...', 'info');
 
-        // R4-LIVE-ENTRY-RECOVERY-1: cleanup self-rescheduling timers
-        if (durationTicker) { clearTimeout(durationTicker); durationTicker = null; }
-        if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
-
+        // The official transition must not wait for recorder drain: start the
+        // request immediately, then apply the authoritative completed state.
+        // Recorder stop/drain runs once in beginTerminalTeardown (bounded).
+        let ended = false;
+        let endedAt = null;
         try {
-          // Host-only recording teardown: destroy() drains the final chunk,
-          // the upload queue, then finalizes EXACTLY ONCE via the uploader
-          // (single finalize path — never finalize.php directly, never twice,
-          // never from unload).
-          if (userRole === 'host' && compositor) {
-            log('Stopping recording and finalizing...', 'info');
-            await compositor.destroy();
-            compositor = null;
-          }
-
-          // Server decision ends the competition AND the recording.
-          // vod_url is a CLAIM (same contract as /live/:id — D-1); the real
-          // readiness proof is the playlist + decoded bytes (VOD branch).
-          const vodUrl = streamServerUrl + '/storage/vod/match_' + competitionId + '.mp4';
           const endRes = await fetch('/api/competitions/' + competitionId + '/end', {
             method: 'POST',
             headers: competitorAuthHeaders(),
-            body: JSON.stringify({ vod_url: vodUrl })
+            body: JSON.stringify({})
           });
           const endData = await endRes.json().catch(function() { return null; });
-          if (!endRes.ok || !endData || endData.success === false) {
+          if (endRes.ok && endData && endData.success !== false) {
+            ended = true;
+            endedAt = (endData.data && endData.data.ended_at) || null;
+          } else {
             log('Warning: ' + ((endData && endData.error) || 'Could not update status'), 'warn');
           }
-
-          // Withdraw session presence (platform contract — leave never
-          // touches started_at/chunks; the session ends with the competition).
-          try {
-            await fetch('/api/signaling/session/leave', {
-              method: 'POST',
-              headers: competitorAuthHeaders(),
-              body: JSON.stringify({ competition_id: Number(competitionId) })
-            });
-          } catch (e) { /* best effort */ }
-
-          // Disconnect P2P
-          if (p2p) {
-            try { await p2p.disconnect(); } catch (e) { /* best effort */ }
-            p2p = null;
-          }
-
-          log('Stream ended successfully!', 'success');
         } catch (err) {
           log('End stream error: ' + (err && err.message ? err.message : err), 'error');
         }
 
-        location.reload();
+        if (ended) {
+          // No reload: the same page becomes the recording viewer. Track
+          // release, timer cleanup and recorder drain are single-shot.
+          applyCompetitionState({ status: 'completed', ended_at: endedAt });
+          showToast(tr.status_completed, 'success');
+        }
+        // Network/response failure may still hide a committed server end;
+        // the bounded GET resync is the authority, never a local guess.
+        scheduleStatusResync(0);
       };
       
       // Navigation away never ends the competition and never finalizes a
       // recording: subscriptions close by themselves, an explicit endStream
       // is the only end path, and refresh re-enters preparation (never
-      // publishes).
+      // publishes). The browser prompt is a warning, not a navigation trap.
+      window.addEventListener('beforeunload', function(ev) {
+        if (!competitionData || competitionData.status !== 'live' || !mediaPublished) return;
+        ev.preventDefault();
+        ev.returnValue = '';
+      });
       window.addEventListener('pagehide', function() {
         try { if (competitionStatusES) competitionStatusES.close(); } catch (e) {}
         try { if (commentsLiveES) commentsLiveES.close(); } catch (e) {}
@@ -3184,8 +3284,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         if (!competitionData) return;
         const status = competitionData.status;
         const streamStatus = competitionData.stream_status;
-        const isUserCreator = window.currentUser && window.currentUser.id === competitionData.creator_id;
-        const isUserOpponent = window.currentUser && window.currentUser.id === competitionData.opponent_id;
         
         // R4-COMP-UNIFIED-1: competitors run the in-page live flow below
         // (same bundle classes as /live/:id — no parallel system). Viewers
@@ -3198,8 +3296,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           initCompetitorStream();
           return;
         }
-        if (isUserCreator || isUserOpponent) return;
         
+        // Completed competitors are viewers of their own recording; the
+        // single resolveVideoSurface decision already returned 'embedded'.
         // Show embedded viewer for live or completed competitions
         if (status === 'live' || status === 'completed' || streamStatus === 'live' || streamStatus === 'ready') {
           initEmbeddedViewer();

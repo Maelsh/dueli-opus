@@ -872,7 +872,12 @@ export class CompetitionController extends BaseController {
 
             // T1.5: Idempotency guard — a completed competition is never re-finalized
             if (competition.status === 'completed') {
-                return this.success(c, { ended: true, status: 'completed', already_completed: true });
+                return this.success(c, {
+                    ended: true,
+                    status: 'completed',
+                    ended_at: (competition as { ended_at?: string | null }).ended_at ?? null,
+                    already_completed: true,
+                });
             }
 
             // B5-1: only live competitions can be completed
@@ -882,18 +887,42 @@ export class CompetitionController extends BaseController {
 
             const body = await this.getBody<{
                 youtube_video_url?: string;
-                vod_url?: string;
             }>(c);
 
+            // R4-LIVE-END-RECOVERY-1 (28.5): body.vod_url is deliberately not
+            // consumed. Ending is not proof that a recording exists; readiness
+            // comes from verified receipts/playlist evidence.
             const completed = await model.complete(id, {
-                youtubeVideoUrl: body?.youtube_video_url,
-                vodUrl: body?.vod_url
+                youtubeVideoUrl: body?.youtube_video_url
             });
 
             // B5-1: race — already completed between read and guarded UPDATE.
             // Treat as idempotent success; never schedule finalize_payouts twice.
             if (!completed) {
-                return this.success(c, { ended: true, status: 'completed', already_completed: true });
+                const raced = await model.findById(id) as { ended_at?: string | null } | null;
+                return this.success(c, {
+                    ended: true,
+                    status: 'completed',
+                    ended_at: raced?.ended_at ?? null,
+                    already_completed: true,
+                });
+            }
+
+            let endedAt: string | null = null;
+            // R4-LIVE-END-RECOVERY-1 (28.5): one terminal event reaches both
+            // participants AND viewers on the existing competition channel.
+            // The persisted row (status + ended_at) stays authoritative; SSE
+            // is display metadata and failure here never rolls back the end.
+            try {
+                const endedRow = await model.findById(id) as { ended_at?: string | null } | null;
+                endedAt = endedRow?.ended_at ?? null;
+                await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(id, {
+                    status: 'completed',
+                    ended_at: endedAt,
+                    updated_at: new Date().toISOString(),
+                });
+            } catch (pushError) {
+                console.error('[CompetitionController] publishCompetitionStatus(completed) failed:', pushError);
             }
 
             // R4-CHUNK-UPLOAD-SAFE-1: NO bulk key deletion on end. In-flight
@@ -944,7 +973,7 @@ export class CompetitionController extends BaseController {
             }
             await this.broadcastRatingTally(c.env.DB, c.env, id, true);
 
-            return this.success(c, { ended: true, status: 'completed' });
+            return this.success(c, { ended: true, status: 'completed', ended_at: endedAt });
         } catch (error) {
             return this.serverError(c, error as Error);
         }

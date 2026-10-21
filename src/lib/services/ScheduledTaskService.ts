@@ -335,6 +335,23 @@ export class ScheduledTaskService {
         `).bind(competitionId).run();
         if (Number(cutoff?.meta?.changes ?? 1) === 0) return false;
 
+        // R4-LIVE-END-RECOVERY-1 (28.5): automatic end is the same terminal
+        // lifecycle event as a manual end. Both participants and viewers
+        // already listen on the competition channel; the row is authoritative.
+        try {
+            const endedRow = await this.db.prepare(
+                'SELECT ended_at FROM competitions WHERE id = ?'
+            ).bind(competitionId).first<{ ended_at: string | null }>();
+            const { EventPusher } = await import('./EventPusher');
+            await new EventPusher(this.db).publishCompetitionStatus(competitionId, {
+                status: 'completed',
+                ended_at: endedRow?.ended_at ?? null,
+                updated_at: new Date().toISOString(),
+            });
+        } catch (pushError) {
+            console.error(`[AutoEnd] Status publish failed for #${competitionId}:`, pushError);
+        }
+
         await this.db.prepare(`
             UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
             WHERE current_competition_id = ?

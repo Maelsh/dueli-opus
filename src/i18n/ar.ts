@@ -764,8 +764,6 @@ export const ar = {
     media_none: 'لا توجد كاميرا أو ميكروفون. يمكنك مشاركة الشاشة للاستعداد.',
     waiting_peer_media: 'بانتظار وسائط الطرف الآخر...',
     screen_share_stopped: 'تم إيقاف مشاركة الشاشة.',
-    leave_broadcast: 'مغادرة البث',
-    leave_broadcast_confirm: 'هل تريد مغادرة البث؟ المنافسة لن تنتهي، ويمكنك العودة لاحقاً.',
     end_competition: 'إنهاء المنافسة',
     end_competition_confirm: 'هل أنت متأكد من إنهاء المنافسة للجميع؟',
     expand_stage: 'تكبير المسرح',

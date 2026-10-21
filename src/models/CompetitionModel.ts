@@ -498,13 +498,17 @@ export class CompetitionModel extends BaseModel<Competition> {
     }
 
     /**
-     * End competition - supports both YouTube and P2P VOD
+     * End competition - supports legacy YouTube VOD links.
+     *
+     * R4-LIVE-END-RECOVERY-1 (28.5): ending is a lifecycle transition, NOT a
+     * recording claim. This method must never write vod_url from the end
+     * request: an attempted upload (or the end click itself) is not verified
+     * completion evidence. Chunk playback derives readiness from the verified
+     * playlist/index; `stream_status='ready'` only marks the closed stream.
      */
     async complete(id: number, options?: {
         youtubeVideoUrl?: string;
-        vodUrl?: string;
     }): Promise<boolean> {
-        const vodUrl = options?.vodUrl || null;
         const youtubeVideoUrl = options?.youtubeVideoUrl || null;
 
         // B5-1: guarded transition — only live -> completed (see startLive).
@@ -516,12 +520,11 @@ export class CompetitionModel extends BaseModel<Competition> {
             UPDATE competitions 
             SET status = 'completed', 
                 ended_at = datetime('now'), 
-                youtube_video_url = ?,
-                vod_url = ?,
+                youtube_video_url = COALESCE(?, youtube_video_url),
                 stream_status = 'ready',
                 stream_ended_at = datetime('now')
             WHERE id = ? AND status = 'live'
-        `).bind(youtubeVideoUrl, vodUrl, id).run();
+        `).bind(youtubeVideoUrl, id).run();
         if (typeof result.meta?.changes === 'number' && result.meta.changes > 0) return true;
         if (typeof result.meta?.changes === 'number' && result.meta.changes === 0) return false;
         const after = await this.db.prepare(

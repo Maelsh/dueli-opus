@@ -1,3 +1,28 @@
+## 2026-10-21 — R4-LIVE-END-RECOVERY-1 (unit 28.5) · FV20-END / FV20-FINAL / FV20-LEAVE · branch feat/r4-live-end-recovery-1-28-5 (from a422f776 = origin/main)
+
+- **SCOPE / PRESERVE:** unit 28.5 only; no 28.4.1/ROW30/32.1/35/H7/finance/ads/PR110 work. No invented HTTP finalize endpoint, no server FFmpeg, no `vod_url` write on end, no schema/migration. PR110 stays HOLD/untouched. No merge or deploy from this session.
+- **BASE / RED EVIDENCE (`a422f776`):** with only the source diff stashed, the new tests (4 API + 5 source-level UI) are `8 failed | 1 passed`. Failing evidence: no terminal SSE publication on manual/auto end, client `vod_url` accepted, `ended_at` absent from SSE, leave flow still present, end reloads/waits, completed readiness still gated on `vod_url`. Restoring the diff gives `9/9` GREEN.
+- **FV20-END**
+  - `BEFORE`: manual end completed the row but emitted no `competition_status` event; the 2-hour task also changed status silently. Viewers/opponents depended on refresh or a delayed poll. The creator-only/opponent authorization existed; repeat end was already idempotent.
+  - `ROOT CAUSE`: completion was a DB-only transition. The existing competition SSE channel was not given the terminal state, and `ended_at` was not in the event contract.
+  - `PATCH`: `CompetitionController.end` still authorizes creator/opponent only, then emits ONE `competition_status: completed` event with the persisted `ended_at` after the guarded transition. `ScheduledTaskService.endLiveMaxDuration` emits the same event for automatic end. `EventPusher` accepts `ended_at` and defaults internal `env` safely. The client applies the patch in place, re-renders the completed surface without refresh, and keeps the bounded GET resync as authority when SSE is missed.
+  - `AFTER`: creator, opponent and viewers receive the same terminal event on `competition:<id>`; reload/reconnect still recovers from the persisted row. Repeat end publishes nothing new and returns `already_completed` plus `ended_at`.
+- **FV20-FINAL**
+  - `BEFORE`: client end wrote `vod_url`, reloaded the page, waited on `compositor.destroy()` before transitioning, and the completed player treated `vod_url/youtube_video_url` as readiness. A reload could cut the recorder drain tail; an attempted upload could look like a finished recording.
+  - `ROOT CAUSE`: completion and recording evidence were conflated; the end request waited on local finalization, and the player trusted a URL instead of the verified chunk index/playlist.
+  - `PATCH`: end sends `{}` and never sends or persists `vod_url`; `CompetitionModel.complete` does not write `vod_url` (`stream_status='ready'` is only the closed-stream marker). The client transitions immediately, stops the ONE recorder once, preserves `dataavailable`/pending saves/`uploader.finalize()`/lease release and the platform marker, and bounds only the UI wait (12s); a slow drain continues in the background with its valid clean-end keys. No reload. Completed playback is gated by `/api/chunks/playlist/:id` (real chunks) and routes to processing/unavailable/error honestly; it does not claim VOD from end or an attempted upload.
+  - `AFTER`: end is independent of drain/upload, no duplicate finalization, no false VOD claim, and late authorized receipt/index tail remains usable. The final marker remains bounded platform evidence, not player readiness.
+- **FV20-LEAVE**
+  - `BEFORE`: a voluntary leave-and-return button/dialog and presence-leave flow existed; a browser-close warning was explicitly absent.
+  - `ROOT CAUSE`: leave was modeled as a product action even though owner decision 28.5 makes End the only terminal action.
+  - `PATCH`: removed the leave button/dialog/handlers, i18n keys, CSP allowlist entries, `leftBroadcast`, and the participant exception that hid completed playback. `endStream` is the only `/end` caller. `beforeunload` may warn while live and published, but never POSTs, destroys or finalizes; `pagehide` only closes SSE. Forced-disconnect recovery/reconnect (`onReconnectNeeded`, watcher) remains wired.
+  - `AFTER`: no automatic end on tab close/disconnect/reload; camera/mic/screen/PC/timers/recorder are released once on authorized completed state, with synchronous `stopLocalMedia()` plus in-flight-acquisition guards.
+- **INTENTIONAL TEST UPDATES:** `tests/ui/r4-live-entry-recovery-rem1.test.ts` now pins End-only/leave-removed and the warning boundary; `tests/ui/comp-unified.test.ts` pins unload-never-finalizes with the local stopped compositor; `tests/ui/r2-l2-competition-ui.test.ts` pins verified-playlist readiness instead of `vod_url`. These supersede the prior conflicting pins.
+- **TEST EVIDENCE:** new API 4/4 + UI 5/5 GREEN; focused suite 58/58 GREEN; `npx tsc --noEmit` clean; `npm run build` pass; full `npm test` `170 files / 1786 tests` GREEN (local `jq` supplied via `JQ_PATH` because Windows lacked it; Ubuntu CI has jq preinstalled).
+- **S VALIDATION:** PENDING — no real two-party camera/mic/screen end-of-recording sensory acceptance was performed; mocks/source pins cannot close S. No `✅`/S PASS claim.
+- **ROLLBACK:** revert this PR commit; no schema/media migration. PR110 remains HOLD.
+- **NEXT:** independent REMOTE review only; do not merge or deploy from this session.
+
 ## 2026-10-20 — R4-CHUNK-VIEW-RECOVERY-REM1 (unit 28.4.1) · FV20-TIME / FV20-START · branch feat/r4-chunk-view-recovery-rem1-28-4-1-fv20 (from 54a3380 = origin/main)
 
 - **SCOPE / PRESERVE:** unit 28.4.1 only; PR119/121/122 player, audio, cache, and recording contracts preserved. No codec/container redesign, server FFmpeg, historical chunk rewrite, media deletion, PHP/D1 migration, hosting change, or 28.5/ROW30/32.1/35 work. PR110 untouched.

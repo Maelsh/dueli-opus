@@ -8,7 +8,7 @@
  *    TEST pages are never the sole path.
  * 2. Media states: waiting/playing/error/processing/ready/unavailable with
  *    a manual retry; completed-without-recording is never VOD; readiness
- *    comes from the vod_url/youtube predicate (no HEAD probing).
+ *    comes from the verified chunk playlist/index (no HEAD probing).
  * 3. Like + Dislike pair with single-active paint from server counts;
  *    no heart in the competition UI; CSP-allowlisted setReaction.
  * 4. Timed comments on the SAME comments/SSE system: video_offset in the
@@ -61,14 +61,14 @@ describe('R2-L2 competition page UI contract', () => {
         expect(PAGE).not.toMatch(/_vodRetryCount < 20/);
     });
 
-    it('3. readiness uses the existing recording predicate (no HEAD probing)', () => {
-        expect(PAGE).toContain('hasPlayableRecording');
-        expect(PAGE).toContain("comp.vod_url");
-        expect(PAGE).toContain('comp.youtube_video_url');
+    it('3. readiness uses verified playlist/index evidence (no HEAD probing)', () => {
+        // 28.5 owner decision: end/attempted upload never writes vod_url;
+        // completed VOD is gated by the verified chunk playlist it fetches.
+        expect(PAGE).not.toContain('hasPlayableRecording');
+        expect(PAGE).toContain("'/api/chunks/playlist/' + competitionId");
+        expect(PAGE).toContain('playlistData.chunks.length === 0');
         expect(PAGE).not.toMatch(/method: ['"]HEAD['"]/);
         expect(PAGE).not.toContain('fetchHEAD');
-        // completed without a recording never reaches the VOD player.
-        expect(PAGE).toContain('if (!hasPlayableRecording(comp))');
     });
 
     it('4. Like + Dislike pair, single-active, server counts (no heart)', () => {
