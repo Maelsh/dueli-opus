@@ -785,9 +785,17 @@ window.ChunkManager = ChunkManager;
 function dueliMediaOrigin(video, expectedDuration) {
     if (!video) return 0;
     var stored = video.__dueliMediaOrigin;
-    if (typeof stored === 'number' && isFinite(stored) && stored >= 0) return stored;
+    // A POSITIVE origin is stable evidence. Zero is not: 0 is also the value
+    // observed when the duration is not yet known, so a cached zero must be
+    // re-evaluated on the next call (production 2244: loadedmetadata read 0,
+    // then the finite absolute duration arrived on durationchange).
+    if (typeof stored === 'number' && isFinite(stored) && stored > 0) {
+        video.__dueliMediaOriginKnown = true;
+        return stored;
+    }
 
     var origin = 0;
+    var known = false;
     var seekStart = null;
     try {
         var sk = video.seekable;
@@ -797,33 +805,140 @@ function dueliMediaOrigin(video, expectedDuration) {
             if (typeof s === 'number' && isFinite(s) && s >= 0) seekStart = s;
         }
     } catch (e) { seekStart = null; }
-    if (seekStart !== null) origin = Math.max(origin, seekStart);
+    // A ZERO seekable start is not proof of a zero origin (production 2244
+    // reported exactly 0 on an absolute timeline); only a positive start is.
+    if (seekStart !== null && seekStart > 0) {
+        origin = seekStart;
+        known = true;
+    }
 
     var dur = video.duration;
     var expected = (typeof expectedDuration === 'number' && isFinite(expectedDuration) && expectedDuration > 0)
         ? expectedDuration : 0;
+    var tolerance = expected > 0 ? Math.max(1, expected * 0.05) : 0;
     if (typeof dur === 'number' && isFinite(dur) && dur > 0 && expected > 0) {
         var diff = dur - expected;
-        // Only a CLEAR excess proves an absolute timeline; a zero-origin
-        // resource's duration matches its chunk length (tiny encoder slack).
-        if (diff > Math.max(1, expected * 0.05)) origin = Math.max(origin, diff);
-    }
-    if (origin > 0) {
-        video.__dueliMediaOrigin = origin;
-        return origin;
+        if (diff > tolerance) {
+            // Duration clearly exceeds the chunk: the resource's timeline is
+            // absolute and its origin is the end minus the verified span.
+            origin = Math.max(origin, diff);
+            known = true;
+        } else if (Math.abs(diff) <= tolerance && !known) {
+            // Duration matches the chunk span: this resource really starts at
+            // 0. This is evidence too, but it is never returned from the
+            // positive cache above, so a later positive signal can supersede
+            // it instead of freezing a wrong zero forever.
+            origin = 0;
+            known = true;
+        }
     }
 
     // Only a parked element at metadata: a playing element's currentTime is a
     // POSITION, not an origin — freezing it would silently zero the clock.
-    var t = video.currentTime;
-    var parked = video.paused === true || (typeof video.readyState === 'number' && video.readyState < 2);
-    if (typeof t === 'number' && isFinite(t) && t > 0 && parked) {
-        video.__dueliMediaOrigin = t;
-        return t;
+    if (!known) {
+        var t = video.currentTime;
+        var parked = video.paused === true || (typeof video.readyState === 'number' && video.readyState < 2);
+        if (typeof t === 'number' && isFinite(t) && t > 0 && parked) {
+            origin = Math.max(origin, t);
+            known = true;
+        }
     }
 
-    video.__dueliMediaOrigin = 0;
+    if (known) {
+        video.__dueliMediaOrigin = origin;
+        video.__dueliMediaOriginKnown = true;
+        return origin;
+    }
+
+    // Unknown: never cache 0 as if it were evidence. The next durationchange/
+    // timeupdate/seek re-derives once the duration is usable.
+    video.__dueliMediaOrigin = undefined;
+    video.__dueliMediaOriginKnown = false;
     return 0;
+}
+
+/** True only when the origin above was derived from real resource evidence. */
+function dueliMediaOriginKnown(video, expectedDuration) {
+    if (!video) return false;
+    dueliMediaOrigin(video, expectedDuration);
+    return video.__dueliMediaOriginKnown === true;
+}
+
+/**
+ * A28-TIME: apply a CHUNK-LOCAL seek on a resource whose media origin may not
+ * be known yet. Writing the bare offset would clamp to the first presentation
+ * time (production 2244 landed every seek on the chunk start), so an unknown
+ * origin defers the write until durationchange/loadeddata/canplay provides
+ * evidence. It never masks wrong math with a clamp; a superseded seek is
+ * retired by the caller's generation predicate.
+ */
+function dueliApplyOriginSeek(video, localOffset, expectedDuration, isStillCurrent) {
+    if (!video || typeof localOffset !== 'number' || !isFinite(localOffset)) return;
+    if (typeof video.__dueliOriginSeekCleanup === 'function') {
+        try { video.__dueliOriginSeekCleanup(); } catch (e) {}
+    }
+    var offset = Math.max(0, localOffset);
+
+    // Immediate path when the origin is already evidence-backed.
+    if (dueliMediaOriginKnown(video, expectedDuration)) {
+        var knownOrigin = dueliMediaOrigin(video, expectedDuration);
+        try { video.currentTime = knownOrigin + offset; } catch (e) {}
+        return;
+    }
+    // Engines/shims without a media timeline (no readyState) have no
+    // absolute-origin semantics to protect; keep the historical bare-offset
+    // path instead of waiting for a durationchange that will never come.
+    if (typeof video.readyState !== 'number') {
+        try { video.currentTime = offset; } catch (e) {}
+        return;
+    }
+
+    var timer = null;
+    var done = false;
+    var check = function() {
+        if (done) return;
+        if (typeof isStillCurrent === 'function' && !isStillCurrent()) { cleanup(); return; }
+        if (!dueliMediaOriginKnown(video, expectedDuration)) return;
+        var origin = dueliMediaOrigin(video, expectedDuration);
+        try { video.currentTime = origin + offset; } catch (e) {}
+        cleanup();
+    };
+    var cleanup = function() {
+        if (done) return;
+        done = true;
+        try {
+            video.removeEventListener('durationchange', check);
+            video.removeEventListener('loadeddata', check);
+            video.removeEventListener('canplay', check);
+        } catch (e) {}
+        if (timer !== null) { clearTimeout(timer); timer = null; }
+        if (video.__dueliOriginSeekCleanup === cleanup) video.__dueliOriginSeekCleanup = null;
+    };
+    video.__dueliOriginSeekCleanup = cleanup;
+    check();
+    if (done) return;
+    try {
+        video.addEventListener('durationchange', check);
+        video.addEventListener('loadeddata', check);
+        video.addEventListener('canplay', check);
+    } catch (e) {}
+    if (done) return;
+    timer = setTimeout(function() {
+        if (done) return;
+        if (typeof isStillCurrent === 'function' && !isStillCurrent()) {
+            cleanup();
+            return;
+        }
+        if (dueliMediaOriginKnown(video, expectedDuration)) {
+            check();
+        } else {
+            // Bounded legacy fallback: a real element that never exposes a
+            // usable duration keeps the historical bare-offset seek instead
+            // of silently losing the request.
+            try { video.currentTime = offset; } catch (e) {}
+        }
+        cleanup();
+    }, 3000);
 }
 
 /**
@@ -918,8 +1033,8 @@ class LiveSequentialPlayer {
 
     captureMediaOrigin(video, expectedDuration) {
         if (!video) return 0;
-        var existing = video.__dueliMediaOrigin;
-        if (typeof existing === 'number' && isFinite(existing) && existing >= 0) return existing;
+        // Re-evaluate a cached zero: it may be the "not known yet" value from
+        // an earlier loadedmetadata, not proof of a zero-origin resource.
         return dueliMediaOrigin(video, expectedDuration);
     }
 
@@ -1153,14 +1268,23 @@ class LiveSequentialPlayer {
         // seekTo() is CHUNK-LOCAL; the element may expect origin+offset (real
         // MP4 sample starts at 517.743s). The loadedmetadata handler also
         // repairs the seek if metadata arrives after load() returns.
+        if (typeof nextPlayer.__dueliOriginSeekCleanup === 'function') {
+            try { nextPlayer.__dueliOriginSeekCleanup(); } catch (e) {}
+        }
         nextPlayer.__dueliMediaOrigin = undefined;
+        nextPlayer.__dueliMediaOriginKnown = false;
         var pendingOffset = (typeof offsetSeconds === 'number' && isFinite(offsetSeconds))
             ? Math.max(0, offsetSeconds) : null;
         var applyTarget = function() {
             if (gen !== undefined && gen !== self.loopGen) return;
-            var origin = self.captureMediaOrigin(nextPlayer, self.expectedChunkDuration(index));
+            var expected = self.expectedChunkDuration(index);
+            self.captureMediaOrigin(nextPlayer, expected);
             if (pendingOffset !== null) {
-                try { nextPlayer.currentTime = origin + pendingOffset; } catch (e) {}
+                // Same A28-TIME contract as VOD: never write the bare offset
+                // before the resource origin is evidence-backed.
+                dueliApplyOriginSeek(nextPlayer, pendingOffset, expected, function() {
+                    return gen === undefined || gen === self.loopGen;
+                });
             }
         };
         nextPlayer.onloadedmetadata = function() {
@@ -1212,6 +1336,9 @@ class LiveSequentialPlayer {
         currentPlayer.style.opacity = '0';
         currentPlayer.style.zIndex = '1';
         try { currentPlayer.pause(); } catch (e) {}
+        if (typeof currentPlayer.__dueliOriginSeekCleanup === 'function') {
+            try { currentPlayer.__dueliOriginSeekCleanup(); } catch (e) {}
+        }
         currentPlayer.muted = true;
         currentPlayer.oncanplay = null;
         currentPlayer.onerror = null;
@@ -1242,6 +1369,9 @@ class LiveSequentialPlayer {
         this.currentIndex = -1;
         this.loopGen = (this.loopGen || 0) + 1;
         this.videoPlayers.forEach(function(v) {
+            if (typeof v.__dueliOriginSeekCleanup === 'function') {
+                try { v.__dueliOriginSeekCleanup(); } catch (e) {}
+            }
             try { v.pause(); } catch (e) {}
             v.oncanplay = null;
             v.onerror = null;
@@ -1387,6 +1517,23 @@ class SmartVodPlayer {
         
         // للـ seeking
         this.seekPending = null;
+
+        // A28-TIME (production 2244): a completed surface can start before the
+        // authorized drain tail's final chunk is ready. The playlist snapshot
+        // used to be captured once, so the clock/total stayed at 24 chunks /
+        // 255.863s after the 25th chunk (271.347s) landed. Refresh the SAME
+        // player in a bounded window; never reload the element or reset the
+        // playhead. Defaults: 2s × 30 = a 60s bounded window.
+        this.playlistRefreshMs = (typeof options.playlistRefreshMs === 'number'
+            && isFinite(options.playlistRefreshMs) && options.playlistRefreshMs >= 0)
+            ? options.playlistRefreshMs : 2000;
+        this.playlistRefreshMaxAttempts = (typeof options.playlistRefreshMaxAttempts === 'number'
+            && isFinite(options.playlistRefreshMaxAttempts) && options.playlistRefreshMaxAttempts > 0)
+            ? Math.floor(options.playlistRefreshMaxAttempts) : 30;
+        this.playlistRefreshTimer = null;
+        this.playlistRefreshAttempts = 0;
+        this.playlistRefreshInFlight = false;
+        this.stopped = false;
     }
 
     /**
@@ -1404,8 +1551,8 @@ class SmartVodPlayer {
 
     captureMediaOrigin(video, expectedDuration) {
         if (!video) return 0;
-        var existing = video.__dueliMediaOrigin;
-        if (typeof existing === 'number' && isFinite(existing) && existing >= 0) return existing;
+        // Re-evaluate a cached zero: it may be the "not known yet" value from
+        // an earlier loadedmetadata, not proof of a zero-origin resource.
         return dueliMediaOrigin(video, expectedDuration);
     }
 
@@ -1413,6 +1560,12 @@ class SmartVodPlayer {
      * بدء المشغل - جلب metadata وتشغيل أول chunk
      */
     async start() {
+        this.stopped = false;
+        if (this.playlistRefreshTimer) {
+            clearTimeout(this.playlistRefreshTimer);
+            this.playlistRefreshTimer = null;
+        }
+        this.playlistRefreshAttempts = 0;
         try {
             // 1. استخدام البيانات المحملة مسبقاً أو جلب playlist جديد
             if (this.playlistData) {
@@ -1468,6 +1621,10 @@ class SmartVodPlayer {
                 chunks: this.chunks.length,
                 extension: this.extension
             });
+
+            // A28-TIME: bounded final-chunk refresh, only when the index says
+            // the recording is not final yet or a ready chunk is still missing.
+            this.schedulePlaylistRefresh();
             
         } catch (error) {
             testLog('❌ ' + error.message, 'error');
@@ -1577,6 +1734,7 @@ class SmartVodPlayer {
      */
     async loadAndPlayChunk(index, globalSeekTime) {
         if (index < 0 || index >= this.chunks.length) return;
+        const self = this;
         // Every switch gets a fresh generation: a late load/seek for an older
         // target is dropped instead of stealing the element (rapid seek).
         const gen = ++this.opGen;
@@ -1623,20 +1781,29 @@ class SmartVodPlayer {
         const blobUrl = URL.createObjectURL(blob);
         this.currentBlobUrl = blobUrl;
 
+        if (typeof this.videoElement.__dueliOriginSeekCleanup === 'function') {
+            try { this.videoElement.__dueliOriginSeekCleanup(); } catch (e) {}
+        }
         this.videoElement.__dueliMediaOrigin = undefined;
+        this.videoElement.__dueliMediaOriginKnown = false;
         const applyTarget = () => {
-            if (gen !== this.opGen) return;
+            if (gen !== self.opGen) return;
             // Do not capture/seek before metadata exists: at the
             // loadedmetadata EVENT currentTime can still read 0 even though
             // the resource's origin (e.g. 517.743) is applied immediately
             // after dispatch. The deferred handler below runs after that.
-            if (typeof this.videoElement.readyState === 'number'
-                && this.videoElement.readyState < 1) return;
-            const origin = this.captureMediaOrigin(
-                this.videoElement, this.chunkDurations[index] || 0
-            );
+            if (typeof self.videoElement.readyState === 'number'
+                && self.videoElement.readyState < 1) return;
+            const expected = self.chunkDurations[index] || 0;
+            self.captureMediaOrigin(self.videoElement, expected);
             if (localSeekOffset !== null) {
-                try { this.videoElement.currentTime = origin + localSeekOffset; } catch (e) {}
+                // A28-TIME: never write the bare offset before the origin is
+                // evidence-backed; it would clamp to the chunk start on an
+                // absolute timeline. The helper re-applies once duration
+                // (or the parked position) proves the origin.
+                dueliApplyOriginSeek(self.videoElement, localSeekOffset, expected, function() {
+                    return gen === self.opGen;
+                });
             }
         };
         this.videoElement.onloadedmetadata = function() {
@@ -1678,15 +1845,18 @@ class SmartVodPlayer {
             if (gen !== this.opGen) return;
         }
 
-        // A cached/cold blob can already expose metadata. Otherwise keep the
-        // legacy chunk-local seek (engines whose origin is 0) and let the
-        // loadedmetadata handler re-apply origin+offset when it arrives.
+        // A cached/cold blob can already expose metadata. Otherwise defer the
+        // seek until the origin is known; writing the bare chunk-local offset
+        // is exactly the clamp this A28-TIME correction removes.
         if (this.videoElement.readyState >= 1
             || (typeof this.videoElement.duration === 'number'
                 && isFinite(this.videoElement.duration) && this.videoElement.duration > 0)) {
             applyTarget();
         } else if (localSeekOffset !== null) {
-            try { this.videoElement.currentTime = localSeekOffset; } catch (e) {}
+            dueliApplyOriginSeek(
+                this.videoElement, localSeekOffset, this.chunkDurations[index] || 0,
+                function() { return gen === self.opGen; }
+            );
         }
         
         // حل مشكلة autoplay policy - البدء muted ثم محاولة unmute
@@ -1700,7 +1870,6 @@ class SmartVodPlayer {
         } catch (e) {
             testLog('⚠️ Autoplay blocked, waiting for user interaction', 'warn');
             // إضافة listener لأول تفاعل
-            const self = this;
             const playOnInteraction = function() {
                 self.videoElement.play().then(function() {
                     self.videoElement.muted = false;
@@ -1895,14 +2064,17 @@ class SmartVodPlayer {
             let offset = targetTime - chunkStart;
             if (!isFinite(offset) || offset < 0) offset = 0;
             if (maxOffset > 0 && offset > maxOffset) offset = maxOffset;
-            this.opGen++;
+            const seekGen = ++this.opGen;
             this.seekPending = null;
             // The element's media timeline may start at a non-zero origin;
             // seek to origin + chunk-local offset, never the bare offset.
-            const origin = this.captureMediaOrigin(
-                this.videoElement, this.chunkDurations[targetChunk] || 0
+            // If the origin is not known yet, the write is deferred instead
+            // of clamping the bare offset to the chunk start.
+            const player = this;
+            dueliApplyOriginSeek(
+                this.videoElement, offset, this.chunkDurations[targetChunk] || 0,
+                function() { return seekGen === player.opGen; }
             );
-            try { this.videoElement.currentTime = origin + offset; } catch (e) {}
             try {
                 const p = this.videoElement.play();
                 if (p && typeof p.catch === 'function') p.catch(function() {});
@@ -2171,9 +2343,84 @@ class SmartVodPlayer {
     }
 
     /**
+     * A28-TIME: refresh is needed only while the authoritative index says the
+     * recording is not final, or a ready chunk is still missing. A legacy
+     * playlist without index_metadata is left on the existing path.
+     */
+    needsPlaylistRefresh() {
+        var meta = this.playlist && this.playlist.index_metadata;
+        if (!meta) return false;
+        var missing = (typeof meta.ready_count === 'number'
+            && typeof meta.uploaded_count === 'number'
+            && meta.ready_count < meta.uploaded_count);
+        if (meta.finalized === true) return missing;
+        return meta.finalized === false;
+    }
+
+    /** Bounded timer; a timer/in-flight request never duplicates. */
+    schedulePlaylistRefresh() {
+        if (this.stopped || this.playlistRefreshTimer || this.playlistRefreshInFlight) return;
+        if (this.playlistRefreshAttempts >= this.playlistRefreshMaxAttempts) return;
+        if (!this.needsPlaylistRefresh()) return;
+        var self = this;
+        this.playlistRefreshTimer = setTimeout(function() {
+            self.playlistRefreshTimer = null;
+            self.refreshPlaylist();
+        }, this.playlistRefreshMs);
+    }
+
+    /**
+     * A28-TIME: fold the final drain-tail chunk into the SAME player. The
+     * element, currentChunkIndex, loaded bytes and generation are untouched,
+     * so playback never restarts or jumps; only the timeline/total metadata
+     * and the appended tail are updated. Bounded by attempts + the
+     * finalized/ready predicate (no infinite loop).
+     */
+    async refreshPlaylist() {
+        if (this.stopped || this.playlistRefreshInFlight) return;
+        if (!this.needsPlaylistRefresh()) return;
+        this.playlistRefreshInFlight = true;
+        this.playlistRefreshAttempts++;
+        try {
+            var res = await fetch('/api/chunks/playlist/' + this.competitionId, { cache: 'no-store' });
+            if (!res || !res.ok) return;
+            var data = await res.json();
+            if (this.stopped || !data || !Array.isArray(data.chunks) || data.chunks.length === 0) return;
+            if (data.upstream === 'error' || data.upstream === 'invalid') return;
+            // Append-only authority: a stale/older snapshot must never shrink
+            // the already playable list.
+            if (data.chunks.length < this.chunks.length) return;
+            this.playlist = data;
+            this.chunks = data.chunks;
+            this.extension = data.extension || this.extension;
+            this.buildTimeMap();
+            this.calculateDurations();
+            if (this.currentChunkIndex >= this.chunks.length) {
+                this.currentChunkIndex = Math.max(0, this.chunks.length - 1);
+            }
+            if (typeof this.onTimeUpdate === 'function') {
+                this.onTimeUpdate(this.getGlobalTime(), this.totalDuration, this.currentChunkIndex);
+            }
+        } catch (e) {
+            testLog('⚠️ Playlist refresh failed (bounded retry)', 'warn');
+        } finally {
+            this.playlistRefreshInFlight = false;
+            if (!this.stopped && this.needsPlaylistRefresh()) this.schedulePlaylistRefresh();
+        }
+    }
+
+    /**
      * إيقاف المشغل
      */
     stop() {
+        this.stopped = true;
+        if (this.playlistRefreshTimer) {
+            clearTimeout(this.playlistRefreshTimer);
+            this.playlistRefreshTimer = null;
+        }
+        if (this.videoElement && typeof this.videoElement.__dueliOriginSeekCleanup === 'function') {
+            try { this.videoElement.__dueliOriginSeekCleanup(); } catch (e) {}
+        }
         this.opGen++;
         this.seekPending = null;
         this.videoElement.pause();
