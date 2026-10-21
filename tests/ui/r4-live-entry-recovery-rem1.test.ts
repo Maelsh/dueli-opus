@@ -18,8 +18,8 @@
  *     hide-local gray, actions green/amber/red.
  *  6. Exactly two <video> elements in the competitor stage; large/small
  *     roles move by CSS, a third video is never added.
- *  7. Leave/back never end the competition and never trap the user
- *     (in-page confirm, no beforeunload).
+ *  7. End is the only terminal action; leaving/back never ends the
+ *     competition. A browser warning may appear while live (never a trap).
  *
  * S (visual/audio/device) verification is manual and tracked separately in
  * the task report — these pins are NOT visual/audio proof.
@@ -90,7 +90,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         // chrome-only so the PC/recorder/preview stay mounted.
         const apply = between(page, 'function applyCompetitionState(next)', 'async function syncCompetitionFromServer');
         expect(apply).toContain('nextSurface !== prevSurface');
-        expect(apply).toContain('renderCompetition(competitionData)');
+        expect(apply).toContain('renderCompetition(nextComp)');
         expect(apply).not.toContain('location.reload');
         // The subscription is started by the single dynamics init.
         expect(between(page, 'async function initCompetitionDynamics()', 'function watchHeaders()'))
@@ -106,7 +106,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         expect(publish).toContain('tr.nothing_to_publish');
         // Acquisition must not publish (initLocalStream is preview-only).
         const init = between(page, 'async function initCompetitorStream()', 'async function publishMedia()');
-        expect(init).toContain('p2p.initLocalStream()');
+        expect(init).toMatch(/session\.initLocalStream\(\)/);
         expect(init).not.toContain('publishLocalStream');
         expect(init).not.toContain('mediaPublished');
         // Screening during prep is allowed and independent from consent.
@@ -162,7 +162,6 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
             ['swapBtn', 'bg-indigo-600', 'swap_videos'],
             ['expandBtn', 'bg-indigo-600', 'expand_stage'],
             ['fullscreenBtn', 'bg-gray-600', 'fullscreen'],
-            ['leaveBtn', 'bg-amber-600', 'leave_broadcast'],
             ['endBtn', 'bg-red-600', 'end_competition'],
         ];
         for (const [id, tone, key] of tools) {
@@ -188,7 +187,6 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
             ['swapBtn', 'swapVideos'],
             ['expandBtn', 'toggleExpandStage'],
             ['fullscreenBtn', 'toggleFullscreen'],
-            ['leaveBtn', 'leaveBroadcast'],
             ['endBtn', 'endStream'],
         ];
         const csp = readSrc(CSP);
@@ -249,7 +247,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         // Stopping restores camera only if one existed, otherwise the published
         // sender is detached (never a stopped source behind a hidden sender).
         const stop = between(page, 'async function stopScreenShare(reason)', 'window.stopScreenShare = stopScreenShare');
-        expect(stop).toContain('if (hadCameraBeforeScreen)');
+        expect(stop).toContain('if (hadCameraBeforeScreen && !terminalTeardownStarted)');
         expect(stop).toContain("await syncPublishedTrack('video', restored)");
         expect(stop).toContain("if (hadScreenAudio) await syncPublishedTrack('audio', localTrackOf('audio'))");
         // Browser "Stop sharing" triggers the same path; no auto-republish.
@@ -288,9 +286,18 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         expect(page).not.toMatch(/force_refresh|recompute.*recording|overwrite.*vod/i);
     });
 
-    it('9. leave/back never end the competition and never trap navigation', () => {
-        expect(page).not.toContain("addEventListener('beforeunload'");
-        expect(page).not.toContain('onbeforeunload');
+    it('9. leave/back never end the competition; End is the only terminal action', () => {
+        // Owner decision 28.5: voluntary leave-and-return is removed.
+        expect(page).not.toContain('id="leaveBtn"');
+        expect(page).not.toContain('id="leaveConfirm"');
+        expect(page).not.toContain('window.leaveBroadcast');
+        // The browser may warn while live, but the warning never sends /end,
+        // finalizes or destroys anything.
+        const before = between(page, "window.addEventListener('beforeunload'", "window.addEventListener('pagehide'");
+        expect(before).toContain('preventDefault()');
+        expect(before).not.toContain('/end');
+        expect(before).not.toContain('fetch(');
+        expect(before).not.toContain('destroy()');
         // pagehide closes subscriptions only — no end, no finalize, no destroy.
         const hide = between(page, "window.addEventListener('pagehide'", '// Check if competition needs embedded viewer');
         expect(hide).toContain('competitionStatusES.close()');
@@ -299,24 +306,13 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         expect(hide).not.toContain('fetch(');
         expect(hide).not.toContain('/end');
         expect(hide).not.toContain('destroy()');
-        // Explicit leave: in-page confirm, presence leave, local teardown, no end.
-        const leave = between(page, 'window.leaveBroadcast = function()', 'window.endStream = async function()');
-        expect(leave).toContain('setLeaveConfirmVisible(true)');
-        expect(leave).toContain("'/api/signaling/session/leave'");
-        expect(leave).toContain('await p2p.disconnect()');
-        expect(leave).toContain('await compositor.destroy()');
-        expect(leave).not.toContain("'/end'");
-        // The overlay is a real dialog with translated actions.
-        expect(page).toContain('id="leaveConfirm"');
-        expect(page).toContain('role="dialog"');
-        expect(page).toContain('aria-modal="true"');
-        expect(page).toContain('id="leaveConfirmStay"');
-        expect(page).toContain('id="leaveConfirmLeave"');
-        expect(page).toContain('window.cancelLeaveCompetition = function()');
+        // The explicit End button (with confirmation) remains.
+        expect(page).toContain('id="endBtn"');
+        expect(page).toContain('end_competition_confirm');
     });
 
     it('10. competitor UI carries no chunk counters/diagnostics/excess publish text', () => {
-        const stage = between(page, 'id="competitorView"', 'id="leaveConfirm"');
+        const stage = between(page, 'id="competitorView"', 'comp.youtube_live_id && isLive');
         expect(stage.toLowerCase()).not.toContain('chunk');
         expect(stage.toLowerCase()).not.toContain('diagnostic');
         expect(stage.toLowerCase()).not.toContain('bitrate');
@@ -333,8 +329,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
             'live_tools', 'start_competition', 'start_competition_failed',
             'publish_state_off', 'publish_state_on', 'nothing_to_publish',
             'media_none', 'waiting_peer_media', 'screen_share_stopped',
-            'leave_broadcast', 'leave_broadcast_confirm', 'end_competition',
-            'end_competition_confirm', 'expand_stage', 'collapse_stage',
+            'end_competition', 'end_competition_confirm', 'expand_stage', 'collapse_stage',
         ] as const;
         for (const key of keys) {
             const arText = (translations.ar as Record<string, unknown>)[key];

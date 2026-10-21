@@ -788,8 +788,6 @@ export const en = {
     media_none: 'No camera or microphone. You can share your screen to prepare.',
     waiting_peer_media: 'Waiting for the other party media...',
     screen_share_stopped: 'Screen sharing stopped.',
-    leave_broadcast: 'Leave broadcast',
-    leave_broadcast_confirm: 'Leave the broadcast? The competition will not end, and you can come back later.',
     end_competition: 'End competition',
     end_competition_confirm: 'End the competition for everyone?',
     expand_stage: 'Expand stage',

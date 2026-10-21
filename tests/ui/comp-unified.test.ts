@@ -43,8 +43,13 @@ describe('R4-COMP-UNIFIED-1 page wiring pins', () => {
     it('3. single finalize, never from unload', () => {
         const src = readSrc(PAGE);
         expect(src).not.toMatch(/fetch\([^)]*finalize\.php/);
-        expect(src).not.toMatch(/addEventListener\('beforeunload'/);
-        expect(src).toContain('await compositor.destroy()');
+        // 28.5: a browser warning may exist, but unload never finalizes/ends.
+        const unload = src.match(/addEventListener\('beforeunload'[\s\S]{0,700}/)?.[0] ?? '';
+        expect(unload).not.toContain('destroy()');
+        expect(unload).not.toContain('/end');
+        // 28.5: the single stop path now captures the compositor locally
+        // (active.destroy) so a racing SSE end cannot finalize twice.
+        expect(src).toMatch(/active\.destroy\(\)/);
         expect(src).toContain('/api/competitions/');
     });
 

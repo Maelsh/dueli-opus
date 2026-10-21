@@ -28,7 +28,10 @@ export class EventPusher {
 
     constructor(private readonly db: D1Database, env?: unknown) {
         this.eventLog = new SseEventLogModel(db);
-        this.env = env;
+        // Internal callers (cron/task service) have no Worker env; an empty
+        // object keeps the DB/SSE path working and simply skips the optional
+        // realtime-worker forward.
+        this.env = env ?? {};
     }
 
     // ----------------------------------------------------------
@@ -216,6 +219,7 @@ export class EventPusher {
             status: string;
             opponent_id?: number | null;
             started_by?: number | null;
+            ended_at?: string | null;
             updated_at?: string;
         }
     ) {
