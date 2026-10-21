@@ -372,6 +372,13 @@ describe('R4-CHUNK-INDEX-1 playlist compatibility (routes)', () => {
         const status = await model.recordingStatus(62);
         expect(status.ended).toBe(true);
         expect(status.finalized).toBe(true);
+
+        // A28-TIME-3: the player needs the marker time to distinguish the
+        // short post-end drain race from an already-settled recording.
+        stubUpstream(() => okJson({ chunks: [] }));
+        const playlist: any = await (await get(db, '/api/chunks/playlist/62')).json();
+        expect(playlist.index_metadata.finalized).toBe(true);
+        expect(playlist.index_metadata.finalized_at).toBe(marker?.finalized_at);
     });
 
     it('19. manifest carries 0042 as known history (baseline-0042)', async () => {

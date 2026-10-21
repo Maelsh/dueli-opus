@@ -311,8 +311,19 @@ function servedChunk(i: number, start: number, duration: number, ready = true) {
     };
 }
 
-function playlistWith(entries: any[], total: number, finalized: boolean, uploaded: number) {
-    return {
+type PlaylistTimes = {
+    finalizedAt?: string | null;
+    checkedAt?: string | null;
+};
+
+function playlistWith(
+    entries: any[],
+    total: number,
+    finalized: boolean,
+    uploaded: number,
+    times: PlaylistTimes = {},
+) {
+    const body: any = {
         success: true,
         id: 2244,
         extension: 'mp4',
@@ -327,6 +338,50 @@ function playlistWith(entries: any[], total: number, finalized: boolean, uploade
             finalized,
         },
     };
+    if ('finalizedAt' in times) body.index_metadata.finalized_at = times.finalizedAt;
+    if ('checkedAt' in times) body.checked_at = times.checkedAt;
+    return body;
+}
+
+/** Fixed server-clock fixtures: the verification window uses these values. */
+const TAIL_CLOCK = Date.parse('2026-10-21T18:00:00.000Z');
+function at(ms: number) {
+    return new Date(TAIL_CLOCK + ms).toISOString();
+}
+
+function jsonResponse(data: any) {
+    return new Response(JSON.stringify(data), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+    });
+}
+
+function installPlaylistFetch(
+    handler: (call: number, init?: any) => Response | Promise<Response>,
+) {
+    let calls = 0;
+    (globalThis as any).fetch = async (url: any, init?: any) => {
+        if (String(url) === '/api/chunks/playlist/2244') {
+            calls++;
+            return handler(calls, init);
+        }
+        if (String(url).startsWith('https://cdn.example/')) {
+            return chunkBytesResponse();
+        }
+        return realFetch(url);
+    };
+    return () => calls;
+}
+
+function completeTailPlaylist(finalizedAt: string, checkedAt: string) {
+    const chunks = Array.from({ length: A_COUNT }, (_, i) => servedChunk(i, i * A_STEP, A_STEP));
+    return playlistWith(chunks, A_TOTAL, true, A_COUNT, { finalizedAt, checkedAt });
+}
+
+function finalTailPlaylist(finalizedAt: string, checkedAt: string) {
+    const chunks = Array.from({ length: A_COUNT }, (_, i) => servedChunk(i, i * A_STEP, A_STEP));
+    chunks.push(servedChunk(A_COUNT, A_TOTAL, B_TAIL_DURATION));
+    return playlistWith(chunks, B_TOTAL, true, B_COUNT, { finalizedAt, checkedAt });
 }
 
 function aPlaylist() {
@@ -711,5 +766,218 @@ describe('A28-TIME — production 2244 forensic reproduction', () => {
         expect(active.currentTime).toBeCloseTo(RAW_ORIGIN, 3);
         expect(player.getGlobalTime()).toBeCloseTo(INDEX_START, 3);
         player.stop();
+    });
+});
+
+describe('A28-TIME-3 — finalized snapshot must not hide the drain tail', () => {
+    it('13. a finalized+complete initial snapshot is rechecked and the later tail is incorporated without restarting playback', async () => {
+        const { SmartVodPlayer } = loadClasses();
+        const el = zeroOriginElement();
+        const finalizedAt = at(0);
+        const checkedAt = at(0);
+        let lastTotal = 0;
+        const calls = installPlaylistFetch(() => jsonResponse(finalTailPlaylist(finalizedAt, checkedAt)));
+        const player = new SmartVodPlayer({
+            videoElement: el,
+            competitionId: 2244,
+            playlistData: completeTailPlaylist(finalizedAt, checkedAt),
+            playlistRefreshMs: 5,
+            playlistRefreshMaxAttempts: 10,
+            onTimeUpdate: (_time: number, total: number) => { lastTotal = total; },
+        });
+        await player.start();
+        el.currentTime = 5;
+        const srcBefore = el.src;
+
+        expect(player.getGlobalDuration()).toBeCloseTo(A_TOTAL, 3);
+        await wait(40);
+
+        expect(calls()).toBeGreaterThan(0);
+        expect(player.chunks.length).toBe(B_COUNT);
+        expect(player.getGlobalDuration()).toBeCloseTo(B_TOTAL, 3);
+        expect(lastTotal).toBeCloseTo(B_TOTAL, 3);
+        expect(player.currentChunkIndex).toBe(0);
+        expect(el.currentTime).toBeCloseTo(5, 3);
+        expect(el.src).toBe(srcBefore);
+        player.stop();
+    });
+
+    it('14. an already-settled finalized playlist is not polled', async () => {
+        const { SmartVodPlayer } = loadClasses();
+        const el = zeroOriginElement();
+        const finalizedAt = at(0);
+        const checkedAt = at(3_600_000);
+        const calls = installPlaylistFetch(
+            () => jsonResponse(completeTailPlaylist(finalizedAt, checkedAt)),
+        );
+        const player = new SmartVodPlayer({
+            videoElement: el,
+            competitionId: 2244,
+            playlistData: completeTailPlaylist(finalizedAt, checkedAt),
+            playlistRefreshMs: 5,
+            playlistRefreshMaxAttempts: 10,
+        });
+        await player.start();
+        await wait(40);
+
+        expect(calls()).toBe(0);
+        expect(player.getGlobalDuration()).toBeCloseTo(A_TOTAL, 3);
+        player.stop();
+    });
+
+    it('15. a recent complete snapshot stops after the bounded verification window', async () => {
+        const { SmartVodPlayer } = loadClasses();
+        const el = zeroOriginElement();
+        const finalizedAt = at(0);
+        const checkedAt = at(0);
+        const calls = installPlaylistFetch(
+            () => jsonResponse(completeTailPlaylist(finalizedAt, checkedAt)),
+        );
+        const player = new SmartVodPlayer({
+            videoElement: el,
+            competitionId: 2244,
+            playlistData: completeTailPlaylist(finalizedAt, checkedAt),
+            playlistRefreshMs: 5,
+            playlistRefreshMaxAttempts: 5,
+        });
+        await player.start();
+        await wait(80);
+
+        const settled = calls();
+        expect(settled).toBeGreaterThanOrEqual(1);
+        expect(settled).toBeLessThanOrEqual(5);
+        expect(player.playlistRefreshTimer).toBeNull();
+        expect(player.playlistRefreshInFlight).toBe(false);
+        await wait(30);
+        expect(calls()).toBe(settled);
+        player.stop();
+    });
+
+    it('16. the tail is discovered after one or more no-growth refresh responses', async () => {
+        const { SmartVodPlayer } = loadClasses();
+        const el = zeroOriginElement();
+        const finalizedAt = at(0);
+        const checkedAt = at(0);
+        const calls = installPlaylistFetch((call) => jsonResponse(
+            call < 3
+                ? completeTailPlaylist(finalizedAt, checkedAt)
+                : finalTailPlaylist(finalizedAt, checkedAt),
+        ));
+        const player = new SmartVodPlayer({
+            videoElement: el,
+            competitionId: 2244,
+            playlistData: completeTailPlaylist(finalizedAt, checkedAt),
+            playlistRefreshMs: 5,
+            playlistRefreshMaxAttempts: 10,
+        });
+        await player.start();
+        await wait(40);
+
+        expect(calls()).toBeGreaterThanOrEqual(3);
+        expect(player.chunks.length).toBe(B_COUNT);
+        expect(player.getGlobalDuration()).toBeCloseTo(B_TOTAL, 3);
+        player.stop();
+    });
+
+    it('17. stop aborts pending verification and prevents further refresh activity', async () => {
+        const { SmartVodPlayer } = loadClasses();
+        const el = zeroOriginElement();
+        const finalizedAt = at(0);
+        const checkedAt = at(0);
+        let aborted = false;
+        const calls = installPlaylistFetch((_call, init) => new Promise<Response>((_resolve, reject) => {
+            const signal = init && init.signal;
+            if (!signal) return;
+            if (signal.aborted) {
+                aborted = true;
+                reject(new Error('aborted'));
+                return;
+            }
+            signal.addEventListener('abort', () => {
+                aborted = true;
+                reject(new Error('aborted'));
+            });
+        }));
+        const player = new SmartVodPlayer({
+            videoElement: el,
+            competitionId: 2244,
+            playlistData: completeTailPlaylist(finalizedAt, checkedAt),
+            playlistRefreshMs: 5,
+            playlistRefreshMaxAttempts: 10,
+        });
+        await player.start();
+        await wait(15);
+
+        expect(calls()).toBe(1);
+        player.stop();
+        await wait(30);
+
+        expect(aborted).toBe(true);
+        expect(calls()).toBe(1);
+        expect(player.playlistRefreshTimer).toBeNull();
+        expect(player.playlistRefreshInFlight).toBe(false);
+    });
+
+    it('18. a stale response cannot roll the playlist back to an older snapshot', async () => {
+        const { SmartVodPlayer } = loadClasses();
+        const el = zeroOriginElement();
+        const fresh = playlistWith(
+            Array.from({ length: A_COUNT }, (_, i) => servedChunk(i, i * A_STEP, A_STEP)),
+            A_TOTAL,
+            false,
+            A_COUNT,
+            { checkedAt: at(1000) },
+        );
+        const stale = finalTailPlaylist(at(0), at(0));
+        const calls = installPlaylistFetch(() => jsonResponse(stale));
+        const player = new SmartVodPlayer({
+            videoElement: el,
+            competitionId: 2244,
+            playlistData: fresh,
+            playlistRefreshMs: 1000,
+            playlistRefreshMaxAttempts: 30,
+        });
+        await player.start();
+        await player.refreshPlaylist();
+
+        expect(calls()).toBe(1);
+        expect(player.chunks.length).toBe(A_COUNT);
+        expect(player.getGlobalDuration()).toBeCloseTo(A_TOTAL, 3);
+        player.stop();
+    });
+
+    it('19. repeated start replaces the verification loop instead of creating a competing one', async () => {
+        const { SmartVodPlayer } = loadClasses();
+        const el = zeroOriginElement();
+        const finalizedAt = at(0);
+        const checkedAt = at(0);
+        let aborted = 0;
+        const calls = installPlaylistFetch((_call, init) => new Promise<Response>((_resolve, reject) => {
+            const signal = init && init.signal;
+            if (!signal) return;
+            signal.addEventListener('abort', () => {
+                aborted++;
+                reject(new Error('aborted'));
+            });
+        }));
+        const player = new SmartVodPlayer({
+            videoElement: el,
+            competitionId: 2244,
+            playlistData: completeTailPlaylist(finalizedAt, checkedAt),
+            playlistRefreshMs: 5,
+            playlistRefreshMaxAttempts: 10,
+        });
+        await player.start();
+        await wait(15);
+        expect(calls()).toBe(1);
+
+        await player.start();
+        await wait(15);
+        expect(aborted).toBe(1);
+        expect(calls()).toBe(2);
+
+        player.stop();
+        await wait(30);
+        expect(calls()).toBe(2);
     });
 });

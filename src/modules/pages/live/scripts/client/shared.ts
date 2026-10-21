@@ -1533,6 +1533,15 @@ class SmartVodPlayer {
         this.playlistRefreshTimer = null;
         this.playlistRefreshAttempts = 0;
         this.playlistRefreshInFlight = false;
+        // A28-TIME-3: /end writes the final marker BEFORE the authorized drain
+        // tail is published. A finalized=true + ready==uploaded snapshot is
+        // therefore not proof that the tail is absent. The marker timestamp
+        // bounds an authoritative recheck after initialization; a lifecycle
+        // epoch + request sequence keep a late/older response from reviving an
+        // old player or overwriting a newer snapshot.
+        this.playlistRefreshEpoch = 0;
+        this.playlistRefreshRequestSeq = 0;
+        this.playlistRefreshAbort = null;
         this.stopped = false;
     }
 
@@ -1561,6 +1570,16 @@ class SmartVodPlayer {
      */
     async start() {
         this.stopped = false;
+        // Retire any previous start/stop lifecycle before reusing the player:
+        // its timer is cleared, its in-flight request is aborted, and its late
+        // response is ignored by the epoch/request-sequence checks below.
+        this.playlistRefreshEpoch++;
+        this.playlistRefreshRequestSeq++;
+        this.playlistRefreshInFlight = false;
+        if (this.playlistRefreshAbort) {
+            try { this.playlistRefreshAbort.abort(); } catch (e) {}
+            this.playlistRefreshAbort = null;
+        }
         if (this.playlistRefreshTimer) {
             clearTimeout(this.playlistRefreshTimer);
             this.playlistRefreshTimer = null;
@@ -2343,9 +2362,15 @@ class SmartVodPlayer {
     }
 
     /**
-     * A28-TIME: refresh is needed only while the authoritative index says the
-     * recording is not final, or a ready chunk is still missing. A legacy
-     * playlist without index_metadata is left on the existing path.
+     * A28-TIME: refresh while the authoritative index says the recording is
+     * not final, or a ready chunk is still missing.
+     *
+     * A28-TIME-3: finalized=true + ready==uploaded is NOT terminal. The final
+     * marker is written at /end before the authorized drain tail is published,
+     * so the tail can appear after this snapshot. Recheck only while the
+     * server's own checked_at is still inside the bounded post-finalization
+     * window. A legacy playlist without finalized_at keeps the old path (it
+     * carries no evidence that would justify polling).
      */
     needsPlaylistRefresh() {
         var meta = this.playlist && this.playlist.index_metadata;
@@ -2353,8 +2378,20 @@ class SmartVodPlayer {
         var missing = (typeof meta.ready_count === 'number'
             && typeof meta.uploaded_count === 'number'
             && meta.ready_count < meta.uploaded_count);
-        if (meta.finalized === true) return missing;
-        return meta.finalized === false;
+        if (meta.finalized !== true) return meta.finalized === false;
+        if (missing) return true;
+
+        var finalizedAt = (typeof meta.finalized_at === 'string')
+            ? Date.parse(meta.finalized_at) : NaN;
+        if (!isFinite(finalizedAt)) return false;
+        // Use the server response timestamp (not the viewer's wall clock) so
+        // clock skew cannot widen or close the window. checked_at exists on
+        // every route response; tests may omit it.
+        var observedAt = (this.playlist && typeof this.playlist.checked_at === 'string')
+            ? Date.parse(this.playlist.checked_at) : NaN;
+        if (!isFinite(observedAt)) observedAt = Date.now();
+        var settleMs = this.playlistRefreshMs * this.playlistRefreshMaxAttempts;
+        return (observedAt - finalizedAt) < settleMs;
     }
 
     /** Bounded timer; a timer/in-flight request never duplicates. */
@@ -2375,18 +2412,39 @@ class SmartVodPlayer {
      * so playback never restarts or jumps; only the timeline/total metadata
      * and the appended tail are updated. Bounded by attempts + the
      * finalized/ready predicate (no infinite loop).
+     *
+     * A28-TIME-3: only apply a response from THIS lifecycle and only when it
+     * is not older than the snapshot currently displayed. The epoch/request
+     * sequence rejects a response that resolves after stop/start; the server
+     * checked_at rejects an out-of-order older response. The append-only guard
+     * still prevents an older/smaller list from shrinking playback.
      */
     async refreshPlaylist() {
         if (this.stopped || this.playlistRefreshInFlight) return;
         if (!this.needsPlaylistRefresh()) return;
+        var epoch = this.playlistRefreshEpoch;
+        var requestId = ++this.playlistRefreshRequestSeq;
         this.playlistRefreshInFlight = true;
         this.playlistRefreshAttempts++;
+        var controller = (typeof AbortController === 'function') ? new AbortController() : null;
+        this.playlistRefreshAbort = controller;
         try {
-            var res = await fetch('/api/chunks/playlist/' + this.competitionId, { cache: 'no-store' });
+            var requestInit = { cache: 'no-store' };
+            if (controller) requestInit.signal = controller.signal;
+            var res = await fetch('/api/chunks/playlist/' + this.competitionId, requestInit);
             if (!res || !res.ok) return;
             var data = await res.json();
-            if (this.stopped || !data || !Array.isArray(data.chunks) || data.chunks.length === 0) return;
+            if (this.stopped || epoch !== this.playlistRefreshEpoch) return;
+            if (!data || !Array.isArray(data.chunks) || data.chunks.length === 0) return;
             if (data.upstream === 'error' || data.upstream === 'invalid') return;
+            // A late older response must never overwrite the newer snapshot.
+            var currentCheckedAt = this.playlist && this.playlist.checked_at;
+            var incomingCheckedAt = data.checked_at;
+            if (typeof currentCheckedAt === 'string' && typeof incomingCheckedAt === 'string') {
+                var currentMs = Date.parse(currentCheckedAt);
+                var incomingMs = Date.parse(incomingCheckedAt);
+                if (isFinite(currentMs) && isFinite(incomingMs) && incomingMs < currentMs) return;
+            }
             // Append-only authority: a stale/older snapshot must never shrink
             // the already playable list.
             if (data.chunks.length < this.chunks.length) return;
@@ -2402,10 +2460,18 @@ class SmartVodPlayer {
                 this.onTimeUpdate(this.getGlobalTime(), this.totalDuration, this.currentChunkIndex);
             }
         } catch (e) {
-            testLog('⚠️ Playlist refresh failed (bounded retry)', 'warn');
+            if (!this.stopped && epoch === this.playlistRefreshEpoch) {
+                testLog('⚠️ Playlist refresh failed (bounded retry)', 'warn');
+            }
         } finally {
-            this.playlistRefreshInFlight = false;
-            if (!this.stopped && this.needsPlaylistRefresh()) this.schedulePlaylistRefresh();
+            if (requestId === this.playlistRefreshRequestSeq) {
+                this.playlistRefreshInFlight = false;
+                if (this.playlistRefreshAbort === controller) this.playlistRefreshAbort = null;
+                if (!this.stopped && epoch === this.playlistRefreshEpoch
+                    && this.needsPlaylistRefresh()) {
+                    this.schedulePlaylistRefresh();
+                }
+            }
         }
     }
 
@@ -2414,6 +2480,16 @@ class SmartVodPlayer {
      */
     stop() {
         this.stopped = true;
+        // A28-TIME-3: make the stop authoritative for async work too. A
+        // pending fetch is aborted and its late response can no longer apply
+        // or reschedule (epoch/request sequence is retired).
+        this.playlistRefreshEpoch++;
+        this.playlistRefreshRequestSeq++;
+        this.playlistRefreshInFlight = false;
+        if (this.playlistRefreshAbort) {
+            try { this.playlistRefreshAbort.abort(); } catch (e) {}
+            this.playlistRefreshAbort = null;
+        }
         if (this.playlistRefreshTimer) {
             clearTimeout(this.playlistRefreshTimer);
             this.playlistRefreshTimer = null;

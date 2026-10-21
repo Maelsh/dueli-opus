@@ -715,15 +715,19 @@ chunksRoutes.get('/playlist/:id', async (c) => {
     // apply), or zero rows all fall through to the exact legacy behavior.
     let indexRows: RecordingChunk[] = [];
     let indexFinalized = false;
+    let indexFinalizedAt: string | null = null;
     const db = (c.env as unknown as { DB?: D1Database }).DB;
     if (db) {
         try {
             const indexModel = new ChunkIndexModel(db);
             indexRows = await indexModel.listOrdered(compId, { limit: 2000 });
-            indexFinalized = (await indexModel.getFinalMarker(compId)) !== null;
+            const finalMarker = await indexModel.getFinalMarker(compId);
+            indexFinalized = finalMarker !== null;
+            indexFinalizedAt = finalMarker ? finalMarker.finalized_at : null;
         } catch {
             indexRows = [];
             indexFinalized = false;
+            indexFinalizedAt = null;
         }
     }
     const hasIndex = indexRows.length > 0;
@@ -733,7 +737,7 @@ chunksRoutes.get('/playlist/:id', async (c) => {
         // invalid (e.g. the known-empty playlist.php): the response IS a
         // valid playlist, hence upstream 'ok' + provenance fields. Per-chunk
         // fetch failures stay loud downstream under existing bounds.
-        const merged = mergePlaylistWithIndex([], indexRows, base, indexFinalized);
+        const merged = mergePlaylistWithIndex([], indexRows, base, indexFinalized, indexFinalizedAt);
         const totalReady = merged.metadata.total_ready_ms;
         return c.json({
             success: true,
@@ -844,7 +848,7 @@ chunksRoutes.get('/playlist/:id', async (c) => {
     // orphans appended, gaps reported) — additive fields only. No D1 rows:
     // the exact legacy shape below is preserved untouched.
     if (hasIndex) {
-        const merged = mergePlaylistWithIndex(chunks, indexRows, base, indexFinalized);
+        const merged = mergePlaylistWithIndex(chunks, indexRows, base, indexFinalized, indexFinalizedAt);
         const served = merged.chunks;
         const first = served.length > 0 ? served[0].url : null;
         const ext = first ? first.match(/\.(mp4|webm)(?=[?#]|$)/i) : null;
