@@ -500,7 +500,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
+                                'Authorization': 'Bearer ' + window.DueliSession.token()
                             },
                             body: JSON.stringify({
                                 competition_id: competitionId
@@ -1035,7 +1035,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch('/api/reports', {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || ''),
+                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
@@ -1155,7 +1155,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     await fetch('/api/competitions/' + competitionId + '/end', {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ vod_url: vodUrl })
@@ -1169,7 +1169,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId') || '')
+                            'Authorization': 'Bearer ' + window.DueliSession.token()
                         },
                         body: JSON.stringify({
                             competition_id: Number(competitionId)
@@ -1196,7 +1196,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const roomCommentsSeen = new Set();
             function roomAuthHeaders() {
                 const h = { 'Content-Type': 'application/json' };
-                const sess = (window.sessionId || localStorage.getItem('sessionId'));
+                const sess = window.DueliSession.token();
                 if (sess) h['Authorization'] = 'Bearer ' + sess;
                 return h;
             }
@@ -1254,7 +1254,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             }
             async function refreshRoomViewerCount() {
                 try {
-                    const sess = (window.sessionId || localStorage.getItem('sessionId'));
+                    const sess = window.DueliSession.token();
                     if (!sess) return;
                     const res = await fetch('/api/signaling/session?competition_id=' + competitionId, {
                         headers: { 'Authorization': 'Bearer ' + sess }

@@ -37,9 +37,12 @@ describe('R2-F page pins', () => {
             for (const s of scripts) {
                 expect(() => new Script(s), `advertiser[${lang}] compiles`).not.toThrow();
             }
-            // Canonical session fallback everywhere (no session_id-only reads).
-            expect(html).not.toMatch(/localStorage\.getItem\('session_id'\)(?! \|)/);
-            expect(html).toContain("localStorage.getItem('session_id') || localStorage.getItem('sessionId')");
+            // SEC-07: every page uses the one canonical accessor; no page reads
+            // either session key directly (legacy-first was the defect).
+            expect(html).not.toContain("localStorage.getItem('session_id')");
+            expect(html).not.toContain("localStorage.getItem('sessionId')");
+            expect(html).toContain('window.DueliSession.token()');
+            expect(html).toContain('/static/session-access.js');
             // No broken string-concat quoting remains (was: data-csp-args='[" + id + "]'
             // inside a single-quoted JS string ⇒ SyntaxError killing ALL page JS).
             // Static JSON string args ('["@event"]', '["login"]', …) are valid.
@@ -56,7 +59,9 @@ describe('R2-F page pins', () => {
             for (const s of scripts) {
                 expect(() => new Script(s), `complaints[${lang}] compiles`).not.toThrow();
             }
-            expect(html).not.toMatch(/localStorage\.getItem\('session_id'\)(?! \|)/);
+            expect(html).not.toContain("localStorage.getItem('session_id')");
+            expect(html).not.toContain("localStorage.getItem('sessionId')");
+            expect(html).toContain('window.DueliSession.token()');
             expect(html).not.toContain('data-csp-args=\'[" +');
         }
     });

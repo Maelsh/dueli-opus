@@ -148,7 +148,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     const url = '/api/users/' + window.currentUser.id + '/requests?type=' + currentTab;
                     const res = await fetch(url, {
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+                            'Authorization': 'Bearer ' + window.DueliSession.token()
                         }
                     });
                     const data = await res.json();
@@ -267,7 +267,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     const res = await fetch(\`/api/competitions/\${compId}/\${action}-request\`, {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ request_id: requestId })
@@ -291,7 +291,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     const res = await fetch(\`/api/competitions/\${compId}/\${action}-invite\`, {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         }
                     });
@@ -322,7 +322,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     const res = await fetch(\`/api/competitions/\${compId}/request\`, {
                         method: 'DELETE',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+                            'Authorization': 'Bearer ' + window.DueliSession.token()
                         }
                     });
                     

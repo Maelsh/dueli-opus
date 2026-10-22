@@ -281,7 +281,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
     </div>
     ${getFooter(lang)}
     <script nonce="${nonce}">
-        const token = localStorage.getItem('session_id') || localStorage.getItem('sessionId');
+        const token = window.DueliSession.token();
         const adminHeaders = (extra) => Object.assign({ 'Authorization': 'Bearer ' + token }, extra || {});
 
         // R2-A: client boot gate (covers cookie-less sessions; the server

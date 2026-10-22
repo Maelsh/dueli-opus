@@ -108,7 +108,7 @@ async function driveDispatcher(clicks: RowNode[]) {
 
 async function renderRows() {
     const html = await (await app.request('/messages?lang=ar', {}, { DB: new FakeD1() } as never)).text();
-    const h = createHarness({ ids: ['conversationsList', 'chatHeader', 'noConversation', 'messagesArea', 'messageInput'] });
+    const h = createHarness({ ids: ['conversationsList', 'chatHeader', 'noConversation', 'messagesArea', 'messageInput'], sessionToken: 'sess' });
 
     const sandbox: Record<string, unknown> = {
         window: { ...h.window, currentUser: { id: 1 }, sessionId: 'sess' },

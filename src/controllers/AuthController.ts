@@ -325,7 +325,10 @@ export class AuthController extends BaseController {
                 user: this.toUserDTO(result.user)
             });
         } catch (error) {
-            return this.success(c, { user: null });
+            // A DB/network failure is transient, not an authoritative guest
+            // answer. Returning 200 {user:null} here made the client clear a
+            // valid session on a temporary outage (SEC-07).
+            return this.serverError(c, error as Error);
         }
     }
 

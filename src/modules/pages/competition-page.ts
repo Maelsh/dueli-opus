@@ -738,7 +738,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '')
+              'Authorization': 'Bearer ' + (window.DueliSession.token() || '')
             },
             body: JSON.stringify({ competitor_id: competitorId, rating: value })
           });
@@ -765,7 +765,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         try {
           const res = await fetch('/api/competitions/' + competitionId + '/rate?competitor_id=' + competitorId + '&lang=' + (window.lang || 'ar'), {
             method: 'DELETE',
-            headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '') }
+            headers: { 'Authorization': 'Bearer ' + (window.DueliSession.token() || '') }
           });
           const data = await res.json();
           if (data.success) {
@@ -1308,7 +1308,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // always binds identity to the session, never to body fields).
       function commentAuthHeaders(extra) {
         const h = extra || {};
-        const sess = (window.sessionId || localStorage.getItem('sessionId'));
+        const sess = window.DueliSession.token();
         if (sess) h['Authorization'] = 'Bearer ' + sess;
         const guest = localStorage.getItem('dueli_guest_token');
         if (guest) h['X-Guest-Token'] = guest;
@@ -1443,7 +1443,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           return;
         }
         try {
-          const sess = (window.sessionId || localStorage.getItem('sessionId'));
+          const sess = window.DueliSession.token();
           if (!sess) { el.classList.add('hidden'); return; }
           const res = await fetch('/api/signaling/session?competition_id=' + competitionId, {
             headers: { 'Authorization': 'Bearer ' + sess }
@@ -1521,7 +1521,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch(path, {
             method: method,
             headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1618,7 +1618,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/remind', {
             method: isReminded ? 'DELETE' : 'POST',
             headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1713,7 +1713,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/reports', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -1738,7 +1738,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/request', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1764,7 +1764,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/request', {
             method: 'DELETE',
             headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1784,7 +1784,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/accept-invite', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1810,7 +1810,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/decline-invite', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -2501,7 +2501,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
 
       function competitorAuthHeaders() {
         const h = { 'Content-Type': 'application/json' };
-        const sess = (window.sessionId || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId')));
+        const sess = window.DueliSession.token();
         if (sess) h['Authorization'] = 'Bearer ' + sess;
         return h;
       }

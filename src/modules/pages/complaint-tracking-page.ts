@@ -46,7 +46,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         async function loadComplaints() {
             try {
-                const token = localStorage.getItem('session_id') || localStorage.getItem('sessionId');
+                const token = window.DueliSession.token();
                 if (!token) return;
                 const res = await fetch('/api/complaints/my', { headers: { 'Authorization': 'Bearer ' + token } });
                 const data = await res.json();
@@ -63,7 +63,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
         }
         async function viewComplaint(id) {
             try {
-                const token = localStorage.getItem('session_id') || localStorage.getItem('sessionId');
+                const token = window.DueliSession.token();
                 const res = await fetch('/api/complaints/' + id, { headers: { 'Authorization': 'Bearer ' + token } });
                 const data = await res.json();
                 if (!data.success) return;

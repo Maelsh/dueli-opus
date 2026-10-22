@@ -493,9 +493,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         }
 
         function exploreHeaders(extra) {
-          var h = extra || {};
-          var sess = safeStorageGet('sessionId');
-          if (sess) h['Authorization'] = 'Bearer ' + sess;
+          var h = window.DueliSession.headers(extra || {});
           var guest = safeStorageGet('dueli_guest_token');
           if (guest) h['X-Guest-Token'] = guest;
           return h;

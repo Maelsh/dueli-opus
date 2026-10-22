@@ -168,7 +168,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+              'Authorization': 'Bearer ' + window.DueliSession.token()
             },
             body: JSON.stringify({
               title: form.title.value,

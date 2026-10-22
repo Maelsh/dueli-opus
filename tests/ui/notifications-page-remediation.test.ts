@@ -57,7 +57,7 @@ const READ_ROW = { ...UNREAD_ROW, is_read: true };
 
 /** Runs the real page inline script against the shim DOM. */
 function runPageScript(html: string, fetchImpl: (url: string, opts?: any) => Promise<any>) {
-    const h = createHarness({ ids: ['notificationsContent', 'markAllBtn'], currentUser: { id: 81 } });
+    const h = createHarness({ ids: ['notificationsContent', 'markAllBtn'], currentUser: { id: 81 }, sessionToken: 'sess-x' });
     const sandbox: Record<string, unknown> = {
         window: h.window,
         document: h.document,

@@ -6,6 +6,13 @@
 
 import { State } from '../core/State';
 import { CookieUtils } from '../core/CookieUtils';
+import {
+    LEGACY_SESSION_STORAGE_KEY,
+    SESSION_STORAGE_KEY,
+    getBrowserSessionToken,
+    listSessionCandidates,
+    readBrowserSessionCandidates,
+} from '../core/SessionAccess';
 import { Toast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
 import { NotificationsUI } from '../ui/NotificationsUI';
@@ -150,10 +157,34 @@ export class AuthService {
      * The actual session resolution. Only this method performs the fetch.
      */
     private static async resolveAuth(): Promise<boolean> {
-        const cookieSession = CookieUtils.get('sessionId');
-        const savedSession = cookieSession || localStorage.getItem('sessionId');
+        // Canonical candidates share one key but may disagree between memory,
+        // localStorage and cookie (for example a stale cookie beside a newer
+        // localStorage value). Validate them in order. The legacy `session_id`
+        // is a MIGRATION path only: it is consulted when no canonical value
+        // exists, never after a canonical value has been authoritatively
+        // rejected. This keeps a stale legacy token from reviving a session.
+        const sources = readBrowserSessionCandidates();
+        const canonicalCandidates = listSessionCandidates({
+            runtime: sources.runtime,
+            stored: sources.stored,
+            cookie: sources.cookie,
+        });
+        const legacyCandidates = listSessionCandidates({ legacy: sources.legacy });
+        const candidates = canonicalCandidates.length > 0
+            ? canonicalCandidates
+            : legacyCandidates;
 
-        if (savedSession) {
+        if (candidates.length === 0) {
+            // No session token anywhere: there is nothing to validate, so the
+            // client is authoritatively a guest (first-visit visitor).
+            AuthService.authStatus = 'guest';
+            this.updateAuthUI();
+            return false;
+        }
+
+        let authoritativeInvalid = false;
+
+        for (const savedSession of candidates) {
             try {
                 const res = await this.withTimeout(fetch('/api/auth/session', {
                     method: 'GET',
@@ -182,23 +213,32 @@ export class AuthService {
                 }
 
                 if (res.status === 401) {
-                    // Genuine unauthenticated/expired session per the current contract.
-                    AuthService.authStatus = 'guest';
-                    this.clearAuth();
-                    this.updateAuthUI();
-                    return false;
+                    // This canonical candidate is invalid. Another canonical
+                    // source may still be valid (for example a stale cookie
+                    // beside a newer localStorage value), so keep checking.
+                    authoritativeInvalid = true;
+                    continue;
                 }
 
-                // B1: only a genuine 401 proves the session is invalid. Any other
-                // status (5xx, 404, gateway errors) is a transient failure and must
-                // never wipe a valid session.
+                // B1: only authoritative invalid answers may clear auth. Any
+                // other status (5xx, 404, gateway errors) is a transient
+                // failure and must never wipe a valid session.
                 if (!res.ok) {
                     console.error('Auth check returned a transient status:', res.status);
                     this.updateAuthUI();
                     return false;
                 }
 
-                const data = await res.json() as ApiResponse;
+                let data: ApiResponse;
+                try {
+                    data = await res.json() as ApiResponse;
+                } catch {
+                    // Malformed response: transient, not proof of expiry.
+                    console.error('Auth check returned an unreadable response');
+                    this.updateAuthUI();
+                    return false;
+                }
+
                 const user = AuthService.normalizeUser(data.user || data.data?.user || data);
 
                 if (user && (user.id || user.user_id || user.email)) {
@@ -219,28 +259,36 @@ export class AuthService {
                         CookieUtils.set('country', user.country, 365);
                     }
 
-                    // Update storage
+                    // Migrate the validated candidate (including a valid
+                    // legacy value) to the canonical pair. The legacy key is
+                    // left in place for compatibility until SEC-08 retires it;
+                    // it can never take precedence over this canonical value.
                     localStorage.setItem('user', JSON.stringify(user));
-                    localStorage.setItem('sessionId', savedSession);
-                    CookieUtils.set('sessionId', savedSession, 7);
+                    localStorage.setItem(SESSION_STORAGE_KEY, savedSession);
+                    CookieUtils.set(SESSION_STORAGE_KEY, savedSession, 7);
 
                     this.updateAuthUI();
                     return true;
-                } else {
-                    // Authoritative 200 with no user: the session is invalid.
-                    AuthService.authStatus = 'guest';
-                    this.clearAuth();
                 }
+
+                // Authoritative 200 with no user: this candidate is invalid.
+                authoritativeInvalid = true;
             } catch (err) {
                 // Network/parse failure: transient, NOT proof the session is
                 // invalid. Preserve local auth state (do not clearAuth) and
                 // report unauthenticated for this check only.
                 console.error('Auth check failed:', err);
+                this.updateAuthUI();
+                return false;
             }
-        } else {
-            // No session token anywhere: there is nothing to validate, so the
-            // client is authoritatively a guest (first-visit visitor).
+        }
+
+        if (authoritativeInvalid) {
+            // Every candidate was answered authoritatively invalid (401 or 200
+            // with no user): this is a genuine expiry/logout, not a transient
+            // outage. Clearing also removes the stale legacy key.
             AuthService.authStatus = 'guest';
+            this.clearAuth();
         }
 
         this.updateAuthUI();
@@ -252,8 +300,11 @@ export class AuthService {
      */
     static clearAuth(): void {
         localStorage.removeItem('user');
-        localStorage.removeItem('sessionId');
-        CookieUtils.delete('sessionId');
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        // A genuine logout/expiry must not leave a stale legacy token behind
+        // for the next page to resurrect.
+        localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY);
+        CookieUtils.delete(SESSION_STORAGE_KEY);
         AuthService.authStatus = 'guest';
         State.currentUser = null;
         State.sessionId = null;
@@ -334,8 +385,8 @@ export class AuthService {
     static async handleOAuthSuccess(session: string, fromUrl: boolean = false): Promise<void> {
         try {
             // Save to cookies
-            CookieUtils.set('sessionId', session, 7);
-            localStorage.setItem('sessionId', session);
+            CookieUtils.set(SESSION_STORAGE_KEY, session, 7);
+            localStorage.setItem(SESSION_STORAGE_KEY, session);
 
             // Remove session from URL if needed
             if (fromUrl) {
@@ -407,8 +458,8 @@ export class AuthService {
                 State.currentUser = user;
                 State.sessionId = sessionId || null;
                 localStorage.setItem('user', JSON.stringify(user));
-                localStorage.setItem('sessionId', sessionId || '');
-                CookieUtils.set('sessionId', sessionId || '', 7);
+                localStorage.setItem(SESSION_STORAGE_KEY, sessionId || '');
+                CookieUtils.set(SESSION_STORAGE_KEY, sessionId || '', 7);
 
 
 
@@ -683,7 +734,7 @@ export class AuthService {
      */
     static async logout(): Promise<void> {
         try {
-            const session = State.sessionId || CookieUtils.get('sessionId') || localStorage.getItem('sessionId');
+            const session = getBrowserSessionToken();
 
             if (session) {
                 await fetch('/api/auth/logout', {

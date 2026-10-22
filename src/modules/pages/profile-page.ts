@@ -311,7 +311,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 if (!btn || !window.currentUser || !profileUsername) return;
                 try {
                     const res = await fetch('/api/users/' + encodeURIComponent(profileUsername), {
-                        headers: { 'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')) }
+                        headers: { 'Authorization': 'Bearer ' + window.DueliSession.token() }
                     });
                     if (!res.ok) return;
                     const data = await res.json();
@@ -339,7 +339,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 if (!btn || !window.currentUser) return;
                 try {
                     const res = await fetch('/api/blocks', {
-                        headers: { 'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')) }
+                        headers: { 'Authorization': 'Bearer ' + window.DueliSession.token() }
                     });
                     if (!res.ok) return;
                     const data = await res.json();
@@ -366,7 +366,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 if (!confirm(blocked ? (tr.confirm_unblock || 'Unblock this user?') : (tr.confirm_block || 'Block this user?'))) return;
                 try {
                     const headers = {
-                        'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                        'Authorization': 'Bearer ' + window.DueliSession.token(),
                         'Content-Type': 'application/json'
                     };
                     const res = blocked
@@ -392,7 +392,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     const res = await fetch(\`/api/users/\${userId}/follow\`, {
                         method,
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         }
                     });
@@ -490,7 +490,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '')
+                            'Authorization': 'Bearer ' + (window.DueliSession.token() || '')
                         },
                         body: JSON.stringify({ content })
                     });
@@ -509,7 +509,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 try {
                     const res = await fetch('/api/settings/posts/' + postId + '?lang=' + (window.lang || 'ar'), {
                         method: 'DELETE',
-                        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('sessionId') || '') }
+                        headers: { 'Authorization': 'Bearer ' + (window.DueliSession.token() || '') }
                     });
                     const data = await res.json();
                     if (data.success) loadUserPosts();
