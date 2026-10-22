@@ -183,6 +183,7 @@ describe('PR #69 blocker 2 — request language cannot escape the nonced script'
         expect(script).not.toContain('../..');
         expect(csp).toContain('script-src');
         expect(csp).not.toContain('unsafe-inline');
-        expect(csp).not.toContain('unsafe-eval');
+        // `'wasm-unsafe-eval'` is allowed; JS `'unsafe-eval'` is not.
+        expect(csp).not.toMatch(/'unsafe-eval'/);
     });
 });

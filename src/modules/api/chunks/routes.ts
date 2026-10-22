@@ -11,6 +11,7 @@ import { CryptoUtils } from '../../../lib/services/CryptoUtils';
 import { findInitEnd } from '../../../lib/services/ChunkInitSegment';
 import { ChunkIndexModel } from '../../../models/ChunkIndexModel';
 import { mergePlaylistWithIndex } from '../../../lib/services/ChunkIndexPlaylist';
+import { buildDownloadManifest } from '../../../lib/services/ChunkDownloadManifest';
 import { measureStoredChunkDuration } from '../../../lib/services/MediaDuration';
 import type { RecordingChunk } from '../../../models/ChunkIndexModel';
 import { RecordingLeaseModel } from '../../../models/RecordingLeaseModel';
@@ -611,6 +612,80 @@ chunksRoutes.delete('/:key', verifyUploadServerHmac, verifyUploadServerOrigin, a
     } catch (error: any) {
         console.error('Delete chunk error:', error);
         return c.json({ success: false, error: error.message }, 500);
+    }
+});
+
+/**
+ * GET /api/chunks/download/:id
+ * R4-CHUNK-DOWNLOAD-1: the authoritative download manifest.
+ *
+ * Unlike the public player playlist, this route is AUTHENTICATED (guest
+ * download is forbidden) and returns facts only: ordered READY chunks with
+ * their locator, byte size, verified duration, computed timeline origin,
+ * digest, container/codecs, plus finalization/gap/unready diagnostics and
+ * the viewer's rights class. The browser download service consumes this
+ * manifest directly — it never reads SmartVodPlayer.loadedChunks and never
+ * requires the whole recording to have played.
+ *
+ * Completeness is a server decision: finalized + contiguous 1..max + every
+ * slot ready. Anything less is explicitly partial, never labelled complete.
+ */
+chunksRoutes.get('/download/:id', authMiddleware({ required: true }), async (c) => {
+    const id = c.req.param('id') ?? '';
+    if (!/^\d+$/.test(id)) {
+        return c.json({ success: false, error: 'Invalid competition id', code: 'bad_id' }, 400);
+    }
+    const competitionId = Number(id);
+    const user = c.get('user');
+    if (!user || !Number.isFinite(Number(user.id))) {
+        return c.json({ success: false, error: 'Authentication required', code: 'auth_required' }, 401);
+    }
+
+    const headers = {
+        'Cache-Control': 'private, no-store, max-age=0',
+        'Vary': 'Authorization, Cookie',
+    };
+
+    try {
+        const competition = await c.env.DB.prepare(
+            'SELECT id, creator_id, opponent_id, status FROM competitions WHERE id = ?'
+        ).bind(competitionId).first<{
+            id: number; creator_id: number; opponent_id: number | null; status: string;
+        } | null>();
+
+        if (!competition) {
+            return c.json({ success: false, error: 'Competition not found', code: 'not_found' }, 404, headers);
+        }
+
+        const model = new ChunkIndexModel(c.env.DB);
+        const [listed, finalMarker] = await Promise.all([
+            model.listAllOrdered(competitionId, { pageSize: 1000, maxRows: 20000 }),
+            model.getFinalMarker(competitionId),
+        ]);
+
+        const base = (c.env.FFMPEG_SERVER_URL || DEFAULT_UPLOAD_URL).replace(/\/+$/, '');
+        const manifest = buildDownloadManifest({
+            competition,
+            viewerUserId: Number(user.id),
+            rows: listed.rows,
+            finalMarker,
+            baseUrl: base,
+            truncated: listed.truncated,
+        });
+
+        return c.json({ success: true, data: manifest }, 200, headers);
+    } catch (error: unknown) {
+        // Partial-schema deployment / missing 0041 table: fail closed and
+        // explicit. A download must never be assembled from guessed metadata.
+        if (leaseUnavailable(error)) {
+            return c.json({
+                success: false,
+                error: 'Download metadata is unavailable',
+                code: 'download_metadata_unavailable',
+            }, 503, headers);
+        }
+        console.error('Chunk download manifest error:', error);
+        return c.json({ success: false, error: 'Download manifest failed', code: 'download_manifest_failed' }, 500, headers);
     }
 });
 

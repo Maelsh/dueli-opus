@@ -55,10 +55,10 @@ describe('R4-COMP-UNIFIED-1 page wiring pins', () => {
 
     it('4. viewer embedded section exposes no competitor controls', () => {
         const src = readSrc(PAGE);
-        // Window widened 4000→6000 by R4-CHUNK-PLAYER-UX-1 (live-edge
-        // rewind/return-live buttons live in this section; still no
-        // competitor controls — asserted below, not by proximity).
-        const viewerSection = src.match(/id="embeddedViewerSection"[\s\S]{0,6000}?id="embeddedVodControls"/);
+        // Window widened 4000→6500 by R4-CHUNK-DOWNLOAD-1 (the independent
+        // download affordance lives in this section; still no competitor
+        // controls — asserted below, not by proximity).
+        const viewerSection = src.match(/id="embeddedViewerSection"[\s\S]{0,6500}?id="embeddedVodControls"/);
         expect(viewerSection, 'viewer section must exist').toBeTruthy();
         const viewerHtml = viewerSection![0];
         expect(viewerHtml).not.toContain('competitorControls');

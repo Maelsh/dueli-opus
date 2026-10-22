@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-11T19:20:51.032Z",
-  "total": 243,
+  "generatedAt": "2026-10-21T23:48:56.942Z",
+  "total": 244,
   "routes": [
     {
       "method": "GET",
@@ -595,6 +595,13 @@
       "path": "/api/chunks/:key",
       "classification": "SERVICE(origin-only ⚠)",
       "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/chunks/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chunks/download/:id",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/chunks/routes.ts"
     },
     {

@@ -1,14 +1,14 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-11T19:20:51.032Z
+> تاريخ التوليد: 2026-10-21T23:48:56.942Z
 
-## الإجمالي: 243 مسار
+## الإجمالي: 244 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 128 |
-| AUTHENTICATED | 68 |
+| AUTHENTICATED | 69 |
 | UNGUARDED ⚠ | 42 |
 | SERVICE(origin-only ⚠) | 5 |
 
@@ -109,6 +109,7 @@
 | GET | `/api/categories/:id` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/categories/routes.ts` |
 | GET | `/api/categories/:id/subcategories` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/categories/routes.ts` |
 | DELETE | `/api/chunks/:key` | SERVICE(origin-only ⚠) | group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
+| GET | `/api/chunks/download/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
 | GET | `/api/chunks/init/:id` | SERVICE(origin-only ⚠) | group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
 | GET | `/api/chunks/lease/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |
 | POST | `/api/chunks/lease/acquire` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/chunks/routes.ts` |

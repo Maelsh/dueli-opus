@@ -43,6 +43,7 @@ import { SettingsUI } from './ui/SettingsUI';
 import { InvitePanel } from './ui/InvitePanel';
 import { RecommendationCarousel, CompetitorsMiniStatsCard } from './ui/RecommendationCarousel';
 import { CountdownTimer } from './ui/CountdownTimer';
+import { RecordingDownloadPanel } from './ui/RecordingDownloadPanel';
 
 // Shared Components (View layer - single source of truth)
 import { getCompetitionCard, type CompetitionCardProps } from '../shared/components/competition-card';
@@ -239,6 +240,10 @@ declare global {
         // R4-COMP-UNIFIED-1: pure role×state surface decision (unified page)
         resolveVideoSurface: typeof resolveVideoSurface;
 
+        // R4-CHUNK-DOWNLOAD-1: independent recording download dialog
+        RecordingDownloadPanel: typeof RecordingDownloadPanel;
+        openRecordingDownload: (competitionId: number) => RecordingDownloadPanel | null;
+
         // Invite Panel (Task 10)
         openInvitePanel: (competitionId: number) => void;
         closeInvitePanel: () => void;
@@ -360,6 +365,10 @@ if (typeof window !== 'undefined') {
     (window as any).PlatformRecordingLease = PlatformRecordingLease;
     // R4-COMP-UNIFIED-1: pure role×state decision for the unified page.
     window.resolveVideoSurface = resolveVideoSurface;
+    // R4-CHUNK-DOWNLOAD-1: independent download dialog (auth-gated by
+    // isDownloadUserAuthenticated + the server manifest route).
+    window.RecordingDownloadPanel = RecordingDownloadPanel;
+    window.openRecordingDownload = (competitionId: number) => RecordingDownloadPanel.open(Number(competitionId));
 
     // Note: Test Streaming functions are injected as inline scripts in test pages
 }

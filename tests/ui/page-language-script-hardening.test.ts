@@ -93,7 +93,10 @@ function assertStrictCsp(res: Response) {
     const csp = res.headers.get('content-security-policy') ?? '';
     expect(csp).toContain('script-src');
     expect(csp).not.toContain('unsafe-inline');
-    expect(csp).not.toContain('unsafe-eval');
+    // `'wasm-unsafe-eval'` is deliberately allowed for the self-hosted
+    // FFmpeg core; the JS `'unsafe-eval'` token must never appear.
+    expect(csp).not.toMatch(/'unsafe-eval'/);
+    expect(csp).toMatch(/script-src[^;]*'wasm-unsafe-eval'/);
 }
 
 describe('post-#69: zero raw request-into-JS sinks remain', () => {
