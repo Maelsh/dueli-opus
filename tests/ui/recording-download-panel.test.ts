@@ -50,6 +50,7 @@ describe('R4-CHUNK-DOWNLOAD-1 download UI helpers', () => {
 
     it('exposes the /live download before the player finishes loading, with the right competition id', () => {
         const script = getViewerScript('en');
+        const modeSet = script.indexOf("currentMode = 'vod';");
         const showCall = script.indexOf('showDownloadButtons();');
         const playerStart = script.indexOf('currentPlayer = new SmartVodPlayer');
 
@@ -57,6 +58,8 @@ describe('R4-CHUNK-DOWNLOAD-1 download UI helpers', () => {
         expect(script).toContain('currentCompetitionId = String(competitionId);');
         expect(script).toContain('window.openRecordingDownload(currentCompetitionId)');
         expect(script).toContain("if (!window.currentUser || !window.currentUser.id)");
+        expect(modeSet).toBeGreaterThan(-1);
+        expect(modeSet).toBeLessThan(showCall);
         expect(showCall).toBeGreaterThan(-1);
         expect(playerStart).toBeGreaterThan(showCall);
         expect(script).not.toContain('fullyLoaded');

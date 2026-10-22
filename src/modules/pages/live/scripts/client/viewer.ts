@@ -145,6 +145,7 @@ export function getViewerScript(lang: Language): string {
             currentCompetitionId = String(competitionId);
             
             setMode('vod', '📼 VOD');
+            currentMode = 'vod';
             document.getElementById('viewerSubtitle').textContent = '${tr.recorded}';
 
             // The download dialog owns its own server manifest + chunk fetch;
@@ -182,7 +183,6 @@ export function getViewerScript(lang: Language): string {
             });
             
             await currentPlayer.start();
-            currentMode = 'vod';
         }
         
         // ===== Setup VOD Controls =====
