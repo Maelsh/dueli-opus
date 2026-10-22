@@ -44,6 +44,9 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
     
+    <!-- SEC-07: synchronous tiny accessor so inline SSR page scripts use the
+         same canonical session precedence as the bundled client. -->
+    <script src="/static/session-access.js"></script>
     <!-- Load client bundle in head with defer so it's ready when DOMContentLoaded fires -->
     <script src="/static/app.js" defer></script>
     

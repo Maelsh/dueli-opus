@@ -92,7 +92,7 @@ window.playerStateLabel = playerStateLabel;
  * يُقرأ من localStorage (يُحفظ عند تسجيل الدخول)
  */
 function getSessionToken() {
-    return localStorage.getItem('sessionId');
+    return (window.DueliSession && window.DueliSession.token) ? window.DueliSession.token() : '';
 }
 
 window.getSessionToken = getSessionToken;

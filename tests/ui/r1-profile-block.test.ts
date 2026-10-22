@@ -31,7 +31,7 @@ async function seedSara(): Promise<FakeD1> {
 async function runProfileActor(opts: { blocked: boolean; calls: { method: string; url: string; body?: string }[] }) {
     const db = await seedSara();
     const html = await (await app.request('/profile/sara?lang=ar', {}, env(db))).text();
-    const h = createHarness({ ids: ['profileActions'], search: '?lang=ar' });
+    const h = createHarness({ ids: ['profileActions'], search: '?lang=ar', sessionToken: 'sess-9' });
     (h.window as Record<string, unknown>).currentUser = { id: 9, username: 'omar' };
     const sandbox: Record<string, unknown> = {
         window: h.window,

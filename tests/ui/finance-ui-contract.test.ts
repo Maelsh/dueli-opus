@@ -45,10 +45,11 @@ const EARNINGS = 'src/modules/pages/earnings-page.ts';
 const DONATE = 'src/modules/pages/donate-page.ts';
 
 describe('R1.5 earnings session key (P15-001)', () => {
-    it('uses the sessionId key in every earnings/withdrawal request', () => {
+    it('uses the canonical session accessor in every earnings/withdrawal request', () => {
         const src = readSrc(EARNINGS);
         expect(src, "wrong session_id key must be gone").not.toContain("getItem('session_id')");
-        expect(src.match(/getItem\('sessionId'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+        expect(src, 'pages must not read sessionId directly').not.toContain("getItem('sessionId')");
+        expect(src.match(/window\.DueliSession\.token\(\)/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
     });
 });
 

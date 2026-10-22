@@ -239,7 +239,7 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
                     const res = await fetch(\`/api/competitions/\${id}\`, {
                         method: 'DELETE',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+                            'Authorization': 'Bearer ' + window.DueliSession.token()
                         }
                     });
                     if (res.ok) {

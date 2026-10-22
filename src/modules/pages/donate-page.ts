@@ -235,7 +235,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             async function loadMyDonations() {
                 const card = document.getElementById('myDonationsCard');
                 const list = document.getElementById('myDonationsList');
-                const token = (window.sessionId || localStorage.getItem('sessionId') || localStorage.getItem('session_id') || '');
+                const token = (window.DueliSession.token() || '');
                 if (!token || !card || !list) return;
                 card.hidden = false;
                 try {

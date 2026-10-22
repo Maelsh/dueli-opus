@@ -7,7 +7,7 @@
     "dev": "npm run build:css && npm run build:client && vite",
     "dev:sandbox": "npm run build:css && npm run build:client && wrangler pages dev dist --d1=dueli-db --local --ip 0.0.0.0 --port 5173",
     "build": "npm run build:css && npm run build:client && vite build",
-    "build:client": "npm run build:ffmpeg-assets && npm run build:ffmpeg-worker && npx esbuild src/client/index.ts --bundle --outfile=dist/static/app.js --format=iife --minify --sourcemap",
+    "build:client": "npm run build:ffmpeg-assets && npm run build:ffmpeg-worker && npx esbuild src/client/index.ts --bundle --outfile=dist/static/app.js --format=iife --minify --sourcemap && npx esbuild src/client/session-access.ts --bundle --outfile=dist/static/session-access.js --format=iife --minify",
     "build:ffmpeg-assets": "node dev-tools/prepare-ffmpeg-assets.mjs",
     "build:ffmpeg-worker": "npx esbuild src/client/ffmpeg/worker.ts --bundle --outfile=public/static/ffmpeg/worker.js --format=iife --minify",
     "build:css": "tailwindcss -i ./src/styles.css -o ./public/static/styles.css",

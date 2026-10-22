@@ -173,6 +173,106 @@ describe('canonical auth lifecycle (single-flight + transient-safe status)', () 
         expect(store.has('sessionId')).toBe(false);
     });
 
+    it('4c. canonical session wins before a stale legacy session_id', async () => {
+        store.set('session_id', 'legacy-stale');
+        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
+            if (!String(url).includes('/api/auth/session')) {
+                return new Response('{}', { status: 200 });
+            }
+            sessionCalls.count += 1;
+            const authorization = init?.headers?.Authorization;
+            if (authorization === 'Bearer sess-abc') return okSession();
+            return new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
+        }));
+
+        expect(await AuthService.checkAuth()).toBe(true);
+        expect(sessionCalls.count).toBe(1);
+        expect(AuthService.authStatus).toBe('authenticated');
+        expect(store.get('sessionId')).toBe('sess-abc');
+        // Compatibility value is left untouched for now, but it was never read.
+        expect(store.get('session_id')).toBe('legacy-stale');
+    });
+
+    it('4d. a stale local canonical value falls through to the valid cookie', async () => {
+        store.set('sessionId', 'stale-local');
+        (globalThis as any).document.cookie = 'sessionId=valid-cookie; path=/';
+        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
+            if (!String(url).includes('/api/auth/session')) {
+                return new Response('{}', { status: 200 });
+            }
+            sessionCalls.count += 1;
+            const authorization = init?.headers?.Authorization;
+            return authorization === 'Bearer valid-cookie'
+                ? okSession()
+                : new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
+        }));
+
+        expect(await AuthService.checkAuth()).toBe(true);
+        expect(sessionCalls.count).toBe(2);
+        expect(AuthService.authStatus).toBe('authenticated');
+        expect(State.sessionId).toBe('valid-cookie');
+        expect(store.get('sessionId')).toBe('valid-cookie');
+    });
+
+    it('4e. a valid legacy-only token is validated once and migrated to canonical', async () => {
+        store.delete('sessionId');
+        store.set('session_id', 'legacy-valid');
+        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
+            if (!String(url).includes('/api/auth/session')) {
+                return new Response('{}', { status: 200 });
+            }
+            sessionCalls.count += 1;
+            return init?.headers?.Authorization === 'Bearer legacy-valid'
+                ? okSession()
+                : new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
+        }));
+
+        expect(await AuthService.checkAuth()).toBe(true);
+        expect(sessionCalls.count).toBe(1);
+        expect(AuthService.authStatus).toBe('authenticated');
+        expect(store.get('sessionId')).toBe('legacy-valid');
+        expect(State.sessionId).toBe('legacy-valid');
+    });
+
+    it('4f. genuine canonical expiry clears both values and never revives legacy', async () => {
+        store.set('sessionId', 'expired-canonical');
+        store.set('session_id', 'legacy-valid-looking');
+        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
+            if (!String(url).includes('/api/auth/session')) {
+                return new Response('{}', { status: 200 });
+            }
+            sessionCalls.count += 1;
+            // Even if the legacy token would validate, a rejected canonical
+            // session is authoritative expiry; legacy must not be consulted.
+            return init?.headers?.Authorization === 'Bearer legacy-valid-looking'
+                ? okSession()
+                : new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
+        }));
+
+        expect(await AuthService.checkAuth()).toBe(false);
+        expect(AuthService.authStatus).toBe('guest');
+        expect(sessionCalls.count).toBe(1);
+        expect(store.has('sessionId')).toBe(false);
+        expect(store.has('session_id')).toBe(false);
+        expect(State.currentUser).toBeNull();
+    });
+
+    it('4g. a 5xx on the first candidate is transient and does not try/clear legacy', async () => {
+        store.set('session_id', 'legacy-maybe-valid');
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        try {
+            vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => new Response('err', { status: 500 })));
+            expect(await AuthService.checkAuth()).toBe(false);
+            expect(AuthService.authStatus).toBe('unknown');
+            expect(sessionCalls.count).toBe(1);
+            expect(store.get('sessionId')).toBe('sess-abc');
+            expect(store.get('session_id')).toBe('legacy-maybe-valid');
+            expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('sess-abc');
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
     it('5a. normalizeUser maps legacy {name, avatar} to the canonical DTO', () => {
         const out = AuthService.normalizeUser({ id: 3, name: 'Old Name', avatar: 'https://cdn.test/o.png' });
         expect(out.display_name).toBe('Old Name');

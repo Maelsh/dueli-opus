@@ -172,7 +172,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 catch (e) { return new URLSearchParams(''); }
             }
             function authHeaders(extra) {
-                return Object.assign({ 'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')) }, extra || {});
+                return window.DueliSession.headers(extra || {});
             }
             
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -247,7 +247,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 try {
                     const res = await fetch('/api/conversations', {
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+                            'Authorization': 'Bearer ' + window.DueliSession.token()
                         }
                     });
                     const data = await res.json();
@@ -322,7 +322,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 try {
                     const res = await fetch(\`/api/conversations/\${conversationId}/messages\`, {
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+                            'Authorization': 'Bearer ' + window.DueliSession.token()
                         }
                     });
                     const data = await res.json();

@@ -4,7 +4,7 @@
  * @module client/core/ApiClient
  */
 
-import { State } from './State';
+import { getBrowserSessionToken } from './SessionAccess';
 
 export interface ApiOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -27,8 +27,8 @@ export class ApiClient {
             ...options.headers,
         };
 
-        // Get session from State or localStorage fallback
-        const session = State.sessionId || localStorage.getItem('sessionId');
+        // One canonical session access path (State/storage/cookie precedence).
+        const session = getBrowserSessionToken();
         if (session) {
             headers['Authorization'] = 'Bearer ' + session;
         }

@@ -37,6 +37,7 @@ const DYNAMIC_CACHE_LIMIT = 60; // T5.3: cap dynamic entries to avoid unbounded 
 const STATIC_ASSETS = [
     '/',
     '/static/styles.css',
+    '/static/session-access.js',
     '/static/app.js',
     '/manifest.json'
 ];

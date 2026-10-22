@@ -102,7 +102,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 try {
                     const res = await fetch('/api/settings', {
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId'))
+                            'Authorization': 'Bearer ' + window.DueliSession.token()
                         }
                     });
                     const data = await res.json();
@@ -230,7 +230,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch('/api/settings', {
                         method: 'PUT',
                         headers: {
-                            'Authorization': 'Bearer ' + (window.sessionId || localStorage.getItem('sessionId')),
+                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify(settings)
@@ -253,7 +253,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function deleteAccount() {
                 if (!confirm(\`\${tr.confirm_delete_account || 'Are you sure you want to delete your account?'}\`)) return;
                 try {
-                    const session = localStorage.getItem('sessionId') || '';
+                    const session = window.DueliSession.token() || '';
                     const res = await fetch('/api/users/delete-account?lang=' + (window.lang || 'ar'), {
                         method: 'POST',
                         headers: {
@@ -266,7 +266,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     if (data.success) {
                         // GDPR deletion done server-side — clear local state and leave
                         localStorage.removeItem('user');
-                        localStorage.removeItem('sessionId');
+                        window.DueliSession.clearLocal();
                         document.cookie = 'sessionId=; Max-Age=0; path=/';
                         alert(tr.account_deleted || 'Your account has been deleted.');
                         window.location.href = '/?lang=' + (window.lang || 'ar');

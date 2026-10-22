@@ -94,7 +94,28 @@ export interface Harness {
     assigned: string[];
 }
 
-export function createHarness(opts: { ids: string[]; currentUser?: unknown; search?: string }): Harness {
+/**
+ * Minimal `window.DueliSession` for page-script harnesses. Real pages load the
+ * SEC-07 accessor synchronously in <head>; these VM tests only execute the
+ * page script, so the same API is supplied here instead of the page reading
+ * localStorage directly again.
+ */
+export function createSessionAccessStub(token: string | (() => string) = '') {
+    const read = typeof token === 'function' ? token : () => token;
+    return {
+        token: () => read(),
+        headers(extra: Record<string, string> = {}) {
+            const headers = { ...extra };
+            const value = read();
+            if (value) headers.Authorization = 'Bearer ' + value;
+            return headers;
+        },
+        hasToken: () => !!read(),
+        clearLocal: () => undefined,
+    };
+}
+
+export function createHarness(opts: { ids: string[]; currentUser?: unknown; search?: string; sessionToken?: string }): Harness {
     REGISTRY = new Map();
     CONTROLS = new Map();
     for (const id of opts.ids) REGISTRY.set(id, makeElement(id));
@@ -125,6 +146,8 @@ export function createHarness(opts: { ids: string[]; currentUser?: unknown; sear
 
     const windowObj: Record<string, unknown> = {
         currentUser: opts.currentUser ?? null,
+        sessionId: opts.sessionToken ?? null,
+        DueliSession: createSessionAccessStub(opts.sessionToken ?? ''),
         innerWidth: 1280,
         location: {
             // The page reads its query from the URL, mirroring the request.
