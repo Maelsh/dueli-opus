@@ -292,3 +292,117 @@ export function buildRealTrunMp4(
     const moof = box('moof', [...traf]);
     return new Uint8Array([...box('ftyp', [0x69, 0x73, 0x6f, 0x6d]), ...moov, ...moof, ...box('mdat', [0x00])]);
 }
+
+// ---------------------------------------------------------------------------
+// R4-CHUNK-DOWNLOAD-1: structurally valid fragmented MP4 chunks.
+//
+// The builders above are intentionally minimal (they exercise duration readers
+// and trun parsing). Download tests need a real init contract: hdlr, stsd,
+// mvex/trex and per-track timescales. These chunks are deterministic and
+// carry one moof + mdat after a single ftyp+moov init, matching stored objects.
+// ---------------------------------------------------------------------------
+
+function be64(n: number): number[] {
+    const hi = Math.floor(n / 0x100000000);
+    const lo = n >>> 0;
+    return [...be32(hi), ...be32(lo)];
+}
+
+export interface Fmp4TrackSpec {
+    id: number;
+    handler: 'vide' | 'soun';
+    timescale: number;
+    sampleEntry: string;
+}
+
+function hdlrBox(handler: 'vide' | 'soun'): number[] {
+    const type = handler === 'vide' ? [0x76, 0x69, 0x64, 0x65] : [0x73, 0x6f, 0x75, 0x6e];
+    return fullBox('hdlr', 0, 0, [
+        ...be32(0), ...type,
+        ...be32(0), ...be32(0), ...be32(0),
+        0,
+    ]);
+}
+
+function trakBox(track: Fmp4TrackSpec): number[] {
+    const tkhd = fullBox('tkhd', 0, 0, [
+        ...be32(0), ...be32(0), ...be32(track.id), ...be32(0), ...be32(0),
+    ]);
+    const mdhd = fullBox('mdhd', 0, 0, [
+        ...be32(0), ...be32(0), ...be32(track.timescale), ...be32(0),
+    ]);
+    // stsd.data: version/flags, entry_count, then the sample entry box. The
+    // sample-entry type lives at data offset 12 (what parseMovieInfo reads).
+    const stsd = fullBox('stsd', 0, 0, [
+        ...be32(1),
+        ...box(track.sampleEntry, new Array(24).fill(0)),
+    ]);
+    const minf = box('minf', box('stbl', stsd));
+    return box('trak', [...tkhd, ...box('mdia', [...mdhd, ...hdlrBox(track.handler), ...minf])]);
+}
+
+export function buildDownloadFmp4Init(tracks: Fmp4TrackSpec[]): Uint8Array {
+    const mvhd = fullBox('mvhd', 0, 0, [
+        ...be32(0), ...be32(0), ...be32(1000), ...be32(0),
+        ...be32(0x00010000), ...be32(0),
+    ]);
+    const trex = tracks.map((track) => fullBox('trex', 0, 0, [
+        ...be32(track.id), ...be32(1), ...be32(0), ...be32(16), ...be32(0),
+    ]));
+    const moov = box('moov', [...mvhd, ...tracks.flatMap(trakBox), ...box('mvex', trex.flat())]);
+    return new Uint8Array([
+        ...box('ftyp', [0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x00, 0x00, 0x69, 0x73, 0x6f, 0x6d]),
+        ...moov,
+    ]);
+}
+
+export interface DownloadFmp4ChunkOptions {
+    /** Absolute sequence written to mfhd. */
+    sequence: number;
+    /** Authoritative timeline origin in ms (the service/D1 value). */
+    timelineStartMs: number;
+    /** Authoritative chunk duration in ms. */
+    durationMs: number;
+    /** Append a stale mfra box to prove the assembler drops it. */
+    withMfra?: boolean;
+}
+
+/** One stored object: init + moof(traf per track) + mdat (+ optional mfra). */
+export function buildDownloadFmp4Chunk(
+    init: Uint8Array,
+    tracks: Fmp4TrackSpec[],
+    opts: DownloadFmp4ChunkOptions,
+): Uint8Array {
+    const sampleSize = 16;
+    const buildMoof = (dataOffset: number): number[] => {
+        const trafs = tracks.map((track) => {
+            const durationUnits = Math.max(1, Math.round((opts.durationMs * track.timescale) / 1000));
+            const baseUnits = Math.max(0, Math.round((opts.timelineStartMs * track.timescale) / 1000));
+            const tfhd = fullBox('tfhd', 0, 0x020000 | 0x08, [
+                ...be32(track.id), ...be32(durationUnits),
+            ]);
+            const tfdt = fullBox('tfdt', 1, 0, be64(baseUnits));
+            const trun = fullBox('trun', 0, 0x000305, [
+                ...be32(1), ...be32(dataOffset), ...be32(0x02000000),
+                ...be32(durationUnits), ...be32(sampleSize),
+            ]);
+            return box('traf', [...tfhd, ...tfdt, ...trun]);
+        });
+        return box('moof', [...fullBox('mfhd', 0, 0, be32(opts.sequence)), ...trafs.flat()]);
+    };
+
+    // data_offset is relative to the moof start (default-base-is-moof); the
+    // value is fixed-width, so one sizing pass is enough.
+    const moofSize = buildMoof(0).length;
+    const moof = buildMoof(moofSize + 8); // + mdat header
+    const parts: number[] = [
+        ...init,
+        ...moof,
+        ...box('mdat', new Array(sampleSize).fill(0x11)),
+    ];
+    if (opts.withMfra) {
+        // Absolute indexes from the old file: must never survive a remux.
+        parts.push(...box('mfra', [...fullBox('tfra', 0, 0, [...be32(1), ...be32(0), ...be32(0), ...be32(0), ...be32(0)])]));
+    }
+    return new Uint8Array(parts);
+}

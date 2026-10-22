@@ -38,7 +38,10 @@ export function getViewerScript(lang: Language): string {
         let currentPlayer = null;
         let chunkManager = null;
         let currentMode = null;
-        let fullyLoaded = false;
+        // The download button is rendered outside loadVOD's parameter scope, so
+        // retain the competition id it belongs to.
+        let currentCompetitionId = null;
+
         
         // ===== Check Competition Status and Load =====
         window.checkAndLoad = async function() {
@@ -139,9 +142,16 @@ export function getViewerScript(lang: Language): string {
         // ===== Load VOD =====
         async function loadVOD(competitionId, playlistData) {
             stopStreamInternal();
+            currentCompetitionId = String(competitionId);
             
             setMode('vod', '📼 VOD');
+            currentMode = 'vod';
             document.getElementById('viewerSubtitle').textContent = '${tr.recorded}';
+
+            // The download dialog owns its own server manifest + chunk fetch;
+            // it must be available before (or without) the player loading every
+            // chunk. Guests still get no button.
+            showDownloadButtons();
             
             // إظهار VOD Controls
             const vodControls = document.getElementById('vodControls');
@@ -160,13 +170,6 @@ export function getViewerScript(lang: Language): string {
                     if (loadingInfo && currentPlayer) {
                         loadingInfo.textContent = loaded + '/' + currentPlayer.chunks.length;
                     }
-                    
-                    // إظهار أزرار التحميل فقط بعد اكتمال التحميل
-                    if (currentPlayer && currentPlayer.isFullyLoaded() && !fullyLoaded) {
-                        fullyLoaded = true;
-                        log('✅ All chunks loaded!', 'success');
-                        showDownloadButtons(currentPlayer.extension);
-                    }
                 },
                 onReady: function(info) {
                     log('✅ Ready: ' + info.chunks + ' chunks, ' + Math.round(info.totalDuration) + 's', 'success');
@@ -180,7 +183,6 @@ export function getViewerScript(lang: Language): string {
             });
             
             await currentPlayer.start();
-            currentMode = 'vod';
         }
         
         // ===== Setup VOD Controls =====
@@ -251,58 +253,44 @@ export function getViewerScript(lang: Language): string {
             }
         });
         
-        // ===== Show Download Buttons (only after fully loaded) =====
-        function showDownloadButtons(extension) {
+        // ===== Show Download Button (R4-CHUNK-DOWNLOAD-1) =====
+        // Guests may watch the recording but get no download button. Signed-in
+        // users open the independent download dialog, which fetches the
+        // authenticated server manifest and never depends on loadedChunks.
+        function showDownloadButtons() {
             const container = document.getElementById('downloadContainer');
             if (!container) return;
-            
+
             container.innerHTML = '';
-            container.classList.remove('hidden');
-            
-            // زر تحميل مباشر
-            const directBtn = document.createElement('button');
-            directBtn.className = 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2';
-            directBtn.innerHTML = '<i class="fas fa-download"></i> ' + extension.toUpperCase();
-            directBtn.onclick = async function() {
-                directBtn.disabled = true;
-                directBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                try {
-                    await currentPlayer.downloadVideo();
-                } catch (e) {
-                    log('❌ Download failed: ' + e.message, 'error');
-                }
-                directBtn.disabled = false;
-                directBtn.innerHTML = '<i class="fas fa-download"></i> ' + extension.toUpperCase();
-            };
-            container.appendChild(directBtn);
-            
-            // زر MP4 إذا كان WebM
-            if (extension === 'webm') {
-                const mp4Btn = document.createElement('button');
-                mp4Btn.className = 'px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2';
-                mp4Btn.innerHTML = '<i class="fas fa-file-video"></i> MP4';
-                mp4Btn.onclick = async function() {
-                    mp4Btn.disabled = true;
-                    mp4Btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                    try {
-                        await currentPlayer.downloadAsMp4(null, function(stage) {
-                            if (stage === 'loading') mp4Btn.innerHTML = '<i class="fas fa-download"></i> FFmpeg...';
-                            else if (stage === 'converting') mp4Btn.innerHTML = '<i class="fas fa-cog fa-spin"></i> ${tr.converting}...';
-                        });
-                    } catch (e) {
-                        log('❌ Conversion failed: ' + e.message, 'error');
-                    }
-                    mp4Btn.disabled = false;
-                    mp4Btn.innerHTML = '<i class="fas fa-file-video"></i> MP4';
-                };
-                container.appendChild(mp4Btn);
+            if (!window.currentUser || !window.currentUser.id) {
+                container.classList.add('hidden');
+                return;
             }
+            container.classList.remove('hidden');
+
+            const mp4Btn = document.createElement('button');
+            mp4Btn.type = 'button';
+            mp4Btn.className = 'px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2';
+            mp4Btn.setAttribute('aria-label', '${tr.download_ui.title}');
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-download';
+            icon.setAttribute('aria-hidden', 'true');
+            const label = document.createElement('span');
+            label.textContent = '${tr.download_ui.start}';
+            mp4Btn.append(icon, label);
+            mp4Btn.onclick = function() {
+                if (typeof window.openRecordingDownload === 'function' && currentCompetitionId) {
+                    window.openRecordingDownload(currentCompetitionId);
+                }
+            };
+            container.appendChild(mp4Btn);
         }
+        window.addEventListener('dueli:auth-success', function() {
+            if (currentMode === 'vod') showDownloadButtons();
+        });
         
         // ===== Stop Stream Internal =====
         function stopStreamInternal() {
-            fullyLoaded = false;
-            
             if (currentPlayer) {
                 if (currentPlayer.destroy) {
                     currentPlayer.destroy();
@@ -330,6 +318,7 @@ export function getViewerScript(lang: Language): string {
             
             setMode('', '');
             currentMode = null;
+            currentCompetitionId = null;
         }
         
         // ===== Stop Stream (Public) =====

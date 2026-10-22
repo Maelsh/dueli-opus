@@ -74,8 +74,14 @@ describe('C5 — served policy has no unsafe directives', () => {
         const csp = res.headers.get('content-security-policy') ?? '';
         expect(csp).toContain('script-src');
         expect(csp).not.toContain('unsafe-inline');
-        expect(csp).not.toContain('unsafe-eval');
+        // R4-CHUNK-DOWNLOAD-1: `'wasm-unsafe-eval'` is allowed for WASM
+        // compilation; the JS `'unsafe-eval'` token must never appear.
+        expect(csp).not.toMatch(/'unsafe-eval'/);
+        expect(csp).toMatch(/script-src[^;]*'wasm-unsafe-eval'/);
         expect(csp).toMatch(/script-src[^;]*'nonce-[A-Za-z0-9+/=]+'/);
+        expect(csp).toMatch(/worker-src 'self'/);
+        expect(csp).toMatch(/media-src[^;]*blob:/);
+        expect(csp).not.toMatch(/connect-src[^;]*blob:/);
     });
 });
 

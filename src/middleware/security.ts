@@ -163,18 +163,23 @@ export function securityHeaders() {
     return async (c: Context, next: Next) => {
         // C5 (final): per-request nonce. Inline handlers are GONE (converted to
         // data-csp-* delegation handled by the external client bundle); page
-        // <script>/<style> blocks carry this nonce. No 'unsafe-inline', no
-        // 'unsafe-eval' anywhere. Pinned by tests/api/csp-hardening.test.ts.
+        // <script>/<style> blocks carry this nonce. No 'unsafe-inline' and no
+        // JS 'unsafe-eval'. R4-CHUNK-DOWNLOAD-1 adds 'wasm-unsafe-eval' (WASM
+        // compilation only, never JS eval) for the self-hosted FFmpeg core and
+        // an explicit own-origin worker policy. `blob:` stays on media-src for
+        // the in-memory MP4 preview; connect-src is unchanged.
+        // Pinned by csp-hardening.test.ts.
         const nonce = generateCspNonce();
         c.set('cspNonce', nonce);
         c.header('Content-Security-Policy', [
             "default-src 'self'",
-            `script-src 'self' 'nonce-${nonce}' https://cdnjs.cloudflare.com https://apis.google.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com`,
+            `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://apis.google.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com`,
             `style-src 'self' 'nonce-${nonce}' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com`,
             "img-src 'self' data: https: blob:",
             "font-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com data:",
             "connect-src 'self' https: wss:",
             "media-src 'self' https: blob:",
+            "worker-src 'self'",
             "frame-src 'self' https://www.youtube.com https://meet.jit.si",
             "frame-ancestors 'none'",
             "base-uri 'self'",

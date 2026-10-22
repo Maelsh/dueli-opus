@@ -554,6 +554,37 @@ export class ChunkIndexModel extends BaseModel<RecordingChunk> {
         return (res.results || []).map((r) => this.row(r));
     }
 
+    /**
+     * R4-CHUNK-DOWNLOAD-1: complete ordered read for the download manifest.
+     * Pages with the indexed continuation query (bounded SELECT per page) up
+     * to a documented ceiling, so a corrupt/absurd sequence space can never
+     * turn one manifest request into an unbounded scan. `truncated` is
+     * reported instead of silently serving a partial authority list.
+     */
+    async listAllOrdered(
+        competitionId: number,
+        opts?: { pageSize?: number; maxRows?: number }
+    ): Promise<{ rows: RecordingChunk[]; truncated: boolean }> {
+        // `continuation()` caps a page at 500 rows; requesting more would make
+        // the "short page" break fire after the first page and silently hide
+        // the rest of a long recording.
+        const PAGE = Math.min(Math.max(asInt(opts?.pageSize) ?? 500, 1), 500);
+        const MAX = Math.min(Math.max(asInt(opts?.maxRows) ?? 20000, 1), 100000);
+        const rows: RecordingChunk[] = [];
+        let after = 0;
+        for (;;) {
+            const page = await this.continuation(competitionId, after, PAGE);
+            if (page.length === 0) break;
+            for (const row of page) {
+                if (rows.length >= MAX) return { rows, truncated: true };
+                rows.push(row);
+            }
+            after = page[page.length - 1].sequence;
+            if (page.length < PAGE) break;
+        }
+        return { rows, truncated: false };
+    }
+
     /** Bounded range read (both bounds required — never a full scan). */
     async listRange(competitionId: number, fromSequence: number, toSequence: number): Promise<RecordingChunk[]> {
         const from = asInt(fromSequence);

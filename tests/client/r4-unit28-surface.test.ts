@@ -57,6 +57,9 @@ function loadApply(opts: HarnessOptions = {}) {
         'window', 'closeRatingUi', 'beginTerminalTeardown', 'renderCompetition',
         'paintCompetitionChrome', 'paintCompetitionTimer', 'initCompetitionDynamics',
         'checkAndInitStream', 'maybeStartRecording', 'log',
+        // R4-CHUNK-DOWNLOAD-1: applyCompetitionState refreshes the independent
+        // download affordance after painting; it is not part of A28's contract.
+        'refreshEmbeddedDownloadButton',
         'initialComp', 'initialCompetitorStarted',
         `
         let competitionData = initialComp;
@@ -91,6 +94,7 @@ function loadApply(opts: HarnessOptions = {}) {
         () => { calls.push('stream'); },
         () => { calls.push('maybeRecord'); },
         () => { calls.push('log'); },
+        () => { calls.push('downloadRefresh'); },
         comp,
         opts.competitorStarted === true,
     );

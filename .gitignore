@@ -45,3 +45,7 @@ logs/
 
 # Real hosting upload configuration (contains the upload secret) — never track.
 /dev-tools/php/upload-config.php
+
+# R4-CHUNK-DOWNLOAD-1: generated from node_modules/@ffmpeg/core by
+# dev-tools/prepare-ffmpeg-assets.mjs (30+ MiB, split for Pages' 25 MiB limit).
+/public/static/ffmpeg/

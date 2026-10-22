@@ -84,7 +84,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       
       document.addEventListener('DOMContentLoaded', async () => {
         await checkAuth();
-        loadCompetition();
+        await loadCompetition();
+        // The download path is independent of the VOD player: an authenticated
+        // user may download as soon as the page (and its button) exists, even
+        // if playback never becomes ready or the whole recording never loads.
+        refreshEmbeddedDownloadButton();
       });
       
       async function loadCompetition() {
@@ -301,6 +305,15 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <!-- Video Container with double buffering -->
                       <div class="aspect-video relative bg-black" id="embeddedVideoContainer">
                         <div id="embeddedModeBadge" class="hidden absolute top-3 right-3 z-10 px-3 py-1 rounded-full text-xs font-bold text-white"></div>
+                        <!-- R4-CHUNK-DOWNLOAD-1: a download affordance that is
+                             independent of VOD readiness / player-loaded chunks.
+                             Hidden for guests and while live. -->
+                        <button id="embeddedDownloadBtn" data-csp-on="click" data-csp-fn="embeddedDownload" data-csp-args='[]'
+                                class="hidden absolute top-3 left-3 z-30 w-10 h-10 flex items-center justify-center bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transition"
+                                aria-label="${tr.download_ui.title}"
+                                title="${tr.download_ui.title}">
+                          <i class="fas fa-download text-sm" aria-hidden="true"></i>
+                        </button>
                         <video id="embeddedVideoPlayer1" autoplay playsinline 
                                class="absolute inset-0 transition-opacity duration-300 opacity-100 z-[2] bg-black"></video>
                         <video id="embeddedVideoPlayer2" autoplay playsinline 
@@ -360,11 +373,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           <input type="range" id="embeddedSeekbar" min="0" max="100" value="0"
                                  class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500"
                                  title="Seek" />
-                          <button id="embeddedDownloadBtn" data-csp-on="click" data-csp-fn="embeddedDownload" data-csp-args='[]'
-                                  class="hidden w-9 h-9 flex items-center justify-center bg-green-600 text-white rounded-full hover:bg-green-700 flex-shrink-0"
-                                  title="${tr.download || '\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0641\u064a\u062f\u064a\u0648'}">
-                            <i class="fas fa-download text-sm"></i>
-                          </button>
                           <button data-csp-on="click" data-csp-fn="embeddedToggleFullscreen" data-csp-args='[]'
                                   class="w-9 h-9 flex items-center justify-center bg-gray-700 text-white rounded-full hover:bg-gray-600 flex-shrink-0">
                             <i class="fas fa-expand text-sm"></i>
@@ -1006,6 +1014,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           try {
             renderCompetition(nextComp);
             if (completionKey !== null) completedSurfaceKey = completionKey;
+            refreshEmbeddedDownloadButton();
           } catch (err) {
             // The failed surface stays retryable: keep the marker clear so
             // the next event/resync repaints it instead of trusting a DOM
@@ -2260,9 +2269,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 const vodControls = document.getElementById('embeddedVodControls');
                 if (vodControls) vodControls.classList.remove('hidden');
                 embeddedSetupVodControls(videoPlayers[0], embeddedCurrentPlayer);
-                // إظهار زر التحميل بعد أن يكون المشغل جاهزاً
-                const dlBtn = document.getElementById('embeddedDownloadBtn');
-                if (dlBtn) dlBtn.classList.remove('hidden');
+                // إظهار زر التحميل بعد أن يكون المشغل جاهزاً — للمستخدمين
+                // المسجلين فقط. الضيف يشاهد الفيديو بلا زر تنزيل (الخادم
+                // يرفض بيان التنزيل لغير المسجلين أيضاً).
+                refreshEmbeddedDownloadButton();
               },
               onError: function(err) {
                 log('VOD error: ' + err.message, 'error');
@@ -2429,19 +2439,35 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         if (icon) icon.className = document.fullscreenElement ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
       });
       
-      // Download VOD recording (merge all chunks in browser memory)
-      window.embeddedDownload = async function() {
-        if (!embeddedCurrentPlayer || !embeddedCurrentPlayer.downloadVideo) return;
-        const btn = document.getElementById('embeddedDownloadBtn');
-        const originalHtml = btn ? btn.innerHTML : '';
-        try {
-          if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin text-sm"></i>'; }
-          await embeddedCurrentPlayer.downloadVideo('competition_' + competitionId);
-        } catch (e) {
-          log('Download failed: ' + e.message, 'error');
-        } finally {
-          if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+      // Download VOD recording (R4-CHUNK-DOWNLOAD-1): the independent
+      // RecordingDownloadService fetches the authenticated server manifest,
+      // pulls every remaining chunk itself, verifies it, then remuxes or
+      // converts. It never reads SmartVodPlayer.loadedChunks and never uses
+      // raw Blob concatenation.
+      function refreshEmbeddedDownloadButton() {
+        const dlBtn = document.getElementById('embeddedDownloadBtn');
+        if (!dlBtn) return;
+        const authed = !!(window.currentUser && window.currentUser.id);
+        // Availability follows the authoritative competition state, not the
+        // VOD player. A partial/not-yet-ready recording may still be
+        // downloadable through the manifest (which labels it partial), while a
+        // LIVE competition must never expose a download.
+        const downloadable = !!competitionData
+          && (competitionData.status === 'completed' || competitionData.stream_status === 'ready');
+        dlBtn.classList.toggle('hidden', !authed || !downloadable);
+      }
+      window.addEventListener('dueli:auth-success', refreshEmbeddedDownloadButton);
+
+      window.embeddedDownload = function() {
+        if (!window.currentUser || !window.currentUser.id) {
+          if (typeof window.showLoginModal === 'function') window.showLoginModal();
+          return;
         }
+        if (typeof window.openRecordingDownload === 'function') {
+          window.openRecordingDownload(competitionId);
+          return;
+        }
+        log('Download UI is not available on this page', 'error');
       };
 
       // ========== R4-COMP-UNIFIED-1: in-page competitor live ==========
