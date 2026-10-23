@@ -6,6 +6,10 @@ name: Quality Gate
 # قرار الفريق (13-TEST-STRATEGY.md §6): الفحوص الجديدة تبدأ "تحذيرية" لأسبوع واحد
 # (continue-on-error: true) ثم تصبح مانعة. راجع تاريخ هذا الملف — إن مضى أسبوع
 # على أول تشغيل ناجح، أزل `continue-on-error` من الخطوات المعلَّمة "GRACE-PERIOD".
+#
+# استثناء محسوم (UNIT30.3): حراس SEC-05/07/08/10/11 صارت فحوص AST مانعة بلا
+# فترة سماح بعد أن أثبت التدقيق أن أنماط grep القديمة كانت تطابق تعليقات
+# توثيقية (لا كوداً تنفيذياً). لا تُعاد إلى grep ولا تُضاف لها استثناءات.
 
 on:
   pull_request:
@@ -52,76 +56,46 @@ jobs:
       - name: SEC-06 — no Math.random() in security-sensitive code
         run: node dev-tools/check-sec06-math-random.mjs
 
-      # SEC-11 — TRANSITIONAL (GRACE-PERIOD, no fixed expiry date):
-      # (a) Incident rollback (PR #1, merge e38a2d3, 2026-09-07) restored the raw
-      #     ?token= query param because its premature removal (55da144) broke
-      #     authenticated SSE user channels in Production (EventSource cannot
-      #     send headers and no realtime ticket flow exists yet).
-      # (b) This remains a KNOWN security debt (docs/12-SECURITY-REMEDIATION.md
-      #     SEC-11) — the check below still FAILS when query('token') is present,
-      #     but only as a ::warning so CI does not demand breaking Production.
-      # (c) Flip back to a blocking check (remove continue-on-error) ONLY after:
-      #     realtime ticket flow (POST /api/realtime/ticket) ships AND tests
-      #     cover expiry + single-use + user-binding of tickets (Phase 4 of
-      #     docs/15-ROADMAP.md).
-      # (d) No artificial closure date is set.
-      - name: SEC-11 — query token remains temporarily required for authenticated SSE (GRACE-PERIOD)
-        continue-on-error: true
-        run: |
-          if grep -rn "query('token')" src/middleware; then
-            echo "::warning::token accepted via query string in authMiddleware — SEC-11 is OPEN (known security debt); blocking re-check returns only after realtime ticket flow + expiry/single-use/user-binding tests (docs/15-ROADMAP.md Phase 4)"
-            exit 1
-          fi
+      # ---- SEC-05/07/08/10/11 — AST guards (UNIT30.3, BLOCKING) ----
+      # These replace the old grep steps. The old patterns matched explanatory
+      # documentation (SEC-05 matched `main.ts`'s comment about cors(); SEC-10
+      # matched the worker header explaining why this.sockets is banned), so
+      # they could not block. The AST checker inspects executable syntax only:
+      # comments, string examples and inactive realtime preparation never
+      # match, while missing inputs fail closed. The old SEC-07/08/11 steps
+      # were GRACE-PERIOD warnings; they are now blocking with no exemption.
+      - name: SEC-05 — CORS must use an allow-list (blocking AST)
+        run: node dev-tools/check-sec-guards.mjs sec05
 
-      # ROW28.2 / R4-PROFILE-SEC11-1 — profile-page own-profile session
-      # resolution must match the canonical auth source (src/middleware/auth.ts:
-      # Bearer header OR `sessionId` cookie ONLY). This is a SSR page, not the
-      # SSE/EventSource path, so the ?token= removal here is UNCONDITIONAL and
-      # BLOCKING — no GRACE-PERIOD. Scope is profile-page.ts only: the email
-      # verification token in verify-page.ts is a legitimate one-shot use and
-      # must keep working (see R4-PROFILE-SEC11-1 in tests/api/profile.test.ts).
-      - name: SEC-11/SEC-07 — profile-page must not accept query token or legacy session_id cookie (BLOCKING)
-        run: |
-          if grep -n "query('token')" src/modules/pages/profile-page.ts; then
-            echo "::error::profile-page.ts accepts a session via ?token= (SEC-11) — own-profile auth must use Bearer header or sessionId cookie only (canonical: src/middleware/auth.ts)"
-            exit 1
-          fi
-          if grep -n "session_id'" src/modules/pages/profile-page.ts; then
-            echo "::error::profile-page.ts reads the legacy session_id cookie (SEC-07) — use the sessionId cookie only (canonical: src/middleware/auth.ts)"
-            exit 1
-          fi
+      - name: SEC-07 — single canonical session key (blocking AST)
+        run: node dev-tools/check-sec-guards.mjs sec07
 
-      - name: SEC-08 — no session id in localStorage (GRACE-PERIOD)
-        continue-on-error: true
-        run: |
-          if grep -rn "localStorage.*[sS]ession" src/; then
-            echo "::warning::session id read/written via localStorage — see SEC-08 (cookie migration pending)"
-            exit 1
-          fi
+      - name: SEC-08 — no JavaScript-readable session secret (blocking AST)
+        run: node dev-tools/check-sec-guards.mjs sec08
 
-      - name: SEC-07 — single session key (no session_id remnants) (GRACE-PERIOD)
-        continue-on-error: true
-        run: |
-          if grep -rn "session_id'" src/modules/pages; then
-            echo "::warning::legacy session_id key still referenced — see SEC-07"
-            exit 1
-          fi
+      - name: SEC-10 — Durable Object hibernation-safe sockets (blocking AST)
+        run: node dev-tools/check-sec-guards.mjs sec10
 
-      - name: SEC-05 — cors() must not run unconfigured (GRACE-PERIOD)
-        continue-on-error: true
-        run: |
-          if grep -n "cors()" src/main.ts; then
-            echo "::warning::cors() called with no allow-list — see SEC-05"
-            exit 1
-          fi
+      - name: SEC-11 — no query-string session token (blocking AST)
+        run: node dev-tools/check-sec-guards.mjs sec11
 
-      - name: SEC-10 — Durable Object must not keep an in-memory socket set (GRACE-PERIOD)
-        continue-on-error: true
+      # Behavioral counterpart to the static guards: the AST proves a banned
+      # construct is absent; these suites prove the intended property still
+      # holds (CORS allow-list, legacy session_id ignored, HttpOnly + CSRF +
+      # Bearer contract, authoritative 401 vs transient 5xx, SSE tickets,
+      # hibernation-safe broadcast). Blocking, with no exception.
+      - name: SEC-05/07/08/10 regression suites (blocking)
         run: |
-          if grep -n "this.sockets" workers/ -r; then
-            echo "::warning::this.sockets found — hibernation-unsafe pattern, see SEC-10"
-            exit 1
-          fi
+          npx vitest run \
+            tests/api/sec-guards.test.ts \
+            tests/api/sec08-httponly-session.test.ts \
+            tests/api/auth-session-transient.test.ts \
+            tests/api/sse-user-auth.test.ts \
+            tests/ui/sec07-session-consumers.test.ts \
+            tests/ui/sec08-no-js-session.test.ts \
+            tests/client/session-access.test.ts \
+            tests/ui/auth-session-lifecycle.test.ts \
+            tests/workers/sec10-realtime.test.ts
 
       # ---- G5: سلامة قاعدة البيانات — ترحيل من قاعدة فارغة ----
       - name: Migrate D1 from empty database (GRACE-PERIOD — needs wrangler auth setup)

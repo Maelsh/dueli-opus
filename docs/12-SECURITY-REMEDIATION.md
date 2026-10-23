@@ -167,10 +167,12 @@
 
 **التوجيه:** قائمة بيضاء من `ALLOWED_ORIGINS`، `credentials: true`، وتحديد `allowMethods`/`allowHeaders` صريحاً. الـorigin غير المصرَّح لا يحصل على ترويسة CORS إطلاقاً.
 
+> **الحالة (UNIT30.3):** منفَّذ في `src/main.ts` بقائمة افتراضية + `ALLOWED_ORIGINS`. الحارس القديم `grep -n "cors()"` كان يطابق تعليق الشرح نفسه، فاستُبدل بفحص AST مانع (`node dev-tools/check-sec-guards.mjs sec05`) يحلل نداءات `cors()` التنفيذية فقط. اختبارات السلوك: `tests/api/sec-guards.test.ts` (4 حالات CORS). القبول الإنتاجي المشترك مؤجل إلى بوابة UNIT30–30.3.
+
 **معيار القبول:**
-- [ ] اختبار: `Origin: https://evil.com` ⇒ لا ترويسة CORS
-- [ ] اختبار: origin مصرَّح ⇒ ترويسة صحيحة، وليست `*`
-- [ ] اختبار: preflight يعمل للمصرَّح
+- [x] اختبار: `Origin: https://evil.com` ⇒ لا ترويسة CORS
+- [x] اختبار: origin مصرَّح ⇒ ترويسة صحيحة، وليست `*`
+- [x] اختبار: preflight يعمل للمصرَّح
 
 ---
 
@@ -197,11 +199,13 @@
 
 **التوجيه:** مفتاح واحد. نقطة وصول واحدة (`AuthService`) — لا قراءة مباشرة من `localStorage` في الصفحات. هذه خطوة تحضيرية لـSEC-08، ومنفصلة عنها لتقليل حجم المخاطرة.
 
+> **الحالة (UNIT30.3):** منفَّذ: `sessionId` هو المفتاح القانوني في الخادم والعميل، و`session_id` القديم لا يُقرأ إلا كمسار هجرة محدود في `SessionAccess` (قراءة/إزالة فقط). حارس AST مانع (`node dev-tools/check-sec-guards.mjs sec07`) يرفض أي استخدام تنفيذي لـ`session_id` في middleware/controllers/auth/pages، ويتجاهل تعليقات التوثيق وأعمدة قاعدة البيانات المختلفة. اختبار السلوك: كوكي `session_id` صالحة تبقى مجهولة (200/user:null) في `tests/api/sec-guards.test.ts`.
+
 **معيار القبول:**
-- [ ] `grep -rn "session_id'" src/modules/pages` ⇒ صفر
-- [ ] `grep -rn "localStorage.getItem('sessionId')" src/modules/pages` ⇒ صفر (عبر `AuthService` فقط)
-- [ ] E2E: دخول ⇒ لوحة الأدمن تتعرّف على الجلسة
-- [ ] E2E: دخول ⇒ بوابة المعلن تتعرّف على الجلسة
+- [x] `grep -rn "session_id'" src/modules/pages` ⇒ صفر (مُستبدل بحارس AST الأوسع)
+- [x] `grep -rn "localStorage.getItem('sessionId')" src/modules/pages` ⇒ صفر (عبر `AuthService` فقط)
+- [ ] E2E: دخول ⇒ لوحة الأدمن تتعرّف على الجلسة (تغطية API قائمة في `tests/api/sec08-httponly-session.test.ts`؛ E2E متصفح مؤجل)
+- [ ] E2E: دخول ⇒ بوابة المعلن تتعرّف على الجلسة (نفس الملاحظة)
 
 ---
 
@@ -221,13 +225,15 @@
 6. **أزِل** قبول الـBearer بعد التحقق، وأزِل `window.sessionId`
 7. الخادم لا يعيد رمز الجلسة في أي جسم استجابة
 
+> **الحالة (UNIT30.3):** منفَّذ: كوكي `sessionId` بـ`HttpOnly; Secure (HTTPS); SameSite=Lax; Path=/`، تدوير عند الدخول، CSRF double-submit، وBearer لغير المتصفح فقط. الهجرة القديمة محدودة في `SessionAccess` (قراءة/إزالة) ولا تُكتب أي جلسة إلى `localStorage`. الحارس القديم `grep -rn "localStorage.*[sS]ession"` كان يطابق تعليقات/نصوصاً ولا يسمح بالمسار الانتقالي، فاستُبدل بفحص AST (`node dev-tools/check-sec-guards.mjs sec08`) يسمح بالقراءة/الإزالة داخل `SessionAccess` فقط ويرفض الكتابة دائماً. اختبارات السلوك: `tests/api/sec08-httponly-session.test.ts` + `tests/api/sec-guards.test.ts` + `tests/client/session-access.test.ts`.
+
 **معيار القبول:**
-- [ ] `grep -rn "localStorage.*[sS]ession" src/` ⇒ صفر
-- [ ] `grep -rn "window.sessionId" src/` ⇒ صفر
-- [ ] اختبار: الاستجابة لا تحتوي الرمز في الجسم
-- [ ] اختبار: طلب تغيير حالة بلا رمز CSRF ⇒ 403
-- [ ] اختبار: معرّف الجلسة تغيّر بعد الدخول
-- [ ] E2E: كل الأدوار السبعة تعمل بالكوكيز
+- [x] `grep -rn "localStorage.*[sS]ession" src/` ⇒ صفر (مُستبدل بحارس AST الذي يسمح بالهجرة المحدودة)
+- [x] `grep -rn "window.sessionId" src/` ⇒ صفر
+- [x] اختبار: الاستجابة لا تحتوي الرمز في الجسم
+- [x] اختبار: طلب تغيير حالة بلا رمز CSRF ⇒ 403
+- [x] اختبار: معرّف الجلسة تغيّر بعد الدخول
+- [ ] E2E: كل الأدوار السبعة تعمل بالكوكيز (تغطية API للأدوار قائمة؛ E2E متصفح مؤجل)
 
 ---
 
@@ -259,11 +265,13 @@
 
 **التوجيه:** استخدم `this.state.getWebSockets()` في كل بثّ. احذف `this.sockets` نهائياً — الاحتفاظ بها كنسخة موازية يعيد الخلل. البيانات المرتبطة بكل اتصال تُخزَّن عبر `serializeAttachment()`.
 
+> **الحالة (UNIT30.3):** منفَّذ في `workers/dueli-realtime/src/index.ts`: البثّ من `state.getWebSockets()` والاستقبال عبر `state.acceptWebSocket()`، ولا وجود لـ`this.sockets` تنفيذياً. الحارس القديم `grep -n "this.sockets" workers/` كان يطابق تعليق الشرح في رأس الملف، فاستُبدل بفحص AST مانع (`node dev-tools/check-sec-guards.mjs sec10`) يتجاهل التعليقات والنصوص. اختبار السلوك `tests/workers/sec10-realtime.test.ts` يثبت الوصول بعد إيقاظ (نسخة جديدة/نفس الحالة) وعدّ التسليم. **Worker لم يُنشَر ولم يُفعَّل (`REALTIME_WS_URL` غير مطلوب)؛ الـDO النشط والقبول الإنتاجي مؤجلان إلى البوابة المشتركة.**
+
 **معيار القبول:**
-- [ ] `grep -n "this.sockets" workers/` ⇒ صفر
-- [ ] اختبار: بثّ بعد الإيقاظ يصل لكل الاتصالات
-- [ ] اختبار: إعادة اتصال بعد قطع الشبكة بلا تكرار رسائل
-- [ ] اختبار: غرفتان متزامنتان معزولتان
+- [x] `grep -n "this.sockets" workers/` ⇒ صفر (مُستبدل بحارس AST)
+- [x] اختبار: بثّ بعد الإيقاظ يصل لكل الاتصالات (محاكاة حالة DO)
+- [ ] اختبار: إعادة اتصال بعد قطع الشبكة بلا تكرار رسائل (يتطلب worker منشوراً/بيئة حية)
+- [ ] اختبار: غرفتان متزامنتان معزولتان (مؤجل مع القبول الإنتاجي)
 
 ---
 
@@ -278,12 +286,14 @@
 2. SSE/WS يقبلان التذكرة فقط، ويحذفانها عند الاستهلاك
 3. **أزِل `c.req.query('token')` من `authMiddleware`** — هذه هي الخطوة التي تُغلق الثغرة فعلاً
 
+> **الحالة (UNIT30.3):** منفَّذ: `authMiddleware` لا يقرأ `?token=` إطلاقاً (Bearer أو `sessionId` فقط)، وSSE يستخدم تذكرة أحادية عبر `POST /api/realtime/ticket`. `verify-page.ts` يحتفظ بـ`?token=` لتحقق البريد لمرة واحدة، وهو خارج نطاق جلسة المصادقة. الحارس القديم لـSEC-11 كان `GRACE-PERIOD` تحذيرياً؛ أصبح فحص AST مانعاً (`node dev-tools/check-sec-guards.mjs sec11`) على middleware وصفحة الملف الشخصي، مع اختبار سلوك يثبت أن رمز جلسة صالحاً في `?token=` يعيد 401.
+
 **معيار القبول:**
-- [ ] `grep -n "query('token')" src/middleware/auth.ts` ⇒ صفر
-- [ ] اختبار: تذكرة مستهلكة ⇒ 401
-- [ ] اختبار: تذكرة عمرها 61 ثانية ⇒ 401
-- [ ] اختبار: تذكرة مستخدم آخر ⇒ 403
-- [ ] اختبار: رمز الجلسة الخام في `?token=` ⇒ 401
+- [x] `grep -n "query('token')" src/middleware/auth.ts` ⇒ صفر (مُستبدل بحارس AST)
+- [x] اختبار: تذكرة مستهلكة ⇒ 401 (`tests/api/sse-ticket.test.ts`)
+- [x] اختبار: تذكرة عمرها 61 ثانية ⇒ 401 (`tests/api/sse-ticket.test.ts`)
+- [x] اختبار: تذكرة مستخدم آخر ⇒ 403 (`tests/api/sse-ticket.test.ts`)
+- [x] اختبار: رمز الجلسة الخام في `?token=` ⇒ 401 (`tests/api/sec-guards.test.ts`)
 
 ---
 
@@ -369,13 +379,16 @@
 
 | الفحص | يمنع |
 |---|---|
-| `grep -rn "Math.random" src/middleware src/lib src/modules/api` | SEC-06 |
-| `grep -rn "query('token')" src/middleware` | SEC-11 |
-| `grep -rn "localStorage.*[sS]ession" src/` | SEC-08 |
-| `grep -n "cors()" src/main.ts` (بلا وسائط) | SEC-05 |
-| `grep -n "this.sockets" workers/` | SEC-10 |
-| `grep -rn "session_id'" src/modules/pages` | SEC-07 |
+| `node dev-tools/check-sec06-math-random.mjs` | SEC-06 |
+| `node dev-tools/check-sec-guards.mjs sec05` | SEC-05 (AST: نداء `cors()` تنفيذي فقط) |
+| `node dev-tools/check-sec-guards.mjs sec07` | SEC-07 (AST: مفتاح `session_id` تنفيذي فقط) |
+| `node dev-tools/check-sec-guards.mjs sec08` | SEC-08 (AST: لا سر مقروء من JS؛ هجرة محدودة في `SessionAccess`) |
+| `node dev-tools/check-sec-guards.mjs sec10` | SEC-10 (AST: لا `this.sockets`؛ يثبت مسار `getWebSockets`) |
+| `node dev-tools/check-sec-guards.mjs sec11` | SEC-11 (AST: لا `?token=` جلسة في middleware/profile) |
+| `npx vitest run tests/api/sec-guards.test.ts tests/api/sec08-httponly-session.test.ts tests/api/auth-session-transient.test.ts tests/api/sse-user-auth.test.ts tests/ui/sec07-session-consumers.test.ts tests/ui/sec08-no-js-session.test.ts tests/client/session-access.test.ts tests/ui/auth-session-lifecycle.test.ts tests/workers/sec10-realtime.test.ts` | سلوك SEC-05/07/08/10/11 (CORS، هيمنة الكوكي، رفض legacy/query، HttpOnly/CSRF/Bearer، 401 مقابل 5xx، بثّ بعد الإيقاظ) |
 | `npm audit --audit-level=high --omit=dev` | SEC-15 |
 | تصنيف `UNGUARDED` في الجرد | SEC-13 |
 
 > **الأصل:** كل ثغرة تُصلَح تُقفل بفحص آلي. البند الذي لا فحص له يعود.
+>
+> **درس UNIT30.3:** لا تستخدم `grep` على تعليقات/نصوص لتأكيد غياب نمط أمني — استخدم فحص AST على الكود التنفيذي، وإلا فالفحص إما يعطي إنذاراً كاذباً (SEC-05/10) أو لا يستطيع أن يصبح مانعاً (SEC-07/08/11). الأدلة: `tests/dev-tools/sec-guards-checker.test.ts` + `dev-tools/check-sec-guards.mjs`.

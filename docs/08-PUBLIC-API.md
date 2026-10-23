@@ -41,15 +41,18 @@
 ## الأحداث اللحظية (Realtime)
 
 ```
-GET /api/sse?channel=user:<id>&token=<session>     # إشعارات شخصية (SSE)
-GET /api/sse?channel=competition:<id>              # تغذية تعليقات بث حي
+POST /api/realtime/ticket                          # مصادقة عادية ⇒ تذكرة أحادية قصيرة العمر
+GET  /api/sse?channel=user:<id>&ticket=<ticket>    # إشعارات شخصية (SSE)
+GET  /api/sse?channel=competition:<id>             # تغذية تعليقات بث حي
 ```
+
+> رمز الجلسة لا يُقبل في `?token=` إطلاقاً (SEC-11). التذكرة مرتبطة بالمستخدم/القناة، أحادية الاستخدام، وتنتهي خلال دقائق.
 
 أنواع الأحداث: `invite_sent`, `invite_accepted`, `invite_declined`,
 `notification`, `withdrawal_status`, `comment_new`, `competition_suspended`.
 
 > عند تمكين Durable Objects (T5.1): نفس القنوات عبر
-> `wss://dueli-realtime.<subdomain>.workers.dev/ws?channel=...&token=...`
+> `wss://dueli-realtime.<subdomain>.workers.dev/ws?channel=...&ticket=...`
 
 ## Webhooks (من الشركاء)
 
