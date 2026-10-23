@@ -246,15 +246,16 @@ describe('R4-LIVE-INT-1 production signaling integration', () => {
             expect(p2p).toContain('SignalingManager');
         });
 
-        it('11. production live room page uses session leave + authed room/create', () => {
+        it('11. production live room page uses session leave + cookie room/create', () => {
             expect(room).not.toMatch(/\/api\/signaling\/room\/leave/);
             expect(room).not.toMatch(/\/api\/signaling\/room\/join/);
             expect(room).not.toMatch(/\/api\/signaling\/signal/);
             expect(room).toContain('/api/signaling/session/leave');
-            // room/create (host-only gate) must carry the session Bearer token.
+            // SEC-08: room/create (host-only gate) authenticates with the
+            // HttpOnly cookie; the synchronous shim adds credentials+CSRF.
             const createCall = room.match(/fetch\('\/api\/signaling\/room\/create'[\s\S]{0,600}/);
             expect(createCall, 'room/create call must exist').toBeTruthy();
-            expect(createCall![0]).toMatch(/Authorization/);
+            expect(createCall![0]).not.toMatch(/Authorization/);
         });
 
         it('12. retry bounds are a single SSOT shared by server and browser', () => {

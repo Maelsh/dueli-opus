@@ -13,6 +13,8 @@ import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
 import { rateLimit, csrfProtection, securityHeaders } from './middleware/security';
+import { getCookie } from 'hono/cookie';
+import { CSRF_COOKIE_NAME, ensureCsrfCookie } from './lib/services/SessionCookieService';
 import { DEFAULT_PLATFORM_URL, WWW_PLATFORM_URL } from './config/defaults';
 
 // Import API Routes - استيراد مسارات API
@@ -103,6 +105,30 @@ app.use('/api/*', (c, next) => {
 
 // Security headers on every response (CSP, X-Frame-Options, HSTS-ready, etc.)
 app.use('*', securityHeaders());
+
+// SEC-08: auth responses carry credentials/user state and must never enter a
+// shared or browser cache.
+app.use('/api/auth/*', async (c, next) => {
+    await next();
+    c.header('Cache-Control', 'no-store');
+});
+
+// SEC-08: every browser response carries the double-submit token cookie if it
+// is missing. Login/OAuth rotate it together with the new session cookie.
+// This runs after the route so a rotate/clear response is not followed by a
+// second Set-Cookie for the same name (browsers keep the last one, but one
+// unambiguous header is safer for caches and clients).
+app.use('*', async (c, next) => {
+    await next();
+    if (getCookie(c, CSRF_COOKIE_NAME)) return;
+    const headers = c.res.headers as Headers & { getSetCookie?: () => string[] };
+    const setCookies = headers.getSetCookie?.() ?? [c.res.headers.get('set-cookie') || ''];
+    if (setCookies.some((value) =>
+        value.startsWith(`${CSRF_COOKIE_NAME}=`)
+        || new RegExp(`(?:^|,\\s*)${CSRF_COOKIE_NAME}=`).test(value)
+    )) return;
+    ensureCsrfCookie(c);
+});
 
 // General API rate limit: 100 requests/minute per IP
 app.use('/api/*', rateLimit({ windowMs: 60000, maxRequests: 100 }));

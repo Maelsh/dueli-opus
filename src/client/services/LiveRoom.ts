@@ -132,7 +132,7 @@ export class LiveRoom {
      */
     private static async notifyJoined(): Promise<void> {
         // Can be used to track viewers or update competition status
-        if (State.sessionId && this.currentRoomName) {
+        if (State.currentUser && this.currentRoomName) {
             try {
                 await ApiClient.post('/api/competitions/join-stream', {
                     roomName: this.currentRoomName

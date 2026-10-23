@@ -88,11 +88,12 @@ window.playerStateLabel = playerStateLabel;
 // ===== Session & Authentication =====
 
 /**
- * getSessionToken - الحصول على توكن الجلسة
- * يُقرأ من localStorage (يُحفظ عند تسجيل الدخول)
+ * getSessionToken - legacy compatibility shim.
+ * SEC-08: there is no JS-readable session token. Pages must rely on the
+ * HttpOnly cookie and window.currentUser for UI hints only.
  */
 function getSessionToken() {
-    return (window.DueliSession && window.DueliSession.token) ? window.DueliSession.token() : '';
+    return '';
 }
 
 window.getSessionToken = getSessionToken;
@@ -107,10 +108,7 @@ async function fetchIceServers() {
     const TURN_UNAVAILABLE_MSG = '${TURN_UNAVAILABLE}';
     const NETWORK_RESTRICTED_MSG = '${NETWORK_RESTRICTED}';
     try {
-        const headers = {};
-        const token = getSessionToken();
-        if (token) headers['Authorization'] = 'Bearer ' + token;
-        const response = await fetch('/api/signaling/ice-servers', { headers: headers });
+        const response = await fetch('/api/signaling/ice-servers');
         const data = await response.json();
         if (response.ok && data.success && data.data && data.data.iceServers) {
             window.DUELI_TURN_STATE = {

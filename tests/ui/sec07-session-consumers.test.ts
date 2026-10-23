@@ -27,8 +27,8 @@ function pageFiles(dir: string): string[] {
     return out;
 }
 
-describe('SEC-07 page consumers use one session accessor', () => {
-    it('no page reads session_id or sessionId directly from localStorage', () => {
+describe('SEC-08 page consumers use the HttpOnly session + CSRF shim', () => {
+    it('no page reads or writes a session secret directly', () => {
         for (const file of pageFiles(PAGES)) {
             const source = readFileSync(file, 'utf-8');
             expect(source, file).not.toContain("localStorage.getItem('session_id')");
@@ -36,22 +36,28 @@ describe('SEC-07 page consumers use one session accessor', () => {
             expect(source, file).not.toContain("localStorage.getItem('sessionId')");
             expect(source, file).not.toContain('localStorage.getItem("sessionId")');
             expect(source, file).not.toContain('window.sessionId');
+            expect(source, file).not.toContain('document.cookie = \'sessionId=');
+            expect(source, file).not.toContain('document.cookie = "sessionId=');
+            expect(source, file).not.toContain("'Authorization': 'Bearer ' + window.DueliSession.token");
+            expect(source, file).not.toContain("'Authorization': 'Bearer ' + (window.DueliSession.token");
         }
     });
 
-    it('Admin and Advertiser consumers use the shared accessor', () => {
+    it('Admin, Advertiser, complaint and live-finance consumers use cookie auth', () => {
         const admin = read('src/modules/pages/admin-dashboard-page.ts');
         const advertiser = read('src/modules/pages/advertiser-portal-page.ts');
         const complaints = read('src/modules/pages/complaint-tracking-page.ts');
         const liveFinance = read('src/modules/pages/live-finance-page.ts');
 
         for (const source of [admin, advertiser, complaints, liveFinance]) {
-            expect(source).toContain('window.DueliSession.token()');
             expect(source).not.toContain('session_id');
+            expect(source).not.toContain('DueliSession.token()');
+            expect(source).not.toContain("'Authorization': 'Bearer ");
         }
-        // The old live-finance reader used the legacy key only and therefore
-        // always sent `Bearer null` for a normally logged-in user.
-        expect(liveFinance).toContain('window.DueliSession.token()');
+        expect(admin).toContain('adminHeaders');
+        expect(advertiser).toContain("fetch('/api/advertiser/dashboard')");
+        expect(complaints).toContain("fetch('/api/complaints/my')");
+        expect(liveFinance).toContain("fetch('/api/admin/live-finance/'");
     });
 
     it('layout loads the synchronous accessor before app.js', () => {

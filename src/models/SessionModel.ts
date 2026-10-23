@@ -13,8 +13,8 @@ export class SessionModel {
     protected readonly db: D1Database;
 
     /**
-     * Session lifetime (B+: shortened from 30 days — no HttpOnly yet, so a
-     * shorter window limits the blast radius of a leaked Bearer token).
+     * Session lifetime (7 days). SEC-08 moves browser sessions to an HttpOnly
+     * cookie, so the cookie and the server row expire together.
      */
     static readonly TTL_DAYS = 7;
 
@@ -37,7 +37,7 @@ export class SessionModel {
      */
     async findBySessionId(sessionId: string): Promise<Session | null> {
         return this.queryOne<Session>(
-            'SELECT * FROM sessions WHERE id = ? AND expires_at > datetime("now")',
+            'SELECT * FROM sessions WHERE id = ? AND datetime(expires_at) > datetime("now")',
             sessionId
         );
     }
@@ -47,7 +47,7 @@ export class SessionModel {
      */
     async findValidSession(sessionId: string): Promise<{ session: Session; user: any } | null> {
         const result = await this.queryOne<Session & { user_id: number }>(
-            'SELECT * FROM sessions WHERE id = ? AND expires_at > datetime("now")',
+            'SELECT * FROM sessions WHERE id = ? AND datetime(expires_at) > datetime("now")',
             sessionId
         );
 
@@ -120,7 +120,7 @@ export class SessionModel {
     async pruneOldSessions(userId: number, keep: number = SessionModel.MAX_SESSIONS_PER_USER): Promise<number> {
         const result = await this.db.prepare(
             `DELETE FROM sessions WHERE user_id = ? AND id NOT IN (
-                SELECT id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
+                SELECT id FROM sessions WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?
             )`
         ).bind(userId, userId, keep).run();
         return result.meta.changes;
@@ -131,7 +131,7 @@ export class SessionModel {
      */
     async cleanExpired(): Promise<number> {
         const result = await this.db.prepare(
-            'DELETE FROM sessions WHERE expires_at < datetime("now")'
+            'DELETE FROM sessions WHERE datetime(expires_at) < datetime("now")'
         ).run();
         return result.meta.changes;
     }

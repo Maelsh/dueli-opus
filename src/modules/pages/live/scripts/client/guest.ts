@@ -77,14 +77,6 @@ export function getGuestScript(lang: Language): string {
             
             updateStatus('${tr.join}: ' + competitionId + '...', 'yellow');
             
-            const token = window.getSessionToken();
-            if (!token) {
-                log('❌ يجب تسجيل الدخول أولاً', 'error');
-                isJoining = false;
-                if (joinBtn) joinBtn.style.opacity = '1';
-                return;
-            }
-            
             const actualRoom = 'comp_' + competitionId;
             window.actualRoomId = actualRoom;
             
@@ -154,7 +146,6 @@ export function getGuestScript(lang: Language): string {
                 // 7.A: platform endpoints only — signalingUrl inert (shared.ts).
                 roomId: actualRoom,
                 role: 'opponent',
-                token: token,
                 onSignal: async function(data) {
                     try {
                         if (data.signalType === 'offer') {

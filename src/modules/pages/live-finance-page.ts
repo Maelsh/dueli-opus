@@ -76,8 +76,7 @@ export function liveFinanceDashboardPage(c: Context<{ Bindings: Bindings; Variab
         const competitionId = ${JSON.stringify(competitionId ?? '')};
         async function pollLiveFinance() {
             try {
-                const token = window.DueliSession.token();
-                const res = await fetch('/api/admin/live-finance/' + competitionId, { headers: { 'Authorization': 'Bearer ' + token } });
+                const res = await fetch('/api/admin/live-finance/' + competitionId);
                 const data = await res.json();
                 if (data.success && data.data.snapshot) {
                     const s = data.data.snapshot;

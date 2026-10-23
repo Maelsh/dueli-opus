@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { execSync } from 'node:child_process';
+import { sessionTokenFromApiResponse } from './helpers/session';
 
 /**
  * B16 — single E2E scenario for the Beta Core user path.
@@ -52,22 +53,28 @@ async function loginViaApi(request: APIRequestContext, u: { email: string; passw
   const body = await res.json();
   const data = body?.data ?? body;
   expect(data?.user?.id, 'login must return the user').toBeTruthy();
-  return { id: data.user.id as number, name: data.user.name as string, token: data.sessionId as string };
+  return { id: data.user.id as number, name: data.user.name as string, token: sessionTokenFromApiResponse(res) };
 }
 
 /** Same-origin headers a real browser session would carry. */
-function browserProof(): Record<string, string> {
-  return { 'X-CSRF-Token': '1', Origin: 'http://127.0.0.1:4173' };
+async function browserProof(req: APIRequestContext): Promise<Record<string, string>> {
+  let csrf = '1';
+  try {
+    csrf = (await req.storageState()).cookies.find((c) => c.name === 'csrfToken')?.value || csrf;
+  } catch {
+    // A context that cannot expose storage still has the Origin proof.
+  }
+  return { 'X-CSRF-Token': csrf, Origin: 'http://127.0.0.1:4173' };
 }
 
 /** POST/PUT through a real browser-like context (CSRF proof + optional Bearer). */
-function apiPost(req: APIRequestContext, url: string, opts: { data?: unknown; token?: string } = {}) {
-  const headers = browserProof();
+async function apiPost(req: APIRequestContext, url: string, opts: { data?: unknown; token?: string } = {}) {
+  const headers = await browserProof(req);
   if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
   return req.post(url, { data: opts.data, headers });
 }
-function apiPut(req: APIRequestContext, url: string, opts: { data?: unknown; token?: string } = {}) {
-  const headers = browserProof();
+async function apiPut(req: APIRequestContext, url: string, opts: { data?: unknown; token?: string } = {}) {
+  const headers = await browserProof(req);
   if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
   return req.put(url, { data: opts.data, headers });
 }
@@ -113,8 +120,13 @@ async function loginViaUi(page: Page, u: { email: string; password: string }): P
   await page.locator('#loginForm button[type="submit"]').click();
   const res = await loginRes;
   expect(res.ok(), 'UI login should succeed').toBeTruthy();
-  // The real client stores the session (AuthService.handleLogin)
-  await expect.poll(async () => page.evaluate(() => localStorage.getItem('sessionId'))).toBeTruthy();
+  // SEC-08: the browser receives an HttpOnly cookie, not a JS-readable
+  // session token. Assert both the cookie attribute and the UI state.
+  await expect.poll(async () =>
+    (await page.context().cookies()).some((c) => c.name === 'sessionId' && c.httpOnly)
+  ).toBe(true);
+  await expect.poll(async () => page.evaluate(() => Boolean((window as any).currentUser))).toBe(true);
+  expect((await res.json())?.data?.sessionId).toBeUndefined();
 }
 
 test('Beta Core user path', async ({ browser }, testInfo) => {

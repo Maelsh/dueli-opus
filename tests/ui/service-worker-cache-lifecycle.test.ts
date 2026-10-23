@@ -71,7 +71,12 @@ function runSw(opts: { network?: (url: string) => Promise<FakeResponse> } = {}) 
         URL,
         URLSearchParams,
         Request: class { constructor(public url: string) {} toString() { return this.url; } },
-        Response: class { constructor(public body: string) {} },
+        Response: class {
+            status: number;
+            constructor(public body: string, init?: { status?: number }) {
+                this.status = init?.status ?? 200;
+            }
+        },
         caches,
         location: { origin: 'https://dueli.test', search: '' },
         clients: { claim: async () => undefined },
@@ -98,8 +103,9 @@ function runSw(opts: { network?: (url: string) => Promise<FakeResponse> } = {}) 
         };
         let responded: Promise<FakeResponse> | undefined;
         listeners.fetch({ request, respondWith: (p: Promise<FakeResponse>) => { responded = p; } });
-        if (!responded) return { handled: false as const, body: undefined };
-        return { handled: true as const, body: (await responded).body };
+        if (!responded) return { handled: false as const, body: undefined, status: undefined };
+        const response = await responded;
+        return { handled: true as const, body: response.body, status: response.status };
     };
 
     const runLifecycle = async (type: 'install' | 'activate') => {
@@ -141,6 +147,16 @@ describe('service worker — stale asset blocker', () => {
 
         const res = await offline.fireFetch('https://dueli.test/static/app.js');
         expect(res.body).toBe('V1');
+    });
+
+    it('reports an offline API failure as transient 503, never a fake auth answer', async () => {
+        const offline = runSw(); // no network: fetch throws
+        const res = await offline.fireFetch('https://dueli.test/api/auth/session');
+        expect(res.handled).toBe(true);
+        expect(res.status).toBe(503);
+        expect(JSON.parse(res.body!)).toMatchObject({ success: false, error: 'Offline' });
+        // The generated copy served by the Pages route must match.
+        expect(serviceWorkerScript).toMatch(/error: 'offline'[\s\S]{0,120}status: 503/);
     });
 
     it('purges caches from previous versions on activation', async () => {

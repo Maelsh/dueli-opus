@@ -12,6 +12,14 @@ import { MicrosoftOAuth } from '../../../lib/oauth/microsoft';
 import { TikTokOAuth } from '../../../lib/oauth/tiktok';
 import { translations, getUILanguage, DEFAULT_LANGUAGE, DEFAULT_COUNTRY, t } from '../../../i18n';
 import { SyntheticRetirementService } from '../../../lib/services/SyntheticRetirementService';
+import {
+  clearOAuthStateCookie,
+  readOAuthStateCookie,
+  readSessionCandidates,
+  setCsrfCookie,
+  setOAuthStateCookie,
+  setSessionCookie,
+} from '../../../lib/services/SessionCookieService';
 
 const oauthRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -54,6 +62,9 @@ oauthRoutes.get('/:provider', async (c) => {
   }
 
   const state = generateState();
+  // Bind the OAuth state to this browser. The callback compares the exact
+  // JSON payload (random nonce + lang) before creating any session.
+  setOAuthStateCookie(c, JSON.stringify({ state, lang }));
   const authUrl = oauth.getAuthUrl(state, lang);
   return c.redirect(authUrl);
 });
@@ -71,13 +82,20 @@ oauthRoutes.get('/:provider/callback', async (c) => {
   const url = new URL(c.req.url);
   const origin = `${url.protocol}//${url.host}`;
 
+  // OAuth login-CSRF protection: the state round-tripped by the provider must
+  // match the HttpOnly one-time cookie issued by the init route. Consume it
+  // before any provider/network/user work.
+  const expectedState = readOAuthStateCookie(c);
+  clearOAuthStateCookie(c);
+  if (!expectedState || !stateParam || expectedState !== stateParam) {
+    return c.html(getOAuthErrorHTML(DEFAULT_LANGUAGE, 'PROVIDER_ERROR', (c.get('cspNonce') as string) ?? ''));
+  }
+
   // Parse state to get lang
   let lang = DEFAULT_LANGUAGE;
   try {
-    if (stateParam) {
-      const stateObj = JSON.parse(stateParam);
-      lang = stateObj.lang || DEFAULT_LANGUAGE;
-    }
+    const stateObj = JSON.parse(stateParam);
+    lang = stateObj.lang || DEFAULT_LANGUAGE;
   } catch (e) {
     // Ignore parse error, default to DEFAULT_LANGUAGE
   }
@@ -152,11 +170,25 @@ oauthRoutes.get('/:provider/callback', async (c) => {
     // Create session (same TTL + rotation policy as password login)
     const { SessionModel } = await import('../../../models/SessionModel');
     const sessionModel = new SessionModel(DB);
+    const priorSessions = readSessionCandidates(c);
     const session = await sessionModel.create({ user_id: (user as any).id });
     await sessionModel.pruneOldSessions((user as any).id);
-    const sessionId = session.id;
+    for (const prior of priorSessions) {
+      if (prior === session.id) continue;
+      try {
+        await sessionModel.deleteBySessionId(prior);
+      } catch (error) {
+        console.error('[OAuth] Failed to revoke rotated session:', error);
+      }
+    }
 
-    return c.html(getOAuthSuccessHTML(lang, sessionId, (c.get('cspNonce') as string) ?? ''));
+    // SEC-08: OAuth has exactly the same browser contract as password login.
+    // The raw session is delivered only through the HttpOnly cookie; the
+    // popup receives no token.
+    setSessionCookie(c, session.id);
+    setCsrfCookie(c);
+
+    return c.html(getOAuthSuccessHTML(lang, (c.get('cspNonce') as string) ?? ''));
 
   } catch (error: any) {
     console.error('OAuth Error Details:', {
@@ -201,8 +233,12 @@ function getOAuthErrorHTML(lang: string, errorType: string, nonce: string): stri
 
 /**
  * OAuth Success HTML - صفحة نجاح OAuth
+ *
+ * Exported for the SEC-08 contract test: this page must never contain a raw
+ * session. The opener refreshes `GET /api/auth/session` itself, which reads the
+ * HttpOnly cookie set by the callback response.
  */
-function getOAuthSuccessHTML(lang: string, sessionId: string, nonce: string): string {
+export function getOAuthSuccessHTML(lang: string, nonce: string): string {
   const tr = translations[getUILanguage(lang)];
   return `
     <!DOCTYPE html>
@@ -227,10 +263,7 @@ function getOAuthSuccessHTML(lang: string, sessionId: string, nonce: string): st
       <script nonce="${nonce}">
         setTimeout(function() {
           if (window.opener) {
-            window.opener.postMessage({
-              type: 'oauth_success',
-              session: '${sessionId}'
-            }, '*');
+            window.opener.postMessage({ type: 'oauth_success' }, window.location.origin);
             setTimeout(function() {
               window.close();
             }, 300);

@@ -34,10 +34,10 @@ describe('checkAuth 429 handling (no forced logout)', () => {
 
     beforeEach(() => {
         store = stubBrowser();
-        store.set('sessionId', 'sess-abc');
+        store.set('sessionId', 'legacy-abc');
         store.set('user', JSON.stringify({ id: 1 }));
         State.currentUser = { id: 1 } as any;
-        State.sessionId = 'sess-abc';
+        State.sessionId = null;
         vi.restoreAllMocks();
     });
 
@@ -53,8 +53,10 @@ describe('checkAuth 429 handling (no forced logout)', () => {
         )));
         const ok = await AuthService.checkAuth();
         expect(ok).toBe(false);
-        expect(store.get('sessionId')).toBe('sess-abc');
-        expect(State.sessionId).toBe('sess-abc');
+        expect(store.get('sessionId')).toBe('legacy-abc');
+        // No JS-readable session state is exposed, and no legacy fallback is
+        // attempted on a transient 429.
+        expect(State.sessionId).toBeNull();
     });
 
     it('genuine auth failure (user:null, 200) still clears', async () => {
@@ -72,7 +74,7 @@ describe('checkAuth 429 handling (no forced logout)', () => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('down'); }));
         const ok = await AuthService.checkAuth();
         expect(ok).toBe(false);
-        expect(store.get('sessionId')).toBe('sess-abc');
+        expect(store.get('sessionId')).toBe('legacy-abc');
     });
 });
 

@@ -1,11 +1,10 @@
 /**
  * @file src/client/session-access.ts
- * @description R4-SESSION-KEY-SEC07-1 — synchronous global session accessor.
+ * @description SEC-08 synchronous browser session bootstrap.
  *
- * This tiny entry loads in <head> before server-rendered inline page scripts.
- * It exposes the same precedence implemented by AuthService/ApiClient so page
- * consumers never read `session_id` directly and a stale legacy value can
- * never override the canonical `sessionId` pair.
+ * Loads in <head> before server-rendered inline scripts. It installs the
+ * cookie/CSRF fetch shim and the no-secret `window.DueliSession` compatibility
+ * object. The session secret itself is HttpOnly and never enters this bundle.
  */
 
 import { installSessionAccessGlobal } from './core/SessionAccess';

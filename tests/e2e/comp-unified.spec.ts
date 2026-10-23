@@ -1,7 +1,14 @@
 import { expect, test, chromium } from '@playwright/test';
+import type { Cookie } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  addRequestCookies,
+  clearRequestCookies,
+  requestCookies,
+  sessionTokenFromApiResponse,
+} from './helpers/session';
 
 // Page globals (global lexical bindings of the competition inline script).
 declare const p2p: { isP2PConnected(): boolean } | null | undefined;
@@ -68,10 +75,17 @@ test.describe('R4-COMP-UNIFIED-1 unified competition page', () => {
     }
     d1(`UPDATE users SET is_verified = 1 WHERE email LIKE '${TAG}-%@example.test'`);
     const login = async (u: typeof H) => {
+      await clearRequestCookies(request);
       const res = await apiPost('/api/auth/login', { email: u.email, password: u.password });
       expect(res.ok(), `login ${u.email}`).toBeTruthy();
       const data = ((await res.json()) as any)?.data ?? {};
-      return { id: data.user.id as number, token: data.sessionId as string };
+      const cookies = await requestCookies(request);
+      await clearRequestCookies(request);
+      return {
+        id: data.user.id as number,
+        token: sessionTokenFromApiResponse(res),
+        cookies,
+      };
     };
     const host = await login(H);
     const guest = await login(G);
@@ -91,9 +105,9 @@ test.describe('R4-COMP-UNIFIED-1 unified competition page', () => {
       args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
     });
     try {
-      const ctxFor = async (token: string) => {
+      const ctxFor = async (cookies: Cookie[]) => {
         const ctx = await browser.newContext({ permissions: ['camera', 'microphone'], ignoreHTTPSErrors: true });
-        await ctx.addInitScript((t) => localStorage.setItem('sessionId', t), token);
+        await addRequestCookies(ctx, cookies);
         return ctx;
       };
       const forwardUploads = async (page: any) => {
@@ -116,8 +130,8 @@ test.describe('R4-COMP-UNIFIED-1 unified competition page', () => {
         });
       };
 
-      const hctx = await ctxFor(host.token);
-      const gctx = await ctxFor(guest.token);
+      const hctx = await ctxFor(host.cookies);
+      const gctx = await ctxFor(guest.cookies);
       const hp = await hctx.newPage();
       const gp = await gctx.newPage();
       const notes: string[] = [];
@@ -147,7 +161,7 @@ test.describe('R4-COMP-UNIFIED-1 unified competition page', () => {
       await expect.poll(async () => ((await stubState()).chunks as number[]).length, { timeout: 90000 }).toBeGreaterThanOrEqual(2);
 
       // Viewer watches the SAME unified page (PR108 chunk player).
-      const vctx = await ctxFor(viewer.token);
+      const vctx = await ctxFor(viewer.cookies);
       const vp = await vctx.newPage();
       await vp.goto(`/competition/${compId}?lang=en`);
       const mediaState = () => (window as any).__mediaState;

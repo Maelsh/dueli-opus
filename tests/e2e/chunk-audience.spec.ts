@@ -1,7 +1,14 @@
 import { expect, test, chromium } from '@playwright/test';
+import type { Cookie } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  addRequestCookies,
+  clearRequestCookies,
+  requestCookies,
+  sessionTokenFromApiResponse,
+} from './helpers/session';
 
 // Page globals (global lexical bindings of the competition inline script).
 declare const embeddedCurrentPlayer: { seekTo(t: number): void } | null | undefined;
@@ -69,10 +76,17 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
     }
     d1(`UPDATE users SET is_verified = 1 WHERE email LIKE '${TAG}-%@example.test'`);
     const login = async (u: typeof H) => {
+      await clearRequestCookies(request);
       const res = await apiPost('/api/auth/login', { email: u.email, password: u.password });
       expect(res.ok(), `login ${u.email}`).toBeTruthy();
       const data = ((await res.json()) as any)?.data ?? {};
-      return { id: data.user.id as number, token: data.sessionId as string };
+      const cookies = await requestCookies(request);
+      await clearRequestCookies(request);
+      return {
+        id: data.user.id as number,
+        token: sessionTokenFromApiResponse(res),
+        cookies,
+      };
     };
     const host = await login(H);
     const guest = await login(G);
@@ -94,11 +108,11 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
       args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
     });
     try {
-      const ctxFor = async (token: string) => {
+      const ctxFor = async (cookies: Cookie[]) => {
         // ignoreHTTPSErrors: the local ffmpeg double serves a test-only
         // self-signed cert so chunk URLs satisfy media-src (https:).
         const ctx = await browser.newContext({ permissions: ['camera', 'microphone'], ignoreHTTPSErrors: true });
-        await ctx.addInitScript((t) => localStorage.setItem('sessionId', t), token);
+        await addRequestCookies(ctx, cookies);
         return ctx;
       };
       // Browser uploads target the hardcoded production ffmpeg host — forward
@@ -123,8 +137,8 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
         });
       };
 
-      const hctx = await ctxFor(host.token);
-      const gctx = await ctxFor(guest.token);
+      const hctx = await ctxFor(host.cookies);
+      const gctx = await ctxFor(guest.cookies);
       const hp = await hctx.newPage();
       const gp = await gctx.newPage();
       const pageNotes: string[] = [];
@@ -178,7 +192,7 @@ test.describe('R4-CHUNK-PLAY-1 audience chunks', () => {
       evidence.uploadedBeforeGap = await stubState();
 
       // ---- LIVE audience: third user watches the host composite ----
-      const vctx = await ctxFor(viewer.token);
+      const vctx = await ctxFor(viewer.cookies);
       const vp = await vctx.newPage();
       capture('viewer', vp);
       await vp.goto(`/competition/${compId}?lang=en`);

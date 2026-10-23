@@ -237,10 +237,7 @@ export const myCompetitionsPage = async (c: Context<{ Bindings: Bindings; Variab
                 
                 try {
                     const res = await fetch(\`/api/competitions/\${id}\`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token()
-                        }
+                        method: 'DELETE'
                     });
                     if (res.ok) {
                         loadCompetitions();

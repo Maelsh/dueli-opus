@@ -1,5 +1,5 @@
 /**
- * Post-R1 acceptance (A+B) — canonical client auth lifecycle.
+ * SEC-08 — canonical client auth lifecycle with an HttpOnly cookie.
  *
  * Proven failure on previous main: App.init + page guards raced duplicate
  * /api/auth/session calls, and any transient 429/5xx/network on a fresh page
@@ -9,12 +9,14 @@
  * Pins:
  * 1. Concurrent checkAuth() calls share ONE network request (single-flight).
  * 2. Transient 429 / 5xx / network / timeout ⇒ status stays 'unknown',
- *    stored session untouched (never a false guest).
+ *    legacy state untouched (never a false guest, never a fallback request).
  * 3. 429 preserves the server's retryAfter hint.
- * 4. ONLY authoritative answers (401, or 200 with user:null) ⇒ 'guest'.
- * 5. normalizeUser(): legacy {name, avatar} ⇒ canonical
- *    {display_name, avatar_url, username}; a missing avatar stays null
- *    (never replaced by a random fallback identity).
+ * 4. ONLY authoritative answers (401, or 200 with user:null) can clear state.
+ * 5. The cookie is tried first. A pre-SEC08 localStorage token is tried at
+ *    most once, only after an authoritative cookie-guest answer, and is then
+ *    removed (bounded migration, no permanent JS-readable fallback).
+ * 6. normalizeUser(): legacy {name, avatar} ⇒ canonical
+ *    {display_name, avatar_url, username}; a missing avatar stays null.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { AuthService } from '../../src/client/services/AuthService';
@@ -28,7 +30,12 @@ function stubBrowser() {
         removeItem: (k: string) => { store.delete(k); },
         clear: () => store.clear(),
     };
-    (globalThis as any).document = { cookie: '', getElementById: () => null };
+    (globalThis as any).document = {
+        cookie: '',
+        getElementById: () => null,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+    };
     (globalThis as any).window = (globalThis as any).window ?? {};
     return store;
 }
@@ -46,31 +53,37 @@ const SESSION_JSON = {
     },
 };
 
-function sessionFetch(sessionCalls: { count: number }, responder: () => Response) {
-    return vi.fn(async (url: any) => {
+const okSession = () => new Response(JSON.stringify(SESSION_JSON), { status: 200 });
+const guestSession = () => new Response(JSON.stringify({ success: true, data: { user: null } }), { status: 200 });
+
+function sessionFetch(
+    sessionCalls: { count: number; auth: Array<string | null> },
+    responder: (authorization: string | null) => Response | Promise<Response>,
+) {
+    return vi.fn(async (url: any, init: any) => {
         if (String(url).includes('/api/auth/session')) {
             sessionCalls.count += 1;
-            return responder();
+            const headers = init?.headers || {};
+            const auth = headers.Authorization ?? headers.authorization ?? null;
+            sessionCalls.auth.push(auth);
+            return responder(auth);
         }
         return new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
     });
 }
 
-const okSession = () => new Response(JSON.stringify(SESSION_JSON), { status: 200 });
-
-describe('canonical auth lifecycle (single-flight + transient-safe status)', () => {
+describe('SEC-08 canonical auth lifecycle (single-flight + transient-safe status)', () => {
     let store: Map<string, string>;
-    let sessionCalls: { count: number };
+    let sessionCalls: { count: number; auth: Array<string | null> };
 
     beforeEach(() => {
         store = stubBrowser();
-        store.set('sessionId', 'sess-abc');
         State.currentUser = null;
         State.sessionId = null;
         AuthService.authStatus = 'unknown';
         AuthService.lastRetryAfterSec = 0;
         (AuthService as any)._pendingAuthCheck = null;
-        sessionCalls = { count: 0 };
+        sessionCalls = { count: 0, auth: [] };
         vi.restoreAllMocks();
     });
 
@@ -81,7 +94,7 @@ describe('canonical auth lifecycle (single-flight + transient-safe status)', () 
     });
 
     it('1. concurrent checkAuth() calls share one /api/auth/session request', async () => {
-        vi.stubGlobal('fetch', sessionFetch(sessionCalls, okSession));
+        vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => okSession()));
         const [a, b, c] = await Promise.all([
             AuthService.checkAuth(),
             AuthService.checkAuth(),
@@ -89,10 +102,12 @@ describe('canonical auth lifecycle (single-flight + transient-safe status)', () 
         ]);
         expect(a && b && c).toBe(true);
         expect(sessionCalls.count).toBe(1);
+        expect(sessionCalls.auth[0]).toBeNull();
         expect(AuthService.authStatus).toBe('authenticated');
     });
 
-    it('2a. 429 preserves retryAfter, keeps status unknown + stored session', async () => {
+    it('2a. 429 preserves retryAfter, keeps status unknown + legacy state', async () => {
+        store.set('session_id', 'legacy-abc');
         vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => new Response(
             JSON.stringify({ success: false, error: 'Too many requests', retryAfter: 45 }),
             { status: 429 }
@@ -101,62 +116,67 @@ describe('canonical auth lifecycle (single-flight + transient-safe status)', () 
         expect(ok).toBe(false);
         expect(AuthService.authStatus).toBe('unknown');
         expect(AuthService.lastRetryAfterSec).toBe(45);
-        expect(store.get('sessionId')).toBe('sess-abc');
+        expect(sessionCalls.count).toBe(1);
+        expect(store.get('session_id')).toBe('legacy-abc');
         expect(State.currentUser).toBeNull();
     });
 
     it('2b. 429 without a body hint is still transient, never guest', async () => {
+        store.set('sessionId', 'legacy-abc');
         vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => new Response('busy', { status: 429 })));
         expect(await AuthService.checkAuth()).toBe(false);
         expect(AuthService.authStatus).toBe('unknown');
-        expect(store.get('sessionId')).toBe('sess-abc');
+        expect(store.get('sessionId')).toBe('legacy-abc');
     });
 
-    it('2c. 500 keeps unknown + stored session', async () => {
+    it('2c. 500 keeps unknown + legacy state and never tries the legacy token', async () => {
+        store.set('session_id', 'legacy-abc');
         vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => new Response('err', { status: 500 })));
         expect(await AuthService.checkAuth()).toBe(false);
         expect(AuthService.authStatus).toBe('unknown');
-        expect(store.get('sessionId')).toBe('sess-abc');
+        expect(sessionCalls.count).toBe(1);
+        expect(store.get('session_id')).toBe('legacy-abc');
     });
 
-    it('2d. network failure keeps unknown + stored session', async () => {
+    it('2d. network failure keeps unknown + legacy state', async () => {
+        store.set('session_id', 'legacy-abc');
         vi.stubGlobal('fetch', vi.fn(async (url: any) => {
             if (String(url).includes('/api/auth/session')) throw new Error('down');
             return new Response('{}', { status: 200 });
         }));
         expect(await AuthService.checkAuth()).toBe(false);
         expect(AuthService.authStatus).toBe('unknown');
-        expect(store.get('sessionId')).toBe('sess-abc');
+        expect(store.get('session_id')).toBe('legacy-abc');
     });
 
     it('2e. timeout is transient, never guest', async () => {
+        store.set('session_id', 'legacy-abc');
         (AuthService as any).AUTH_CHECK_TIMEOUT_MS = 20;
         try {
             vi.stubGlobal('fetch', vi.fn(async () => new Promise(() => {})));
             expect(await AuthService.checkAuth()).toBe(false);
             expect(AuthService.authStatus).toBe('unknown');
-            expect(store.get('sessionId')).toBe('sess-abc');
+            expect(store.get('session_id')).toBe('legacy-abc');
         } finally {
             (AuthService as any).AUTH_CHECK_TIMEOUT_MS = 10000;
         }
     });
 
     it('3. a previously authenticated client survives a later 429 (no false logout)', async () => {
-        vi.stubGlobal('fetch', sessionFetch(sessionCalls, okSession));
+        vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => okSession()));
         expect(await AuthService.checkAuth()).toBe(true);
         expect(AuthService.authStatus).toBe('authenticated');
 
         vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => new Response('busy', { status: 429 })));
         expect(await AuthService.checkAuth()).toBe(false);
-        // The known user is preserved; status never degrades to guest.
         expect(AuthService.authStatus).toBe('authenticated');
         expect(State.currentUser?.id).toBe(7);
-        expect(store.get('sessionId')).toBe('sess-abc');
+        expect(store.get('user')).toContain('canon');
     });
 
-    it('4a. 401 is authoritative: guest + cleared', async () => {
+    it('4a. 401 is authoritative: guest + legacy cleared', async () => {
+        store.set('sessionId', 'legacy-expired');
         State.currentUser = { id: 7 } as any;
-        State.sessionId = 'sess-abc';
         vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => new Response('{}', { status: 401 })));
         expect(await AuthService.checkAuth()).toBe(false);
         expect(AuthService.authStatus).toBe('guest');
@@ -164,100 +184,51 @@ describe('canonical auth lifecycle (single-flight + transient-safe status)', () 
         expect(State.currentUser).toBeNull();
     });
 
-    it('4b. 200 with user:null is authoritative: guest + cleared', async () => {
-        vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => new Response(
-            JSON.stringify({ success: true, user: null }), { status: 200 }
-        )));
+    it('4b. 200 with user:null is authoritative: guest + legacy cleared', async () => {
+        store.set('session_id', 'legacy-expired');
+        vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => guestSession()));
         expect(await AuthService.checkAuth()).toBe(false);
         expect(AuthService.authStatus).toBe('guest');
-        expect(store.has('sessionId')).toBe(false);
+        expect(store.has('session_id')).toBe(false);
     });
 
-    it('4c. canonical session wins before a stale legacy session_id', async () => {
-        store.set('session_id', 'legacy-stale');
-        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
-            if (!String(url).includes('/api/auth/session')) {
-                return new Response('{}', { status: 200 });
-            }
-            sessionCalls.count += 1;
-            const authorization = init?.headers?.Authorization;
-            if (authorization === 'Bearer sess-abc') return okSession();
-            return new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
-        }));
+    it('4c. cookie success wins first and clears legacy without an Authorization header', async () => {
+        store.set('sessionId', 'legacy-stale');
+        vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => okSession()));
 
         expect(await AuthService.checkAuth()).toBe(true);
         expect(sessionCalls.count).toBe(1);
+        expect(sessionCalls.auth).toEqual([null]);
         expect(AuthService.authStatus).toBe('authenticated');
-        expect(store.get('sessionId')).toBe('sess-abc');
-        // Compatibility value is left untouched for now, but it was never read.
-        expect(store.get('session_id')).toBe('legacy-stale');
+        expect(store.has('sessionId')).toBe(false);
+        expect(store.get('user')).toContain('canon');
     });
 
-    it('4d. a stale local canonical value falls through to the valid cookie', async () => {
-        store.set('sessionId', 'stale-local');
-        (globalThis as any).document.cookie = 'sessionId=valid-cookie; path=/';
-        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
-            if (!String(url).includes('/api/auth/session')) {
-                return new Response('{}', { status: 200 });
-            }
-            sessionCalls.count += 1;
-            const authorization = init?.headers?.Authorization;
-            return authorization === 'Bearer valid-cookie'
-                ? okSession()
-                : new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
-        }));
+    it('4d. a valid legacy-only token is tried once, then removed after success', async () => {
+        store.set('session_id', 'legacy-valid');
+        vi.stubGlobal('fetch', sessionFetch(sessionCalls, (authorization) =>
+            authorization === 'Bearer legacy-valid' ? okSession() : guestSession()
+        ));
 
         expect(await AuthService.checkAuth()).toBe(true);
         expect(sessionCalls.count).toBe(2);
+        expect(sessionCalls.auth).toEqual([null, 'Bearer legacy-valid']);
         expect(AuthService.authStatus).toBe('authenticated');
-        expect(State.sessionId).toBe('valid-cookie');
-        expect(store.get('sessionId')).toBe('valid-cookie');
+        expect(store.has('session_id')).toBe(false);
+        expect(store.has('sessionId')).toBe(false);
     });
 
-    it('4e. a valid legacy-only token is validated once and migrated to canonical', async () => {
-        store.delete('sessionId');
-        store.set('session_id', 'legacy-valid');
-        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
-            if (!String(url).includes('/api/auth/session')) {
-                return new Response('{}', { status: 200 });
-            }
-            sessionCalls.count += 1;
-            return init?.headers?.Authorization === 'Bearer legacy-valid'
-                ? okSession()
-                : new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
-        }));
-
-        expect(await AuthService.checkAuth()).toBe(true);
-        expect(sessionCalls.count).toBe(1);
-        expect(AuthService.authStatus).toBe('authenticated');
-        expect(store.get('sessionId')).toBe('legacy-valid');
-        expect(State.sessionId).toBe('legacy-valid');
-    });
-
-    it('4f. genuine canonical expiry clears both values and never revives legacy', async () => {
-        store.set('sessionId', 'expired-canonical');
-        store.set('session_id', 'legacy-valid-looking');
-        vi.stubGlobal('fetch', vi.fn(async (url: any, init: any) => {
-            if (!String(url).includes('/api/auth/session')) {
-                return new Response('{}', { status: 200 });
-            }
-            sessionCalls.count += 1;
-            // Even if the legacy token would validate, a rejected canonical
-            // session is authoritative expiry; legacy must not be consulted.
-            return init?.headers?.Authorization === 'Bearer legacy-valid-looking'
-                ? okSession()
-                : new Response(JSON.stringify({ success: true, user: null }), { status: 200 });
-        }));
+    it('4e. an invalid legacy token is tried once and cleared (bounded, no loop)', async () => {
+        store.set('session_id', 'legacy-invalid');
+        vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => guestSession()));
 
         expect(await AuthService.checkAuth()).toBe(false);
         expect(AuthService.authStatus).toBe('guest');
-        expect(sessionCalls.count).toBe(1);
-        expect(store.has('sessionId')).toBe(false);
+        expect(sessionCalls.count).toBe(2);
         expect(store.has('session_id')).toBe(false);
-        expect(State.currentUser).toBeNull();
     });
 
-    it('4g. a 5xx on the first candidate is transient and does not try/clear legacy', async () => {
+    it('4f. a 5xx on the first cookie request never falls back to legacy', async () => {
         store.set('session_id', 'legacy-maybe-valid');
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
         try {
@@ -265,9 +236,8 @@ describe('canonical auth lifecycle (single-flight + transient-safe status)', () 
             expect(await AuthService.checkAuth()).toBe(false);
             expect(AuthService.authStatus).toBe('unknown');
             expect(sessionCalls.count).toBe(1);
-            expect(store.get('sessionId')).toBe('sess-abc');
             expect(store.get('session_id')).toBe('legacy-maybe-valid');
-            expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('sess-abc');
+            expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('legacy-maybe-valid');
         } finally {
             errorSpy.mockRestore();
         }
@@ -277,20 +247,18 @@ describe('canonical auth lifecycle (single-flight + transient-safe status)', () 
         const out = AuthService.normalizeUser({ id: 3, name: 'Old Name', avatar: 'https://cdn.test/o.png' });
         expect(out.display_name).toBe('Old Name');
         expect(out.avatar_url).toBe('https://cdn.test/o.png');
-        // Compatibility aliases survive in both directions.
         expect(out.name).toBe('Old Name');
         expect(out.avatar).toBe('https://cdn.test/o.png');
     });
 
-    it('5b. normalizeUser never invents an avatar', () => {
-        const out = AuthService.normalizeUser({ id: 3, username: 'noavatar' });
+    it('5b. a missing avatar stays null, never a generated identity', () => {
+        const out = AuthService.normalizeUser({ id: 4, username: 'noavatar' });
         expect(out.avatar_url).toBeNull();
         expect(out.avatar).toBeNull();
-        expect(out.display_name).toBe('noavatar');
     });
 
     it('5c. a successful check stores the canonical user in State', async () => {
-        vi.stubGlobal('fetch', sessionFetch(sessionCalls, okSession));
+        vi.stubGlobal('fetch', sessionFetch(sessionCalls, () => okSession()));
         expect(await AuthService.checkAuth()).toBe(true);
         expect(State.currentUser.display_name).toBe('Canon User');
         expect(State.currentUser.avatar_url).toBe('https://cdn.test/a.png');

@@ -8,7 +8,7 @@
 - **Base URL:** `https://dueli.maelshpro.com`
 - **الصيغة:** JSON في كل الاستجابات: `{ success: boolean, data?: ..., error?... }`
 - **اللغة:** أضف `?lang=ar|en|<code>` لأي نقطة لرسائل مترجمة
-- **المصادقة:** رأس `Authorization: Bearer <sessionId>` — الجلسة تُنشأ من `/api/auth/login` أو OAuth
+- **المصادقة:** رأس `Authorization: Bearer <sessionId>` للعملاء غير المتصفحين. جلسة المتصفح تُدار بكوكي `sessionId` من نوع HttpOnly يُصدر عبر `Set-Cookie` من `/api/auth/login` أو OAuth؛ لا يعيد جسم الاستجابة الرمز.
 
 ## نقاط القراءة العامة (بلا مصادقة)
 
@@ -73,8 +73,13 @@ Rate limiting مطبق على نقاط الكتابة الحساسة. للمشا
 - `X-CSRF-Token: <any-non-empty>` (لعملاء غير المتصفح مثل curl/SDK)،
   ويُقبل أيضاً `X-Session-Token` كبديل.
 
-أي طلب مغيّر **بدون** `Origin`/`Referer`/`X-CSRF-Token` يُرفض بـ
-`403 Missing CSRF proof`. مثال curl:
+الطلبات التي تحمل `Authorization: Bearer ...` هي عقد العملاء غير المتصفحين
+وتُعفى من CSRF لأن المتصفح لا يضيفها تلقائياً؛ صفحات المتصفح تستخدم كوكي
+`sessionId` من نوع HttpOnly فقط. في المتصفح، الحماية المزدوجة (double-submit)
+هي: كوكي `csrfToken` غير HttpOnly يُصدره الخادم، ويجب إرسال **نفس القيمة** في
+`X-CSRF-Token` مع كل طلب مغيّر. وجود كوكي الجلسة مع قيمة غير مطابقة أو غائبة
+يُرفض بـ `403`. أي طلب مغيّر لا يحمل Bearer وبدون
+`Origin`/`Referer`/`X-CSRF-Token` يُرفض بـ `403 Missing CSRF proof`. مثال curl:
 
 ```bash
 curl -X POST https://dueli.maelshpro.com/api/competitions/1/comments \

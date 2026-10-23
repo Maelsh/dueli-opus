@@ -100,11 +100,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             
             async function loadSettings() {
                 try {
-                    const res = await fetch('/api/settings', {
-                        headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token()
-                        }
-                    });
+                    const res = await fetch('/api/settings');
                     const data = await res.json();
                     currentSettings = data.data?.settings || {};
                     renderSettings();
@@ -230,7 +226,6 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch('/api/settings', {
                         method: 'PUT',
                         headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify(settings)
@@ -253,21 +248,20 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function deleteAccount() {
                 if (!confirm(\`\${tr.confirm_delete_account || 'Are you sure you want to delete your account?'}\`)) return;
                 try {
-                    const session = window.DueliSession.token() || '';
                     const res = await fetch('/api/users/delete-account?lang=' + (window.lang || 'ar'), {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + session
+                            'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ confirm: true })
                     });
                     const data = await res.json();
                     if (data.success) {
-                        // GDPR deletion done server-side — clear local state and leave
+                        // GDPR deletion done server-side — clear local UI state.
+                        // The server invalidates the HttpOnly session cookie; the
+                        // browser must never write it from JS.
                         localStorage.removeItem('user');
                         window.DueliSession.clearLocal();
-                        document.cookie = 'sessionId=; Max-Age=0; path=/';
                         alert(tr.account_deleted || 'Your account has been deleted.');
                         window.location.href = '/?lang=' + (window.lang || 'ar');
                     } else {

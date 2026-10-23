@@ -99,12 +99,13 @@ export function formatDownloadDuration(ms: number): string {
  */
 export function isDownloadUserAuthenticated(): boolean {
     if (typeof window === 'undefined') return false;
-    const win = window as unknown as { currentUser?: { id?: number } | null; sessionId?: string | null };
+    const win = window as unknown as { currentUser?: { id?: number } | null };
     if (win.currentUser && win.currentUser.id) return true;
     try {
+        // Non-secret UI hint only; the server manifest route is the actual
+        // authorization boundary. No session key is read or written here.
         const storedUser = localStorage.getItem('user');
-        const storedSession = localStorage.getItem('sessionId');
-        if (!storedUser || !storedSession) return false;
+        if (!storedUser) return false;
         const parsed = JSON.parse(storedUser) as { id?: number } | null;
         return !!parsed && !!parsed.id;
     } catch {

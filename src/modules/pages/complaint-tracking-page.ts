@@ -46,9 +46,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         async function loadComplaints() {
             try {
-                const token = window.DueliSession.token();
-                if (!token) return;
-                const res = await fetch('/api/complaints/my', { headers: { 'Authorization': 'Bearer ' + token } });
+                const res = await fetch('/api/complaints/my');
                 const data = await res.json();
                 if (data.success && data.data.complaints && data.data.complaints.length) {
                     document.getElementById('complaintsList').innerHTML = data.data.complaints.map(c => {
@@ -63,8 +61,7 @@ export function complaintTrackingPage(c: Context<{ Bindings: Bindings; Variables
         }
         async function viewComplaint(id) {
             try {
-                const token = window.DueliSession.token();
-                const res = await fetch('/api/complaints/' + id, { headers: { 'Authorization': 'Bearer ' + token } });
+                const res = await fetch('/api/complaints/' + id);
                 const data = await res.json();
                 if (!data.success) return;
                 const c = data.data.tracker;

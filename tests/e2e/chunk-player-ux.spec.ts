@@ -2,6 +2,7 @@ import { expect, test, chromium } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { clearRequestCookies, sessionTokenFromApiResponse } from './helpers/session';
 
 // Page globals (script-scope bindings of the competition inline script,
 // same access pattern as the row-26 p2p probe).
@@ -71,9 +72,12 @@ test.describe('R4-CHUNK-PLAYER-UX-1 player UX in a real browser', () => {
     }
     d1(`UPDATE users SET is_verified = 1 WHERE email LIKE '${TAG}-%@example.test'`);
     const login = async (email: string) => {
+      await clearRequestCookies(request);
       const res = await apiPost('/api/auth/login', { email, password: 'PlayerUx123!' });
       const data = ((await res.json()) as any)?.data ?? {};
-      return { id: data.user.id as number, token: data.sessionId as string };
+      const token = sessionTokenFromApiResponse(res);
+      await clearRequestCookies(request);
+      return { id: data.user.id as number, token };
     };
     const host = await login(`${TAG}-h@example.test`);
     const opp = await login(`${TAG}-o@example.test`);

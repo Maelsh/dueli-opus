@@ -14,6 +14,7 @@
  */
 import { test, expect, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import { execSync } from 'node:child_process';
+import { seededAuthCookies } from './helpers/session';
 
 let actorSeq = 0;
 function getActors(locale: string) {
@@ -140,10 +141,11 @@ test.describe('R2-L1 shared comments + qualified views (browser)', () => {
             const tokenA = actors.A.session;
             const tokenB = actors.B.session;
             const tokenC = actors.C.session;
+            await ctxA.addCookies(seededAuthCookies(tokenA, 'http://127.0.0.1:4173'));
+            await ctxB.addCookies(seededAuthCookies(tokenB, 'http://127.0.0.1:4173'));
+            await ctxC.addCookies(seededAuthCookies(tokenC, 'http://127.0.0.1:4173'));
             await pageA.goto(`/?lang=${locale}`, { waitUntil: 'load' });
-            await pageA.evaluate((t) => localStorage.setItem('sessionId', t), tokenA);
             await pageB.goto(`/?lang=${locale}`, { waitUntil: 'load' });
-            await pageB.evaluate((t) => localStorage.setItem('sessionId', t), tokenB);
             await expect(pageA.locator('html')).toHaveAttribute('dir', dir);
 
             // A creates a competition via the real create contract, then both
@@ -176,8 +178,6 @@ test.describe('R2-L1 shared comments + qualified views (browser)', () => {
                 headers: browserProof(tokenAX),
             });
             expect(startRes.ok(), 'start should succeed').toBeTruthy();
-            await pageB.goto(`/?lang=${locale}`, { waitUntil: 'load' });
-            await pageB.evaluate((t) => localStorage.setItem('sessionId', t), tokenB);
             await pageB.goto(`/competition/${competitionId}?lang=${locale}`, { waitUntil: 'load' });
 
             // A posts from the UI (keyboard: focus + Enter submits the form).

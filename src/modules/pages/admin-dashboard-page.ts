@@ -16,7 +16,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
     // R2-A: server-side gate. Cookie/Bearer sessions are checked here and
     // non-admins get an immediate 403 (no dashboard shell, no API probing
     // needed). The admin API stays authoritative; the client boot-check
-    // below covers cookie-less (localStorage-only) sessions the same way.
+    // below covers cookie-less (legacy storage-only) sessions the same way.
     const sessionId = c.req.header('Authorization')?.replace('Bearer ', '')
         || getCookie(c, 'sessionId');
     if (sessionId) {
@@ -281,22 +281,23 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
     </div>
     ${getFooter(lang)}
     <script nonce="${nonce}">
-        const token = window.DueliSession.token();
-        const adminHeaders = (extra) => Object.assign({ 'Authorization': 'Bearer ' + token }, extra || {});
+        const adminHeaders = (extra) => Object.assign({}, extra || {});
 
         // R2-A: client boot gate (covers cookie-less sessions; the server
-        // gate + admin API remain authoritative). Non-admins see an explicit
-        // denial instead of an empty dashboard; guests go to login.
+        // gate + admin API remain authoritative). Guests and non-admins see
+        // an explicit denial instead of an empty dashboard.
         function denyAdminAccess() {
-            document.querySelector('.container')?.insertAdjacentHTML('afterbegin',
+            const host = document.getElementById('adminStats')?.parentElement
+                || document.querySelector('.container');
+            host?.insertAdjacentHTML('afterbegin',
                 '<div id="adminDenied" class="mb-6 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 font-bold" role="alert">${tt('access_denied')}</div>');
         }
 
         async function loadAdminDashboard() {
             try {
-                if (!token) { window.location.href = '/login?redirect=' + encodeURIComponent('/admin'); return; }
+                // SEC-08: the page gate and admin API use the HttpOnly cookie.
                 const res = await fetch('/api/admin/enhanced-stats', { headers: adminHeaders() });
-                if (res.status === 403) { denyAdminAccess(); return; }
+                if (res.status === 401 || res.status === 403) { denyAdminAccess(); return; }
                 const data = await res.json();
                 if (data.success) {
                     const d = data.data;
@@ -314,12 +315,12 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
                         document.getElementById('hottestCompetitions').innerHTML = d.hottestCompetitions.map(c => '<div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-xl"><div><span class="font-bold">' + c.title + '</span><span class="text-sm text-gray-500 ml-2">' + c.status + '</span></div><div class="flex items-center gap-2"><span class="text-sm text-gray-500">' + c.total_views + ' ${tr.viewers}</span><button data-csp-on="click" data-csp-fn="openSuspendPanel" data-csp-args='[" + c.id + "]' class="text-xs text-red-500 hover:text-red-700 font-bold"><i class="fas fa-ban"></i></button></div></div>').join('');
                     }
                 }
-                const rolesRes = await fetch('/api/admin/roles', { headers: { 'Authorization': 'Bearer ' + token } });
+                const rolesRes = await fetch('/api/admin/roles', { headers: adminHeaders() });
                 const rolesData = await rolesRes.json();
                 if (rolesData.success && rolesData.data.roles) {
                     document.getElementById('adminRoles').innerHTML = rolesData.data.roles.map(r => '<div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"><span>' + r.display_name + ' (' + r.username + ')</span><div class="flex items-center gap-2"><span class="px-2 py-1 rounded-full text-xs font-bold ' + (r.role === 'SuperAdmin' ? 'bg-red-100 text-red-700' : r.role === 'Auditor' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700') + '">' + r.role + '</span><button data-csp-on="click" data-csp-fn="revokeRole" data-csp-args='[" + r.user_id + "]' class="text-red-500 text-xs">${tt('revoke_role')}</button></div></div>').join('');
                 }
-                const logsRes = await fetch('/api/admin/audit-logs?limit=10', { headers: { 'Authorization': 'Bearer ' + token } });
+                const logsRes = await fetch('/api/admin/audit-logs?limit=10', { headers: adminHeaders() });
                 const logsData = await logsRes.json();
                 if (logsData.success && logsData.data.logs) {
                     document.getElementById('auditLogs').innerHTML = logsData.data.logs.map(l => '<div class="p-2 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm"><div class="flex justify-between"><span class="font-bold">' + l.admin_username + '</span><span class="text-gray-500">' + new Date(l.timestamp).toLocaleString() + '</span></div><p class="text-gray-600 dark:text-gray-400 truncate">' + l.action_type + ' → ' + l.target_entity + (l.target_id ? ' #' + l.target_id : '') + '</p>' + (l.details ? '<p class="text-xs text-gray-400 truncate">' + l.details + '</p>' : '') + '</div>').join('');
@@ -333,7 +334,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
         async function loadWithdrawals() {
             const status = document.getElementById('withdrawFilterStatus').value;
             const url = '/api/admin/withdrawals' + (status ? '?status=' + status : '');
-            const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+            const res = await fetch(url, { headers: adminHeaders() });
             const data = await res.json();
             if (!data.success) return;
             const list = data.data.requests || [];
@@ -370,7 +371,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
             if (!txn) { alert('Transaction ID is required.'); return; }
             const res = await fetch('/api/admin/withdrawals/' + id + '/approve', {
                 method: 'PUT',
-                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ transaction_id: txn, note: document.getElementById('approveNote').value.trim() })
             });
             const data = await res.json();
@@ -391,7 +392,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
             if (!reason) { alert('Rejection reason is required.'); return; }
             const res = await fetch('/api/admin/withdrawals/' + id + '/reject', {
                 method: 'PUT',
-                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ reason })
             });
             const data = await res.json();
@@ -418,7 +419,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
             if (!confirm('You are about to SUSPEND competition #' + compId + '.\n\nThis will:\n• Change status to SUSPENDED (NOT deleted)\n• Remain visible in archive with tombstone\n• Log your name, role, and reason\n• Instantly notify all live viewers\n\nReason: ' + reason + '\n\nProceed?')) return;
             const res = await fetch('/api/admin/competitions/' + compId + '/suspend', {
                 method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ reason })
             });
             const data = await res.json();
@@ -439,7 +440,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
             if (!compId || !reason) { alert('Competition ID and reason are required.'); return; }
             const res = await fetch('/api/admin/competitions/' + compId + '/restore', {
                 method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ reason })
             });
             const data = await res.json();
@@ -465,11 +466,11 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
         function showGrantRoleForm() { document.getElementById('grantRoleForm').classList.toggle('hidden'); }
         async function grantRole(e) {
             e.preventDefault();
-            await fetch('/api/admin/roles', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: parseInt(document.getElementById('grantUserId').value), role: document.getElementById('grantRoleSelect').value }) });
+            await fetch('/api/admin/roles', { method: 'POST', headers: adminHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ user_id: parseInt(document.getElementById('grantUserId').value), role: document.getElementById('grantRoleSelect').value }) });
             loadAdminDashboard();
         }
         async function revokeRole(userId) {
-            await fetch('/api/admin/roles/' + userId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+            await fetch('/api/admin/roles/' + userId, { method: 'DELETE', headers: adminHeaders() });
             loadAdminDashboard();
         }
 

@@ -81,7 +81,6 @@ export class SseService {
         // becomes stale and can never fire afterwards.
         this.disconnect();
 
-        const token = State.sessionId || '';
         this.connectedUserId = user.id;
         const generation = ++this.connectGeneration;
 
@@ -99,9 +98,9 @@ export class SseService {
                 wsUrl = '';
             }
             if (wsUrl) {
-                this.connectWebSocket(wsUrl, user.id, token);
+                this.connectWebSocket(wsUrl, user.id);
             } else {
-                this.connectSse(user.id, token);
+                this.connectSse(user.id);
             }
         };
 
@@ -124,7 +123,7 @@ export class SseService {
      * C4 (SEC-11): تذكرة أحادية 60s بدل الجلسة الخام — يستهلكها الـWorker عبر
      * POST /api/realtime/redeem عند المصافحة.
      */
-    private static async connectWebSocket(wsBase: string, userId: number, token: string): Promise<void> {
+    private static async connectWebSocket(wsBase: string, userId: number): Promise<void> {
         const channel = `user:${userId}`;
         let ticket = '';
         try {
@@ -132,8 +131,8 @@ export class SseService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
+                credentials: 'include',
                 body: JSON.stringify({ channel }),
             });
             if (!res.ok) throw new Error(`ticket ${res.status}`);
@@ -142,7 +141,7 @@ export class SseService {
             ticket = body.data.ticket;
         } catch (err) {
             console.error('[SseService] WS ticket mint failed, falling back to SSE:', err);
-            await this.connectSse(userId, token);
+            await this.connectSse(userId);
             return;
         }
         try {
@@ -169,19 +168,19 @@ export class SseService {
                 this.ws = null;
                 this.wsRetryTimer = setTimeout(() => {
                     const u = State.currentUser as any;
-                    if (u?.id === userId && State.sessionId) {
+                    if (u?.id === userId) {
                         if (this.wsRetryCount < 3) {
                             this.wsRetryCount++;
-                            this.connectWebSocket(wsBase, userId, State.sessionId);
+                            this.connectWebSocket(wsBase, userId);
                         } else {
-                            this.connectSse(userId, State.sessionId);
+                            this.connectSse(userId);
                         }
                     }
                 }, 5000);
             };
         } catch (err) {
             console.error('[SseService] WS connect failed, falling back to SSE:', err);
-            this.connectSse(userId, token);
+            this.connectSse(userId);
         }
     }
 
@@ -215,7 +214,7 @@ export class SseService {
      * C4 (SEC-11): raw session NEVER goes in the URL — mint a single-use
      * ticket (60s, bound to this user+channel) and connect with it.
      */
-    private static async connectSse(userId: number, token: string): Promise<void> {
+    private static async connectSse(userId: number): Promise<void> {
         const channel = `user:${userId}`;
         let ticket = '';
         try {
@@ -223,8 +222,8 @@ export class SseService {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token,
                 },
+                credentials: 'include',
                 body: JSON.stringify({ channel }),
             });
             if (!res.ok) throw new Error(`ticket ${res.status}`);

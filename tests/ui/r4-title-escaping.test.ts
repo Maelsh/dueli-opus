@@ -24,6 +24,7 @@ import app from '../../src/main';
 import { generateHTML } from '../../src/shared/templates/layout';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { sessionTokenFromResponse } from '../helpers/session-cookie';
 
 type Env = Parameters<typeof app.request>[2];
 const env = (db: SqliteD1): Env => ({ DB: db }) as unknown as Env;
@@ -87,7 +88,7 @@ describe('R4: stored doc title is escaped in reader <title> + <h1>', () => {
             method: 'POST', headers: headers(), body: JSON.stringify({ email: 'admin@r4title.local', password: 'admin' }),
         }, env(db));
         expect(login.status).toBe(200);
-        const adminTok = ((await login.json()) as any).data.sessionId as string;
+        const adminTok = sessionTokenFromResponse(login);
         const evilTitle = `Doc</title><script>alert(3)</script>`;
         const create = await app.request('/api/admin/documents?lang=en', {
             method: 'POST',
@@ -157,7 +158,7 @@ describe('R4-REM1 (Codex P2): create → cleanTitle → DB → live-room → <ti
             method: 'POST', headers: headers(), body: JSON.stringify({ email: 'creator@r4p2.local', password: 'creatorpw' }),
         }, env(db));
         expect(login.status).toBe(200);
-        token = ((await login.json()) as any).data.sessionId as string;
+        token = sessionTokenFromResponse(login);
     });
 
     /** Full write path: raw title in, store-escaped title out (T1.4 premise). */

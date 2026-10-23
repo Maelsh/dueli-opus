@@ -146,11 +146,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                 
                 try {
                     const url = '/api/users/' + window.currentUser.id + '/requests?type=' + currentTab;
-                    const res = await fetch(url, {
-                        headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token()
-                        }
-                    });
+                    const res = await fetch(url);
                     const data = await res.json();
                     
                     if (data.success && data.data?.length > 0) {
@@ -267,7 +263,6 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     const res = await fetch(\`/api/competitions/\${compId}/\${action}-request\`, {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ request_id: requestId })
@@ -291,7 +286,6 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
                     const res = await fetch(\`/api/competitions/\${compId}/\${action}-invite\`, {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         }
                     });
@@ -320,10 +314,7 @@ export const myRequestsPage = async (c: Context<{ Bindings: Bindings; Variables:
             async function cancelRequest(compId) {
                 try {
                     const res = await fetch(\`/api/competitions/\${compId}/request\`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token()
-                        }
+                        method: 'DELETE'
                     });
                     
                     if (res.ok) {

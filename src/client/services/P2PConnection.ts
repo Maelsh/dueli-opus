@@ -112,28 +112,6 @@ export class P2PConnection {
     }
 
     /**
-     * Session token for Bearer auth (never ?token=, SEC-11).
-     * Reads the canonical session id exposed by app.js (window.sessionId).
-     */
-    private sessionToken(): string | null {
-        try {
-            // window.sessionId is declared on Window by src/client/index.ts.
-            const sess = (typeof window !== 'undefined' && window.sessionId)
-                || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId'));
-            return sess || null;
-        } catch {
-            return null;
-        }
-    }
-
-    private authHeaders(): Record<string, string> {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        const sess = this.sessionToken();
-        if (sess) headers['Authorization'] = 'Bearer ' + sess;
-        return headers;
-    }
-
-    /**
      * Initialize the connection (ICE + peer connection; signaling transport
      * starts on joinRoom, mirroring the proven test flows).
      */
@@ -149,7 +127,8 @@ export class P2PConnection {
         this.offerInFlight = false;
 
         // Authenticated ICE (short-lived per-session TURN, STUN fallback).
-        const ice = await fetchPlatformIceServers(this.sessionToken());
+        // SEC-08: cookie auth; no JS-readable session token is sent.
+        const ice = await fetchPlatformIceServers(null);
         this.iceServers = ice.iceServers;
 
         // Create peer connection
@@ -210,7 +189,6 @@ export class P2PConnection {
         const manager = new SignalingManager({
             roomId: this.config.roomId,
             role: this.config.role,
-            token: this.sessionToken(),
             mode: this.config.role === 'viewer' ? 'viewer' : 'participant',
             logger: (msg, type = 'info') => debugLog('[signaling]', type, msg),
             onSignal: (data) => this.handleIncoming(data),
@@ -638,7 +616,7 @@ export class P2PConnection {
         try {
             const response = await fetchJsonWithTimeout(
                 `/api/signaling/session?competition_id=${this.competitionId}`,
-                { headers: this.authHeaders() }
+                { headers: { 'Content-Type': 'application/json' }, credentials: 'include' }
             );
             if (!response.ok) return null;
             const result = (await response.json().catch(() => null)) as {

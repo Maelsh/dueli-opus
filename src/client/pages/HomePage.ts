@@ -328,7 +328,7 @@ export class HomePage {
     }
 
     static ensureGuestToken(): void {
-        if (State.sessionId) return;
+        if (State.currentUser) return;
         try {
             if (typeof localStorage === 'undefined') return;
             if (localStorage.getItem('dueli_guest_token')) return;
@@ -348,7 +348,8 @@ export class HomePage {
 
     static guestHeaders(extra: Record<string, string>): Record<string, string> {
         const headers: Record<string, string> = { ...(extra || {}) };
-        if (State.sessionId) headers['Authorization'] = 'Bearer ' + State.sessionId;
+        // SEC-08: authenticated browsers use the HttpOnly cookie. The guest
+        // token is a non-secret first-party rail identity, not a session.
         try {
             const guest = typeof localStorage !== 'undefined' ? localStorage.getItem('dueli_guest_token') : null;
             if (guest) headers['X-Guest-Token'] = guest;
