@@ -218,7 +218,8 @@ describe.each(protectedRoutes)('$method $path', (route) => {
 |---|---|---|
 | الأنواع | `npx tsc --noEmit` | ✅ |
 | سقف `any` | مقارنة بالأساس 308 | ✅ |
-| فحوص أمنية نمطية | `grep` (SEC-06/08/11/05/07/10) | ✅ |
+| حراس أمنية (AST) | `node dev-tools/check-sec-guards.mjs sec05\|sec07\|sec08\|sec10\|sec11` + `check-sec06-math-random.mjs` | ✅ |
+| اختبارات سلوك SEC | `vitest run` لحزمة SEC-05/07/08/10 (CORS/cookie/CSRF/SSE/بثّ) | ✅ |
 | الترحيل من صفر | `db:migrate:local` على قاعدة فارغة | ✅ |
 | Unit | `npm test` (vitest run) | ✅ |
 | Integration | `npm run test:integration` | ✅ |
@@ -229,6 +230,8 @@ describe.each(protectedRoutes)('$method $path', (route) => {
 | مراجع الوثائق | كشف ملفات مُشار إليها وغير موجودة | ⚠️ |
 
 **قرار:** تبدأ الفحوص الجديدة **تحذيرية** لأسبوع، ثم تصبح مانعة. البوابة التي تكسر كل شيء يوم تشغيلها يُعطّلها الفريق.
+
+**استثناء UNIT30.3:** حراس SEC-05/07/08/10/11 لا تدخل فترة السماح. كانت أنماط `grep` السابقة إما تطابق تعليقات توثيقية (SEC-05/10) أو لا تصلح مانعة (SEC-07/08/11)؛ استُبدلت بفحص AST (`dev-tools/check-sec-guards.mjs`) وأصبحت مانعة فوراً مع اختبارات ضبط تثبت الاتجاهين. لا تُضاف لها استثناءات ولا تُعاد إلى `grep`.
 
 ### إصلاح مسبق مطلوب
 

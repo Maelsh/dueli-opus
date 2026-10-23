@@ -25,7 +25,7 @@
 | `/api/earnings`, `/api/withdrawals` | مربوطة | ✅ |
 | `/api/advertisements`, `/api/transparency`, `/api/advertiser`, `/api/complaints` | مربوطة | ✅ |
 | `/api/matchmaking` | modules/api/matchmaking | ✅ (online-users, heartbeat, offline) |
-| `/api/sse` | modules/api/sse | ✅ مربوطة + العميل يتصل الآن عبر SseService (T2.2) — تدعم `?token=` |
+| `/api/sse` | modules/api/sse | ✅ مربوطة + العميل يتصل الآن عبر SseService (T2.2) — تذكرة `?ticket=` فقط (لا رمز جلسة في الـURL) |
 | `/api/recommendations` | modules/api/recommendations | ✅ مربوطة (T1.2) — شاملة competitor-stats/:userId |
 | `/api/leaderboard` | modules/api/leaderboard | ✅ مربوطة (T1.2) |
 | `/api/analytics` | modules/api/analytics | ✅ مربوطة (T1.2) |
@@ -84,7 +84,6 @@
 
 - `POST /api/competitions/:id/end` — يجب أن يستدعي التقييم←الفائز←الأرباح (T1.5)
 - ~~`POST /api/competitions/:id/invite` ينشئ إشعار DB صامت~~ — ✅ يدفع SSE الآن (T2.2)
-- المصادقة: Bearer header **أو** `?token=` **أو** cookie sessionId (مطلوب لـEventSource) —
-  `?token=` دين أمني مؤقت (SEC-11، انظر `AGENTS.md`): لا تعتمد عليه في كود جديد.
+- المصادقة: `Authorization: Bearer` (غير المتصفح) **أو** كوكي `sessionId` HttpOnly. لا يُقبل رمز جلسة في `?token=` إطلاقاً (SEC-11). `EventSource` يستخدم تذكرة أحادية قصيرة العمر: `POST /api/realtime/ticket` ثم `?ticket=` — وليس رمز الجلسة. رمز `?token=` في `verify-page.ts` مخصّص لتحقق البريد لمرة واحدة وليس جلسة.
 
 > ⚠️ لا تعدّل هذا الملف عبر PowerShell (`Set-Content`) — يفسد ترميز العربية.

@@ -43,8 +43,8 @@
 - جدول المتابعة الفعلي اسمه `follows` وليس `user_follows` (أُصلح في T1.1)
 - ad-blocks, ad-reports, donations, payment-methods مربوطة في `main.ts` (خطة 4) — لكن راجع `docs/14-ROUTE-INVENTORY.md` قبل افتراض أنها محمية؛ عدّة مسارات فيها بلا `authMiddleware` (SEC-13)
 - **لا تعدّل الملفات العربية عبر PowerShell Set-Content** — يفسد الترميز. أدوات تحرير الملفات فقط
-- المصادقة: Bearer header أو `?token=` أو cookie sessionId — **⚠ `?token=` مرفوض هندسياً (SEC-11): يُسجَّل في سجلات الطرف الثالث. الإزالة مجدولة بالمرحلة 4 من `15-ROADMAP.md`، لا تعتمد عليه في كود جديد**
+- المصادقة: Bearer header **أو** كوكي `sessionId` HttpOnly فقط — **`?token=` مرفوض نهائياً (SEC-11)؛ لا تعتمده في كود جديد.** `EventSource` يستخدم تذكرة أحادية: `POST /api/realtime/ticket` ثم `?ticket=`. `?token=` في `verify-page.ts` لتحقق البريد فقط وليس جلسة
 - cron: لا يوجد cron أصلي في Pages — المجدول الخارجي يضرب `POST /api/cron/run` بترويسة `Authorization: Bearer <CRON_SECRET>` كل دقيقة (SEC-04 مُنفّذة في الكود؛ `?key=` مرفوضة) — منطق الدورة SSOT في `ScheduledTaskService` و`CronHandler` يفوّض له (F-6)
 - **MVC مُطبّق (F-5A → F-5D):** `CompetitionController` و`AdminController` وصفحتا `profile-page` و`live/main` بلا SQL مباشر — أي SQL جديد فيها مرفوض. الاستثناء الوحيد: `FollowModel` لا يرث `BaseModel` عمداً (نُقل كما هو في F-5B — لا "تصلحه")
 - الدخول يفحص `is_verified` (وليس `email_verified` غير المستخدم) — تعارض مخطط مؤجل لـT3.x
-- CI: `.github/workflows/quality-gate.yml` يفرض جزءاً من `docs/11-DEFINITION-OF-DONE.md` — بعض الفحوص لا تزال `continue-on-error: true` (فترة سماح أسبوع من أول تشغيل ناجح) ثم تصبح مانعة — راجع تعليقات الملف قبل تعديله
+- CI: `.github/workflows/quality-gate.yml` يفرض جزءاً من `docs/11-DEFINITION-OF-DONE.md` — حراس SEC-05/07/08/10/11 صارت فحوص AST مانعة بلا فترة سماح (UNIT30.3)، وبعض الفحوص الأخرى لا تزال `continue-on-error: true` — راجع تعليقات الملف قبل تعديله

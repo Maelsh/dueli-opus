@@ -26,7 +26,8 @@
 | `docs/COMPLETE_PROJECT_PLANS.md` مرجع ملزم وحالات "مكتملة" صحيحة | أرشيف تاريخي؛ الحالات غير موثوقة؛ الحاكم `docs/11` + `docs/15` | `docs/10-ARCHITECTURE-ASSESSMENT.md` |
 | `docs/10` أرقامه (صفر اختبارات، 265 SQL خارج النماذج…) تصف الحاضر | لقطة مؤرخة؛ F-1 → F-7 غيّرت الواقع (اختبارات في `tests/`، استخراج SQL) | ترويسة `docs/10` |
 | cron يعمل بـ `?key=CRON_SECRET` (SEC-04 مفتوحة) | الكود يستخدم `POST` + `Authorization: Bearer` فقط (نُفّذ فعلاً) | `src/modules/api/cron/routes.ts` |
-| `?token=` في query آلية مصادقة مقبولة | مرفوض هندسياً (SEC-11) — دين مؤقت مُعلن، لا تعتمد عليه في كود جديد | `AGENTS.md` |
+| `?token=` في query آلية مصادقة مقبولة | **مغلق**: `authMiddleware` لا يقبل `?token=`؛ Bearer أو كوكي `sessionId` فقط، وSSE بتذكرة أحادية (SEC-11). `?token=` في `verify-page.ts` لتحقق البريد فقط | `src/middleware/auth.ts`، `tests/api/sec-guards.test.ts` |
+| حراس SEC-05/10 النصية (`grep cors()` / `grep this.sockets`) صالحة | كانت تطابق تعليقات الشرح نفسها — إنذار كاذب دائم. استُبدلت بحراس AST مانعة (SEC-05/07/08/10/11) في `dev-tools/check-sec-guards.mjs` | `docs/12` §4، `tests/dev-tools/sec-guards-checker.test.ts` |
 | كل نموذج يجب أن يرث `BaseModel` بلا استثناء | `FollowModel` استثناء موثّق: نُقل كما هو (F-5B) دون وراثة عمداً | `docs/01-ARCHITECTURE-RULES.md` |
 | منطق دورة المنافسة موزع بين `CronHandler` والمهام | `ScheduledTaskService` هو SSOT الوحيد (F-6)؛ `CronHandler` يفوّض | `docs/05-COMPETITION-LIFECYCLE.md` |
 | `docs/04-STREAMING-PIPELINE.md` مفقود (كما تدّعي `docs/15` المرحلة 4) | الملف **موجود** وموثّق؛ بند الخارطة يُقرأ "حدّثه ليطابق الكود" لا "اكتبه من الصفر" | `docs/04-STREAMING-PIPELINE.md` |
