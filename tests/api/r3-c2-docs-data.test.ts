@@ -21,6 +21,7 @@ import { resolve } from 'node:path';
 import app from '../../src/main';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { sessionTokenFromResponse } from '../helpers/session-cookie';
 
 type Env = Parameters<typeof app.request>[2];
 const env = (db: SqliteD1): Env => ({ DB: db }) as unknown as Env;
@@ -74,7 +75,7 @@ describe('R3-C2 admin-managed C2 documents', () => {
             const res = await app.request('/api/auth/login?lang=en', {
                 method: 'POST', headers: headers(), body: JSON.stringify({ email, password }),
             }, env(db));
-            return (await res.json() as any).data.sessionId as string;
+            return sessionTokenFromResponse(res);
         };
         adminTok = await login('admin@c2.local', 'admin');
         plainTok = await login('plain@c2.local', 'userpass1');

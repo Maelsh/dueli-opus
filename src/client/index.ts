@@ -75,7 +75,7 @@ const CountryFunctions = {
         CookieUtils.set('country', countryCode, 365);
         CookieUtils.set('lang', country.primaryLang, 365);
 
-        if (State.currentUser && State.sessionId) {
+        if (State.currentUser) {
             ApiClient.put('/api/users/preferences', {
                 country: countryCode,
                 language: country.primaryLang
@@ -138,9 +138,9 @@ export class App {
         // Check authentication (await to ensure State.currentUser is set before HomePage.init)
         await AuthService.checkAuth();
 
-        // Expose session data to window for SSR inline scripts
+        // Expose the authenticated user (never a session secret) for SSR
+        // inline scripts.
         window.currentUser = State.currentUser;
-        window.sessionId = State.sessionId;
         window.lang = State.lang;
         window.isDarkMode = State.isDarkMode;
 
@@ -157,16 +157,12 @@ export class App {
     }
 
     /**
-     * Handle OAuth callback from URL
+     * Handle OAuth error returned in the URL. Successful OAuth callbacks use
+     * the HttpOnly cookie + `postMessage` path; no session is ever in a URL.
      */
     private static handleOAuthCallback(): void {
         const urlParams = new URLSearchParams(window.location.search);
-        const session = urlParams.get('session');
         const error = urlParams.get('error');
-
-        if (session) {
-            AuthService.handleOAuthSuccess(session, true);
-        }
 
         if (error) {
             Modal.showOAuthError(error);
@@ -185,7 +181,6 @@ declare global {
     interface Window {
         dueli: typeof dueliAPI;
         currentUser: any;
-        sessionId: string | null;
         lang: string;
         isDarkMode: boolean;
         // Global functions for onclick handlers

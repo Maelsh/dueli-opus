@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
 import { CryptoUtils } from '../../../lib/services/CryptoUtils';
+import { clearCsrfCookie, clearSessionCookie } from '../../../lib/services/SessionCookieService';
 
 const deleteAccountRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -128,6 +129,11 @@ deleteAccountRoutes.post('/', async (c) => {
 
         // Log deletion for audit
         console.log(`[ACCOUNT DELETION] User ${user.id} deleted at ${new Date().toISOString()}`);
+
+        // SEC-08: the account and all its server sessions are gone; clear the
+        // dead browser credentials so the next request is visibly a guest.
+        clearSessionCookie(c);
+        clearCsrfCookie(c);
 
         return c.json({
             success: true,

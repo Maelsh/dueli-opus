@@ -345,30 +345,44 @@ signalingRoutes.get('/config', async (c) => {
  * Called by external signaling server to validate participants
  * يُستدعى من سيرفر الإشارات الخارجي للتحقق من المشاركين
  */
-signalingRoutes.post('/verify', async (c) => {
+signalingRoutes.post('/verify', authMiddleware({ required: false }), async (c) => {
     const { DB } = c.env;
 
     try {
         const body = await c.req.json();
         const { session_token, competition_id, claimed_role } = body;
 
-        if (!session_token || !competition_id || !claimed_role) {
+        if (!competition_id || !claimed_role) {
             return c.json({
                 valid: false,
-                error: 'Missing session_token, competition_id, or claimed_role'
+                error: 'Missing competition_id or claimed_role'
             }, 400);
+        }
+
+        // SEC-08: browser callers authenticate with the HttpOnly cookie (the
+        // authMiddleware above). The body token remains for the documented
+        // non-browser signaling-server contract, never for the browser path.
+        const authedUser = c.get('user') as { id: number; username?: string; display_name?: string } | null;
+        let user = authedUser;
+
+        if (!user) {
+            if (!session_token) {
+                return c.json({ valid: false, error: 'invalid_session' }, 401);
+            }
+            const sessionModel = new SessionModel(DB);
+            const found = await sessionModel.findValidSession(session_token);
+            if (!found) {
+                return c.json({ valid: false, error: 'invalid_session' }, 401);
+            }
+            user = found.user;
         }
 
         // 7.A correction: SignalingAuthService is the SOLE authority.
         // No duplicated SQL/authorization below this point.
-        const sessionModel = new SessionModel(DB);
-        const found = await sessionModel.findValidSession(session_token);
-        if (!found) {
-            return c.json({ valid: false, error: 'invalid_session' }, 401);
-        }
+        const authenticatedUser = user as { id: number; username?: string; display_name?: string };
         const normalizedClaim = claimed_role === 'opponent' ? 'guest' : claimed_role;
         const auth = new SignalingAuthService(DB);
-        const gate = await auth.authorize(found.user.id, Number(competition_id), normalizedClaim);
+        const gate = await auth.authorize(authenticatedUser.id, Number(competition_id), normalizedClaim);
         if (!gate.ok) {
             const status = gate.code === 401 ? 401 : gate.code === 409 ? 409 : 403;
             const error =
@@ -382,9 +396,9 @@ signalingRoutes.post('/verify', async (c) => {
         return c.json({
             valid: true,
             data: {
-                user_id: found.user.id,
-                username: found.user.username,
-                display_name: found.user.display_name,
+                user_id: authenticatedUser.id,
+                username: authenticatedUser.username,
+                display_name: authenticatedUser.display_name,
                 role: gate.role,
                 competition_id: gate.competitionId
             }

@@ -77,8 +77,10 @@ describe('R2-L1 competition page + live room contracts', () => {
         expect(src).toContain('removeLiveComment');
         // Author fallback when an older payload lacks display_name.
         expect(src).toContain('cm.display_name || cm.username');
-        // Session auth on the POST (server still binds identity server-side).
-        expect(src).toContain("'Authorization'");
+        // SEC-08: the POST uses the HttpOnly cookie (credentials shim); no
+        // JS-readable session/Bearer header may reappear in the page.
+        expect(src).not.toContain("'Authorization'");
+        expect(src).toContain('commentAuthHeaders');
         // Failures surface to the user instead of console-only.
         expect(src).toContain("showToast((data && data.error)");
         // Watch intent + bounded heartbeat + presence wiring, no client trust.

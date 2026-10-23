@@ -11,6 +11,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import app from '../../src/main';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { sessionTokenFromResponse } from '../helpers/session-cookie';
 
 type Env = Parameters<typeof app.request>[2];
 const env = (db: SqliteD1): Env => ({ DB: db }) as unknown as Env;
@@ -44,7 +45,8 @@ async function login(db: SqliteD1, email: string) {
         body: JSON.stringify({ email, password: 'userpass1' }),
     }, env(db));
     const body = await res.json() as any;
-    return body.data.sessionId as string;
+    if (res.status !== 200) throw new Error(`login failed: ${res.status} ${JSON.stringify(body)}`);
+    return sessionTokenFromResponse(res);
 }
 
 async function api(db: SqliteD1, method: string, path: string, token?: string, body?: unknown) {

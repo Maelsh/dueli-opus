@@ -28,6 +28,7 @@ import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
 import { NotificationModel } from '../../src/models/NotificationModel';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { setCookieHeaders } from '../helpers/session-cookie';
 
 const SESS_A = 'sess-r2f-a';
 const SESS_B = 'sess-r2f-b';
@@ -249,6 +250,14 @@ describe('R2-F journeys', () => {
             body: JSON.stringify({ confirm: true }),
         }, env(db));
         expect(del.status).toBe(200);
+        // SEC-08: account deletion revokes every server session and clears the
+        // dead browser cookies in the same response.
+        const cleared = setCookieHeaders(del);
+        for (const name of ['sessionId', 'csrfToken']) {
+            const header = cleared.find((h) => h.startsWith(`${name}=`));
+            expect(header, `${name} cleared`).toBeTruthy();
+            expect(header).toMatch(/Max-Age=0/i);
+        }
 
         const user = await db.prepare(
             'SELECT username, email, is_active, display_name FROM users WHERE id = 121'

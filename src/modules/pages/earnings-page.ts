@@ -172,7 +172,6 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // SSE Connection
             // =====================
             function connectSSE(channel) {
-                const sessionId = window.DueliSession.token();
                 const url = '/api/sse?channel=' + encodeURIComponent(channel);
                 const es  = new EventSource(url, { withCredentials: false });
 
@@ -225,10 +224,9 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // =====================
             async function loadEarnings() {
                 try {
-                    const sessionId = window.DueliSession.token();
                     const [earningsRes, historyRes] = await Promise.all([
-                        fetch('/api/withdrawals', { headers: { 'Authorization': 'Bearer ' + sessionId } }),
-                        fetch('/api/withdrawals?limit=10', { headers: { 'Authorization': 'Bearer ' + sessionId } })
+                        fetch('/api/withdrawals'),
+                        fetch('/api/withdrawals?limit=10')
                     ]);
                     const earningsData = await earningsRes.json();
                     if (!earningsData.success) { showLoginRequired(); return; }
@@ -364,9 +362,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     + '<option value="crypto_usdt">Crypto USDT (TRC-20)</option>';
                 if (hint) hint.classList.add('hidden');
                 try {
-                    const res = await fetch('/api/payment-methods', {
-                        headers: { 'Authorization': 'Bearer ' + window.DueliSession.token() }
-                    });
+                    const res = await fetch('/api/payment-methods');
                     const data = await res.json().catch(() => ({}));
                     const methods = (data.success && data.data?.methods) || [];
                     methods.forEach(m => {
@@ -430,12 +426,10 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 errDiv.classList.add('hidden');
 
                 try {
-                    const sessionId = window.DueliSession.token();
                     const res = await fetch('/api/withdrawals', {
                         method: 'POST',
                         headers: {
-                            'Content-Type':  'application/json',
-                            'Authorization': 'Bearer ' + sessionId
+                            'Content-Type':  'application/json'
                         },
                         body: JSON.stringify(payload)
                     });
@@ -464,10 +458,8 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // =====================
             async function cancelWithdrawal(id) {
                 if (!confirm(tr.confirm_cancel_withdrawal)) return;
-                const sessionId = window.DueliSession.token();
                 const res = await fetch('/api/withdrawals/' + id, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': 'Bearer ' + sessionId }
+                    method: 'DELETE'
                 });
                 const data = await res.json();
                 if (data.success) {

@@ -41,6 +41,8 @@ describe('R2-A admin UI contract', () => {
         expect(ADMIN_PAGE).toContain('403');
         expect(ADMIN_PAGE).toContain("tt('access_denied')");
         expect(ADMIN_PAGE).toContain('denyAdminAccess');
+        // SEC-08: a guest has no JS token gate; the first API call returns 401.
+        expect(ADMIN_PAGE).toContain('res.status === 401 || res.status === 403');
     });
 
     it('2. admin nav entry hidden unless admin session', () => {

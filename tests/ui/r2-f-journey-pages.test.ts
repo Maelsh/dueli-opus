@@ -37,11 +37,12 @@ describe('R2-F page pins', () => {
             for (const s of scripts) {
                 expect(() => new Script(s), `advertiser[${lang}] compiles`).not.toThrow();
             }
-            // SEC-07: every page uses the one canonical accessor; no page reads
-            // either session key directly (legacy-first was the defect).
+            // SEC-08: pages use the HttpOnly cookie via the synchronous shim;
+            // no page reads a JS session key or builds a Bearer header.
             expect(html).not.toContain("localStorage.getItem('session_id')");
             expect(html).not.toContain("localStorage.getItem('sessionId')");
-            expect(html).toContain('window.DueliSession.token()');
+            expect(html).not.toContain('window.DueliSession.token()');
+            expect(html).not.toContain("'Authorization'");
             expect(html).toContain('/static/session-access.js');
             // No broken string-concat quoting remains (was: data-csp-args='[" + id + "]'
             // inside a single-quoted JS string ⇒ SyntaxError killing ALL page JS).
@@ -61,7 +62,9 @@ describe('R2-F page pins', () => {
             }
             expect(html).not.toContain("localStorage.getItem('session_id')");
             expect(html).not.toContain("localStorage.getItem('sessionId')");
-            expect(html).toContain('window.DueliSession.token()');
+            expect(html).not.toContain('window.DueliSession.token()');
+            expect(html).not.toContain("'Authorization'");
+            expect(html).toContain('/static/session-access.js');
             expect(html).not.toContain('data-csp-args=\'[" +');
         }
     });

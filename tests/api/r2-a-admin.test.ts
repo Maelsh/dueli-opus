@@ -24,6 +24,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import app from '../../src/main';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { sessionTokenFromResponse } from '../helpers/session-cookie';
 
 type Env = Parameters<typeof app.request>[2];
 const env = (db: SqliteD1): Env => ({ DB: db }) as unknown as Env;
@@ -62,7 +63,11 @@ async function login(db: SqliteD1, email: string, password: string) {
         headers: headers(),
         body: JSON.stringify({ email, password }),
     }, env(db));
-    return { status: res.status, data: await res.json() as any };
+    return {
+        status: res.status,
+        data: await res.json() as any,
+        token: res.status === 200 ? sessionTokenFromResponse(res) : '',
+    };
 }
 
 async function api(db: SqliteD1, method: string, path: string, token?: string, body?: unknown) {
@@ -88,8 +93,8 @@ describe('R2-A admin identity, settings, roles, H9 documents', () => {
     beforeEach(async () => {
         db = await createSqliteD1();
         await seedR2A(db);
-        adminTok = (await login(db, 'admin@dueli.local', 'admin')).data.data.sessionId as string;
-        plainTok = (await login(db, 'plain@r2a.local', 'userpass1')).data.data.sessionId as string;
+        adminTok = (await login(db, 'admin@dueli.local', 'admin')).token;
+        plainTok = (await login(db, 'plain@r2a.local', 'userpass1')).token;
     });
 
     it('1. bootstrap-shape admin logs in; wrong password is 401', async () => {
@@ -149,7 +154,7 @@ describe('R2-A admin identity, settings, roles, H9 documents', () => {
         const stale = await login(db, 'admin@dueli.local', 'admin');
         expect(stale.status).toBe(401);
 
-        const fresh = relogin.data.data.sessionId as string;
+        const fresh = relogin.token;
         expect((await api(db, 'PUT', '/api/account/password', fresh,
             { current_password: 'nope', new_password: 'newadmin00' })).status).toBe(401);
         expect((await api(db, 'PUT', '/api/account/password', fresh,
@@ -180,7 +185,7 @@ describe('R2-A admin identity, settings, roles, H9 documents', () => {
         expect(flag?.is_admin).toBe(1);
 
         // A Moderator (non-SuperAdmin) cannot grant: 403, no escalation.
-        const modTok = (await login(db, 'mod@r2a.local', 'userpass1')).data.data.sessionId as string;
+        const modTok = (await login(db, 'mod@r2a.local', 'userpass1')).token;
         expect((await api(db, 'POST', '/api/admin/roles', modTok, { user_id: 4, role: 'Moderator' })).status).toBe(403);
 
         // Invalid role 422, unknown target 404.

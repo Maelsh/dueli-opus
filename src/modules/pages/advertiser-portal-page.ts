@@ -102,9 +102,7 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
     <script nonce="${(c.get('cspNonce') as string) ?? ''}">
         async function loadAdvertiserDashboard() {
             try {
-                const token = window.DueliSession.token();
-                if (!token) return;
-                const res = await fetch('/api/advertiser/dashboard', { headers: { 'Authorization': 'Bearer ' + token } });
+                const res = await fetch('/api/advertiser/dashboard');
                 const data = await res.json();
                 if (data.success) {
                     const d = data.data;
@@ -125,15 +123,14 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
         function showCreateCampaignForm() { document.getElementById('createCampaignForm').classList.toggle('hidden'); }
         async function createCampaign(e) {
             e.preventDefault();
-            const token = window.DueliSession.token();
             const body = { title: document.getElementById('campaignTitle').value, budget_cents: parseInt(document.getElementById('campaignBudget').value, 10), cost_per_impression_cents: parseInt(document.getElementById('revenuePerView').value, 10), image_url: document.getElementById('campaignImage').value || undefined, link_url: document.getElementById('campaignLink').value || undefined, target_language: document.getElementById('targetLanguage').value || undefined, target_country: document.getElementById('targetCountry').value || undefined };
-            const res = await fetch('/api/advertiser/campaigns', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            const res = await fetch('/api/advertiser/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             if (res.ok) { loadAdvertiserDashboard(); document.getElementById('createCampaignForm').classList.add('hidden'); }
         }
-        async function pauseCampaign(id) { const token = window.DueliSession.token(); await fetch('/api/advertiser/campaigns/' + id + '/pause', { method: 'PUT', headers: { 'Authorization': 'Bearer ' + token } }); loadAdvertiserDashboard(); }
-        async function resumeCampaign(id) { const token = window.DueliSession.token(); await fetch('/api/advertiser/campaigns/' + id + '/resume', { method: 'PUT', headers: { 'Authorization': 'Bearer ' + token } }); loadAdvertiserDashboard(); }
-        async function submitCampaign(id) { const token = window.DueliSession.token(); await fetch('/api/advertiser/campaigns/' + id + '/submit-review', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } }); loadAdvertiserDashboard(); }
-        async function endCampaign(id) { const token = window.DueliSession.token(); await fetch('/api/advertiser/campaigns/' + id + '/end', { method: 'PUT', headers: { 'Authorization': 'Bearer ' + token } }); loadAdvertiserDashboard(); }
+        async function pauseCampaign(id) { await fetch('/api/advertiser/campaigns/' + id + '/pause', { method: 'PUT' }); loadAdvertiserDashboard(); }
+        async function resumeCampaign(id) { await fetch('/api/advertiser/campaigns/' + id + '/resume', { method: 'PUT' }); loadAdvertiserDashboard(); }
+        async function submitCampaign(id) { await fetch('/api/advertiser/campaigns/' + id + '/submit-review', { method: 'POST' }); loadAdvertiserDashboard(); }
+        async function endCampaign(id) { await fetch('/api/advertiser/campaigns/' + id + '/end', { method: 'PUT' }); loadAdvertiserDashboard(); }
         loadAdvertiserDashboard();
     </script>`;
 

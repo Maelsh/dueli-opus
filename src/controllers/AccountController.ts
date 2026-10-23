@@ -13,6 +13,7 @@ import { UserModel } from '../models/UserModel';
 import { SessionModel } from '../models/SessionModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
 import { CryptoUtils } from '../lib/services/CryptoUtils';
+import { clearCsrfCookie, clearSessionCookie } from '../lib/services/SessionCookieService';
 
 /** Mirrors register's implicit rule (lowercased alphanumerics), made explicit. */
 const USERNAME_RE = /^[a-z0-9][a-z0-9_.]{1,28}[a-z0-9]$/;
@@ -101,6 +102,12 @@ export class AccountController extends BaseController {
             const hash = await CryptoUtils.hashPassword(body.new_password);
             await userModel.updatePassword(me.id, hash);
             const killed = await new SessionModel(c.env.DB).deleteByUser(me.id);
+
+            // SEC-08: revocation is visible immediately in the browser. The
+            // cookie is dead either way; clearing it avoids a stale credential
+            // being presented until the next session check.
+            clearSessionCookie(c);
+            clearCsrfCookie(c);
 
             try {
                 await new AdminAuditLogModel(c.env.DB).log(

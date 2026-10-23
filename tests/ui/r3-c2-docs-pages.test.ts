@@ -12,6 +12,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import app from '../../src/main';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { sessionTokenFromResponse } from '../helpers/session-cookie';
 
 type Env = Parameters<typeof app.request>[2];
 const env = (db: SqliteD1): Env => ({ DB: db }) as unknown as Env;
@@ -43,7 +44,7 @@ describe('R3-C2 public docs pages', () => {
         const login = await app.request('/api/auth/login?lang=en', {
             method: 'POST', headers: headers(), body: JSON.stringify({ email: 'admin@c2ui.local', password: 'admin' }),
         }, env(db));
-        adminTok = ((await login.json()) as any).data.sessionId as string;
+        adminTok = sessionTokenFromResponse(login);
         const create = async (body: Record<string, unknown>) => {
             const res = await app.request('/api/admin/documents?lang=en', {
                 method: 'POST', headers: headers(adminTok), body: JSON.stringify(body),

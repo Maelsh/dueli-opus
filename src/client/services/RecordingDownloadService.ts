@@ -168,7 +168,6 @@ export interface DownloadOptions {
 
 export interface DownloadServiceOptions {
     fetchImpl?: typeof fetch;
-    authToken?: string | null;
     manifestBase?: string;
     ffmpegBaseUrl?: string;
     workerFactory?: (url: string) => Worker;
@@ -264,11 +263,8 @@ export class RecordingDownloadService {
     // ---------------------------------------------------------------------
 
     private authHeaders(): Record<string, string> {
-        const token = this.options.authToken
-            ?? (typeof localStorage !== 'undefined' ? localStorage.getItem('sessionId') : null);
-        const headers: Record<string, string> = { Accept: 'application/json' };
-        if (token) headers.Authorization = `Bearer ${token}`;
-        return headers;
+        // SEC-08: the HttpOnly cookie authenticates manifest/chunk fetches.
+        return { Accept: 'application/json' };
     }
 
     async loadManifest(competitionId: number, signal?: AbortSignal): Promise<DownloadManifest> {

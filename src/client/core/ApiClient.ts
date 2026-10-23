@@ -4,8 +4,6 @@
  * @module client/core/ApiClient
  */
 
-import { getBrowserSessionToken } from './SessionAccess';
-
 export interface ApiOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
     headers?: Record<string, string>;
@@ -27,12 +25,8 @@ export class ApiClient {
             ...options.headers,
         };
 
-        // One canonical session access path (State/storage/cookie precedence).
-        const session = getBrowserSessionToken();
-        if (session) {
-            headers['Authorization'] = 'Bearer ' + session;
-        }
-
+        // SEC-08: the browser authenticates with the HttpOnly session cookie.
+        // No Authorization header is constructed from JS-readable state.
         const response = await fetch(endpoint, {
             method: options.method || 'GET',
             headers,

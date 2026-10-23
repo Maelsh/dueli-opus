@@ -6,7 +6,9 @@
  */
 
 import type { Context, Next } from 'hono';
+import { getCookie } from 'hono/cookie';
 import type { Bindings, Variables } from '../config/types';
+import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from '../lib/services/SessionCookieService';
 
 // SEC-12 (docs/12-SECURITY-REMEDIATION.md): rate limiting is backed by D1
 // (see migrations/0012_rate_limits.sql), not an in-memory Map — Workers
@@ -82,7 +84,24 @@ export function strictRateLimit() {
 }
 
 /**
- * CSRF protection middleware
+ * Constant-time comparison for the CSRF double-submit value.
+ * Tokens are random ASCII; length mismatch is already a rejection.
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return diff === 0;
+}
+
+/**
+ * CSRF protection middleware.
+ *
+ * A Bearer request is not automatically attached by browsers (cross-site forms
+ * cannot set it), so it keeps the non-browser contract without a CSRF token.
+ * Cookie-authenticated state changes require the double-submit token:
+ * `csrfToken` cookie + `X-CSRF-Token` header. The non-HttpOnly cookie is a
+ * random non-secret value; the session cookie itself is never JS-readable.
  */
 export function csrfProtection() {
     return async (c: Context<{ Bindings: Bindings; Variables: Variables }>, next: Next) => {
@@ -100,6 +119,22 @@ export function csrfProtection() {
         // path. Excluding it here keeps the CSRF defense intact for every
         // browser-driven route.
         if (c.req.path === '/api/donations/webhook') {
+            return await next();
+        }
+
+        // Signaling /verify is a read-only capability probe. Non-browser
+        // signaling callers present a session token in the body (legacy
+        // contract); the route validates it server-side. It performs no write,
+        // so CSRF cannot cause a state change here.
+        if (c.req.path === '/api/signaling/verify') {
+            return await next();
+        }
+
+        // SEC-08: Authorization is a deliberate, non-automatic credential.
+        // It is the supported non-browser API contract and cannot be set by a
+        // cross-site HTML form. A Bearer-carrying request is therefore treated
+        // as that non-browser contract even if a cookie is also present.
+        if (/^Bearer\s+\S+/i.test(c.req.header('Authorization') || '')) {
             return await next();
         }
 
@@ -130,15 +165,23 @@ export function csrfProtection() {
         }
 
         // Beyond this point, Origin/Referer matched Host (or neither was sent, e.g. same-origin
-        // fetch/cURL). That check alone is the real CSRF defense here: browsers refuse to spoof
-        // Origin, so a cross-site form/fetch cannot forge a matching Origin header. We still
-        // require *some* proof of same-origin intent (Origin, Referer, or an explicit CSRF
-        // token) rather than silently allowing requests that sent none of the three.
+        // fetch/cURL). Browsers refuse to spoof Origin, so a cross-site form/fetch
+        // cannot forge a matching Origin. A cookie-authenticated browser request
+        // also has to present the double-submit pair; the header-only fallback
+        // remains for pre-SEC08 API/test clients and is still not form-forgeable.
         const csrfToken = c.req.header('X-CSRF-Token');
-        const sessionToken = c.req.header('X-Session-Token');
+        const csrfCookie = getCookie(c, CSRF_COOKIE_NAME);
+        const sessionCookie = getCookie(c, SESSION_COOKIE_NAME);
 
-        if (!origin && !referer && !csrfToken && !sessionToken) {
-            return c.json({ success: false, error: 'Missing CSRF proof (Origin/Referer/X-CSRF-Token)' }, 403);
+        if (sessionCookie && csrfCookie) {
+            if (!csrfToken || !constantTimeEqual(csrfCookie, csrfToken)) {
+                return c.json({ success: false, error: 'Invalid CSRF token' }, 403);
+            }
+        } else {
+            const sessionToken = c.req.header('X-Session-Token');
+            if (!origin && !referer && !csrfToken && !sessionToken) {
+                return c.json({ success: false, error: 'Missing CSRF proof (Origin/Referer/X-CSRF-Token)' }, 403);
+            }
         }
 
         await next();

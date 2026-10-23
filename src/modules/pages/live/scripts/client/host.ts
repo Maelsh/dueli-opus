@@ -255,24 +255,19 @@ export function getHostScript(lang: Language): string {
         async function createRoom() {
             try {
                 log('${tr.loading}...');
-                const token = window.getSessionToken();
-                if (!token) {
-                    log('❌ يجب تسجيل الدخول أولاً', 'error');
-                    return false;
-                }
 
                 // 7.A correction: room creation goes through the PLATFORM
-                // (/api/signaling/room/create, host-only, session Bearer auth),
-                // never directly to the external worker.
+                // (/api/signaling/room/create, host-only). SEC-08 authenticates
+                // with the HttpOnly cookie; no token is read or returned.
                 const res = await fetch('/api/signaling/room/create', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ competition_id: Number(competitionId) })
                 });
                 const data = await res.json();
                 if (data.success && data.data.room_id) {
                     window.actualRoomId = data.data.room_id;
-                    return { roomId: data.data.room_id, token };
+                    return { roomId: data.data.room_id };
                 }
                 return false;
             } catch (err) {
@@ -518,7 +513,6 @@ export function getHostScript(lang: Language): string {
                 // signalingUrl is inert (see shared.ts), room is comp_<id>.
                 roomId: roomData.roomId,
                 role: 'host',
-                token: roomData.token,
                 onSignal: async function(data) {
                     try {
                         const peerId = data.from || '';

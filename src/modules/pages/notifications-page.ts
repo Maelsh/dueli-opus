@@ -93,9 +93,7 @@ export const notificationsPage = async (c: Context<{ Bindings: Bindings; Variabl
             }
 
             function authHeaders() {
-                return {
-                    'Authorization': 'Bearer ' + window.DueliSession.token()
-                };
+                return {};
             }
 
             function showLoginRequired() {

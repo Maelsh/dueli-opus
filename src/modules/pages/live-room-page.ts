@@ -492,15 +492,14 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     return false;
                 }
 
-                // Create room if host (platform gate: host-only, session Bearer auth)
+                // Create room if host (platform gate: host-only, HttpOnly cookie)
                 if (userRole === 'host') {
                     log('Creating signaling room...', 'info');
                     const created = await withSignalingRetry('room/create', async () => {
                         const createRes = await fetch('/api/signaling/room/create', {
                             method: 'POST',
                             headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': 'Bearer ' + window.DueliSession.token()
+                                'Content-Type': 'application/json'
                             },
                             body: JSON.stringify({
                                 competition_id: competitionId
@@ -1035,7 +1034,6 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch('/api/reports', {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
@@ -1155,7 +1153,6 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     await fetch('/api/competitions/' + competitionId + '/end', {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ vod_url: vodUrl })
@@ -1168,8 +1165,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     await fetch('/api/signaling/session/leave', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + window.DueliSession.token()
+                            'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
                             competition_id: Number(competitionId)
@@ -1195,10 +1191,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // R1.6 text-sink rule stays: raw text only ever reaches textContent.
             const roomCommentsSeen = new Set();
             function roomAuthHeaders() {
-                const h = { 'Content-Type': 'application/json' };
-                const sess = window.DueliSession.token();
-                if (sess) h['Authorization'] = 'Bearer ' + sess;
-                return h;
+                return { 'Content-Type': 'application/json' };
             }
             function appendRoomComment(cm) {
                 // Id-merge: our own POST response and its SSE echo share one id.
@@ -1254,11 +1247,8 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
             }
             async function refreshRoomViewerCount() {
                 try {
-                    const sess = window.DueliSession.token();
-                    if (!sess) return;
-                    const res = await fetch('/api/signaling/session?competition_id=' + competitionId, {
-                        headers: { 'Authorization': 'Bearer ' + sess }
-                    });
+                    if (!window.currentUser) return;
+                    const res = await fetch('/api/signaling/session?competition_id=' + competitionId);
                     const data = await res.json().catch(function(){ return null; });
                     const count = data && data.success && data.data && data.data.presence
                         ? data.data.presence.viewer_count : null;

@@ -135,7 +135,9 @@ export async function fetchPlatformIceServers(token: string | null): Promise<Pla
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
     try {
-        const response = await fetchJsonWithTimeout('/api/signaling/ice-servers', { headers });
+        // SEC-08: cookie auth for browser ICE; a Bearer token is only used by
+        // non-browser callers of this helper.
+        const response = await fetchJsonWithTimeout('/api/signaling/ice-servers', { headers, credentials: 'include' });
         const result = (await response.json().catch(() => null)) as {
             success?: boolean;
             data?: { iceServers?: RTCIceServer[]; turn_available?: boolean; expires_at?: string | null } | null;

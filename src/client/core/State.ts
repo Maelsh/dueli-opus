@@ -69,7 +69,6 @@ function getBrowserCountry(): string {
  */
 export class State {
     private static _currentUser: any = null;
-    private static _sessionId: string | null = null;
     private static _lang: string = DEFAULT_LANGUAGE;
     private static _country: string = DEFAULT_COUNTRY;
     private static _isDarkMode: boolean = false;
@@ -100,16 +99,17 @@ export class State {
         }
     }
 
-    // Session ID
+    /**
+     * @deprecated SEC-08: the session secret is HttpOnly. This property is
+     * retained as a no-secret compatibility no-op for older callers; auth
+     * decisions use `State.currentUser` and the server.
+     */
     static get sessionId(): string | null {
-        return this._sessionId;
+        return null;
     }
 
-    static set sessionId(id: string | null) {
-        this._sessionId = id;
-        if (typeof window !== 'undefined') {
-            (window as any).sessionId = id;
-        }
+    static set sessionId(_id: string | null) {
+        // Intentionally ignored: never persist a session secret in JS state.
     }
 
     // Language

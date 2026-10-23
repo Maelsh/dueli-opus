@@ -147,13 +147,9 @@ export class PlatformRecordingLease implements RecordingLeaseHandle {
     }
 
     private headers(): Record<string, string> {
-        const h: Record<string, string> = { 'Content-Type': 'application/json' };
-        try {
-            const sess = (typeof window !== 'undefined' && (window as unknown as { sessionId?: string }).sessionId)
-                || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId'));
-            if (sess) h['Authorization'] = 'Bearer ' + sess;
-        } catch { /* storage unavailable — server will 401 */ }
-        return h;
+        // SEC-08: authentication is the HttpOnly cookie; the browser attaches
+        // it automatically. This method only carries the content type.
+        return { 'Content-Type': 'application/json' };
     }
 
     async acquire(): Promise<Awaited<ReturnType<RecordingLeaseHandle['acquire']>>> {
@@ -843,12 +839,8 @@ export class ChunkUploader {
      * identity, byte ceiling); the external host verifies + consumes it.
      */
     private async fetchChunkKey(chunkNumber: number): Promise<string> {
+        // SEC-08: cookie auth + the global CSRF shim; no JS-readable secret.
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        try {
-            const sess = (typeof window !== 'undefined' && (window as unknown as { sessionId?: string }).sessionId)
-                || (typeof localStorage !== 'undefined' && localStorage.getItem('sessionId'));
-            if (sess) headers['Authorization'] = 'Bearer ' + sess;
-        } catch { /* storage unavailable — server will 401 */ }
         const res = await fetch('/api/chunks/register', {
             method: 'POST',
             headers,

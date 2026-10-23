@@ -141,13 +141,15 @@ describe('B1 — AuthService session handling', () => {
         vi.useRealTimers();
     });
 
-    it('publishes an auth-success event after a modal login', async () => {
+    it('publishes an auth-success event and clears legacy state after a modal login', async () => {
         const { AuthService } = await loadAuth();
+        withSession();
         const events: unknown[] = [];
         window.addEventListener('dueli:auth-success', (e) => events.push(e));
+        // SEC-08: the server no longer returns a session secret in JSON.
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, {
             success: true,
-            data: { user: { id: 5, username: 'u5' }, sessionId: 'new-session' },
+            data: { user: { id: 5, username: 'u5' } },
         })));
         document.getElementById = ((id: string) => (
             id === 'loginEmail' ? { value: 'a@b.c' } : id === 'loginPassword' ? { value: 'pw' } : null
@@ -157,6 +159,8 @@ describe('B1 — AuthService session handling', () => {
         await new Promise((r) => setTimeout(r, 0));
 
         expect(events).toHaveLength(1);
+        expect(localStorage.getItem('sessionId')).toBeNull();
+        expect(localStorage.getItem('session_id')).toBeNull();
     });
 
     it('logout still clears the UI state', async () => {

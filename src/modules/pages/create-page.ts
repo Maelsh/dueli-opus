@@ -166,9 +166,8 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
         try {
           const res = await fetch('/api/competitions', {
             method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + window.DueliSession.token()
+            headers: {
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
               title: form.title.value,

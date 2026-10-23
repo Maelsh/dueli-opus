@@ -1,7 +1,14 @@
 import { expect, test, chromium } from '@playwright/test';
+import type { Cookie } from '@playwright/test';
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  addRequestCookies,
+  clearRequestCookies,
+  requestCookies,
+  sessionTokenFromApiResponse,
+} from './helpers/session';
 
 // Page globals (global lexical bindings of the live room inline script).
 declare const p2p: { isP2PConnected(): boolean } | null | undefined;
@@ -57,11 +64,18 @@ test.describe('R4-LIVE-INT-1 host+guest fake-device media', () => {
     }
     d1(`UPDATE users SET is_verified = 1 WHERE email LIKE '${TAG}-%@example.test'`);
     const login = async (u: typeof H) => {
+      await clearRequestCookies(request);
       const res = await apiPost('/api/auth/login', { email: u.email, password: u.password });
       expect(res.ok(), `login ${u.email}`).toBeTruthy();
       const body = await res.json();
       const data = body?.data ?? body;
-      return { id: data.user.id as number, token: data.sessionId as string };
+      const cookies = await requestCookies(request);
+      await clearRequestCookies(request);
+      return {
+        id: data.user.id as number,
+        token: sessionTokenFromApiResponse(res),
+        cookies,
+      };
     };
     const host = await login(H);
     const guest = await login(G);
@@ -90,13 +104,13 @@ test.describe('R4-LIVE-INT-1 host+guest fake-device media', () => {
     });
     const consoleTexts: string[] = [];
     try {
-      const ctxFor = async (token: string) => {
+      const ctxFor = async (cookies: Cookie[]) => {
         const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
-        await ctx.addInitScript((t) => localStorage.setItem('sessionId', t), token);
+        await addRequestCookies(ctx, cookies);
         return ctx;
       };
-      const hctx = await ctxFor(host.token);
-      const gctx = await ctxFor(guest.token);
+      const hctx = await ctxFor(host.cookies);
+      const gctx = await ctxFor(guest.cookies);
       const hp = await hctx.newPage();
       const gp = await gctx.newPage();
       for (const p of [hp, gp]) {

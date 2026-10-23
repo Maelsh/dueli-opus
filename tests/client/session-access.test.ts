@@ -1,156 +1,134 @@
 /**
- * SEC-07 — canonical client session access.
+ * SEC-08 — client session access no longer exposes a secret.
  *
- * Proven failure modes on current main:
- *  - admin/advertiser/complaint/live-finance read the legacy `session_id` key
- *    FIRST (or only), so a stale legacy value overrides the canonical
- *    `sessionId` pair and the page renders logged-out / 401.
- *  - AuthService picked one cookie/localStorage candidate; a stale canonical
- *    copy could hide a newer valid copy and clear a valid session.
- *  - AuthController.getSession turned a DB error into 200 {user:null}, which
- *    the client correctly treated as authoritative expiry (false logout).
- *
- * These tests pin the single precedence path and its migration semantics.
+ * The browser holds the session only in the server's HttpOnly cookie. These
+ * tests pin the no-secret compatibility surface, bounded legacy cleanup, and
+ * the synchronous fetch shim (cookies + double-submit CSRF, no Authorization).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+    CSRF_COOKIE_NAME,
     LEGACY_SESSION_STORAGE_KEY,
     SESSION_STORAGE_KEY,
+    clearLegacySessionStorage,
+    getCsrfToken,
     installSessionAccessGlobal,
-    listSessionCandidates,
-    normalizeSessionToken,
     readCookieValue,
-    selectSessionToken,
+    readLegacySessionToken,
 } from '../../src/client/core/SessionAccess';
 
-function stubBrowserStorage() {
+const globals = globalThis as unknown as Record<string, any>;
+
+function installBrowser(cookie = '') {
     const store = new Map<string, string>();
     const storage = {
-        getItem: (key: string) => store.get(key) ?? null,
-        setItem: (key: string, value: string) => { store.set(key, value); },
-        removeItem: (key: string) => { store.delete(key); },
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => { store.set(k, v); },
+        removeItem: (k: string) => { store.delete(k); },
         clear: () => store.clear(),
-        key: () => null,
-        length: 0,
     };
-    vi.stubGlobal('localStorage', storage);
-    vi.stubGlobal('window', {
-        sessionId: null,
-        localStorage: storage,
-    });
-    vi.stubGlobal('document', { cookie: '' });
-    return store;
+    const win: any = {
+        location: { origin: 'https://dueli.test' },
+        currentUser: null,
+        fetch: vi.fn(async () => new Response('{}', { status: 200 })),
+    };
+    globals.window = win;
+    globals.localStorage = storage;
+    globals.document = { cookie };
+    return { win, store, storage };
 }
 
-describe('SEC-07 canonical session access', () => {
-    it('uses one canonical key and keeps the legacy key as a compatibility constant', () => {
-        expect(SESSION_STORAGE_KEY).toBe('sessionId');
-        expect(LEGACY_SESSION_STORAGE_KEY).toBe('session_id');
-    });
-
-    it('orders runtime > canonical storage > canonical cookie > legacy', () => {
-        const candidates = listSessionCandidates({
-            runtime: 'runtime-token',
-            stored: 'stored-token',
-            cookie: 'cookie-token',
-            legacy: 'legacy-token',
-        });
-        expect(candidates).toEqual([
-            'runtime-token',
-            'stored-token',
-            'cookie-token',
-            'legacy-token',
-        ]);
-        expect(selectSessionToken({
-            runtime: null,
-            stored: null,
-            cookie: null,
-            legacy: 'legacy-token',
-        })).toBe('legacy-token');
-    });
-
-    it('never lets a stale legacy value override any canonical value', () => {
-        expect(selectSessionToken({
-            stored: 'new-canonical',
-            legacy: 'old-legacy',
-        })).toBe('new-canonical');
-        expect(selectSessionToken({
-            cookie: 'cookie-canonical',
-            legacy: 'old-legacy',
-        })).toBe('cookie-canonical');
-        expect(selectSessionToken({
-            runtime: 'validated-runtime',
-            stored: 'stale-stored',
-            legacy: 'old-legacy',
-        })).toBe('validated-runtime');
-    });
-
-    it('treats null/empty/placeholder values as absent and skips them', () => {
-        for (const value of [null, undefined, '', '   ', 'null', 'undefined', 'Bearer', 'Bearer null']) {
-            expect(normalizeSessionToken(value)).toBeNull();
-        }
-        expect(normalizeSessionToken('  real-token  ')).toBe('real-token');
-        expect(listSessionCandidates({
-            runtime: '',
-            stored: 'null',
-            cookie: 'undefined',
-            legacy: 'legacy-valid',
-        })).toEqual(['legacy-valid']);
-    });
-
-    it('de-duplicates the same value across sources', () => {
-        expect(listSessionCandidates({
-            runtime: 'same-token',
-            stored: 'same-token',
-            cookie: 'same-token',
-            legacy: 'same-token',
-        })).toEqual(['same-token']);
-    });
-
-    it('reads the canonical cookie safely, including percent-encoding', () => {
-        expect(readCookieValue('lang=en; sessionId=abc-123; theme=dark', 'sessionId')).toBe('abc-123');
-        expect(readCookieValue('sessionId=abc%2D123', 'sessionId')).toBe('abc-123');
-        expect(readCookieValue('session_id=legacy-only', 'sessionId')).toBeNull();
-        expect(readCookieValue(null, 'sessionId')).toBeNull();
-    });
+afterEach(() => {
+    delete globals.window;
+    delete globals.localStorage;
+    delete globals.document;
+    vi.restoreAllMocks();
 });
 
-describe('SEC-07 installed global accessor', () => {
-    let store: Map<string, string>;
+beforeEach(() => {
+    installBrowser();
+});
 
-    beforeEach(() => {
-        store = stubBrowserStorage();
+describe('SEC-08 client session access', () => {
+    it('never exposes a session token, even if legacy state is present', () => {
+        const { win, store } = installBrowser();
+        store.set(SESSION_STORAGE_KEY, 'legacy-canonical');
+        store.set(LEGACY_SESSION_STORAGE_KEY, 'legacy-old');
+        win.sessionId = 'legacy-runtime';
+
+        const api = installSessionAccessGlobal(win);
+        expect(api.token()).toBe('');
+        expect(api.hasToken()).toBe(false);
+        expect(api.headers()).not.toHaveProperty('Authorization');
+        expect(win.sessionId).toBeUndefined();
     });
 
-    afterEach(() => {
-        vi.unstubAllGlobals();
+    it('reads legacy tokens only for the bounded migration helper', () => {
+        const { store } = installBrowser();
+        store.set(LEGACY_SESSION_STORAGE_KEY, 'legacy-old');
+        expect(readLegacySessionToken()).toBe('legacy-old');
+        store.set(SESSION_STORAGE_KEY, 'legacy-canonical');
+        expect(readLegacySessionToken()).toBe('legacy-canonical');
     });
 
-    it('uses the same precedence and header shape as the bundle', () => {
-        store.set(SESSION_STORAGE_KEY, 'stored-token');
-        store.set(LEGACY_SESSION_STORAGE_KEY, 'legacy-token');
-        (globalThis as any).document.cookie = 'sessionId=cookie-token';
-        const api = installSessionAccessGlobal((globalThis as any).window);
-
-        expect(api.token()).toBe('stored-token');
-        expect(api.headers({ 'Content-Type': 'application/json' })).toEqual({
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer stored-token',
-        });
-
-        (globalThis as any).window.sessionId = 'runtime-token';
-        expect(api.token()).toBe('runtime-token');
-
-        store.delete(SESSION_STORAGE_KEY);
-        (globalThis as any).window.sessionId = null;
-        expect(api.token()).toBe('cookie-token');
-
-        (globalThis as any).document.cookie = '';
-        expect(api.token()).toBe('legacy-token');
-
-        api.clearLocal();
+    it('clears both legacy storage keys and the window resident', () => {
+        const { win, store } = installBrowser();
+        store.set(SESSION_STORAGE_KEY, 'a');
+        store.set(LEGACY_SESSION_STORAGE_KEY, 'b');
+        win.sessionId = 'c';
+        clearLegacySessionStorage();
         expect(store.has(SESSION_STORAGE_KEY)).toBe(false);
         expect(store.has(LEGACY_SESSION_STORAGE_KEY)).toBe(false);
-        expect(api.token()).toBe('');
+        expect(win.sessionId).toBeUndefined();
+    });
+
+    it('reads the non-secret CSRF cookie and emits it as a header', () => {
+        const { win } = installBrowser(`${CSRF_COOKIE_NAME}=csrf-abc`);
+        expect(getCsrfToken()).toBe('csrf-abc');
+        const api = installSessionAccessGlobal(win);
+        expect(api.headers({ 'Content-Type': 'application/json' })).toEqual({
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': 'csrf-abc',
+        });
+        expect(api.headers({ Authorization: 'Bearer should-not-exist' })).not.toHaveProperty('Authorization');
+    });
+
+    it('parses cookie values without leaking adjacent cookies', () => {
+        expect(readCookieValue('a=1; csrfToken=x%2Fy; b=2', CSRF_COOKIE_NAME)).toBe('x/y');
+        expect(readCookieValue('', CSRF_COOKIE_NAME)).toBeNull();
+    });
+
+    it('installs a same-origin fetch shim with include credentials + CSRF and strips empty Bearer', async () => {
+        const { win } = installBrowser(`${CSRF_COOKIE_NAME}=csrf-123`);
+        const original = win.fetch;
+        installSessionAccessGlobal(win);
+
+        await win.fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: {
+                Authorization: 'Bearer ',
+                'Content-Type': 'application/json',
+            },
+        });
+
+        expect(original).toHaveBeenCalledTimes(1);
+        const init = original.mock.calls[0][1];
+        expect(init.credentials).toBe('include');
+        const headers = init.headers as Headers;
+        expect(headers.get('X-CSRF-Token')).toBe('csrf-123');
+        expect(headers.get('Authorization')).toBeNull();
+    });
+
+    it('does not modify non-API or cross-origin requests', async () => {
+        const { win } = installBrowser(`${CSRF_COOKIE_NAME}=csrf-123`);
+        const original = win.fetch;
+        installSessionAccessGlobal(win);
+
+        await win.fetch('/terms');
+        await win.fetch('https://other.test/api/x');
+
+        expect(original).toHaveBeenCalledTimes(2);
+        expect((original.mock.calls[0][1] as RequestInit).headers).toBeUndefined();
+        expect((original.mock.calls[1][1] as RequestInit).headers).toBeUndefined();
     });
 });

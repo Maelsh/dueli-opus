@@ -14,6 +14,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
 import { CryptoUtils } from '../../src/lib/services/CryptoUtils';
+import { sessionTokenFromResponse } from '../helpers/session-cookie';
 
 const AVATAR = 'https://cdn.test/avatar-b.png';
 
@@ -47,9 +48,10 @@ describe('post-R1: normalized auth user DTO', () => {
             body: JSON.stringify({ email: 'dto@local', password: 'secret123' }),
         }, env(db));
         expect(login.status).toBe(200);
+        sessionId = sessionTokenFromResponse(login);
         const loginBody = (await login.json()) as any;
-        sessionId = loginBody?.data?.sessionId;
-        expect(sessionId).toBeTruthy();
+        // SEC-08: the secret is cookie-only, never a JSON field.
+        expect(loginBody?.data?.sessionId).toBeUndefined();
     });
 
     it('login returns the canonical identity fields', async () => {

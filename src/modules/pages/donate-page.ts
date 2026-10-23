@@ -235,13 +235,10 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
             async function loadMyDonations() {
                 const card = document.getElementById('myDonationsCard');
                 const list = document.getElementById('myDonationsList');
-                const token = (window.DueliSession.token() || '');
-                if (!token || !card || !list) return;
+                if (!card || !list) return;
                 card.hidden = false;
                 try {
-                    const res = await fetch('/api/donations/my?lang=' + (window.lang || 'ar'), {
-                        headers: { 'Authorization': 'Bearer ' + token }
-                    });
+                    const res = await fetch('/api/donations/my?lang=' + (window.lang || 'ar'));
                     if (res.status === 401) { card.hidden = true; return; }
                     if (!res.ok) throw new Error('my donations failed');
                     const data = await res.json();

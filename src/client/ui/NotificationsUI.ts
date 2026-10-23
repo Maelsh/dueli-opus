@@ -56,7 +56,7 @@ export class NotificationsUI {
      * Initialize notifications
      */
     static async init(): Promise<void> {
-        if (!State.currentUser || !State.sessionId) return;
+        if (!State.currentUser) return;
         await this.loadNotifications();
         this.updateBadge();
     }

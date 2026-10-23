@@ -92,7 +92,7 @@ self.addEventListener('fetch', (event) => {
             fetch(request).catch(() => {
                 return new Response(
                     JSON.stringify({ success: false, error: 'Offline' }),
-                    { headers: { 'Content-Type': 'application/json' } }
+                    { status: 503, headers: { 'Content-Type': 'application/json' } }
                 );
             })
         );

@@ -7,11 +7,8 @@
 import { State } from '../core/State';
 import { CookieUtils } from '../core/CookieUtils';
 import {
-    LEGACY_SESSION_STORAGE_KEY,
-    SESSION_STORAGE_KEY,
-    getBrowserSessionToken,
-    listSessionCandidates,
-    readBrowserSessionCandidates,
+    clearLegacySessionStorage,
+    readLegacySessionToken,
 } from '../core/SessionAccess';
 import { Toast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
@@ -28,8 +25,7 @@ interface ApiResponse {
     error?: string;
     message?: string;
     user?: any;
-    data?: { user?: any; message?: string; sessionId?: string };
-    sessionId?: string;
+    data?: { user?: any; message?: string };
 }
 
 /**
@@ -154,160 +150,148 @@ export class AuthService {
     }
 
     /**
-     * The actual session resolution. Only this method performs the fetch.
+     * The actual session resolution. The browser sends no credential in JS:
+     * the HttpOnly cookie is attached by the browser. A pre-SEC08
+     * localStorage token is tried exactly once (bounded migration) when the
+     * cookie is authoritatively invalid. Transient 429/5xx/network/timeout
+     * never clears state and never falls through to the legacy value.
      */
     private static async resolveAuth(): Promise<boolean> {
-        // Canonical candidates share one key but may disagree between memory,
-        // localStorage and cookie (for example a stale cookie beside a newer
-        // localStorage value). Validate them in order. The legacy `session_id`
-        // is a MIGRATION path only: it is consulted when no canonical value
-        // exists, never after a canonical value has been authoritatively
-        // rejected. This keeps a stale legacy token from reviving a session.
-        const sources = readBrowserSessionCandidates();
-        const canonicalCandidates = listSessionCandidates({
-            runtime: sources.runtime,
-            stored: sources.stored,
-            cookie: sources.cookie,
-        });
-        const legacyCandidates = listSessionCandidates({ legacy: sources.legacy });
-        const candidates = canonicalCandidates.length > 0
-            ? canonicalCandidates
-            : legacyCandidates;
-
-        if (candidates.length === 0) {
-            // No session token anywhere: there is nothing to validate, so the
-            // client is authoritatively a guest (first-visit visitor).
-            AuthService.authStatus = 'guest';
+        const first = await this.requestSession();
+        if (!first.ok) {
             this.updateAuthUI();
             return false;
         }
 
-        let authoritativeInvalid = false;
+        const firstUser = await this.readSessionUser(first.response);
+        if (firstUser === undefined) {
+            this.updateAuthUI();
+            return false;
+        }
+        if (firstUser) {
+            this.applyAuthenticatedUser(firstUser);
+            return true;
+        }
 
-        for (const savedSession of candidates) {
-            try {
-                const res = await this.withTimeout(fetch('/api/auth/session', {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': 'Bearer ' + savedSession,
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include'
-                }), AuthService.AUTH_CHECK_TIMEOUT_MS);
-
-                // Rate-limited (429): the session is NOT invalid — keep local
-                // auth state untouched so a throttled check never logs the user
-                // out. Preserve the server's retryAfter hint when present.
-                if (res.status === 429) {
-                    try {
-                        const body = (await res.json()) as any;
-                        const hint = Number(body?.retryAfter ?? body?.retry_after ?? 0);
-                        if (Number.isFinite(hint) && hint > 0) {
-                            AuthService.lastRetryAfterSec = hint;
-                        }
-                    } catch {
-                        // Body unreadable — still transient, still not a logout.
-                    }
-                    this.updateAuthUI();
-                    return false;
-                }
-
-                if (res.status === 401) {
-                    // This canonical candidate is invalid. Another canonical
-                    // source may still be valid (for example a stale cookie
-                    // beside a newer localStorage value), so keep checking.
-                    authoritativeInvalid = true;
-                    continue;
-                }
-
-                // B1: only authoritative invalid answers may clear auth. Any
-                // other status (5xx, 404, gateway errors) is a transient
-                // failure and must never wipe a valid session.
-                if (!res.ok) {
-                    console.error('Auth check returned a transient status:', res.status);
-                    this.updateAuthUI();
-                    return false;
-                }
-
-                let data: ApiResponse;
-                try {
-                    data = await res.json() as ApiResponse;
-                } catch {
-                    // Malformed response: transient, not proof of expiry.
-                    console.error('Auth check returned an unreadable response');
-                    this.updateAuthUI();
-                    return false;
-                }
-
-                const user = AuthService.normalizeUser(data.user || data.data?.user || data);
-
-                if (user && (user.id || user.user_id || user.email)) {
-                    AuthService.authStatus = 'authenticated';
-                    State.currentUser = user;
-                    State.sessionId = savedSession;
-
-                    // Apply user's language/country preferences from database.
-                    // B2: an explicit page/URL/cookie language choice is the
-                    // current contract and must not be silently overridden by a
-                    // late-arriving user.language on a client rerender.
-                    if (user.language && !State.hasExplicitLanguagePreference()) {
-                        State.lang = user.language;
-                        CookieUtils.set('lang', user.language, 365);
-                    }
-                    if (user.country) {
-                        State.country = user.country;
-                        CookieUtils.set('country', user.country, 365);
-                    }
-
-                    // Migrate the validated candidate (including a valid
-                    // legacy value) to the canonical pair. The legacy key is
-                    // left in place for compatibility until SEC-08 retires it;
-                    // it can never take precedence over this canonical value.
-                    localStorage.setItem('user', JSON.stringify(user));
-                    localStorage.setItem(SESSION_STORAGE_KEY, savedSession);
-                    CookieUtils.set(SESSION_STORAGE_KEY, savedSession, 7);
-
-                    this.updateAuthUI();
-                    return true;
-                }
-
-                // Authoritative 200 with no user: this candidate is invalid.
-                authoritativeInvalid = true;
-            } catch (err) {
-                // Network/parse failure: transient, NOT proof the session is
-                // invalid. Preserve local auth state (do not clearAuth) and
-                // report unauthenticated for this check only.
-                console.error('Auth check failed:', err);
+        // The cookie was authoritatively unauthenticated. The only remaining
+        // path is the one-time migration of a pre-SEC08 localStorage token.
+        // Read it only now, never on the normal cookie-authenticated path.
+        const legacyToken = readLegacySessionToken();
+        if (legacyToken) {
+            const migrated = await this.requestSession(legacyToken);
+            if (!migrated.ok) {
+                // A transient failure must not clear a token that might be
+                // valid; preserve it for the next bounded attempt.
                 this.updateAuthUI();
                 return false;
             }
+            const migratedUser = await this.readSessionUser(migrated.response);
+            if (migratedUser === undefined) {
+                this.updateAuthUI();
+                return false;
+            }
+            if (migratedUser) {
+                this.applyAuthenticatedUser(migratedUser);
+                return true;
+            }
         }
 
-        if (authoritativeInvalid) {
-            // Every candidate was answered authoritatively invalid (401 or 200
-            // with no user): this is a genuine expiry/logout, not a transient
-            // outage. Clearing also removes the stale legacy key.
-            AuthService.authStatus = 'guest';
-            this.clearAuth();
-        }
-
+        // Authoritative invalid answer(s): genuine expiry/logout.
+        AuthService.authStatus = 'guest';
+        this.clearAuth();
         this.updateAuthUI();
         return false;
     }
 
     /**
-     * Clear authentication data
+     * One bounded `/api/auth/session` call. `ok` is false only for transient
+     * outcomes (429/5xx/network/timeout/unknown status); a 401/200 is a valid
+     * response that may authoritatively mean guest.
+     */
+    private static async requestSession(legacyToken?: string): Promise<{ ok: boolean; response: Response }> {
+        try {
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (legacyToken) headers['Authorization'] = 'Bearer ' + legacyToken;
+            const response = await this.withTimeout(fetch('/api/auth/session', {
+                method: 'GET',
+                headers,
+                credentials: 'include',
+            }), AuthService.AUTH_CHECK_TIMEOUT_MS);
+
+            if (response.status === 429) {
+                try {
+                    const body = (await response.json()) as any;
+                    const hint = Number(body?.retryAfter ?? body?.retry_after ?? 0);
+                    if (Number.isFinite(hint) && hint > 0) {
+                        AuthService.lastRetryAfterSec = hint;
+                    }
+                } catch {
+                    // Body unreadable — still transient, still not a logout.
+                }
+                return { ok: false, response };
+            }
+
+            if (!response.ok && response.status !== 401) {
+                console.error('Auth check returned a transient status:', response.status);
+                return { ok: false, response };
+            }
+
+            return { ok: true, response };
+        } catch (err) {
+            // Network/parse failure: transient, NOT proof the session invalid.
+            console.error('Auth check failed:', err);
+            return { ok: false, response: new Response(null, { status: 503 }) };
+        }
+    }
+
+    /**
+     * `undefined` = transient/unreadable; `null` = authoritative guest;
+     * object = authenticated user.
+     */
+    private static async readSessionUser(response: Response): Promise<any | null | undefined> {
+        if (response.status === 401) return null;
+        try {
+            const data = await response.json() as ApiResponse;
+            const raw = data.user || data.data?.user;
+            if (!raw) return null;
+            const user = AuthService.normalizeUser(raw);
+            return user && (user.id || user.user_id || user.email) ? user : null;
+        } catch {
+            console.error('Auth check returned an unreadable response');
+            return undefined;
+        }
+    }
+
+    private static applyAuthenticatedUser(user: any): void {
+        AuthService.authStatus = 'authenticated';
+        State.currentUser = user;
+
+        // Apply user's language/country preferences from database. B2: an
+        // explicit page/URL/cookie language choice wins over a late user value.
+        if (user.language && !State.hasExplicitLanguagePreference()) {
+            State.lang = user.language;
+            CookieUtils.set('lang', user.language, 365);
+        }
+        if (user.country) {
+            State.country = user.country;
+            CookieUtils.set('country', user.country, 365);
+        }
+
+        localStorage.setItem('user', JSON.stringify(user));
+        // Bounded migration ends here: no JS-readable session remains.
+        clearLegacySessionStorage();
+        this.updateAuthUI();
+    }
+
+    /**
+     * Clear authentication data. The HttpOnly cookie is cleared by the server
+     * on logout; a genuine 401/expiry only clears UI/migration state.
      */
     static clearAuth(): void {
         localStorage.removeItem('user');
-        localStorage.removeItem(SESSION_STORAGE_KEY);
-        // A genuine logout/expiry must not leave a stale legacy token behind
-        // for the next page to resurrect.
-        localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY);
-        CookieUtils.delete(SESSION_STORAGE_KEY);
+        clearLegacySessionStorage();
         AuthService.authStatus = 'guest';
         State.currentUser = null;
-        State.sessionId = null;
         // T2.2: Close the real-time channel on logout
         SseService.disconnect();
     }
@@ -380,35 +364,16 @@ export class AuthService {
     }
 
     /**
-     * Handle OAuth success
+     * Handle OAuth success. The callback set the HttpOnly cookie; the popup
+     * only signals completion. No token crosses the window boundary.
      */
-    static async handleOAuthSuccess(session: string, fromUrl: boolean = false): Promise<void> {
+    static async handleOAuthSuccess(): Promise<void> {
         try {
-            // Save to cookies
-            CookieUtils.set(SESSION_STORAGE_KEY, session, 7);
-            localStorage.setItem(SESSION_STORAGE_KEY, session);
-
-            // Remove session from URL if needed
-            if (fromUrl) {
-                window.history.replaceState({}, document.title,
-                    window.location.pathname + window.location.search.replace(/[\?&]session=[^&]+/, '').replace(/^&/, '?')
-                );
-            }
-
-            // Fetch user info through the canonical single-flight resolution
-            // (storage was just primed above) instead of a second bespoke
-            // /api/auth/session call racing App.init/page guards.
             const ok = await this.checkAuth();
             const user = State.currentUser;
 
             if ((ok || user) && user && (user.id || user.user_id || user.email)) {
-                localStorage.setItem('user', JSON.stringify(user));
-                State.currentUser = user;
-                State.sessionId = session;
-
-                this.updateAuthUI();
                 Modal.hideLogin();
-
                 Toast.success(t('auth.login_success', State.lang));
 
                 setTimeout(() => {
@@ -448,20 +413,15 @@ export class AuthService {
 
 
             if (data.success) {
-                // Server wraps response in data.data
+                // Server wraps response in data.data. SEC-08: the response
+                // contains the user only; the session is Set-Cookie HttpOnly.
                 const responseData = data.data || data;
                 const user = AuthService.normalizeUser(responseData.user);
-                const sessionId = responseData.sessionId;
 
-
-
+                AuthService.authStatus = 'authenticated';
                 State.currentUser = user;
-                State.sessionId = sessionId || null;
                 localStorage.setItem('user', JSON.stringify(user));
-                localStorage.setItem(SESSION_STORAGE_KEY, sessionId || '');
-                CookieUtils.set(SESSION_STORAGE_KEY, sessionId || '', 7);
-
-
+                clearLegacySessionStorage();
 
                 this.updateAuthUI();
                 Modal.hideLogin();
@@ -710,14 +670,15 @@ export class AuthService {
         // Listen for OAuth callback
         const handleOAuthCallback = async (event: MessageEvent) => {
             if (event.origin !== window.location.origin) return;
+            if (popup && event.source && event.source !== popup) return;
 
-            if (event.data.type === 'oauth_success' && event.data.session) {
+            if (event.data?.type === 'oauth_success') {
                 window.removeEventListener('message', handleOAuthCallback);
                 try {
                     if (popup) popup.close();
                 } catch (_) {}
-                await this.handleOAuthSuccess(event.data.session, false);
-            } else if (event.data.type === 'oauth_error') {
+                await this.handleOAuthSuccess();
+            } else if (event.data?.type === 'oauth_error') {
                 window.removeEventListener('message', handleOAuthCallback);
                 Modal.showOAuthError(event.data.error);
                 try {
@@ -734,23 +695,27 @@ export class AuthService {
      */
     static async logout(): Promise<void> {
         try {
-            const session = getBrowserSessionToken();
+            // SEC-08: the server invalidates the session and clears the
+            // HttpOnly cookie. No session value is read or sent from JS.
+            const res = await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+            });
 
-            if (session) {
-                await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + session,
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include'
-                });
+            if (!res.ok && res.status !== 401) {
+                // A transient/rate-limited logout must not claim success while
+                // the server session (and HttpOnly cookie) still exists.
+                Toast.error(t('auth.connection_failed', State.lang));
+                return;
             }
         } catch (err) {
             console.error('Logout error:', err);
+            Toast.error(t('auth.connection_failed', State.lang));
+            return;
         }
 
-        // Clear all auth data
+        // Clear all local UI data; the browser cookie is already gone.
         this.clearAuth();
         this.updateAuthUI();
 

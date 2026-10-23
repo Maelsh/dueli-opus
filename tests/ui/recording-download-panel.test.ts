@@ -21,23 +21,24 @@ afterEach(() => {
 });
 
 describe('R4-CHUNK-DOWNLOAD-1 download UI helpers', () => {
-    it('shows download affordances only for an authenticated user hint', () => {
-        globals.window = { currentUser: { id: 7 }, sessionId: 'sess' };
+    it('shows download affordances only for an authenticated user hint (no session key)', () => {
+        globals.window = { currentUser: { id: 7 } };
         expect(isDownloadUserAuthenticated()).toBe(true);
 
-        globals.window = { currentUser: null, sessionId: null };
+        globals.window = { currentUser: null };
         expect(isDownloadUserAuthenticated()).toBe(false);
 
         globals.window = {};
         globals.localStorage = {
             getItem: (key: string) => (key === 'user' ? '{"id":8}' : null),
         };
-        expect(isDownloadUserAuthenticated()).toBe(false);
-
-        globals.localStorage = {
-            getItem: (key: string) => (key === 'user' ? '{"id":8}' : key === 'sessionId' ? 'sess' : null),
-        };
         expect(isDownloadUserAuthenticated()).toBe(true);
+
+        // A stale session key is no longer part of the hint.
+        globals.localStorage = {
+            getItem: (key: string) => (key === 'sessionId' ? 'sess' : null),
+        };
+        expect(isDownloadUserAuthenticated()).toBe(false);
     });
 
     it('maps every failure code to a user-facing translation key', () => {

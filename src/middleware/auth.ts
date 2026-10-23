@@ -7,10 +7,10 @@
  */
 
 import { Context, Next } from 'hono';
-import { getCookie } from 'hono/cookie';
 import type { Bindings, Variables, Language } from '../config/types';
 import { SessionModel, AdminRoleModel, AdminRoleType } from '../models';
 import { t } from '../i18n';
+import { readSessionCandidates } from '../lib/services/SessionCookieService';
 
 type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
@@ -27,13 +27,12 @@ export function authMiddleware(options: { required?: boolean } = {}) {
     return async (c: AppContext, next: Next) => {
         // C4 (SEC-11): Bearer header OR sessionId cookie ONLY. Raw `?token=`
         // was removed — it leaked sessions into logs/history/Referer (GOV-11).
-        // EventSource clients use single-use tickets: POST /api/realtime/ticket
-        // then GET /api/sse?channel=…&ticket=… (consumed server-side, see sse/routes).
-        const authHeader = c.req.header('Authorization');
-        const sessionId = authHeader?.replace('Bearer ', '')
-            || getCookie(c, 'sessionId');
+        // SEC-08: browser requests use the HttpOnly cookie; Bearer remains the
+        // non-browser API contract. EventSource clients use single-use tickets:
+        // POST /api/realtime/ticket then GET /api/sse?channel=…&ticket=….
+        const sessionIds = readSessionCandidates(c);
 
-        if (!sessionId) {
+        if (sessionIds.length === 0) {
             if (required) {
                 const lang = (c.get('lang') || 'en') as Language;
                 return c.json({
@@ -47,7 +46,11 @@ export function authMiddleware(options: { required?: boolean } = {}) {
 
         try {
             const sessionModel = new SessionModel(c.env.DB);
-            const result = await sessionModel.findValidSession(sessionId);
+            let result: Awaited<ReturnType<SessionModel['findValidSession']>> = null;
+            for (const sessionId of sessionIds) {
+                result = await sessionModel.findValidSession(sessionId);
+                if (result) break;
+            }
 
             if (!result) {
                 if (required) {
@@ -104,18 +107,22 @@ export function adminMiddleware() {
  */
 export function adminAuthMiddleware() {
     return async (c: AppContext, next: Next) => {
-        // First check auth
-        const authHeader = c.req.header('Authorization');
-        const sessionId = authHeader?.replace('Bearer ', '');
+        // First check auth (SEC-08: Bearer non-browser contract OR HttpOnly
+        // session cookie for the browser).
+        const sessionIds = readSessionCandidates(c);
 
-        if (!sessionId) {
+        if (sessionIds.length === 0) {
             const lang = (c.get('lang') || 'en') as Language;
             return c.json({ success: false, error: t('login_required', lang) }, 401);
         }
 
         try {
             const sessionModel = new SessionModel(c.env.DB);
-            const result = await sessionModel.findValidSession(sessionId);
+            let result: Awaited<ReturnType<SessionModel['findValidSession']>> = null;
+            for (const sessionId of sessionIds) {
+                result = await sessionModel.findValidSession(sessionId);
+                if (result) break;
+            }
 
             if (!result) {
                 const lang = (c.get('lang') || 'en') as Language;

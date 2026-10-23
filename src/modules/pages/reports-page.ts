@@ -194,7 +194,6 @@ export const reportsPage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     const res = await fetch('/api/reports', {
                         method: 'POST',
                         headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token(),
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify(report)

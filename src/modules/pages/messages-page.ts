@@ -245,11 +245,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function loadConversations() {
                 const container = document.getElementById('conversationsList');
                 try {
-                    const res = await fetch('/api/conversations', {
-                        headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token()
-                        }
-                    });
+                    const res = await fetch('/api/conversations');
                     const data = await res.json();
                     const conversations = data.data?.conversations || [];
                     conversationsCache = conversations;
@@ -320,11 +316,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 container.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin text-2xl text-purple-400"></i></div>';
                 
                 try {
-                    const res = await fetch(\`/api/conversations/\${conversationId}/messages\`, {
-                        headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token()
-                        }
-                    });
+                    const res = await fetch(\`/api/conversations/\${conversationId}/messages\`);
                     const data = await res.json();
                     const messages = data.data?.messages || [];
                     

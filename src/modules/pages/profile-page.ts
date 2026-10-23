@@ -310,9 +310,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 const btn = document.getElementById('followBtn');
                 if (!btn || !window.currentUser || !profileUsername) return;
                 try {
-                    const res = await fetch('/api/users/' + encodeURIComponent(profileUsername), {
-                        headers: { 'Authorization': 'Bearer ' + window.DueliSession.token() }
-                    });
+                    const res = await fetch('/api/users/' + encodeURIComponent(profileUsername));
                     if (!res.ok) return;
                     const data = await res.json();
                     if (data && data.success && data.data && data.data.is_following) {
@@ -338,9 +336,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 const btn = document.getElementById('blockBtn');
                 if (!btn || !window.currentUser) return;
                 try {
-                    const res = await fetch('/api/blocks', {
-                        headers: { 'Authorization': 'Bearer ' + window.DueliSession.token() }
-                    });
+                    const res = await fetch('/api/blocks');
                     if (!res.ok) return;
                     const data = await res.json();
                     const list = (data && data.success && data.data) ? data.data : [];
@@ -366,7 +362,6 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 if (!confirm(blocked ? (tr.confirm_unblock || 'Unblock this user?') : (tr.confirm_block || 'Block this user?'))) return;
                 try {
                     const headers = {
-                        'Authorization': 'Bearer ' + window.DueliSession.token(),
                         'Content-Type': 'application/json'
                     };
                     const res = blocked
@@ -390,11 +385,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     const method = isFollowing ? 'DELETE' : 'POST';
                     
                     const res = await fetch(\`/api/users/\${userId}/follow\`, {
-                        method,
-                        headers: {
-                            'Authorization': 'Bearer ' + window.DueliSession.token(),
-                            'Content-Type': 'application/json'
-                        }
+                        method
                     });
                     
                     if (res.ok) {
@@ -489,8 +480,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     const res = await fetch('/api/settings/posts?lang=' + (window.lang || 'ar'), {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': 'Bearer ' + (window.DueliSession.token() || '')
+                            'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ content })
                     });
@@ -508,8 +498,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 if (!confirm(tr.confirm_delete_post || 'Delete this post?')) return;
                 try {
                     const res = await fetch('/api/settings/posts/' + postId + '?lang=' + (window.lang || 'ar'), {
-                        method: 'DELETE',
-                        headers: { 'Authorization': 'Bearer ' + (window.DueliSession.token() || '') }
+                        method: 'DELETE'
                     });
                     const data = await res.json();
                     if (data.success) loadUserPosts();

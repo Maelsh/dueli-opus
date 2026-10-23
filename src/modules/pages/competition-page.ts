@@ -737,8 +737,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/rate?lang=' + (window.lang || 'ar'), {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + (window.DueliSession.token() || '')
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({ competitor_id: competitorId, rating: value })
           });
@@ -765,7 +764,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         try {
           const res = await fetch('/api/competitions/' + competitionId + '/rate?competitor_id=' + competitorId + '&lang=' + (window.lang || 'ar'), {
             method: 'DELETE',
-            headers: { 'Authorization': 'Bearer ' + (window.DueliSession.token() || '') }
+            headers: { 'Content-Type': 'application/json' }
           });
           const data = await res.json();
           if (data.success) {
@@ -1304,12 +1303,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       };
 
-      // R2-L1: shared headers — the session Bearer when present (the server
-      // always binds identity to the session, never to body fields).
+      // R2-L1: shared headers. SEC-08: the browser session is the HttpOnly
+      // cookie; the server always binds identity to it, never to body fields.
       function commentAuthHeaders(extra) {
         const h = extra || {};
-        const sess = window.DueliSession.token();
-        if (sess) h['Authorization'] = 'Bearer ' + sess;
         const guest = localStorage.getItem('dueli_guest_token');
         if (guest) h['X-Guest-Token'] = guest;
         return h;
@@ -1443,11 +1440,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           return;
         }
         try {
-          const sess = window.DueliSession.token();
-          if (!sess) { el.classList.add('hidden'); return; }
-          const res = await fetch('/api/signaling/session?competition_id=' + competitionId, {
-            headers: { 'Authorization': 'Bearer ' + sess }
-          });
+          const res = await fetch('/api/signaling/session?competition_id=' + competitionId);
           const data = await res.json().catch(function(){ return null; });
           const count = data && data.success && data.data && data.data.presence
             ? data.data.presence.viewer_count : null;
@@ -1521,7 +1514,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch(path, {
             method: method,
             headers: {
-              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1618,7 +1610,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/remind', {
             method: isReminded ? 'DELETE' : 'POST',
             headers: {
-              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1713,7 +1704,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/reports', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -1738,7 +1728,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/request', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1764,7 +1753,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/request', {
             method: 'DELETE',
             headers: {
-              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1784,7 +1772,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/accept-invite', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -1810,7 +1797,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/decline-invite', {
             method: 'POST',
             headers: {
-              'Authorization': 'Bearer ' + window.DueliSession.token(),
               'Content-Type': 'application/json'
             }
           });
@@ -2500,10 +2486,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       var durationTicker = null;
 
       function competitorAuthHeaders() {
-        const h = { 'Content-Type': 'application/json' };
-        const sess = window.DueliSession.token();
-        if (sess) h['Authorization'] = 'Bearer ' + sess;
-        return h;
+        return { 'Content-Type': 'application/json' };
       }
 
       async function withCompetitorRetry(label, fn) {

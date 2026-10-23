@@ -10,6 +10,16 @@ import { BaseController, AppContext } from './base/BaseController';
 import { UserModel, SessionModel } from '../models';
 import { EmailService } from '../lib/services/EmailService';
 import { CryptoUtils } from '../lib/services/CryptoUtils';
+import { getCookie } from 'hono/cookie';
+import {
+    clearCsrfCookie,
+    clearSessionCookie,
+    CSRF_COOKIE_NAME,
+    readSessionCandidates,
+    SESSION_COOKIE_NAME,
+    setCsrfCookie,
+    setSessionCookie,
+} from '../lib/services/SessionCookieService';
 
 /**
  * Auth Controller Class
@@ -289,11 +299,28 @@ export class AuthController extends BaseController {
             // Create session (fresh id on every login = rotation) and prune
             // stale sessions beyond the per-user cap.
             const sessionModel = new SessionModel(DB);
+            const priorSessions = readSessionCandidates(c);
             const session = await sessionModel.create({ user_id: user.id });
             await sessionModel.pruneOldSessions(user.id);
 
+            // Rotation also invalidates the session credential this browser (or
+            // legacy Bearer client) presented for the login request. Other
+            // devices/sessions remain untouched.
+            for (const prior of priorSessions) {
+                if (prior === session.id) continue;
+                try {
+                    await sessionModel.deleteBySessionId(prior);
+                } catch (error) {
+                    console.error('[Login] Failed to revoke rotated session:', error);
+                }
+            }
+
+            // SEC-08: the secret leaves the server only through the HttpOnly
+            // cookie. It is never serialized into the JSON response.
+            setSessionCookie(c, session.id);
+            setCsrfCookie(c);
+
             return this.success(c, {
-                sessionId: session.id,
                 user: this.toUserDTO(user)
             });
         } catch (error) {
@@ -308,22 +335,38 @@ export class AuthController extends BaseController {
     async getSession(c: AppContext) {
         try {
             const { DB } = c.env;
-            const sessionId = c.req.header('Authorization')?.replace('Bearer ', '');
-
-            if (!sessionId) {
-                return this.success(c, { user: null });
-            }
-
             const sessionModel = new SessionModel(DB);
-            const result = await sessionModel.findValidSession(sessionId);
 
-            if (!result) {
-                return this.success(c, { user: null });
+            for (const sessionId of readSessionCandidates(c)) {
+                const result = await sessionModel.findValidSession(sessionId);
+                if (!result) continue;
+
+                // SEC-08 bounded transition: a pre-existing non-browser Bearer
+                // client (or an old tab holding a JS-readable token) is moved to
+                // the HttpOnly cookie on its first successful validation.
+                //
+                // Always reissue on a successful check: pre-SEC08 clients also
+                // had a non-HttpOnly `sessionId` cookie. The server cannot see
+                // cookie attributes, so reissuing the same value with HttpOnly
+                // is what upgrades that legacy browser cookie. The CSRF token
+                // is only created when missing (it is not a session secret).
+                setSessionCookie(c, sessionId);
+                if (!getCookie(c, CSRF_COOKIE_NAME)) {
+                    setCsrfCookie(c);
+                }
+
+                return this.success(c, {
+                    user: this.toUserDTO(result.user)
+                });
             }
 
-            return this.success(c, {
-                user: this.toUserDTO(result.user)
-            });
+            // Authoritative expiry/revocation: drop the dead browser session
+            // cookie so it is not presented on every subsequent request.
+            if (getCookie(c, SESSION_COOKIE_NAME)) {
+                clearSessionCookie(c);
+            }
+
+            return this.success(c, { user: null });
         } catch (error) {
             // A DB/network failure is transient, not an authoritative guest
             // answer. Returning 200 {user:null} here made the client clear a
@@ -339,17 +382,23 @@ export class AuthController extends BaseController {
     async logout(c: AppContext) {
         try {
             const { DB } = c.env;
-            const sessionId = c.req.header('Authorization')?.replace('Bearer ', '');
-
-            if (sessionId) {
+            for (const sessionId of readSessionCandidates(c)) {
                 const sessionModel = new SessionModel(DB);
                 await sessionModel.deleteBySessionId(sessionId);
             }
-
-            return this.success(c, { success: true });
         } catch (error) {
-            return this.success(c, { success: true });
+            // Invalidation failure must not report a successful logout, and
+            // must not clear the browser cookie while the server session may
+            // still be valid. The client keeps its authenticated UI and retries.
+            return this.serverError(c, error as Error);
         }
+
+        // Successful or already-missing session: clear both cookies. The
+        // server-side invalidation above is the authoritative logout.
+        clearSessionCookie(c);
+        clearCsrfCookie(c);
+
+        return this.success(c, { success: true });
     }
 
     /**
@@ -499,6 +548,11 @@ export class AuthController extends BaseController {
             // attacker holding an old session is logged out immediately
             const sessionModel = new SessionModel(DB);
             await sessionModel.deleteByUser(user.id);
+
+            // SEC-08: the reset flow revokes every server session; clear the
+            // dead browser cookie as well so the next request is visibly guest.
+            clearSessionCookie(c);
+            clearCsrfCookie(c);
 
             return this.success(c, { message: this.t('auth_password_changed', c) });
         } catch (error) {
