@@ -8,7 +8,7 @@
 - **إثبات فشل الحراس على انحدارات حقيقية:** أُدخلت مؤقتاً (ثم أُزيلت) مخالفة تنفيذية في كل ملف حقيقي: `cors()` في `src/main.ts`، `getCookie(c,'session_id')` في `auth.ts`، `localStorage.setItem('sessionId',…)` في `SessionAccess.ts`، `this.sockets` في worker، و`c.req.query('token')` في middleware — كل وضع أعاد `FAIL` وexit 1؛ وبعد الإزالة عاد PASS. التعليقات/النصوص الحقيقية بقيت PASS (SEC-05/10) و`verify-page.ts` بقي خارج SEC-11.
 - **CI:** حُذفت خطوات `grep`/GRACE-PERIOD الخمس واستُبدلت بخمس خطوات AST مانعة + خطوة `vitest` سلوكية مانعة (بلا `continue-on-error`). `tests/dev-tools/sec-guards-checker.test.ts` يثبت غياب أنماط grep القديمة ووجود كل ملف اختبار في الخطوة.
 - **NOT RUN — ENVIRONMENT:** `jq` غير مثبت على ويندوز (اختبار `quality-gate-poll` البيئي مستثنى؛ Ubuntu CI يوفره)؛ `npm run test:integration` لم يُشغَّل (حزمة D1/schema، ولا حالة UNIT30.3 فيها)؛ لا متصفح/staging/إنتاج ولا نشر worker، وG7 غير متحقق.
-- **PR:** pending at time of writing (`feat/r4-sec-guards-docs-1`)؛ سيُحدَّث بالرابط الفعلي بعد الفتح. PR واحد فقط مقابل main؛ غير مدموج وغير منشور.
+- **PR:** [#132](https://github.com/Maelsh/dueli-opus/pull/132) (`feat/r4-sec-guards-docs-1`) هو الـPR المركز الوحيد مقابل main؛ غير مدموج وغير منشور.
 - **الحالة:** `🔧 LOCAL RED→GREEN — NOT ACCEPTED`. القبول الإنتاجي المشترك لـUNIT30/30.1/30.2/30.3 يُنفَّذ مرة واحدة بعد قبول 30.3 ودمجه؛ لا يُدّعى هنا.
 - **ROLLBACK:** إرجاع commits هذا الفرع؛ لا migration ولا بيانات إنتاج ولا نشر؛ التغيير كله ملفات حارس/اختبار/CI/وثائق.
 - **NEXT:** مراجعة مستقلة + CI ثم دمج من القائد، ثم بوابة القبول الإنتاجي المشتركة (UNIT30–30.3)، ثم UNIT31.

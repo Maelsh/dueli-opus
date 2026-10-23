@@ -1905,6 +1905,6 @@ ROW28-HOSTING-ARTIFACTS + PRODUCTION MP4 FIX (branch fix/row28-hosting-artifacts
   - **CI:** حُذفت خطوات grep الخمس وGRACE-PERIOD؛ خمس خطوات AST مانعة + خطوة vitest سلوكية مانعة، بلا `continue-on-error`. تثبيت الربط في `sec-guards-checker.test.ts`.
   - **الأدلة:** `npx tsc --noEmit` نظيف؛ `npm run build` ناجح؛ `git diff --check` نظيف؛ `npm audit --audit-level=high --omit=dev` بلا high/critical (تحذير Hono moderate قديم)؛ أي عدّ `any` لم يتغير عن BASE؛ لا migration ولا تغيير مخطط/سياسة CORS/WebSocket.
   - **NOT RUN — ENVIRONMENT:** `jq` غير مثبت (اختبار `quality-gate-poll` البيئي مستثنى؛ Ubuntu CI يوفره)؛ `npm run test:integration` لم يُشغَّل (حزمة D1/schema؛ لا حالة UNIT30.3)؛ لا متصفح/staging/إنتاج ولا نشر worker؛ G7 غير متحقق.
-  - **PR:** pending at time of writing (سيُحدَّث برابط الـPR بعد الفتح). غير مدموج/منشور.
+  - **PR:** [#132](https://github.com/Maelsh/dueli-opus/pull/132). غير مدموج/منشور.
   - **الحالة:** 🔧 LOCAL RED→GREEN — NOT ACCEPTED. القبول الإنتاجي المشترك لـUNIT30/30.1/30.2/30.3 مؤجل إلى بوابة واحدة بعد قبول 30.3 ودمجه.
   - **ROLLBACK:** إرجاع commits هذا الفرع؛ لا migration/بيانات إنتاج/نشر.
