@@ -19,8 +19,8 @@ const env = (database: SqliteD1): Env => ({ DB: database } as unknown as Env);
 let db: SqliteD1;
 let ipSeq = 940;
 
-async function seedBase(): Promise<void> {
-    db = new SqliteD1();
+async function seedBase(database: SqliteD1 = new SqliteD1()): Promise<void> {
+    db = database;
     await db.prepare(
         `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country)
          VALUES (1, 'host@u304.local', 'host304', 'x', 'Host', 1, 'ar', 'SA'),
@@ -68,7 +68,7 @@ async function readRow(id: number): Promise<Record<string, unknown>> {
     const row = await db.prepare(
         `SELECT status, started_at, ended_at, duration_seconds, ended_early,
                 ended_by_user_id, end_reason, result_source, result_version,
-                winner_id
+                winner_id, elo_applied_at
            FROM competitions WHERE id = ?`
     ).bind(id).first<Record<string, unknown>>();
     return row ?? {};
@@ -82,6 +82,24 @@ async function credits(id: number): Promise<Array<{ competitor_id: number; stars
           ORDER BY stars DESC, competitor_id ASC`
     ).bind(id).all<{ competitor_id: number; stars: number; source: string; reason: string }>();
     return res.results ?? [];
+}
+
+/**
+ * Simulates a transient failure of the single atomic aggregates/ELO batch
+ * (the statement that writes `creator_rating`/`opponent_rating`/`winner_id`).
+ * Other batches (the guarded cutoff + credit ledger) keep working.
+ */
+class FailingAggregateBatchD1 extends SqliteD1 {
+    failAggregateBatch = false;
+
+    async batch(statements: Parameters<SqliteD1['batch']>[0]) {
+        const sql = statements.map((statement) => statement.sqlText).join('\n');
+        if (this.failAggregateBatch && sql.includes('SET creator_rating')) {
+            this.failAggregateBatch = false;
+            throw new Error('simulated aggregate batch failure');
+        }
+        return super.batch(statements);
+    }
 }
 
 beforeEach(async () => {
@@ -180,6 +198,176 @@ describe('UNIT30.4 early-end duration and credit ledger', () => {
             expect(final.winner_id).toBe(2);
             expect(final.result_source).toBe('SYSTEM_EARLY_END');
             expect(final.early_end).toBe(true);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('REGRESSION: aggregate failure keeps result pending; the successful recalc publishes the settled winner once', async () => {
+        const fdb = new FailingAggregateBatchD1();
+        await seedBase(fdb);
+        const id = await addLiveCompetition("strftime('%Y-%m-%d %H:%M:%f', 'now', '-120 seconds')");
+
+        // A real viewer vote favors the creator. That is the provisional live
+        // winner and must never be announced as the final early-end result.
+        await fdb.prepare(
+            `INSERT INTO ratings (competition_id, user_id, competitor_id, rating)
+             VALUES (?, 3, 1, 5)`
+        ).bind(id).run();
+        const service = new ScheduledTaskService(fdb as unknown as D1Database);
+        await service.updateAggregatesAfterVote(id);
+        expect(Number((await readRow(id)).winner_id)).toBe(1);
+
+        const events: Array<Record<string, unknown>> = [];
+        const spy = vi.spyOn(EventPusher.prototype, 'publishCompetitionStatus')
+            .mockImplementation(async (competitionId, change) => {
+                events.push({ competition_id: competitionId, ...change });
+                return { id: events.length, sseMessage: '' } as never;
+            });
+
+        try {
+            fdb.failAggregateBatch = true;
+            const res = await postEnd(id, 'sess-u304-host', {});
+            expect(res.status).toBe(200);
+            const json = await res.json() as { data: Record<string, unknown> };
+            // Cutoff persisted, but the final result is not settled yet.
+            expect(json.data.result_pending).toBe(true);
+            expect(json.data.winner_id).toBeNull();
+
+            const pending = events.filter(event => event.status === 'completed');
+            expect(pending).toHaveLength(1);
+            expect(pending[0].result_pending).toBe(true);
+            expect(pending[0].winner_id).toBeUndefined();
+
+            const unsettled = await readRow(id);
+            expect(unsettled.status).toBe('completed');
+            expect(Number(unsettled.winner_id)).toBe(1); // provisional, not final
+            expect(unsettled.elo_applied_at).toBeNull();
+
+            const retry = await fdb.prepare(
+                `SELECT id FROM competition_scheduled_tasks
+                  WHERE competition_id = ? AND task_type = 'recalc_aggregates' AND status = 'pending'
+                  ORDER BY id DESC LIMIT 1`
+            ).bind(id).first<{ id: number }>();
+            expect(retry).toBeTruthy();
+
+            // The retry succeeds: settle the DB and publish the final winner
+            // (the opponent, because the creator withdrew early) exactly once.
+            await fdb.prepare(
+                `UPDATE competition_scheduled_tasks
+                    SET execute_at = datetime('now', '-1 minute')
+                  WHERE id = ?`
+            ).bind(retry!.id).run();
+            fdb.failAggregateBatch = false;
+            await service.processPendingTasks();
+
+            const settled = await readRow(id);
+            expect(Number(settled.winner_id)).toBe(2);
+            expect(settled.elo_applied_at).toBeTruthy();
+
+            const finals = events.filter(event => event.status === 'completed' && event.result_pending === false);
+            expect(finals).toHaveLength(1);
+            expect(finals[0].winner_id).toBe(2);
+            expect(finals[0].result_source).toBe('SYSTEM_EARLY_END');
+            expect(finals[0].early_end).toBe(true);
+
+            // Retry/concurrency must not duplicate or contradict the final event.
+            await service.finalizeCompetition(id);
+            await service.processPendingTasks();
+            expect(events.filter(event => event.status === 'completed' && event.result_pending === false)).toHaveLength(1);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('REGRESSION: a vote pass racing the cutoff cannot claim or announce the final result', async () => {
+        const id = await addLiveCompetition("strftime('%Y-%m-%d %H:%M:%f', 'now', '-120 seconds')");
+        const model = new CompetitionModel(db as unknown as D1Database);
+        expect(await model.complete(id, { actorUserId: 1, endReason: 'competitor_end' })).toBe(true);
+
+        const events: Array<Record<string, unknown>> = [];
+        const spy = vi.spyOn(EventPusher.prototype, 'publishCompetitionStatus')
+            .mockImplementation(async (competitionId, change) => {
+                events.push({ competition_id: competitionId, ...change });
+                return { id: events.length, sseMessage: '' } as never;
+            });
+
+        try {
+            const service = new ScheduledTaskService(db as unknown as D1Database);
+            // The vote request read `live`, then the cutoff landed before its
+            // aggregate pass. It must not run the final ELO pass or announce.
+            const votePass = await service.updateAggregatesAfterVote(id, { allowFinalize: false });
+            expect(votePass.settled).toBe(false);
+            expect(votePass.final).toBe(true);
+            expect(votePass.finalClaimed).toBe(false);
+            expect((await readRow(id)).elo_applied_at).toBeNull();
+            expect(events.filter(event => event.result_pending === false)).toHaveLength(0);
+
+            // The finalize path still owns the claim and emits the one final event.
+            const finalized = await service.finalizeCompetition(id);
+            expect(finalized.settled).toBe(true);
+            expect((await readRow(id)).elo_applied_at).toBeTruthy();
+            const finals = events.filter(event => event.status === 'completed' && event.result_pending === false);
+            expect(finals).toHaveLength(1);
+            expect(finals[0].winner_id).toBe(2);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('REGRESSION: a delayed live aggregate pass cannot overwrite the final row', async () => {
+        const id = await addLiveCompetition("strftime('%Y-%m-%d %H:%M:%f', 'now', '-120 seconds')");
+        const service = new ScheduledTaskService(db as unknown as D1Database);
+
+        // The live provisional pass emits a status guard.
+        const batchSpy = vi.spyOn(db, 'batch');
+        try {
+            await service.updateAggregatesAfterVote(id, { allowFinalize: false });
+            const sql = batchSpy.mock.calls[0]?.[0]?.[0]?.sqlText ?? '';
+            expect(sql).toContain("AND status = 'live'");
+        } finally {
+            batchSpy.mockRestore();
+        }
+
+        // Cutoff + finalize settles the opponent as the winner.
+        const model = new CompetitionModel(db as unknown as D1Database);
+        expect(await model.complete(id, { actorUserId: 1, endReason: 'competitor_end' })).toBe(true);
+        await service.finalizeCompetition(id);
+        expect(Number((await readRow(id)).winner_id)).toBe(2);
+
+        // The delayed provisional write now matches zero rows.
+        const delayed = await db.prepare(`
+            UPDATE competitions
+            SET creator_rating = 5, opponent_rating = 0, average_rating = 5, winner_id = 1
+            WHERE id = ? AND status = 'live'
+        `).bind(id).run();
+        expect(Number(delayed.meta.changes)).toBe(0);
+        expect(Number((await readRow(id)).winner_id)).toBe(2);
+    });
+
+    it('REGRESSION: concurrent finalize publishes exactly one settled winner event', async () => {
+        const id = await addLiveCompetition("strftime('%Y-%m-%d %H:%M:%f', 'now', '-120 seconds')");
+        const model = new CompetitionModel(db as unknown as D1Database);
+        expect(await model.complete(id, { actorUserId: 1, endReason: 'competitor_end' })).toBe(true);
+
+        const events: Array<Record<string, unknown>> = [];
+        const spy = vi.spyOn(EventPusher.prototype, 'publishCompetitionStatus')
+            .mockImplementation(async (competitionId, change) => {
+                events.push({ competition_id: competitionId, ...change });
+                return { id: events.length, sseMessage: '' } as never;
+            });
+
+        try {
+            const service = new ScheduledTaskService(db as unknown as D1Database);
+            await Promise.all([
+                service.finalizeCompetition(id),
+                service.finalizeCompetition(id),
+            ]);
+
+            const finals = events.filter(event => event.status === 'completed' && event.result_pending === false);
+            expect(finals).toHaveLength(1);
+            expect(finals[0].winner_id).toBe(2);
+            expect(Number((await readRow(id)).winner_id)).toBe(2);
         } finally {
             spy.mockRestore();
         }
