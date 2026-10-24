@@ -19,7 +19,7 @@
  *  - missing 0041 table degrades to proxy-only (deployment window);
  *  - /end snapshots the final marker without blocking the transition.
  *
- * Manifest: known_history carries 0041 (membership, no new baseline).
+ * Manifest: baseline-0043 carries 0041-0043 in known_history.
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
@@ -381,16 +381,17 @@ describe('R4-CHUNK-INDEX-1 playlist compatibility (routes)', () => {
         expect(playlist.index_metadata.finalized_at).toBe(marker?.finalized_at);
     });
 
-    it('19. manifest carries 0042 as known history (baseline-0042)', async () => {
-        // R4-RELEASE-RECOVERY-C: the manifest baseline is raised to 0042 so the
-        // readiness gate can enforce the ROW28 window (0040 leases, 0041 index,
-        // 0042 key binding) instead of trusting a 0039-only pin set.
-        expect(manifest.manifest_version).toBe('R-RELEASE-1.baseline-0042');
-        expect(manifest.known_history).toContain('0042_chunk_key_binding.sql');
+    it('19. manifest carries 0043 as known history (baseline-0043)', async () => {
+        // R4-RELEASE-RECOVERY-C / UNIT30.4: the manifest baseline is raised to
+        // 0043 so the readiness gate can enforce the ROW28 window (0040 leases,
+        // 0041 index, 0042 key binding) plus the early-end columns/ledger.
+        expect(manifest.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(manifest.known_history).toContain('0043_competition_early_end.sql');
         expect(manifest.required_migrations.map((m: any) => m.file)).toEqual(expect.arrayContaining([
             '0040_recording_leases.sql',
             '0041_chunk_index.sql',
             '0042_chunk_key_binding.sql',
+            '0043_competition_early_end.sql',
         ]));
     });
 });
