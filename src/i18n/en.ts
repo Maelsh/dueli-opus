@@ -790,6 +790,10 @@ export const en = {
     screen_share_stopped: 'Screen sharing stopped.',
     end_competition: 'End competition',
     end_competition_confirm: 'End the competition for everyone?',
+    early_end_confirm: 'Early end: you will be treated as withdrawn and lose the competition. Your opponent wins by withdrawal and receives a SYSTEM credit of 10 stars (two five-star ratings); you receive 0, and the short competition quality is 0. Continue?',
+    early_end_winner_banner: 'Winner by early withdrawal',
+    early_end_result_note: 'System credit, separate from audience votes: 10 stars to the opponent and 0 to the ending competitor.',
+    fullscreen_unavailable: 'Fullscreen is unavailable here; the in-page expanded view is being used instead.',
     expand_stage: 'Expand stage',
     collapse_stage: 'Collapse stage',
 

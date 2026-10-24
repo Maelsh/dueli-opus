@@ -109,13 +109,14 @@ export class RecommendationEngine {
             return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), row: r };
         });
         const ordered = ranking.h7OrderScored(scored);
-        const diverse = ranking.h7ApplyDiscoveryDiversity(
+        const diverse = ranking.h7ApplyDiscoveryDiversityByTier(
             ordered.map((s) => ({
                 id: s.id,
                 creator_id: s.row.creator_id,
                 opponent_id: s.row.opponent_id,
                 created_at: s.row.created_at,
                 total_views: s.row.total_views,
+                quality_tier: s.row.quality_tier,
             })),
             nowMs
         );

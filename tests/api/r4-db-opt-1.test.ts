@@ -36,7 +36,9 @@ class CountingDb {
     writes = 0;
     constructor(private readonly inner: SqliteD1) {}
     prepare(sql: string) {
-        if (/^\s*select/i.test(sql)) this.reads += 1;
+        // A CTE (`WITH ... SELECT`) is still a read; UNIT30.4's merged
+        // profile-credit aggregate starts that way without adding a statement.
+        if (/^\s*(select|with)/i.test(sql)) this.reads += 1;
         else this.writes += 1;
         return this.inner.prepare(sql);
     }

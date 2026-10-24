@@ -10,6 +10,7 @@ import { getNavigation, getLoginModal, getFooter } from '../../shared/components
 import { generateHTML } from '../../shared/templates/layout';
 import { getClientSharedScript } from './live/scripts/client/shared';
 import { getViewerScript } from './live/scripts/client/viewer';
+import { DUELI_PRIMARY_GRADIENT, DUELI_PRIMARY_GRADIENT_HOVER } from '../../shared/constants';
 
 export async function competitionPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
@@ -206,6 +207,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   
                   <!-- ===== R4-COMP-UNIFIED-1: in-page competitor live (unified) ===== -->
                   \${(window.resolveVideoSurface ? window.resolveVideoSurface(comp, window.currentUser && window.currentUser.id) : 'embedded') === 'competitor' ? \`
+                    <div id="competitorShell" class="competitor-shell">
+                    <!-- Visible, accessible EXIT in native/faux fullscreen; the
+                         toolbar stays inside the same fullscreen container. -->
+                    <button data-csp-on="click" data-csp-fn="toggleFullscreen" data-csp-args='[]' id="competitorExitFullscreenBtn"
+                            class="fs-exit-btn hidden absolute top-3 right-3 z-[90] items-center gap-2 rounded-lg bg-black/70 px-3 py-2 text-sm font-bold text-white hover:bg-black/90"
+                            aria-label="\${tr.exit_fullscreen}" title="\${tr.exit_fullscreen}">
+                      <i class="fas fa-compress" aria-hidden="true"></i><span>\${tr.exit_fullscreen}</span>
+                    </button>
                     <div id="competitorView" class="live-stage relative bg-black aspect-video overflow-hidden" aria-label="\${tr.live_tools}">
                       <div id="remoteVideoWrapper" class="live-stage-main">
                         <video id="remoteVideo" class="w-full h-full object-cover" autoplay playsinline></video>
@@ -238,10 +247,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                          Publish is an explicit consent action; LIVE alone never
                          publishes, and every source change is visible here. -->
                     <div id="competitorControls" class="flex flex-wrap items-center justify-center gap-2 py-3 px-1" role="toolbar" aria-label="\${tr.live_tools}">
-                      <button data-csp-on="click" data-csp-fn="startCompetition" data-csp-args='[]' id="startBtn" class="live-tool bg-green-600 hover:bg-green-700 text-white hidden" aria-label="\${tr.start_competition}" title="\${tr.start_competition}">
-                        <i class="fas fa-play" aria-hidden="true"></i>
-                      </button>
-                      <button data-csp-on="click" data-csp-fn="publishMedia" data-csp-args='[]' id="publishBtn" class="live-tool bg-green-600 hover:bg-green-700 text-white hidden" aria-label="\${tr.prep_publish_host}" title="\${tr.prep_publish_host}">
+                      <!-- UNIT30.4: ONE tower entry. Its action follows the
+                           server state + role: host accepted starts, either
+                           competitor with unpublished media publishes. The
+                           visual START arrow is intentionally gone. -->
+                      <button data-csp-on="click" data-csp-fn="runLiveAction" data-csp-args='[]' id="liveActionBtn" class="live-tool bg-green-600 hover:bg-green-700 text-white hidden" aria-label="\${tr.start_competition}" title="\${tr.start_competition}">
                         <i class="fas fa-broadcast-tower" aria-hidden="true"></i>
                       </button>
                       <button data-csp-on="click" data-csp-fn="shareScreen" data-csp-args='[]' id="screenBtn" class="live-tool bg-blue-600 hover:bg-blue-700 text-white" aria-label="\${tr.share_screen}" title="\${tr.share_screen}">
@@ -276,6 +286,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       </button>
                     </div>
                     <p id="publishState" class="text-center text-xs text-gray-500 dark:text-gray-400 pb-2 px-4" aria-live="polite">\${tr.prep_privacy_hint}</p>
+                    </div>
                     
                   \` : (isCreator || isOpponent) && comp.opponent_id && isPending ? \`
                     <!-- Ready to Go Live (legacy pending-with-opponent edge;
@@ -302,6 +313,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   \` : (isLive || isCompleted) ? \`
                     <!-- ===== مشاهد البث المدمج (Chunk-Based) ===== -->
                     <div class="bg-black relative" id="embeddedViewerSection">
+                      <!-- UNIT30.4: the fullscreen container includes video AND
+                           LIVE/VOD controls. One visible EXIT serves both the
+                           native fullscreen and the unsupported-API fallback. -->
+                      <button data-csp-on="click" data-csp-fn="embeddedToggleFullscreen" data-csp-args='[]' id="embeddedExitFullscreenBtn"
+                              class="fs-exit-btn hidden absolute top-3 right-3 z-[90] items-center gap-2 rounded-lg bg-black/70 px-3 py-2 text-sm font-bold text-white hover:bg-black/90"
+                              aria-label="\${tr.exit_fullscreen}" title="\${tr.exit_fullscreen}">
+                        <i class="fas fa-compress" aria-hidden="true"></i><span>\${tr.exit_fullscreen}</span>
+                      </button>
                       <!-- Video Container with double buffering -->
                       <div class="aspect-video relative bg-black" id="embeddedVideoContainer">
                         <div id="embeddedModeBadge" class="hidden absolute top-3 right-3 z-10 px-3 py-1 rounded-full text-xs font-bold text-white"></div>
@@ -309,7 +328,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                              independent of VOD readiness / player-loaded chunks.
                              Hidden for guests and while live. -->
                         <button id="embeddedDownloadBtn" data-csp-on="click" data-csp-fn="embeddedDownload" data-csp-args='[]'
-                                class="hidden absolute top-3 left-3 z-30 w-10 h-10 flex items-center justify-center bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 transition"
+                                class="hidden absolute top-3 left-3 z-30 w-10 h-10 flex items-center justify-center ${DUELI_PRIMARY_GRADIENT} ${DUELI_PRIMARY_GRADIENT_HOVER} text-white rounded-full shadow-lg transition-colors"
                                 aria-label="${tr.download_ui.title}"
                                 title="${tr.download_ui.title}">
                           <i class="fas fa-download text-sm" aria-hidden="true"></i>
@@ -336,10 +355,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                         
                         <!-- Fullscreen button -->
-                        <button data-csp-on="click" data-csp-fn="embeddedToggleFullscreen" data-csp-args='[]' 
+                        <button data-csp-on="click" data-csp-fn="embeddedToggleFullscreen" data-csp-args='[]' id="embeddedFsBtn"
                                 class="absolute bottom-3 right-3 z-30 w-9 h-9 bg-black/50 backdrop-blur text-white rounded-lg hover:bg-black/70 transition flex items-center justify-center"
-                                title="\${tr.fullscreen || 'ملء الشاشة'}">
-                          <i id="embeddedFsIcon" class="fas fa-expand text-sm"></i>
+                                aria-label="\${tr.fullscreen}" aria-pressed="false" title="\${tr.fullscreen}">
+                          <i id="embeddedFsIcon" class="fas fa-expand text-sm" aria-hidden="true"></i>
                         </button>
 
                         <!-- Stream info bar -->
@@ -373,10 +392,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           <input type="range" id="embeddedSeekbar" min="0" max="100" value="0"
                                  class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500"
                                  title="Seek" />
-                          <button data-csp-on="click" data-csp-fn="embeddedToggleFullscreen" data-csp-args='[]'
-                                  class="w-9 h-9 flex items-center justify-center bg-gray-700 text-white rounded-full hover:bg-gray-600 flex-shrink-0">
-                            <i class="fas fa-expand text-sm"></i>
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -473,15 +488,18 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 </div>
 
                 \${isCompleted && comp.winner_id ? \`
-                  <!-- T2.4: Winner banner (decided by viewer ratings) -->
+                  <!-- T2.4 / UNIT30.4: winner banner. A SYSTEM_EARLY_END result
+                       names the withdrawal reason instead of claiming that the
+                       audience chose the winner. -->
                   <div class="card p-5 border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/10">
                     <div class="flex items-center justify-center gap-3 text-center">
                       <i class="fas fa-trophy text-3xl text-amber-500"></i>
                       <div>
-                        <p class="text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">\${tr.rate_winner_banner || 'Winner by public rating'}</p>
+                        <p class="text-xs font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">\${comp.result_source === 'SYSTEM_EARLY_END' ? (tr.early_end_winner_banner || 'Winner by early withdrawal') : (tr.rate_winner_banner || 'Winner by public rating')}</p>
                         <p class="text-lg font-black text-gray-900 dark:text-white">
                           \${comp.winner_id === comp.creator_id ? comp.creator_name : (comp.opponent_name || '')}
                         </p>
+                        \${comp.result_source === 'SYSTEM_EARLY_END' ? \`<p class="text-xs mt-1 text-gray-600 dark:text-gray-300">\${tr.early_end_result_note}</p>\` : ''}
                       </div>
                     </div>
                   </div>
@@ -626,8 +644,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     \${window.currentUser ? \`
                       <form data-csp-on="submit" data-csp-fn="sendComment" data-csp-args='["@event"]' class="flex gap-2">
                         <input type="text" id="commentInput" placeholder="\${tr.add_comment}..." aria-label="\${tr.add_comment || 'Add comment'}" class="flex-1 border dark:border-gray-600 dark:bg-gray-700 rounded-full px-4 py-2 text-sm">
-                        <button type="submit" aria-label="\${tr.send || 'Send'}" class="p-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition-colors">
-                          <i class="fas fa-paper-plane"></i>
+                        <button type="submit" aria-label="\${tr.send || 'Send'}" class="p-2 ${DUELI_PRIMARY_GRADIENT} ${DUELI_PRIMARY_GRADIENT_HOVER} text-white rounded-full transition-colors">
+                          <i class="fas fa-paper-plane" aria-hidden="true"></i>
                         </button>
                       </form>
                       <div class="mt-2 text-center">
@@ -656,7 +674,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         if (!competitionData || competitionData.status !== 'accepted') return;
         if (startInFlight) return;
         startInFlight = true;
-        const btn = document.getElementById('startBtn');
+        const btn = document.getElementById('liveActionBtn');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'; }
         const liveUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
         try {
@@ -681,10 +699,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           showToast(tr.start_competition_failed, 'error');
         } finally {
           startInFlight = false;
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-play" aria-hidden="true"></i>';
-          }
+          if (btn) btn.disabled = false;
           paintCompetitorControls();
         }
       }
@@ -2404,25 +2419,63 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         syncLiveEdgeButtons();
       };
       
-      window.embeddedToggleFullscreen = function() {
-        const container = document.getElementById('embeddedVideoContainer');
-        if (!container) return;
-        if (!document.fullscreenElement) {
-          container.requestFullscreen && container.requestFullscreen();
-          container.webkitRequestFullscreen && container.webkitRequestFullscreen();
-          embeddedFullscreen = true;
-        } else {
-          document.exitFullscreen && document.exitFullscreen();
-          document.webkitExitFullscreen && document.webkitExitFullscreen();
+      window.embeddedToggleFullscreen = async function() {
+        const shell = document.getElementById('embeddedViewerSection');
+        if (!shell) return;
+        const current = fullscreenElement();
+        if (current || shell.classList.contains('is-player-fullscreen')) {
+          if (current) await exitFullscreenCompat();
+          shell.classList.remove('is-player-fullscreen');
           embeddedFullscreen = false;
+          document.body.classList.remove('player-shell-locked');
+          releaseLandscapeLock();
+        } else {
+          const ok = await requestFullscreenCompat(shell);
+          embeddedFullscreen = ok;
+          if (!ok) {
+            // Unsupported/rejected API: a fixed in-page shell that still
+            // contains the video + controls, never a pretend native state.
+            shell.classList.add('is-player-fullscreen');
+            embeddedFullscreen = true;
+            document.body.classList.add('player-shell-locked');
+            showToast(tr.fullscreen_unavailable || tr.fullscreen, 'info');
+          }
+          attemptLandscapeLock();
         }
-        const icon = document.getElementById('embeddedFsIcon');
-        if (icon) icon.className = embeddedFullscreen ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
+        paintEmbeddedFullscreenChrome();
       };
-      
-      document.addEventListener('fullscreenchange', function() {
+      function paintEmbeddedFullscreenChrome() {
+        const shell = document.getElementById('embeddedViewerSection');
+        const btn = document.getElementById('embeddedFsBtn');
+        if (!shell || !btn) return;
+        const full = fullscreenElement() === shell || shell.classList.contains('is-player-fullscreen');
+        const label = full ? (tr.exit_fullscreen || tr.fullscreen) : tr.fullscreen;
         const icon = document.getElementById('embeddedFsIcon');
-        if (icon) icon.className = document.fullscreenElement ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
+        if (icon) icon.className = full ? 'fas fa-compress text-sm' : 'fas fa-expand text-sm';
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('title', label);
+        btn.setAttribute('aria-pressed', full ? 'true' : 'false');
+        btn.classList.toggle('is-active', full);
+        embeddedFullscreen = full;
+      }
+      function syncEmbeddedFullscreenFromBrowser() {
+        const shell = document.getElementById('embeddedViewerSection');
+        const native = !!fullscreenElement();
+        if (!native && shell) {
+          shell.classList.remove('is-player-fullscreen');
+          document.body.classList.remove('player-shell-locked');
+          releaseLandscapeLock();
+        }
+        paintEmbeddedFullscreenChrome();
+      }
+      document.addEventListener('fullscreenchange', syncEmbeddedFullscreenFromBrowser);
+      document.addEventListener('webkitfullscreenchange', syncEmbeddedFullscreenFromBrowser);
+      document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        const shell = document.getElementById('embeddedViewerSection');
+        if (shell && shell.classList.contains('is-player-fullscreen')) {
+          window.embeddedToggleFullscreen();
+        }
       });
       
       // Download VOD recording (R4-CHUNK-DOWNLOAD-1): the independent
@@ -2471,6 +2524,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // None of these are derived from the competition being LIVE.
       var mediaPublished = false;
       var startInFlight = false;
+      var publishInFlight = false;
       var hadCameraBeforeScreen = false;
       var localMediaAvailable = false;
       var prepReady = false;
@@ -2539,26 +2593,41 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       function paintCompetitorControls() {
         if (!document.getElementById('competitorControls')) return;
         const status = competitionData ? competitionData.status : null;
-        const canStart = status === 'accepted' && !!competitionData.opponent_id && !startInFlight;
         const setHidden = function(id, hidden) {
           const el = document.getElementById(id);
           if (el) el.classList.toggle('hidden', !!hidden);
         };
-        setHidden('startBtn', !canStart);
         setHidden('endBtn', status !== 'live');
-        // Publish appears only once a real local source exists and consent has
-        // not been given yet; the end button never shows before LIVE.
+        // ONE tower entry: host accepted => start; either competitor with a
+        // real unpublished local source => publish. Live alone never grants
+        // publish consent, and the opponent never gets a start action here.
         const preview = p2p ? p2p.getLocalStream() : null;
         const hasMedia = !!(preview && preview.getTracks().length > 0);
-        setHidden('publishBtn', !p2p || mediaPublished || !hasMedia);
-        setHidden('screenBtn', !supportsScreenShare());
-
-        const publishBtn = document.getElementById('publishBtn');
-        if (publishBtn && !mediaPublished) {
-          const label = userRole === 'host' ? tr.prep_publish_host : tr.prep_publish_guest;
-          publishBtn.setAttribute('aria-label', label);
-          publishBtn.setAttribute('title', label);
+        const action = window.resolveLiveAction
+          ? window.resolveLiveAction({
+              status: status,
+              role: userRole,
+              hasOpponent: !!(competitionData && competitionData.opponent_id),
+              hasMedia: hasMedia,
+              mediaPublished: mediaPublished,
+              startInFlight: startInFlight,
+              publishInFlight: publishInFlight,
+            })
+          : 'none';
+        const actionBtn = document.getElementById('liveActionBtn');
+        setHidden('liveActionBtn', action === 'none');
+        if (actionBtn) {
+          const label = action === 'start'
+            ? tr.start_competition
+            : (userRole === 'host' ? tr.prep_publish_host : tr.prep_publish_guest);
+          actionBtn.setAttribute('aria-label', label);
+          actionBtn.setAttribute('title', label);
+          actionBtn.disabled = startInFlight || publishInFlight;
+          actionBtn.innerHTML = (startInFlight || publishInFlight)
+            ? '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'
+            : '<i class="fas fa-broadcast-tower" aria-hidden="true"></i>';
         }
+        setHidden('screenBtn', !supportsScreenShare());
 
         const screenBtn = document.getElementById('screenBtn');
         if (screenBtn) screenBtn.classList.toggle('is-active', isScreenSharing);
@@ -2606,12 +2675,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       }
 
       function applyStageVisibility() {
+        const shell = document.getElementById('competitorShell');
         const stage = document.getElementById('competitorView');
         const localWrapper = document.getElementById('localVideoWrapper');
-        if (stage) {
-          stage.classList.toggle('is-swapped', videosSwapped);
-          stage.classList.toggle('is-expanded', stageExpanded);
-        }
+        if (stage) stage.classList.toggle('is-swapped', videosSwapped);
+        // Expand is the in-page theater shell: the stage AND its toolbar stay
+        // inside the fixed container. Fullscreen is a separate browser mode.
+        if (shell) shell.classList.toggle('is-expanded', stageExpanded);
         if (localWrapper) localWrapper.style.display = localVideoVisible ? '' : 'none';
         document.body.classList.toggle('live-stage-locked', stageExpanded);
         const expandBtn = document.getElementById('expandBtn');
@@ -2619,6 +2689,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const label = stageExpanded ? tr.collapse_stage : tr.expand_stage;
           expandBtn.setAttribute('aria-label', label);
           expandBtn.setAttribute('title', label);
+          expandBtn.setAttribute('aria-pressed', stageExpanded ? 'true' : 'false');
+          expandBtn.classList.toggle('is-active', stageExpanded);
+          expandBtn.innerHTML = stageExpanded
+            ? '<i class="fas fa-down-left-and-up-right-to-center" aria-hidden="true"></i>'
+            : '<i class="fas fa-up-right-and-down-left-from-center" aria-hidden="true"></i>';
         }
       }
 
@@ -2673,7 +2748,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         // Fullscreen icon/aria stays truthful for the in-page and expanded
         // stage alike; the label follows the actual fullscreen element.
         document.addEventListener('fullscreenchange', function() {
-          if (document.getElementById('competitorView')) paintFullscreenChrome();
+          if (document.getElementById('competitorShell')) paintFullscreenChrome();
+        });
+        document.addEventListener('webkitfullscreenchange', function() {
+          if (document.getElementById('competitorShell')) paintFullscreenChrome();
         });
       }
 
@@ -3018,7 +3096,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // here runs from acquisition, invite acceptance, LIVE state or refresh —
       // only this handler attaches local tracks to the peer connection.
       async function publishMedia() {
-        if (!p2p || mediaPublished) return;
+        if (!p2p || mediaPublished || publishInFlight) return;
         const stream = p2p.getLocalStream();
         const hasTracks = !!(stream && stream.getTracks().length > 0);
         if (!hasTracks) {
@@ -3027,7 +3105,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           setPublishState(tr.media_none);
           return;
         }
-        const publishBtn = document.getElementById('publishBtn');
+        publishInFlight = true;
+        const publishBtn = document.getElementById('liveActionBtn');
         if (publishBtn) {
           publishBtn.disabled = true;
           setPublishState(tr.prep_publishing);
@@ -3054,11 +3133,32 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           log('Publish failed: ' + (err && err.message ? err.message : err), 'error');
           showToast(tr.camera_error, 'error');
         } finally {
+          publishInFlight = false;
           if (publishBtn) publishBtn.disabled = false;
           paintCompetitorControls();
         }
       }
       window.publishMedia = publishMedia;
+      // The single visual tower entry delegates to the same two existing
+      // actions. startCompetition/publishMedia remain exposed for their
+      // existing contracts (and the start API is never removed).
+      window.runLiveAction = async function() {
+        if (!competitionData) return;
+        const preview = p2p ? p2p.getLocalStream() : null;
+        const action = window.resolveLiveAction
+          ? window.resolveLiveAction({
+              status: competitionData.status,
+              role: userRole,
+              hasOpponent: !!competitionData.opponent_id,
+              hasMedia: !!(preview && preview.getTracks().length > 0),
+              mediaPublished: mediaPublished,
+              startInFlight: startInFlight,
+              publishInFlight: publishInFlight,
+            })
+          : 'none';
+        if (action === 'start') await startCompetition();
+        else if (action === 'publish') await publishMedia();
+      };
       
       // Recording stays host-only AND requires both the explicit publish and
       // the competition actually being LIVE. LIVE alone never records (there
@@ -3089,29 +3189,86 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           el.style.insetInlineEnd = '';
         });
       }
+      function fullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || null;
+      }
+      function requestFullscreenCompat(el) {
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (!req) return Promise.resolve(false);
+        try {
+          const result = req.call(el);
+          if (result && typeof result.then === 'function') {
+            return result.then(function() { return true; }).catch(function() { return false; });
+          }
+          return Promise.resolve(true);
+        } catch (e) {
+          return Promise.resolve(false);
+        }
+      }
+      function exitFullscreenCompat() {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (!exit) return Promise.resolve(false);
+        try {
+          const result = exit.call(document);
+          if (result && typeof result.then === 'function') {
+            return result.then(function() { return true; }).catch(function() { return false; });
+          }
+          return Promise.resolve(true);
+        } catch (e) {
+          return Promise.resolve(false);
+        }
+      }
+      // Viewer-only orientation attempt. Competitor surfaces never force
+      // landscape (a portrait broadcast must keep its source orientation).
+      function attemptLandscapeLock() {
+        try {
+          const orientation = window.screen && window.screen.orientation;
+          if (orientation && typeof orientation.lock === 'function') {
+            const result = orientation.lock('landscape');
+            if (result && typeof result.catch === 'function') result.catch(function() {});
+          }
+        } catch (e) { /* unsupported/refused: keep the in-page layout */ }
+      }
+      function releaseLandscapeLock() {
+        try {
+          const orientation = window.screen && window.screen.orientation;
+          if (orientation && typeof orientation.unlock === 'function') orientation.unlock();
+        } catch (e) { /* no-op */ }
+      }
       function paintFullscreenChrome() {
         const btn = document.getElementById('fullscreenBtn');
-        if (!btn) return;
-        const full = !!document.fullscreenElement;
+        const shell = document.getElementById('competitorShell');
+        if (!btn || !shell) return;
+        const full = fullscreenElement() === shell;
         const label = full ? (tr.exit_fullscreen || tr.fullscreen) : tr.fullscreen;
         btn.innerHTML = full
           ? '<i class="fas fa-compress" aria-hidden="true"></i>'
           : '<i class="fas fa-expand" aria-hidden="true"></i>';
         btn.setAttribute('aria-label', label);
         btn.setAttribute('title', label);
+        btn.setAttribute('aria-pressed', full ? 'true' : 'false');
+        btn.classList.toggle('is-active', full);
       }
-      window.toggleFullscreen = function() {
-        const stage = document.getElementById('competitorView');
-        if (!stage) return;
-        if (!document.fullscreenElement) {
-          const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
-          if (req) { try { req.call(stage); } catch (e) { /* denied */ } }
-        } else if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
+      window.toggleFullscreen = async function() {
+        const shell = document.getElementById('competitorShell');
+        if (!shell) return;
+        const current = fullscreenElement();
+        if (current) {
+          // One call path only; never race standard + WebKit requests.
+          await exitFullscreenCompat();
+        } else {
+          const ok = await requestFullscreenCompat(shell);
+          if (!ok) {
+            // Best in-page experience, without pretending fullscreen or
+            // locking orientation succeeded.
+            if (!stageExpanded) {
+              stageExpanded = true;
+              applyStageVisibility();
+            }
+            showToast(tr.fullscreen_unavailable || tr.fullscreen, 'info');
+          }
         }
-        isFullscreen = !!document.fullscreenElement;
+        isFullscreen = fullscreenElement() === shell;
         paintFullscreenChrome();
       };
       
@@ -3287,11 +3444,30 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // Voluntary leave-and-return is deliberately gone (owner decision):
       // the only terminal action is the existing End button. Navigation gets
       // a browser warning while live, but never ends/finalizes the competition.
+      // Best-effort warning only. The server re-measures duration from its
+      // own started_at/now and is the sole authority for early/normal.
+      function serverDateMs(value) {
+        if (!value) return null;
+        let s = String(value).trim();
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(s)) s = s.replace(' ', 'T') + 'Z';
+        const ms = Date.parse(s);
+        return Number.isFinite(ms) ? ms : null;
+      }
+      function isEarlyEndWindow() {
+        const started = competitionData ? serverDateMs(competitionData.started_at) : null;
+        if (started === null) return false;
+        const elapsed = Date.now() - started;
+        return elapsed >= 0 && elapsed < 300000;
+      }
       window.endStream = async function() {
         // The end button only renders while LIVE; this guard keeps the handler
         // honest for any race (a non-live end would orphan the state).
         if (!competitionData || competitionData.status !== 'live') return;
-        if (!confirm(tr.end_competition_confirm || tr.end_stream_confirm)) return;
+        const early = isEarlyEndWindow();
+        const confirmText = early
+          ? (tr.early_end_confirm || tr.end_competition_confirm || tr.end_stream_confirm)
+          : (tr.end_competition_confirm || tr.end_stream_confirm);
+        if (!confirm(confirmText)) return; // cancel sends NOTHING to the server
 
         log('Ending stream...', 'info');
 
@@ -3300,6 +3476,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         // Recorder stop/drain runs once in beginTerminalTeardown (bounded).
         let ended = false;
         let endedAt = null;
+        let endResult = null;
         try {
           const endRes = await fetch('/api/competitions/' + competitionId + '/end', {
             method: 'POST',
@@ -3310,6 +3487,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           if (endRes.ok && endData && endData.success !== false) {
             ended = true;
             endedAt = (endData.data && endData.data.ended_at) || null;
+            endResult = endData.data || null;
           } else {
             log('Warning: ' + ((endData && endData.error) || 'Could not update status'), 'warn');
           }
@@ -3320,7 +3498,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         if (ended) {
           // No reload: the same page becomes the recording viewer. Track
           // release, timer cleanup and recorder drain are single-shot.
-          applyCompetitionState({ status: 'completed', ended_at: endedAt });
+          applyCompetitionState({
+            status: 'completed',
+            ended_at: endedAt,
+            ended_early: endResult && endResult.early_end ? 1 : 0,
+            result_source: endResult ? endResult.result_source : null,
+            winner_id: endResult ? endResult.winner_id : null,
+          });
           showToast(tr.status_completed, 'success');
         }
         // Network/response failure may still hide a committed server end;

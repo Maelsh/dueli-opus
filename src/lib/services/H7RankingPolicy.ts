@@ -14,6 +14,18 @@
 
 export const H7_POLICY_VERSION = 'h7-v1';
 
+/**
+ * UNIT30.4 — discovery priority-layer version. This is NOT a re-weighting of
+ * h7-v1: the numeric weights stay frozen. It only names the new approved
+ * ordering layer (long eligible recordings before trusted short recordings)
+ * so frozen sessions can transition explicitly instead of silently mixing
+ * two orderings.
+ */
+export const H7_DISCOVERY_ORDERING_VERSION = 'short-tier-v1';
+
+/** Official short-competition boundary: strictly less than 300 seconds. */
+export const H7_SHORT_DURATION_SECONDS = 300;
+
 export type H7Identity = 'user' | 'guest';
 export type H7StatusBucket = 'live' | 'recorded' | 'upcoming' | 'mixed';
 
@@ -95,6 +107,36 @@ export function h7Quality(stars: number, views: number, likes: number, dislikes:
         H7_Q_W_BALANCE * h7Balance(likes, dislikes) +
         H7_Q_W_VIEWS * h7Normalize(views, H7_K_VIEWS);
     return Math.min(1, Math.max(0, q));
+}
+
+/**
+ * UNIT30.4 — quality tier from the official server duration.
+ * Tier 2 = trusted completed duration < 300s; tier 1 = normal/unknown.
+ * Unknown, missing, negative or inconsistent durations never guess a
+ * penalty: they stay tier 1 with the normal h7-v1 Q.
+ */
+export function h7QualityTier(durationSeconds: number | null | undefined): 1 | 2 {
+    if (durationSeconds === null || durationSeconds === undefined) return 1;
+    const d = Number(durationSeconds);
+    if (!Number.isFinite(d) || d < 0) return 1;
+    return d < H7_SHORT_DURATION_SECONDS ? 2 : 1;
+}
+
+/**
+ * Q for ordering. A trusted short completed recording contributes ZERO
+ * quality (including system stars); its real views/likes/comments and the
+ * competitors' profile stars are not erased. Unknown/inconsistent duration
+ * falls back to the normal h7-v1 Q (tier 1).
+ */
+export function h7QualityForTier(
+    qualityTier: number | null | undefined,
+    stars: number,
+    views: number,
+    likes: number,
+    dislikes: number
+): number {
+    if (qualityTier === 2) return 0;
+    return h7Quality(stars, views, likes, dislikes);
 }
 
 /** Pinned §3: first like moves Q by 0.35*(6/11-0.5). */

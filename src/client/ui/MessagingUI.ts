@@ -7,6 +7,7 @@
 import { State } from '../core/State';
 import { MessagingService } from '../services/MessagingService';
 import { t, isRTL } from '../../i18n';
+import { DUELI_PRIMARY_GRADIENT, DUELI_PRIMARY_GRADIENT_HOVER } from '../../shared/constants';
 import { DateFormatter } from '../helpers/DateFormatter';
 
 /**
@@ -86,8 +87,8 @@ export class MessagingUI {
                                 placeholder="${t('messages.type_message', State.lang)}"
                                 class="flex-1 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
                             >
-                            <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-full hover:bg-purple-700 transition">
-                                <i class="fas fa-paper-plane"></i>
+                            <button type="submit" class="px-4 py-2 ${DUELI_PRIMARY_GRADIENT} ${DUELI_PRIMARY_GRADIENT_HOVER} text-white rounded-full transition-colors">
+                                <i class="fas fa-paper-plane" aria-hidden="true"></i>
                             </button>
                         </form>
                     </div>
