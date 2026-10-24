@@ -878,14 +878,22 @@ export class CompetitionController extends BaseController {
                     ended_early?: number;
                     result_source?: string | null;
                     winner_id?: number | null;
+                    opponent_id?: number | null;
+                    elo_applied_at?: string | null;
                 };
+                // Same settlement gate as the guarded-cutoff branch below: a
+                // two-sided completed row is not final until ELO settlement
+                // records elo_applied_at. Never expose the provisional live
+                // winner as the final result.
+                const resultPending = !!completedRow.opponent_id && !completedRow.elo_applied_at;
                 return this.success(c, {
                     ended: true,
                     status: 'completed',
                     ended_at: completedRow.ended_at ?? null,
                     early_end: !!completedRow.ended_early,
                     result_source: completedRow.result_source ?? null,
-                    winner_id: completedRow.winner_id ?? null,
+                    winner_id: resultPending ? null : completedRow.winner_id ?? null,
+                    result_pending: resultPending,
                     already_completed: true,
                 });
             }
