@@ -919,14 +919,21 @@ export class CompetitionController extends BaseController {
                     ended_early?: number;
                     result_source?: string | null;
                     winner_id?: number | null;
+                    opponent_id?: number | null;
+                    elo_applied_at?: string | null;
                 } | null;
+                // A losing simultaneous end may observe the row after the
+                // guarded cutoff but before finalize settles the winner. Never
+                // expose the provisional live winner as the final result.
+                const racedPending = !!raced?.opponent_id && !raced?.elo_applied_at;
                 return this.success(c, {
                     ended: true,
                     status: 'completed',
                     ended_at: raced?.ended_at ?? null,
                     early_end: !!raced?.ended_early,
                     result_source: raced?.result_source ?? null,
-                    winner_id: raced?.winner_id ?? null,
+                    winner_id: racedPending ? null : raced?.winner_id ?? null,
+                    result_pending: racedPending,
                     already_completed: true,
                 });
             }
@@ -935,6 +942,7 @@ export class CompetitionController extends BaseController {
             let endedEarly = false;
             let resultSource: string | null = null;
             let winnerId: number | null = null;
+            let finalizeSettled = false;
             // R4-LIVE-END-RECOVERY-1 (28.5): one terminal event reaches both
             // participants AND viewers on the existing competition channel.
             // The persisted row (status + ended_at) stays authoritative; SSE
@@ -1001,7 +1009,8 @@ export class CompetitionController extends BaseController {
             // payout ledger tx), so concurrent ends / retries converge.
             try {
                 const taskService = new ScheduledTaskService(c.env.DB);
-                await taskService.finalizeCompetition(id);
+                const finalized = await taskService.finalizeCompetition(id);
+                finalizeSettled = finalized.settled;
             } catch (finalizeError) {
                 console.error(`[End] Finalize failed for ${id}, scheduling retry:`, finalizeError);
                 try {
@@ -1024,7 +1033,10 @@ export class CompetitionController extends BaseController {
                 } | null;
                 endedEarly = !!finalRow?.ended_early;
                 resultSource = finalRow?.result_source ?? null;
-                winnerId = finalRow?.winner_id ?? null;
+                // Only a committed aggregates/ELO batch may expose a final
+                // winner; an unsettled row still holds the provisional live
+                // winner and must stay result_pending until the retry lands.
+                winnerId = finalizeSettled ? finalRow?.winner_id ?? null : null;
             } catch (readError) {
                 console.error(`[End] Final result read failed for ${id}:`, readError);
             }
@@ -1036,6 +1048,7 @@ export class CompetitionController extends BaseController {
                 early_end: endedEarly,
                 result_source: resultSource,
                 winner_id: winnerId,
+                result_pending: !finalizeSettled,
             });
         } catch (error) {
             return this.serverError(c, error as Error);
@@ -1429,7 +1442,7 @@ export class CompetitionController extends BaseController {
             // Failure never fails the vote; a durable retry is scheduled.
             try {
                 const taskService = new ScheduledTaskService(c.env.DB);
-                await taskService.updateAggregatesAfterVote(competitionId);
+                await taskService.updateAggregatesAfterVote(competitionId, { allowFinalize: false });
             } catch (voteError) {
                 console.error(`[Rate] Aggregate update failed for competition ${competitionId}:`, voteError);
             }
@@ -1518,7 +1531,7 @@ export class CompetitionController extends BaseController {
             }
             if (!replaced) return this.notFound(c, this.t('ratings.no_ratings', c));
             try {
-                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId);
+                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId, { allowFinalize: false });
             } catch (voteError) {
                 console.error(`[Rate:update] Aggregate update failed for ${competitionId}:`, voteError);
             }
@@ -1636,7 +1649,7 @@ export class CompetitionController extends BaseController {
             }
             if (!removed) return this.notFound(c, this.t('ratings.no_ratings', c));
             try {
-                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId);
+                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId, { allowFinalize: false });
             } catch (voteError) {
                 console.error(`[Rate:withdraw] Aggregate update failed for ${competitionId}:`, voteError);
             }
