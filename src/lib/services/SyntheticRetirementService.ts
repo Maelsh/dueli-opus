@@ -22,6 +22,10 @@ export const USER_DEPENDENTS: Dependent[] = [
     { table: 'competitions', column: 'creator_id' },
     { table: 'competitions', column: 'opponent_id' },
     { table: 'competitions', column: 'winner_id' },
+    // UNIT30.4: the confirmed early-end actor and the separate result-credit
+    // ledger both reference users; synthetic retirement must see them.
+    { table: 'competitions', column: 'ended_by_user_id' },
+    { table: 'competition_result_credits', column: 'competitor_id' },
     { table: 'competition_invites', column: 'inviter_id' },
     { table: 'competition_invites', column: 'invitee_id' },
     { table: 'competition_requests', column: 'requester_id' },
@@ -87,6 +91,8 @@ export const USER_DEPENDENTS: Dependent[] = [
 export const COMPETITION_DEPENDENTS: Dependent[] = [
     { table: 'competition_invites', column: 'competition_id' },
     { table: 'competition_requests', column: 'competition_id' },
+    // UNIT30.4: result credits are competition-owned audit rows.
+    { table: 'competition_result_credits', column: 'competition_id' },
     { table: 'ratings', column: 'competition_id' },
     { table: 'comments', column: 'competition_id' },
     { table: 'scheduled_competitions', column: 'competition_id' },

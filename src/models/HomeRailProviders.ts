@@ -45,12 +45,16 @@ import {
     SUGGESTED_GUEST_SURFACE,
 } from './RecommendationModel';
 import { H7SignalsModel } from './H7SignalsModel';
-import { h7ApplyDiscoveryDiversity, h7OrderScored, h7ScoreCard } from '../lib/services/H7RankingService';
-import { h7RecencyOf } from '../lib/services/H7RankingPolicy';
+import { h7ApplyDiscoveryDiversityByTier, h7OrderScored, h7ScoreCard } from '../lib/services/H7RankingService';
+import { H7_DISCOVERY_ORDERING_VERSION, H7_POLICY_VERSION, h7RecencyOf } from '../lib/services/H7RankingPolicy';
 import type { H7StatusBucket } from '../lib/services/H7RankingPolicy';
 
-/** Policy version pinned into every rail context (h7-v1 approved). */
-export const RAIL_POLICY_VERSION = 'h7-v1';
+/**
+ * Policy + ordering version pinned into every rail context. h7-v1 weights
+ * are unchanged; the suffix names the UNIT30.4 priority layer so a frozen
+ * pre-deploy session is not silently reinterpreted.
+ */
+export const RAIL_POLICY_VERSION = `${H7_POLICY_VERSION}+${H7_DISCOVERY_ORDERING_VERSION}`;
 
 /** Session surface for the logged-in Suggested rail (guest reuses #76's). */
 export const HOME_SUGGESTED_USER_SURFACE = 'home_suggested_user';
@@ -391,13 +395,14 @@ export class CategoryRailProvider implements ResultSessionProvider {
             return { id: r.id, score, recency: h7RecencyOf({ ...r }, nowMs), row: r };
         });
         const ordered = h7OrderScored(scored);
-        const diverse = h7ApplyDiscoveryDiversity(
+        const diverse = h7ApplyDiscoveryDiversityByTier(
             ordered.map((s) => ({
                 id: s.id,
                 creator_id: s.row.creator_id,
                 opponent_id: s.row.opponent_id,
                 created_at: s.row.created_at,
                 total_views: s.row.total_views,
+                quality_tier: s.row.quality_tier,
             })),
             nowMs
         );

@@ -26,6 +26,44 @@ export interface SurfaceCompetition {
     youtube_video_url?: string | null;
 }
 
+export type LiveAction = 'start' | 'publish' | 'none';
+
+export interface LiveActionState {
+    status?: string | null;
+    role?: 'host' | 'opponent' | 'viewer' | null;
+    hasOpponent?: boolean;
+    hasMedia?: boolean;
+    mediaPublished?: boolean;
+    startInFlight?: boolean;
+    publishInFlight?: boolean;
+}
+
+/**
+ * UNIT30.4 — the ONE tower entry's state/role decision.
+ *
+ * - Host at `accepted` starts the competition (existing authorized API).
+ * - A competitor with real local media and no consent yet publishes. This is
+ *   the same explicit publish action as before; LIVE/acquisition never sets
+ *   `mediaPublished`.
+ * - Opponent never gets a start action from this entry. The existing server
+ *   start permission is not removed, but the unified UI exposes only publish
+ *   for that role.
+ * - While an action is in flight the entry is `none` (disabled), so a double
+ *   click cannot send two requests.
+ */
+export function resolveLiveAction(state: LiveActionState | null | undefined): LiveAction {
+    if (!state) return 'none';
+    if (state.startInFlight || state.publishInFlight) return 'none';
+    const role = state.role ?? null;
+    const isCompetitor = role === 'host' || role === 'opponent';
+    if (!isCompetitor) return 'none';
+    if (state.status === 'accepted' && role === 'host' && state.hasOpponent) return 'start';
+    if ((state.status === 'accepted' || state.status === 'live') && state.hasMedia && !state.mediaPublished) {
+        return 'publish';
+    }
+    return 'none';
+}
+
 export function resolveVideoSurface(comp: SurfaceCompetition | null | undefined, userId: number | null | undefined): VideoSurface {
     if (!comp) return 'waiting';
     const status = comp.status ?? null;

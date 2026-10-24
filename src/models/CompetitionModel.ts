@@ -9,6 +9,9 @@ import { BaseModel, QueryOptions } from './base/BaseModel';
 import type { Competition, CompetitionStatus } from '../config/types';
 import { SyntheticRetirementService } from '../lib/services/SyntheticRetirementService';
 
+/** UNIT30.4 official early-end boundary (server-measured, strict < 300s). */
+export const COMPETITION_EARLY_END_SECONDS = 300;
+
 /**
  * Competition filter options
  */
@@ -508,29 +511,126 @@ export class CompetitionModel extends BaseModel<Competition> {
      */
     async complete(id: number, options?: {
         youtubeVideoUrl?: string;
+        /**
+         * UNIT30.4: session-verified participant who pressed End. The server
+         * never trusts a client-supplied winner/clock; this is the only actor
+         * evidence used to attribute an early withdrawal. Null/undefined for
+         * generic/automatic closes (no invented withdrawing party).
+         */
+        actorUserId?: number | null;
+        endReason?: string | null;
     }): Promise<boolean> {
         const youtubeVideoUrl = options?.youtubeVideoUrl || null;
+        const actorUserId = typeof options?.actorUserId === 'number' ? options.actorUserId : null;
+        const endReason = options?.endReason || (actorUserId !== null ? 'competitor_end' : 'normal_end');
 
         // B5-1: guarded transition — only live -> completed (see startLive).
         const before = await this.db.prepare(
             'SELECT status FROM competitions WHERE id = ?'
         ).bind(id).first<{ status: string } | null>();
 
-        const result = await this.db.prepare(`
-            UPDATE competitions 
-            SET status = 'completed', 
-                ended_at = datetime('now'), 
+        const threshold = COMPETITION_EARLY_END_SECONDS;
+        // SQLite's 'now' is fixed for the whole statement, so duration and
+        // the early flag use the same instant. julianday preserves sub-second
+        // precision (299.999s < 300s; 300.000s is normal).
+        const earlySql = `started_at IS NOT NULL
+            AND (julianday('now') - julianday(started_at)) * 86400 >= 0
+            AND (julianday('now') - julianday(started_at)) * 86400 < ${threshold}`;
+
+        const update = this.db.prepare(`
+            UPDATE competitions
+            SET status = 'completed',
+                ended_at = datetime('now'),
                 youtube_video_url = COALESCE(?, youtube_video_url),
                 stream_status = 'ready',
-                stream_ended_at = datetime('now')
+                stream_ended_at = datetime('now'),
+                duration_seconds = CASE WHEN started_at IS NOT NULL
+                    AND julianday('now') >= julianday(started_at)
+                    THEN CAST((julianday('now') - julianday(started_at)) * 86400 AS INTEGER)
+                    ELSE NULL END,
+                ended_early = CASE WHEN ${earlySql} THEN 1 ELSE 0 END,
+                ended_by_user_id = ?,
+                end_reason = CASE
+                    WHEN ? IS NOT NULL AND ${earlySql} THEN 'early_withdrawal'
+                    WHEN ? = 'auto_end' THEN 'auto_end'
+                    ELSE 'normal_end' END,
+                result_source = CASE
+                    WHEN ? IS NOT NULL AND ${earlySql} THEN 'SYSTEM_EARLY_END'
+                    WHEN ? = 'auto_end' THEN 'AUTO'
+                    ELSE 'RATINGS' END,
+                result_version = 1
             WHERE id = ? AND status = 'live'
-        `).bind(youtubeVideoUrl, id).run();
-        if (typeof result.meta?.changes === 'number' && result.meta.changes > 0) return true;
-        if (typeof result.meta?.changes === 'number' && result.meta.changes === 0) return false;
+              -- Defense in depth: a non-participant actor never closes a live
+              -- competition through this model. The controller already
+              -- rejects it; NULL is reserved for AUTO/generic closes.
+              AND (? IS NULL OR ? IN (creator_id, opponent_id))
+        `).bind(youtubeVideoUrl, actorUserId, actorUserId, endReason, actorUserId, endReason, id, actorUserId, actorUserId);
+
+        // The credit rows are part of the SAME atomic batch as the guarded
+        // transition. UNIQUE(competition_id, competitor_id, source) makes
+        // retry/reload/simultaneous END converge to exactly one 10 and one 0.
+        const credit10 = this.db.prepare(`
+            INSERT OR IGNORE INTO competition_result_credits
+                (competition_id, competitor_id, stars, source, reason, duration_seconds, version, created_at)
+            SELECT c.id,
+                   CASE WHEN c.ended_by_user_id = c.creator_id THEN c.opponent_id ELSE c.creator_id END,
+                   10, 'SYSTEM_EARLY_END', 'early_withdrawal', c.duration_seconds, 1, datetime('now')
+              FROM competitions c
+             WHERE c.id = ?
+               AND c.status = 'completed'
+               AND c.ended_early = 1
+               AND c.result_source = 'SYSTEM_EARLY_END'
+               AND c.opponent_id IS NOT NULL
+               AND (c.ended_by_user_id = c.creator_id OR c.ended_by_user_id = c.opponent_id)
+        `).bind(id);
+        const credit0 = this.db.prepare(`
+            INSERT OR IGNORE INTO competition_result_credits
+                (competition_id, competitor_id, stars, source, reason, duration_seconds, version, created_at)
+            SELECT c.id, c.ended_by_user_id,
+                   0, 'SYSTEM_EARLY_END', 'early_withdrawal', c.duration_seconds, 1, datetime('now')
+              FROM competitions c
+             WHERE c.id = ?
+               AND c.status = 'completed'
+               AND c.ended_early = 1
+               AND c.result_source = 'SYSTEM_EARLY_END'
+               AND c.opponent_id IS NOT NULL
+               AND (c.ended_by_user_id = c.creator_id OR c.ended_by_user_id = c.opponent_id)
+        `).bind(id);
+
+        const results = await this.db.batch([update, credit10, credit0]);
+        const result = results[0];
+        if (typeof result?.meta?.changes === 'number' && result.meta.changes > 0) return true;
+        if (typeof result?.meta?.changes === 'number' && result.meta.changes === 0) return false;
         const after = await this.db.prepare(
             'SELECT status FROM competitions WHERE id = ?'
         ).bind(id).first<{ status: string } | null>();
         return before?.status === 'live' && after?.status === 'completed';
+    }
+
+    /**
+     * UNIT30.4: read the separate SYSTEM_EARLY_END credit ledger.
+     *
+     * This is never mixed into `ratings` (which stays 1..5 viewer votes) and
+     * is returned separately by the ratings summary. Migration-lag safe: an
+     * environment that has not applied 0043 yet returns an empty ledger
+     * instead of breaking the public summary.
+     */
+    async getResultCredits(
+        competitionId: number,
+        source = 'SYSTEM_EARLY_END'
+    ): Promise<Array<{ competitor_id: number; stars: number; source: string }>> {
+        try {
+            const result = await this.db.prepare(`
+                SELECT competitor_id, stars, source
+                  FROM competition_result_credits
+                 WHERE competition_id = ? AND source = ?
+                 ORDER BY stars DESC, competitor_id ASC
+            `).bind(competitionId, source).all<{ competitor_id: number; stars: number; source: string }>();
+            return (result.results ?? []) as Array<{ competitor_id: number; stars: number; source: string }>;
+        } catch (error) {
+            console.error('[CompetitionModel] result credits unavailable:', error);
+            return [];
+        }
     }
 
     /**

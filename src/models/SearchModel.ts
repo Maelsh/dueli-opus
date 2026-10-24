@@ -122,9 +122,9 @@ export class SearchModel {
             const profiles = await signalsModel.loadProfiles(uids);
             const scored = rows.map((r) => {
                 const { score } = ranking.h7ScoreCard({ ...r, nowMs }, ctx, 'guest', 'mixed', profiles);
-                return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs) };
+                return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), quality_tier: r.quality_tier };
             });
-            orderedIds = ranking.h7OrderScored(scored).map((s) => s.id);
+            orderedIds = ranking.h7ApplyPriorityTier(ranking.h7OrderScored(scored)).map((s) => s.id);
         } else {
             const layered = rows.map((r) => ({
                 row: r,
@@ -138,8 +138,11 @@ export class SearchModel {
                     id: row.id,
                     score: ranking.h7SearchScore({ ...row, nowMs }, ctx, 0.5),
                     recency: policy.h7RecencyOf({ ...row }, nowMs),
+                    quality_tier: row.quality_tier,
                 }));
-                orderedIds.push(...ranking.h7OrderScored(scored).map((s) => s.id));
+                // Exact-title layer stays first; inside the layer the normal
+                // H7 order is preserved, then the approved short tier.
+                orderedIds.push(...ranking.h7ApplyPriorityTier(ranking.h7OrderScored(scored)).map((s) => s.id));
             }
         }
         const pageIds = orderedIds.slice(offset, offset + limit);
@@ -363,13 +366,14 @@ export class SearchModel {
             return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), row: r };
         });
         const ordered = ranking.h7OrderScored(scored);
-        const diverse = ranking.h7ApplyDiscoveryDiversity(
+        const diverse = ranking.h7ApplyDiscoveryDiversityByTier(
             ordered.map((s) => ({
                 id: s.id,
                 creator_id: s.row.creator_id,
                 opponent_id: s.row.opponent_id,
                 created_at: s.row.created_at,
                 total_views: s.row.total_views,
+                quality_tier: s.row.quality_tier,
             })),
             nowMs
         );

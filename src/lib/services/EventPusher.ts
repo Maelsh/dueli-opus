@@ -220,6 +220,9 @@ export class EventPusher {
             opponent_id?: number | null;
             started_by?: number | null;
             ended_at?: string | null;
+            early_end?: boolean;
+            result_source?: string | null;
+            winner_id?: number | null;
             updated_at?: string;
         }
     ) {

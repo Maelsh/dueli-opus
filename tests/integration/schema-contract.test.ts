@@ -76,6 +76,7 @@ const EXPECTED_MIGRATIONS = [
     '0040_recording_leases.sql',
     '0041_chunk_index.sql',
     '0042_chunk_key_binding.sql',
+    '0043_competition_early_end.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -104,6 +105,7 @@ const EXPECTED_TABLES = [
     'explore_result_sessions',
     'explore_result_chunks',
     'competition_views',
+    'competition_result_credits',
     'managed_documents',
     'support_threads',
     'support_messages',
@@ -116,6 +118,7 @@ let advertisementsColumns: string[] = [];
 let userEarningsColumns: string[] = [];
 let chunkKeysColumns: string[] = [];
 let withdrawalColumns: string[] = [];
+let competitionResultCreditsColumns: string[] = [];
 let dedupIdentityIndexSql = '';
 let reportsDdl = '';
 let foreignKeyCheck: ForeignKeyCheckRow[] = [];
@@ -174,6 +177,9 @@ beforeAll(() => {
     );
     chunkKeysColumns = columnNames(queryD1('PRAGMA table_info(chunk_keys)').filter(isTableInfoRow));
     withdrawalColumns = columnNames(queryD1('PRAGMA table_info(withdrawal_requests)').filter(isTableInfoRow));
+    competitionResultCreditsColumns = columnNames(
+        queryD1('PRAGMA table_info(competition_result_credits)').filter(isTableInfoRow),
+    );
     const dedupIndexRows = queryD1(
         "SELECT name, type, tbl_name, sql FROM sqlite_master WHERE type='index' AND name='idx_ad_impression_dedup_identity'",
     ).filter(isSqliteMasterRow);
@@ -193,8 +199,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 43 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(43);
+    it('has exactly 44 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(44);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -307,6 +313,13 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
     it('chunk_keys carries SAFE28 binding columns (0042_chunk_key_binding.sql)', () => {
         for (const col of ['lease_generation', 'object_path', 'max_bytes']) {
             expect(chunkKeysColumns, `missing column: ${col}`).toContain(col);
+        }
+    });
+
+    it('UNIT30.4 early-end credit ledger exists with its provenance columns (0043)', () => {
+        expect(tables).toContain('competition_result_credits');
+        for (const col of ['competition_id', 'competitor_id', 'stars', 'source', 'reason', 'version']) {
+            expect(competitionResultCreditsColumns, `missing column: ${col}`).toContain(col);
         }
     });
 

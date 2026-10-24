@@ -330,7 +330,19 @@ export class ScheduledTaskService {
         const cutoff = await this.db.prepare(`
             UPDATE competitions
             SET status = 'completed', ended_at = datetime('now'), updated_at = datetime('now'),
-                auto_deleted_reason = 'live_max_2hr'
+                auto_deleted_reason = 'live_max_2hr',
+                duration_seconds = CASE WHEN started_at IS NOT NULL
+                    AND julianday('now') >= julianday(started_at)
+                    THEN CAST((julianday('now') - julianday(started_at)) * 86400 AS INTEGER)
+                    ELSE NULL END,
+                ended_early = CASE WHEN started_at IS NOT NULL
+                    AND (julianday('now') - julianday(started_at)) * 86400 >= 0
+                    AND (julianday('now') - julianday(started_at)) * 86400 < 300
+                    THEN 1 ELSE 0 END,
+                ended_by_user_id = NULL,
+                end_reason = 'auto_end',
+                result_source = 'AUTO',
+                result_version = 1
             WHERE id = ? AND status = 'live'
         `).bind(competitionId).run();
         if (Number(cutoff?.meta?.changes ?? 1) === 0) return false;
@@ -518,7 +530,9 @@ export class ScheduledTaskService {
         const { computeEloChange } = await import('./EloRatingService');
 
         const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, status, ended_at, elo_applied_at FROM competitions WHERE id = ?
+            SELECT id, creator_id, opponent_id, status, ended_at, elo_applied_at,
+                   result_source, ended_by_user_id, ended_early
+              FROM competitions WHERE id = ?
         `).bind(competitionId).first<any>();
 
         if (!competition) return;
@@ -543,6 +557,17 @@ export class ScheduledTaskService {
         if (competition.opponent_id) {
             if (creatorAvg > opponentAvg) winnerId = competition.creator_id;
             else if (opponentAvg > creatorAvg) winnerId = competition.opponent_id;
+        }
+
+        // UNIT30.4: a confirmed competitor early End is a withdrawal by that
+        // actor — the opponent wins regardless of (typically absent) viewer
+        // votes. Automatic/admin closes carry no actor and never invent one.
+        if (competition.result_source === 'SYSTEM_EARLY_END' && competition.opponent_id) {
+            if (competition.ended_by_user_id === competition.creator_id) {
+                winnerId = competition.opponent_id;
+            } else if (competition.ended_by_user_id === competition.opponent_id) {
+                winnerId = competition.creator_id;
+            }
         }
 
         // R2-V: final exactly at the cutoff — no 24h window. Live stays
