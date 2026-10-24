@@ -1,7 +1,8 @@
 /**
  * UNIT30.4 / R4-COMP-CONTROLS-EARLY-END-1 — controls + fullscreen contract.
  *
- * RED before the patch:
+ * Pre-patch behavior this suite pins (authored with the patch; no RED
+ * transcript was captured):
  *  - START and PUBLISH were two adjacent buttons; the START arrow could imply
  *    publish consent.
  *  - Expand and fullscreen both targeted the video stage (not the shell) and
