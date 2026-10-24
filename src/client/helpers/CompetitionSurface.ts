@@ -64,6 +64,89 @@ export function resolveLiveAction(state: LiveActionState | null | undefined): Li
     return 'none';
 }
 
+/** UNIT30.4 §15.7 — one visible tower action OR one visible End action. */
+export type CompetitorButtonVisibility = 'hidden' | 'visible' | 'loading';
+export type CompetitorControlProgress =
+    | 'starting'
+    | 'publishing'
+    | 'ending'
+    | 'verifying'
+    | 'waiting'
+    | 'ended'
+    | null;
+
+export interface CompetitorButtonState {
+    start: CompetitorButtonVisibility;
+    end: CompetitorButtonVisibility;
+    progress: CompetitorControlProgress;
+}
+
+export interface CompetitorButtonInput {
+    status?: string | null;
+    role?: 'host' | 'opponent' | 'viewer' | null;
+    mediaPublished?: boolean;
+    startInFlight?: boolean;
+    publishInFlight?: boolean;
+    endInFlight?: boolean;
+    endUnknown?: boolean;
+}
+
+/**
+ * Display truth for §15.7. `mediaPublished` must come from the real
+ * published-sender state, never from the click or the competition being live.
+ * At most one of start/end is visible (or loading); a null pair is only
+ * allowed with a progress/waiting state or a terminal surface.
+ */
+export function resolveCompetitorButtons(
+    state: CompetitorButtonInput | null | undefined
+): CompetitorButtonState {
+    if (!state) return { start: 'hidden', end: 'hidden', progress: null };
+    const role = state.role ?? null;
+    const isCompetitor = role === 'host' || role === 'opponent';
+    const status = state.status ?? null;
+    const final = status === 'completed' || status === 'ended' || status === 'cancelled';
+    if (final) return { start: 'hidden', end: 'hidden', progress: 'ended' };
+    if (!isCompetitor) return { start: 'hidden', end: 'hidden', progress: null };
+
+    // End/verify wins over a stale start attempt: a server end must never
+    // bring the start action back while the outcome is being verified.
+    if (state.endUnknown) return { start: 'hidden', end: 'loading', progress: 'verifying' };
+    if (state.endInFlight) return { start: 'hidden', end: 'loading', progress: 'ending' };
+    if (state.startInFlight) return { start: 'loading', end: 'hidden', progress: 'starting' };
+    if (state.publishInFlight) return { start: 'loading', end: 'hidden', progress: 'publishing' };
+
+    if (status === 'accepted') {
+        if (role === 'host') return { start: 'visible', end: 'hidden', progress: null };
+        // The opponent can publish during prep, then waits for the host; the
+        // End action is never shown before the competition is live.
+        if (state.mediaPublished) return { start: 'hidden', end: 'hidden', progress: 'waiting' };
+        return { start: 'visible', end: 'hidden', progress: null };
+    }
+    if (status === 'live') {
+        if (state.mediaPublished) return { start: 'hidden', end: 'visible', progress: null };
+        // Start here means "publish my own source" (or republish after an
+        // explicit source stop); LIVE alone never hides it.
+        return { start: 'visible', end: 'hidden', progress: null };
+    }
+    return { start: 'hidden', end: 'hidden', progress: 'waiting' };
+}
+
+export type CompetitorVideoLayout = 'local' | 'remote' | 'terminal';
+
+/**
+ * UNIT30.4 §15.8 — the ONLY layout inputs are the server-final state and
+ * actual opponent-video presence (V). P, the generic connection state and the
+ * LIVE flag are deliberately absent.
+ */
+export function resolveCompetitorVideoLayout(state: {
+    serverFinal?: boolean;
+    remoteVideoPresent?: boolean;
+} | null | undefined): CompetitorVideoLayout {
+    if (!state) return 'local';
+    if (state.serverFinal) return 'terminal';
+    return state.remoteVideoPresent ? 'remote' : 'local';
+}
+
 export function resolveVideoSurface(comp: SurfaceCompetition | null | undefined, userId: number | null | undefined): VideoSurface {
     if (!comp) return 'waiting';
     const status = comp.status ?? null;

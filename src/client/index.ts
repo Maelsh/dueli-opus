@@ -58,7 +58,12 @@ import { DateFormatter } from './helpers/DateFormatter';
 import { NumberFormatter } from './helpers/NumberFormatter';
 import { YouTubeHelpers } from './helpers/YouTubeHelpers';
 import { Utils } from './helpers/Utils';
-import { resolveLiveAction, resolveVideoSurface } from './helpers/CompetitionSurface';
+import {
+    resolveCompetitorButtons,
+    resolveCompetitorVideoLayout,
+    resolveLiveAction,
+    resolveVideoSurface,
+} from './helpers/CompetitionSurface';
 
 /**
  * Country selection functions (moved from CountryService)
@@ -236,6 +241,9 @@ declare global {
         resolveVideoSurface: typeof resolveVideoSurface;
         // UNIT30.4: one tower entry, state/role-resolved action.
         resolveLiveAction: typeof resolveLiveAction;
+        // UNIT30.4 §15.7–15.8: mutually-exclusive start/end + video layout.
+        resolveCompetitorButtons: typeof resolveCompetitorButtons;
+        resolveCompetitorVideoLayout: typeof resolveCompetitorVideoLayout;
 
         // R4-CHUNK-DOWNLOAD-1: independent recording download dialog
         RecordingDownloadPanel: typeof RecordingDownloadPanel;
@@ -364,6 +372,10 @@ if (typeof window !== 'undefined') {
     window.resolveVideoSurface = resolveVideoSurface;
     // UNIT30.4: one tower entry, state/role-resolved action.
     window.resolveLiveAction = resolveLiveAction;
+    // UNIT30.4 §15.7–15.8: one visible tower/End action and the four
+    // competitor video layouts (actual remote-frame evidence only).
+    window.resolveCompetitorButtons = resolveCompetitorButtons;
+    window.resolveCompetitorVideoLayout = resolveCompetitorVideoLayout;
     // R4-CHUNK-DOWNLOAD-1: independent download dialog (auth-gated by
     // isDownloadUserAuthenticated + the server manifest route).
     window.RecordingDownloadPanel = RecordingDownloadPanel;

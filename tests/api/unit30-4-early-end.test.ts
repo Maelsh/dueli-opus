@@ -5,10 +5,11 @@
  * the guarded transition, the SQLite-measured duration and the separate
  * result-credit ledger are exercised as production SQL — not a fake model.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import app from '../../src/main';
 import { CompetitionModel } from '../../src/models/CompetitionModel';
 import { H7SignalsModel } from '../../src/models/H7SignalsModel';
+import { EventPusher } from '../../src/lib/services/EventPusher';
 import { ScheduledTaskService } from '../../src/lib/services/ScheduledTaskService';
 import { SqliteD1 } from '../helpers/sqlite-d1';
 
@@ -149,6 +150,39 @@ describe('UNIT30.4 early-end duration and credit ledger', () => {
         expect(Number(repeatJson.data.winner_id)).toBe(2);
         expect(Number((await readRow(id)).ended_by_user_id)).toBe(1);
         expect(await credits(id)).toHaveLength(2);
+    });
+
+    it('Codex P2: connected viewers get result_pending, then the settled winner after finalize', async () => {
+        const id = await addLiveCompetition("strftime('%Y-%m-%d %H:%M:%f', 'now', '-120 seconds')");
+        const events: Array<Record<string, unknown>> = [];
+        const spy = vi.spyOn(EventPusher.prototype, 'publishCompetitionStatus')
+            .mockImplementation(async (competitionId, change) => {
+                events.push({ competition_id: competitionId, ...change });
+                return { id: events.length, sseMessage: '' } as never;
+            });
+
+        try {
+            const res = await postEnd(id, 'sess-u304-host', {});
+            expect(res.status).toBe(200);
+            const json = await res.json() as { data: Record<string, unknown> };
+            expect(Number(json.data.winner_id)).toBe(2);
+
+            const terminal = events.filter(event => event.status === 'completed');
+            expect(terminal.length).toBeGreaterThanOrEqual(2);
+            // The immediate cutoff event is terminal for teardown but must
+            // never claim a winner before finalizeCompetition settles it.
+            expect(terminal[0].result_pending).toBe(true);
+            expect(terminal[0].winner_id).toBeUndefined();
+            // The last event is the one a still-connected viewer receives
+            // without reloading; it carries the final winner.
+            const final = terminal[terminal.length - 1];
+            expect(final.result_pending).toBe(false);
+            expect(final.winner_id).toBe(2);
+            expect(final.result_source).toBe('SYSTEM_EARLY_END');
+            expect(final.early_end).toBe(true);
+        } finally {
+            spy.mockRestore();
+        }
     });
 
     it('rejects an unauthorized model actor without closing the competition', async () => {

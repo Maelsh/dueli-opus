@@ -101,8 +101,9 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         // Exactly one call site of the publish contract (the explicit handler).
         expect(page.match(/p2p\.publishLocalStream\(\)/g)?.length).toBe(1);
         const publish = between(page, 'async function publishMedia()', 'window.publishMedia = publishMedia');
-        expect(publish).toContain('if (!p2p || mediaPublished || publishInFlight) return;');
+        expect(publish).toContain('if (!p2p || publishInFlight || endInFlight || endUnknown) return;');
         expect(publish).toContain('p2p.publishLocalStream()');
+        expect(publish).toContain('republishPublishedTracks');
         expect(publish).toContain('tr.nothing_to_publish');
         // Acquisition must not publish (initLocalStream is preview-only).
         const init = between(page, 'async function initCompetitorStream()', 'async function publishMedia()');
@@ -120,14 +121,15 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
 
     it('4. one honest tower action; START and PUBLISH are never separate entries', () => {
         const paint = between(page, 'function paintCompetitorControls()', 'function applyStageVisibility()');
-        // Publish line is driven by mediaPublished/prepReady, never by LIVE.
-        expect(paint).toContain('if (mediaPublished) setPublishState(tr.publish_state_on);');
+        // Publish line is driven by actual sender truth + prepReady, never LIVE.
+        expect(paint).toContain('else if (published.published) setPublishState(tr.publish_state_on);');
         expect(paint).toContain('setPublishState(tr.publish_state_off)');
         expect(paint).toContain('setPublishState(tr.media_none)');
-        expect(paint).toContain("setHidden('endBtn', status !== 'live')");
+        expect(paint).toContain("setHidden('endBtn', buttons.end === 'hidden')");
         // ONE tower entry whose action follows state + role + real media.
-        expect(paint).toContain("setHidden('liveActionBtn', action === 'none')");
+        expect(paint).toContain("setHidden('liveActionBtn', buttons.start === 'hidden')");
         expect(paint).toContain('window.resolveLiveAction');
+        expect(paint).toContain('window.resolveCompetitorButtons');
         expect(paint).toContain('startInFlight: startInFlight');
         expect(paint).toContain('publishInFlight: publishInFlight');
         expect(paint).toContain("const actionBtn = document.getElementById('liveActionBtn')");
@@ -138,8 +140,8 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         expect(page).toMatch(/window\.startCompetition\s*=/);
         expect(page).toMatch(/window\.publishMedia\s*=/);
         expect(page).toMatch(/window\.runLiveAction\s*=/);
-        expect(page).toContain("if (action === 'start') await startCompetition();");
-        expect(page).toContain("else if (action === 'publish') await publishMedia();");
+        expect(page).toContain('await startCompetition();');
+        expect(page).toContain('await publishMedia();');
         // End is guarded by LIVE state and an explicit confirmation that
         // includes the server-authoritative early-withdrawal warning.
         const end = between(page, 'window.endStream = async function()', '// Navigation away never ends');
@@ -255,7 +257,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         expect(styles).toContain('.live-stage-pip');
         expect(styles).toContain('body.live-stage-locked');
         expect(page).toContain('window.toggleExpandStage = function()');
-        expect(page).toContain("stage.classList.toggle('is-swapped', videosSwapped)");
+        expect(page).toContain("stage.classList.toggle('is-swapped', layout === 'remote' && videosSwapped)");
         expect(page).toContain("shell.classList.toggle('is-expanded', stageExpanded)");
         expect(page).toContain("document.body.classList.toggle('live-stage-locked', stageExpanded)");
         // Small pane is draggable inside bounds, hideable, and resets on swap.

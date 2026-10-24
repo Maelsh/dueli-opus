@@ -949,13 +949,16 @@ export class CompetitionController extends BaseController {
                 endedAt = endedRow?.ended_at ?? null;
                 endedEarly = !!endedRow?.ended_early;
                 resultSource = endedRow?.result_source ?? null;
-                winnerId = endedRow?.winner_id ?? null;
+                // Codex P2: the cutoff event is immediate, but it is NOT the
+                // final result. Omit winner_id and mark it pending; the
+                // post-finalize event from ScheduledTaskService carries the
+                // settled winner so connected viewers never need a reload.
                 await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(id, {
                     status: 'completed',
                     ended_at: endedAt,
                     early_end: endedEarly,
                     result_source: resultSource,
-                    winner_id: winnerId,
+                    result_pending: true,
                     updated_at: new Date().toISOString(),
                 });
             } catch (pushError) {

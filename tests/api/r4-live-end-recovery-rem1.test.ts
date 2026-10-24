@@ -4,9 +4,10 @@
  *
  * Required behavior:
  *  - creator and opponent may end; viewers never may; completed is idempotent;
- *  - the guarded live -> completed transition persists ended_at and emits ONE
- *    competition_status event with the persisted ended_at (all roles listen on
- *    the existing competition channel; no refresh);
+ *  - the guarded live -> completed transition persists ended_at and emits a
+ *    pending terminal event, then exactly one post-finalize event with the
+ *    settled result (all roles listen on the existing competition channel;
+ *    no refresh);
  *  - an end request never becomes a recording claim: a client-supplied
  *    vod_url is ignored until verified completion evidence exists;
  *  - automatic end (2h rule) emits the same terminal event;
@@ -105,7 +106,7 @@ describe('R4-LIVE-END-RECOVERY-1 (28.5) end lifecycle', () => {
         expect(opponent.json?.data?.status).toBe('completed');
     });
 
-    it('2. end persists ended_at, ignores a client vod_url claim, and publishes one terminal event', async () => {
+    it('2. end persists ended_at, ignores a client vod_url claim, and publishes pending then final', async () => {
         const claim = 'https://cdn.example/vod/attempted.mp4';
         const res = await post(db, '/api/competitions/7003/end', 'sess-end-creator', { vod_url: claim });
         expect(res.status).toBe(200);
@@ -120,11 +121,19 @@ describe('R4-LIVE-END-RECOVERY-1 (28.5) end lifecycle', () => {
         expect(row?.vod_url).toBeNull();
 
         const events = await statusEvents(db, 7003);
-        expect(events).toHaveLength(1);
+        expect(events).toHaveLength(2);
         expect(events[0]).toMatchObject({
             competition_id: 7003,
             status: 'completed',
             ended_at: row?.ended_at,
+            result_pending: true,
+        });
+        expect(events[0].winner_id).toBeUndefined();
+        expect(events[1]).toMatchObject({
+            competition_id: 7003,
+            status: 'completed',
+            ended_at: row?.ended_at,
+            result_pending: false,
         });
     });
 
@@ -134,7 +143,8 @@ describe('R4-LIVE-END-RECOVERY-1 (28.5) end lifecycle', () => {
         expect(repeat.status).toBe(200);
         expect(repeat.json?.data?.already_completed).toBe(true);
         expect(repeat.json?.data?.ended_at).toBeTruthy();
-        expect(await statusEvents(db, 7003)).toHaveLength(1);
+        // Pending + final from the first end; the repeat publishes nothing.
+        expect(await statusEvents(db, 7003)).toHaveLength(2);
         // The guarded transition writes the final marker once, never twice.
         const finals = await db.prepare(
             'SELECT COUNT(*) AS c FROM recording_finals WHERE competition_id = 7003'
@@ -153,11 +163,18 @@ describe('R4-LIVE-END-RECOVERY-1 (28.5) end lifecycle', () => {
         expect(row?.status).toBe('completed');
         expect(row?.ended_at).toBeTruthy();
         const events = await statusEvents(db, 7005);
-        expect(events).toHaveLength(1);
+        expect(events).toHaveLength(2);
         expect(events[0]).toMatchObject({
             competition_id: 7005,
             status: 'completed',
             ended_at: row?.ended_at,
+            result_pending: true,
+        });
+        expect(events[1]).toMatchObject({
+            competition_id: 7005,
+            status: 'completed',
+            ended_at: row?.ended_at,
+            result_pending: false,
         });
     });
 });

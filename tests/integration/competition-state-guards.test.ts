@@ -52,6 +52,14 @@ function makeRealD1(): ConstructorParameters<typeof CompetitionModel>[0] {
             };
             return stmt;
         },
+        // UNIT30.4 complete() uses db.batch() for the cutoff + SYSTEM credit
+        // statements. The Wrangler CLI runner has no batch API, so execute the
+        // bound statements in order and return the same per-statement results.
+        async batch(statements: Array<{ run: () => Promise<unknown> }>) {
+            const results = [];
+            for (const stmt of statements) results.push(await stmt.run());
+            return results;
+        },
     };
     return db as ConstructorParameters<typeof CompetitionModel>[0];
 }

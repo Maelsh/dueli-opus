@@ -51,7 +51,40 @@ export class ScheduledTaskService {
             }
         }
 
+        // Codex P2: the terminal event may already have gone out as
+        // result_pending. Only after the winner/ELO/payout settle do we emit
+        // the final event; retries re-enter here and converge on the same row.
+        await this.publishFinalCompetitionStatus(competitionId);
         return { winnerId: row?.winner_id ?? null };
+    }
+
+    private async publishFinalCompetitionStatus(competitionId: number): Promise<void> {
+        try {
+            const row = await this.db.prepare(`
+                SELECT status, ended_at, ended_early, result_source, winner_id
+                FROM competitions WHERE id = ?
+            `).bind(competitionId).first<{
+                status: string;
+                ended_at: string | null;
+                ended_early: number | null;
+                result_source: string | null;
+                winner_id: number | null;
+            }>();
+            if (!row || row.status !== 'completed') return;
+            const { EventPusher } = await import('./EventPusher');
+            await new EventPusher(this.db).publishCompetitionStatus(competitionId, {
+                status: 'completed',
+                ended_at: row.ended_at ?? null,
+                early_end: !!row.ended_early,
+                result_source: row.result_source ?? null,
+                winner_id: row.winner_id ?? null,
+                result_pending: false,
+                updated_at: new Date().toISOString(),
+            });
+        } catch (e) {
+            // SSE is display metadata; the persisted row remains authoritative.
+            console.error(`[Finalize] Final status publish failed for #${competitionId}:`, e);
+        }
     }
 
     /**
@@ -358,6 +391,11 @@ export class ScheduledTaskService {
             await new EventPusher(this.db).publishCompetitionStatus(competitionId, {
                 status: 'completed',
                 ended_at: endedRow?.ended_at ?? null,
+                early_end: false,
+                result_source: 'AUTO',
+                // Codex P2: finalizeCompetition() below emits the settled
+                // winner; this cutoff event only tears down the live surface.
+                result_pending: true,
                 updated_at: new Date().toISOString(),
             });
         } catch (pushError) {

@@ -142,6 +142,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 local preview never publishes', () => {
         expect(client.isLocalPublished()).toBe(true);
         expect(client.hasPublishedTrack()).toBe(true);
         expect(client.hasPublishedTrack('video')).toBe(true);
+        expect(client.getPublishedMediaState()).toEqual({ published: true, video: true, audio: true });
 
         expect(client.publishLocalStream()).toBe(true);
         expect(pc.senders.length).toBe(2);
@@ -179,6 +180,9 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 local preview never publishes', () => {
         expect(await client.setPublishedTrack('audio', null)).toBe('replaced');
         expect(pc.senders.length).toBe(2);
         expect(pc.senders.find((s: any) => s.track === null || s.track === undefined)).toBeTruthy();
+        // §15.7 P: a null sender is not published, but the still-live video
+        // sender keeps P true.
+        expect(client.getPublishedMediaState()).toEqual({ published: true, video: true, audio: false });
     });
 
     it('8. renegotiation follows the single-offerer rule (host offers, guest requests)', async () => {

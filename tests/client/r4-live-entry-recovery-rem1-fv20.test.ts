@@ -150,9 +150,19 @@ function loadPublisher(opts: PublisherOptions) {
         record: 0,
         paint: 0,
     };
+    let published = false;
     const p2p = {
         getLocalStream: () => opts.stream,
-        publishLocalStream: () => opts.publishResult !== false,
+        publishLocalStream: () => {
+            const ok = opts.publishResult !== false;
+            if (ok) published = true;
+            return ok;
+        },
+        isLocalPublished: () => published,
+        hasPublishedTrack: () => published,
+        getPublishedMediaState: () => ({ published, video: published, audio: published }),
+        setPublishedTrack: async () => 'replaced',
+        negotiateMediaChange: async () => { /* no-op */ },
         getRoomStatus: async () => opts.status ?? null,
         isP2PConnected: () => opts.connected === true,
         createOffer: async () => { calls.offers++; },
@@ -174,14 +184,19 @@ function loadPublisher(opts: PublisherOptions) {
     // The extracted functions are the page's real bodies, not copies. They run
     // in one scope so publishMedia sees the page-local showToast definition.
     const factory = new Function(
-        'p2p', 'mediaPublished', 'publishInFlight', 'tr', 'setPublishState', 'log', 'userRole',
+        'p2p', 'mediaPublished', 'publishInFlight', 'endInFlight', 'endUnknown',
+        'publishedMediaState', 'republishPublishedTracks',
+        'tr', 'setPublishState', 'log', 'userRole',
         'watchCompetitorOpponent', 'maybeStartRecording', 'paintCompetitorControls',
         'document', 'window', 'isRTL',
         `${toastSrc}\n${publishSrc}\n` +
         'return { publishMedia: publishMedia, isPublished: function() { return mediaPublished; } };'
     );
     const api = factory(
-        p2p, false, false, tr,
+        p2p, false, false, false, false,
+        () => p2p.getPublishedMediaState(),
+        async () => { published = true; return true; },
+        tr,
         (state: string) => calls.states.push(state),
         (msg: string, type: string) => calls.logs.push([msg, type]),
         opts.role,

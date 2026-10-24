@@ -82,6 +82,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         // Fallback to English
         return category.category_name_en || category.name_en || '';
       }
+
+      // UNIT30.4 §15.8: profile fallback values are rendered client-side from
+      // the server row; escape them before they enter innerHTML.
+      function escapeHtmlClient(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, function(ch) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+      }
       
       document.addEventListener('DOMContentLoaded', async () => {
         await checkAuth();
@@ -152,6 +160,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const isCompleted = comp.status === 'completed';
         const isCreator = window.currentUser && window.currentUser.id === comp.creator_id;
         const isOpponent = window.currentUser && window.currentUser.id === comp.opponent_id;
+        // UNIT30.4 §15.8: no-camera fallback uses the current competitor's
+        // profile image (or initial) in the same large/PiP slot — no extra
+        // permission prompt and no third video element.
+        const selfName = isCreator ? comp.creator_name : (isOpponent ? comp.opponent_name : '');
+        const selfAvatar = isCreator ? comp.creator_avatar : (isOpponent ? comp.opponent_avatar : '');
+        const selfInitial = String(selfName || '').trim().charAt(0) || '?';
         // R2-J (H3): invite/request/show-page contract. A pending invitation for
         // the current user replaces the join-request path with Accept/Decline;
         // closed competitions (non-pending or opponent set) expose a translated
@@ -227,8 +241,20 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </div>
                       </div>
                       <div id="localVideoWrapper" class="live-stage-pip" aria-label="\${tr.toggle_my_video}">
-                        <div class="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500">
+                        <div id="localPreviewFrame" class="relative w-full h-full rounded-xl overflow-hidden shadow-2xl border-2 border-purple-500">
                           <video id="localVideo" class="w-full h-full object-cover" autoplay muted playsinline></video>
+                          <!-- UNIT30.4 §15.8: no-camera fallback in the SAME
+                               large/PiP slot; profile image or initial. -->
+                          <div id="localPreviewFallback" class="absolute inset-0 hidden items-center justify-center bg-gray-900" aria-hidden="true">
+                            <div class="text-center px-4">
+                              <img id="localPreviewAvatar" src="\${escapeHtmlClient(selfAvatar || '')}" alt=""
+                                   class="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover mx-auto border-2 border-purple-500 \${selfAvatar ? '' : 'hidden'}">
+                              <div id="localPreviewInitials" class="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-purple-600 text-white text-3xl font-bold flex items-center justify-center mx-auto border-2 border-purple-500 \${selfAvatar ? 'hidden' : ''}">
+                                \${escapeHtmlClient(selfInitial)}
+                              </div>
+                              <p class="mt-2 text-sm text-white">\${escapeHtmlClient(tr.you)}</p>
+                            </div>
+                          </div>
                           <div class="absolute bottom-1 ${rtl ? 'right-1' : 'left-1'} bg-black/60 px-2 py-0.5 rounded text-white text-xs">
                             \${tr.you}
                           </div>
@@ -237,6 +263,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <div id="opponentLabel" class="absolute top-4 ${rtl ? 'right-4' : 'left-4'} bg-black/50 px-3 py-1 rounded-full text-white text-sm z-20">
                         <i class="fas fa-user me-1"></i> \${tr.opponent}
                       </div>
+                      <p id="videoLayoutStatus" class="sr-only" role="status" aria-live="polite"></p>
                       <div id="connectionStatus" class="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-sm hidden z-30">
                         <i class="fas fa-wifi me-2"></i><span>...</span>
                       </div>
@@ -672,20 +699,25 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       async function startCompetition() {
         if (!window.currentUser) { showLoginModal(); return; }
         if (!competitionData || competitionData.status !== 'accepted') return;
-        if (startInFlight) return;
+        if (startInFlight || endInFlight || endUnknown) return;
         startInFlight = true;
+        paintCompetitorControls();
         const btn = document.getElementById('liveActionBtn');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'; }
         const liveUrl = streamServerUrl + '/storage/live/match_' + competitionId + '/playlist.m3u8';
+        const startAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const startTimer = startAbort ? setTimeout(function() { startAbort.abort(); }, 15000) : null;
         try {
           const res = await fetch('/api/competitions/' + competitionId + '/start', {
             method: 'POST',
             headers: competitorAuthHeaders(),
-            body: JSON.stringify({ live_url: liveUrl })
+            body: JSON.stringify({ live_url: liveUrl }),
+            signal: startAbort ? startAbort.signal : undefined
           });
           const data = await res.json().catch(function() { return null; });
           if (res.ok && data && data.success) {
             competitionData.status = 'live';
+            endFailed = false;
             paintCompetitionChrome();
             paintCompetitorControls();
             maybeStartRecording();
@@ -697,7 +729,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } catch (err) {
           console.error(err);
           showToast(tr.start_competition_failed, 'error');
+          // A lost/timed-out response may hide a committed start; the bounded
+          // server resync is the only authority that can turn this LIVE.
+          scheduleStatusResync(0);
         } finally {
+          if (startTimer) clearTimeout(startTimer);
           startInFlight = false;
           if (btn) btn.disabled = false;
           paintCompetitorControls();
@@ -920,6 +956,14 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         terminalTeardownStarted = true;
         if (durationTicker) { clearTimeout(durationTicker); durationTicker = null; }
         if (competitorWatcher) { clearInterval(competitorWatcher); competitorWatcher = null; }
+        // §15.8.4: terminal server state wins over any video layout. Hide the
+        // stage immediately; the completed surface then replaces the live DOM.
+        stopRemoteFrameWatch();
+        if (remoteVideoLossTimer) { clearTimeout(remoteVideoLossTimer); remoteVideoLossTimer = null; }
+        remoteVideoHealthy = false;
+        endInFlight = false;
+        endUnknown = false;
+        applyVideoLayout('terminal');
 
         const stopPromise = stopRecorderForEnd();
         const activeP2P = p2p;
@@ -986,12 +1030,28 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const nextComp = Object.assign({}, prev, next);
         const nextSurface = resolve ? resolve(nextComp, userId) : 'waiting';
         const becameCompleted = prev.status !== 'completed' && nextComp.status === 'completed';
+        const resultChanged = nextComp.status === 'completed' && (
+          (nextComp.winner_id ?? null) !== (prev.winner_id ?? null)
+          || (nextComp.result_source ?? null) !== (prev.result_source ?? null)
+          || (nextComp.ended_early ?? null) !== (prev.ended_early ?? null)
+        );
         const wasParticipant = !!userId && (userId === nextComp.creator_id || userId === nextComp.opponent_id);
         // The truthful surface marker for THIS competition's completed state
         // (id-based: unrelated fields arriving later never invalidate it).
         const completionKey = nextComp.status === 'completed'
           ? String(nextComp.id || competitionId) + ':completed'
           : null;
+        // §15.7: the server row is authoritative for the End outcome. A
+        // definite failure is retryable; an unknown request is resolved by
+        // the bounded resync, never by a local guess.
+        if (nextComp.status === 'completed') {
+          endInFlight = false;
+          endUnknown = false;
+          endFailed = false;
+        } else if (endUnknown) {
+          endUnknown = false;
+          endFailed = true;
+        }
         competitionData = nextComp;
 
         // A28-SURFACE: cleanup/teardown are best-effort steps on the way to
@@ -1024,7 +1084,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         // completed surface whose previous render threw (state is already
         // completed, so becameCompleted is false on the retry).
         const completedNeedsRender = completionKey !== null && completedSurfaceKey !== completionKey;
-        if (becameCompleted || (!competitorStarted && nextSurface !== prevSurface) || completedNeedsRender) {
+        if (becameCompleted || resultChanged || (!competitorStarted && nextSurface !== prevSurface) || completedNeedsRender) {
           try {
             renderCompetition(nextComp);
             if (completionKey !== null) completedSurfaceKey = completionKey;
@@ -1099,6 +1159,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
               if (payload.opponent_id !== undefined) patch.opponent_id = payload.opponent_id;
               if (payload.started_at) patch.started_at = payload.started_at;
               if (payload.ended_at) patch.ended_at = payload.ended_at;
+              // Codex P2: the first terminal event may be result_pending;
+              // the post-finalize event carries the real winner. Apply it
+              // in place so a connected viewer never needs a reload.
+              if (payload.winner_id !== undefined) patch.winner_id = payload.winner_id;
+              if (payload.result_source !== undefined) patch.result_source = payload.result_source;
+              if (payload.early_end !== undefined) patch.ended_early = payload.early_end ? 1 : 0;
+              if (payload.result_pending === false) completedSurfaceKey = null;
               applyCompetitionState(patch);
             }
             scheduleStatusResync(0);
@@ -1848,6 +1915,21 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       let localVideoVisible = true;
       let isScreenSharing = false;
       let currentFacingMode = 'user';
+      // UNIT30.4 §15.7: End visibility/loading is independent of start/publish.
+      let endInFlight = false;
+      let endUnknown = false;
+      let endFailed = false;
+      let competitorConnectionState = null;
+      // UNIT30.4 §15.8: V is actual remote-video presence (frame evidence),
+      // never the LIVE flag or a generic connection. The short loss debounce
+      // only prevents flicker; it never decides the competition state.
+      let remoteVideoHealthy = false;
+      let remoteVideoEverSeen = false;
+      let remoteVideoLossTimer = null;
+      let remoteFrameWatchActive = false;
+      let remoteFrameCallbackId = null;
+      let remoteTrackStream = null;
+      let competitorVideoLayout = 'local';
       const streamServerUrl = 'https://maelshpro.com/ffmpeg';
       
       // ===== Embedded Viewer State =====
@@ -2559,6 +2641,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       }
 
       function updateCompetitorStatus(state) {
+        competitorConnectionState = state;
         const el = document.getElementById('connectionStatus');
         if (!el) return;
         el.classList.remove('hidden');
@@ -2590,6 +2673,24 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         return stream.getTracks().find(function(t) { return t.kind === kind; }) || null;
       }
 
+      // §15.7.3 source of truth for P: actual RTCRtpSender tracks, not a
+      // click, not the LIVE flag, and not a stale local boolean.
+      function publishedMediaState() {
+        if (!p2p) return { published: false, video: false, audio: false };
+        if (typeof p2p.getPublishedMediaState === 'function') {
+          return p2p.getPublishedMediaState();
+        }
+        const published = !!(p2p.isLocalPublished()
+          && (p2p.hasPublishedTrack('video') || p2p.hasPublishedTrack('audio')));
+        return { published: published, video: published, audio: published };
+      }
+
+      function competitorServerFinal() {
+        if (!competitionData) return false;
+        const status = competitionData.status;
+        return status === 'completed' || status === 'ended' || status === 'cancelled';
+      }
+
       function paintCompetitorControls() {
         if (!document.getElementById('competitorControls')) return;
         const status = competitionData ? competitionData.status : null;
@@ -2597,35 +2698,69 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const el = document.getElementById(id);
           if (el) el.classList.toggle('hidden', !!hidden);
         };
-        setHidden('endBtn', status !== 'live');
-        // ONE tower entry: host accepted => start; either competitor with a
-        // real unpublished local source => publish. Live alone never grants
-        // publish consent, and the opponent never gets a start action here.
+        // §15.7: P is the actual published-sender state. Never infer it from
+        // the LIVE flag or from a previous click.
+        const published = publishedMediaState();
+        mediaPublished = published.published;
         const preview = p2p ? p2p.getLocalStream() : null;
-        const hasMedia = !!(preview && preview.getTracks().length > 0);
+        const hasMedia = !!(preview && preview.getTracks().some(function(t) {
+          return !t.readyState || t.readyState === 'live';
+        }));
         const action = window.resolveLiveAction
           ? window.resolveLiveAction({
               status: status,
               role: userRole,
               hasOpponent: !!(competitionData && competitionData.opponent_id),
               hasMedia: hasMedia,
-              mediaPublished: mediaPublished,
+              mediaPublished: published.published,
               startInFlight: startInFlight,
               publishInFlight: publishInFlight,
             })
           : 'none';
+        const buttons = window.resolveCompetitorButtons
+          ? window.resolveCompetitorButtons({
+              status: status,
+              role: userRole,
+              mediaPublished: published.published,
+              startInFlight: startInFlight,
+              publishInFlight: publishInFlight,
+              endInFlight: endInFlight,
+              endUnknown: endUnknown,
+            })
+          : { start: action === 'none' ? 'hidden' : 'visible', end: 'hidden', progress: null };
         const actionBtn = document.getElementById('liveActionBtn');
-        setHidden('liveActionBtn', action === 'none');
+        setHidden('liveActionBtn', buttons.start === 'hidden');
+        setHidden('endBtn', buttons.end === 'hidden');
         if (actionBtn) {
-          const label = action === 'start'
-            ? tr.start_competition
-            : (userRole === 'host' ? tr.prep_publish_host : tr.prep_publish_guest);
+          const starting = buttons.start === 'loading';
+          const label = starting
+            ? (buttons.progress === 'publishing' ? tr.prep_publishing : tr.prep_starting)
+            : (action === 'start'
+              ? tr.start_competition
+              : (status === 'accepted' && userRole === 'host'
+                ? tr.start_competition
+                : (userRole === 'host' ? tr.prep_publish_host : tr.prep_publish_guest)));
           actionBtn.setAttribute('aria-label', label);
           actionBtn.setAttribute('title', label);
-          actionBtn.disabled = startInFlight || publishInFlight;
-          actionBtn.innerHTML = (startInFlight || publishInFlight)
+          actionBtn.setAttribute('aria-busy', starting ? 'true' : 'false');
+          actionBtn.disabled = starting;
+          actionBtn.innerHTML = starting
             ? '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'
             : '<i class="fas fa-broadcast-tower" aria-hidden="true"></i>';
+        }
+        const endBtn = document.getElementById('endBtn');
+        if (endBtn) {
+          const ending = buttons.end === 'loading';
+          const endLabel = ending
+            ? (buttons.progress === 'verifying' ? tr.prep_verifying_end : tr.prep_ending)
+            : tr.end_competition;
+          endBtn.setAttribute('aria-label', endLabel);
+          endBtn.setAttribute('title', endLabel);
+          endBtn.setAttribute('aria-busy', ending ? 'true' : 'false');
+          endBtn.disabled = ending;
+          endBtn.innerHTML = ending
+            ? '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>'
+            : '<i class="fas fa-stop-circle" aria-hidden="true"></i>';
         }
         setHidden('screenBtn', !supportsScreenShare());
 
@@ -2668,21 +2803,246 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
 
         // The prep/publish line never claims publishing because the
-        // competition is LIVE — only because this party consented.
-        if (mediaPublished) setPublishState(tr.publish_state_on);
+        // competition is LIVE — only because this party consented and the
+        // sender tracks still exist.
+        if (buttons.progress === 'starting') setPublishState(tr.prep_starting);
+        else if (buttons.progress === 'publishing') setPublishState(tr.prep_publishing);
+        else if (buttons.progress === 'ending') setPublishState(tr.prep_ending);
+        else if (buttons.progress === 'verifying') setPublishState(tr.prep_verifying_end);
+        else if (buttons.progress === 'waiting') {
+          setPublishState(userRole === 'host' ? tr.prep_waiting_host : tr.prep_waiting_guest);
+        } else if (endFailed) setPublishState(tr.end_competition_failed);
+        else if (published.published && (competitorConnectionState === 'disconnected'
+          || competitorConnectionState === 'failed' || competitorConnectionState === 'closed')) {
+          setPublishState(tr.reconnecting);
+        } else if (published.published) setPublishState(tr.publish_state_on);
         else if (prepReady && !localMediaAvailable) setPublishState(tr.media_none);
         else if (prepReady) setPublishState(tr.publish_state_off);
+      }
+
+      // §15.8 V: actual remote-video presence, backed by frame progress or
+      // the browser's timeupdate/resize evidence. A video element, a stopped
+      // track or a generic P2P 'connected' state is NOT enough.
+      function remoteVideoTrackLive() {
+        const video = document.getElementById('remoteVideo');
+        const stream = video && video.srcObject;
+        if (!stream || typeof stream.getVideoTracks !== 'function') return false;
+        const tracks = stream.getVideoTracks();
+        if (!tracks || !tracks.length) return false;
+        const track = tracks[0];
+        return !!(track && track.readyState !== 'ended'
+          && track.enabled !== false && !track.muted);
+      }
+
+      function remoteVideoPresent() {
+        const video = document.getElementById('remoteVideo');
+        if (!remoteVideoHealthy || !video || !video.srcObject) return false;
+        if (!remoteVideoTrackLive()) return false;
+        if (video.readyState < 2 || !video.videoWidth) return false;
+        return true;
+      }
+
+      function stopRemoteFrameWatch() {
+        const video = document.getElementById('remoteVideo');
+        remoteFrameWatchActive = false;
+        if (video && remoteFrameCallbackId !== null
+          && typeof video.cancelVideoFrameCallback === 'function') {
+          try { video.cancelVideoFrameCallback(remoteFrameCallbackId); } catch (e) {}
+        }
+        remoteFrameCallbackId = null;
+      }
+
+      function startRemoteFrameWatch() {
+        const video = document.getElementById('remoteVideo');
+        if (!video || remoteFrameWatchActive || terminalTeardownStarted) return;
+        if (typeof video.requestVideoFrameCallback !== 'function') return;
+        remoteFrameWatchActive = true;
+        const onFrame = function() {
+          if (!remoteFrameWatchActive || terminalTeardownStarted || competitorServerFinal()) return;
+          if (video.readyState >= 2 && video.videoWidth > 0) {
+            markRemoteVideoHealthy('frame');
+          }
+          remoteFrameCallbackId = video.requestVideoFrameCallback(onFrame);
+        };
+        remoteFrameCallbackId = video.requestVideoFrameCallback(onFrame);
+      }
+
+      function markRemoteVideoHealthy(source) {
+        if (terminalTeardownStarted || competitorServerFinal()) return;
+        // A live element with an ended/muted/disabled video track is not V.
+        // If it was healthy, transition to state 3 instead of leaving a stale
+        // or black remote frame on the large surface.
+        if (!remoteVideoTrackLive()) {
+          if (remoteVideoHealthy) markRemoteVideoLost('track-inactive');
+          return;
+        }
+        if (remoteVideoLossTimer) {
+          clearTimeout(remoteVideoLossTimer);
+          remoteVideoLossTimer = null;
+        }
+        const wasLocal = !remoteVideoHealthy;
+        remoteVideoHealthy = true;
+        remoteVideoEverSeen = true;
+        // Automatic state 4 always returns to state 2 (remote large/local
+        // PiP), taking precedence over a previous manual swap.
+        if (wasLocal) videosSwapped = false;
+        applyVideoLayout(source || 'frame');
+        // Re-arm the frame watch after a loss; harmless when already active.
+        startRemoteFrameWatch();
+      }
+
+      function scheduleRemoteVideoLoss(reason) {
+        if (remoteVideoLossTimer || terminalTeardownStarted) return;
+        // Short anti-flicker debounce only. It never changes S and never
+        // decides that the competition ended.
+        remoteVideoLossTimer = setTimeout(function() {
+          remoteVideoLossTimer = null;
+          if (!remoteVideoPresent()) markRemoteVideoLost(reason);
+        }, 350);
+      }
+
+      function markRemoteVideoLost(reason) {
+        if (remoteVideoLossTimer) {
+          clearTimeout(remoteVideoLossTimer);
+          remoteVideoLossTimer = null;
+        }
+        remoteVideoHealthy = false;
+        videosSwapped = false;
+        // Keep the frame-callback chain armed: the remote element remains
+        // composited (opacity 0), so a returning frame is the state-4 signal.
+        applyVideoLayout(reason || 'lost');
+      }
+
+      function bindRemoteTrackSignals(stream) {
+        if (!stream) return;
+        remoteTrackStream = stream;
+        if (typeof stream.getVideoTracks !== 'function') return;
+        stream.getVideoTracks().forEach(function(track) {
+          if (!track || track.__dueliLayoutBound === '1') return;
+          if (typeof track.addEventListener !== 'function') return;
+          try { track.__dueliLayoutBound = '1'; } catch (e) { /* frozen track */ }
+          track.addEventListener('mute', function() { scheduleRemoteVideoLoss('track-mute'); });
+          track.addEventListener('unmute', function() {
+            const video = document.getElementById('remoteVideo');
+            if (video && video.readyState >= 2 && video.videoWidth > 0) {
+              markRemoteVideoHealthy('track-unmute');
+            }
+          });
+          track.addEventListener('ended', function() { markRemoteVideoLost('track-ended'); });
+        });
+      }
+
+      function bindRemoteVideoSignals() {
+        const video = document.getElementById('remoteVideo');
+        if (!video) return;
+        bindRemoteTrackSignals(video.srcObject);
+        if (video.__dueliLayoutBound !== '1') {
+          video.__dueliLayoutBound = '1';
+          ['loadeddata', 'loadedmetadata', 'playing', 'resize'].forEach(function(eventName) {
+            video.addEventListener(eventName, function() {
+              if (video.readyState >= 2 && video.videoWidth > 0) {
+                markRemoteVideoHealthy(eventName);
+              }
+            });
+          });
+          video.addEventListener('timeupdate', function() {
+            if (video.readyState >= 2 && video.videoWidth > 0 && !video.paused) {
+              markRemoteVideoHealthy('timeupdate');
+            }
+          });
+          ['waiting', 'stalled', 'suspend', 'pause', 'ended', 'emptied', 'error'].forEach(function(eventName) {
+            video.addEventListener(eventName, function() { scheduleRemoteVideoLoss(eventName); });
+          });
+        }
+        startRemoteFrameWatch();
+      }
+
+      function updateLocalPreviewFallback() {
+        const video = document.getElementById('localVideo');
+        const fallback = document.getElementById('localPreviewFallback');
+        const track = localTrackOf('video');
+        const videoOn = !!(track && track.enabled
+          && (!track.readyState || track.readyState === 'live'));
+        const showVideo = videoOn && localVideoVisible;
+        if (video) video.classList.toggle('hidden', !showVideo);
+        if (fallback) {
+          fallback.classList.toggle('hidden', showVideo);
+          // Inline display makes the fallback deterministic even if a CSS
+          // utility order changes; the class remains the no-JS default.
+          fallback.style.display = showVideo ? 'none' : 'flex';
+        }
+      }
+
+      function applyVideoLayout(reason) {
+        const stage = document.getElementById('competitorView');
+        if (!stage) return;
+        const layout = window.resolveCompetitorVideoLayout
+          ? window.resolveCompetitorVideoLayout({
+              serverFinal: competitorServerFinal(),
+              remoteVideoPresent: remoteVideoPresent(),
+            })
+          : (remoteVideoPresent() ? 'remote' : 'local');
+        const layoutChanged = competitorVideoLayout !== layout;
+        // Frame/timeupdate signals can fire 30-60 times per second; once the
+        // layout is already correct they must not churn DOM/ARIA.
+        const frameSignal = reason === 'frame' || reason === 'timeupdate'
+          || reason === 'loadeddata' || reason === 'playing' || reason === 'resize'
+          || reason === 'track-unmute';
+        if (!layoutChanged && frameSignal) return;
+        competitorVideoLayout = layout;
+        stage.classList.toggle('is-local-main', layout === 'local');
+        stage.classList.toggle('is-remote-main', layout === 'remote');
+        stage.classList.toggle('is-terminal', layout === 'terminal');
+        stage.classList.toggle('is-swapped', layout === 'remote' && videosSwapped);
+
+        const localWrapper = document.getElementById('localVideoWrapper');
+        const remoteWrapper = document.getElementById('remoteVideoWrapper');
+        if (localWrapper) {
+          // State 2 keeps the local slot even when the camera is off: the
+          // profile fallback then occupies the PiP, per §15.8. State 1/3
+          // already uses the same fallback in the large slot.
+          localWrapper.style.display = layout === 'terminal' ? 'none' : '';
+        }
+        if (remoteWrapper) {
+          // Keep the remote element rendered while it is visually hidden:
+          // requestVideoFrameCallback needs it composited to detect the
+          // opponent's return. opacity/pointer-events prevent a stale frame
+          // and any interaction; terminal state is the only hard display:none.
+          remoteWrapper.style.display = layout === 'terminal' ? 'none' : '';
+          remoteWrapper.setAttribute('aria-hidden', layout === 'local' ? 'true' : 'false');
+        }
+        const waitingOverlay = document.getElementById('waitingOverlay');
+        if (waitingOverlay) waitingOverlay.classList.add('hidden');
+        const opponentLabel = document.getElementById('opponentLabel');
+        if (opponentLabel) opponentLabel.classList.toggle('hidden', layout !== 'remote');
+        const swapBtn = document.getElementById('swapBtn');
+        if (swapBtn) swapBtn.classList.toggle('hidden', layout !== 'remote');
+        updateLocalPreviewFallback();
+        // A dragged PiP position must not leak into the large local surface
+        // (or back into the PiP) when the automatic state changes.
+        if (layoutChanged) resetPipPosition();
+
+        const statusText = layout === 'terminal'
+          ? tr.video_layout_terminal
+          : layout === 'remote'
+            ? tr.video_layout_remote
+            : (remoteVideoEverSeen ? tr.video_layout_lost : tr.video_layout_waiting);
+        stage.setAttribute('aria-label', statusText);
+        const status = document.getElementById('videoLayoutStatus');
+        if (status) status.textContent = statusText;
+        // Keep the control line truthful when the layout reason changes.
+        if (reason === 'lost' || reason === 'connection' || reason === 'track-ended') {
+          paintCompetitorControls();
+        }
       }
 
       function applyStageVisibility() {
         const shell = document.getElementById('competitorShell');
         const stage = document.getElementById('competitorView');
-        const localWrapper = document.getElementById('localVideoWrapper');
-        if (stage) stage.classList.toggle('is-swapped', videosSwapped);
         // Expand is the in-page theater shell: the stage AND its toolbar stay
         // inside the fixed container. Fullscreen is a separate browser mode.
         if (shell) shell.classList.toggle('is-expanded', stageExpanded);
-        if (localWrapper) localWrapper.style.display = localVideoVisible ? '' : 'none';
+        applyVideoLayout('stage');
         document.body.classList.toggle('live-stage-locked', stageExpanded);
         const expandBtn = document.getElementById('expandBtn');
         if (expandBtn) {
@@ -2704,6 +3064,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         el.dataset.pipBound = '1';
         el.addEventListener('pointerdown', function(ev) {
           if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+          // Manual PiP drag exists only in state 2 (remote large + local PiP).
+          if (competitorVideoLayout !== 'remote') return;
           const stage = document.getElementById('competitorView');
           if (!stage) return;
           // Only the CURRENT small pane is draggable: local in normal mode,
@@ -2743,6 +3105,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         applyStageVisibility();
         makePipDraggable(document.getElementById('localVideoWrapper'));
         makePipDraggable(document.getElementById('remoteVideoWrapper'));
+        bindRemoteVideoSignals();
+        applyVideoLayout('setup');
         const remote = document.getElementById('remoteVideo');
         if (remote) remote.muted = speakerMuted;
         // Fullscreen icon/aria stays truthful for the in-page and expanded
@@ -2973,6 +3337,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           if (hadScreenAudio) await syncPublishedTrack('audio', localTrackOf('audio'));
         }
         if (reason !== 'switch-camera') showToast(tr.screen_share_stopped, 'info');
+        applyVideoLayout('local-media');
         paintCompetitorControls();
       }
       window.stopScreenShare = stopScreenShare;
@@ -3014,12 +3379,37 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           role: userRole,
           userId: me,
           onRemoteStream: function(stream) {
+            const isNewStream = remoteTrackStream !== stream;
+            // Re-arm frame evidence for every stream/track update; the old
+            // callback may have belonged to an ended track.
+            stopRemoteFrameWatch();
             remoteVideo.srcObject = stream;
+            if (isNewStream) {
+              // A new stream is not V yet: never leave the previous stream's
+              // last frame on screen as if it were the opponent's live video.
+              remoteVideoHealthy = false;
+              videosSwapped = false;
+            }
+            bindRemoteVideoSignals();
+            // Arrival of a stream/track is not V. Keep the local preview
+            // large until frame evidence proves the opponent video is live.
+            if (typeof remoteVideo.play === 'function') {
+              try { remoteVideo.play().catch(function() {}); } catch (e) {}
+            }
             if (waitingOverlay) waitingOverlay.classList.add('hidden');
+            applyVideoLayout('stream-arrived');
             maybeStartRecording();
           },
           onConnectionStateChange: function(state) {
+            competitorConnectionState = state;
             updateCompetitorStatus(state);
+            // C lost means V is lost; C connected alone never proves V.
+            if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+              markRemoteVideoLost('connection');
+            } else {
+              applyVideoLayout('connection-' + state);
+            }
+            paintCompetitorControls();
           },
           onError: function(error) {
             log('P2P error: ' + (error && error.message ? error.message : error), 'error');
@@ -3095,10 +3485,40 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // R4-LIVE-ENTRY-RECOVERY-REM1: explicit publish consent gate. Nothing
       // here runs from acquisition, invite acceptance, LIVE state or refresh —
       // only this handler attaches local tracks to the peer connection.
-      async function publishMedia() {
-        if (!p2p || mediaPublished || publishInFlight) return;
+      // §15.7.5: after an explicit source stop the sender may still exist with
+      // a null track. A fresh explicit publish re-attaches the live local
+      // tracks through the existing setPublishedTrack path; it never runs
+      // automatically and never adds a new stop/exit action.
+      async function republishPublishedTracks() {
+        if (!p2p) return false;
         const stream = p2p.getLocalStream();
-        const hasTracks = !!(stream && stream.getTracks().length > 0);
+        if (!stream) return false;
+        const tracks = stream.getTracks().filter(function(track) {
+          return !track.readyState || track.readyState === 'live';
+        });
+        if (!tracks.length) return false;
+        let added = false;
+        for (let i = 0; i < tracks.length; i++) {
+          const mode = await p2p.setPublishedTrack(tracks[i].kind, tracks[i]);
+          if (mode === 'added') added = true;
+        }
+        if (added) await p2p.negotiateMediaChange();
+        return publishedMediaState().published;
+      }
+
+      async function publishMedia() {
+        if (!p2p || publishInFlight || endInFlight || endUnknown) return;
+        const already = publishedMediaState();
+        if (already.published) {
+          mediaPublished = true;
+          endFailed = false;
+          paintCompetitorControls();
+          return;
+        }
+        const stream = p2p.getLocalStream();
+        const hasTracks = !!(stream && stream.getTracks().some(function(track) {
+          return !track.readyState || track.readyState === 'live';
+        }));
         if (!hasTracks) {
           // Honest refusal: there is nothing to publish yet.
           showToast(tr.nothing_to_publish, 'error');
@@ -3106,15 +3526,21 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           return;
         }
         publishInFlight = true;
+        paintCompetitorControls();
         const publishBtn = document.getElementById('liveActionBtn');
         if (publishBtn) {
           publishBtn.disabled = true;
           setPublishState(tr.prep_publishing);
         }
         try {
-          const ok = p2p.publishLocalStream();
+          const ok = p2p.isLocalPublished()
+            ? await republishPublishedTracks()
+            : p2p.publishLocalStream();
           if (!ok) throw new Error('publishLocalStream returned false');
+          const actual = publishedMediaState();
+          if (!actual.published) throw new Error('no live published sender');
           mediaPublished = true;
+          endFailed = false;
           log('Local media published after explicit consent', 'success');
           showToast(tr.prep_published, 'success');
           if (userRole === 'host') {
@@ -3143,21 +3569,36 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // actions. startCompetition/publishMedia remain exposed for their
       // existing contracts (and the start API is never removed).
       window.runLiveAction = async function() {
-        if (!competitionData) return;
+        if (!competitionData || endInFlight || endUnknown) return;
         const preview = p2p ? p2p.getLocalStream() : null;
+        const hasMedia = !!(preview && preview.getTracks().some(function(track) {
+          return !track.readyState || track.readyState === 'live';
+        }));
+        const published = publishedMediaState().published;
         const action = window.resolveLiveAction
           ? window.resolveLiveAction({
               status: competitionData.status,
               role: userRole,
               hasOpponent: !!competitionData.opponent_id,
-              hasMedia: !!(preview && preview.getTracks().length > 0),
-              mediaPublished: mediaPublished,
+              hasMedia: hasMedia,
+              mediaPublished: published,
               startInFlight: startInFlight,
               publishInFlight: publishInFlight,
             })
           : 'none';
-        if (action === 'start') await startCompetition();
-        else if (action === 'publish') await publishMedia();
+        if (action === 'start') {
+          await startCompetition();
+        } else if (action === 'publish') {
+          await publishMedia();
+        } else if (!hasMedia) {
+          showToast(tr.nothing_to_publish, 'error');
+          setPublishState(tr.media_none);
+        } else if (competitionData.status === 'accepted' && userRole === 'opponent' && published) {
+          showToast(tr.prep_waiting_host, 'info');
+        } else if (competitionData.status === 'accepted' && userRole === 'host'
+          && !competitionData.opponent_id) {
+          showToast(tr.awaiting_opponent, 'info');
+        }
       };
       
       // Recording stays host-only AND requires both the explicit publish and
@@ -3276,6 +3717,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       // elements — the stage never gains a third video.
       window.swapVideos = function() {
         if (!document.getElementById('competitorView')) return;
+        // §15.8: manual swap exists only in state 2. States 1/3 own the
+        // layout (local large, no PiP) and automatic 3/4 transitions take
+        // precedence, so a stale swap can never hide the returning remote.
+        if (competitorVideoLayout !== 'remote') return;
         videosSwapped = !videosSwapped;
         resetPipPosition();
         applyStageVisibility();
@@ -3324,6 +3769,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           localMediaAvailable = true;
           videoMuted = false;
           await syncPublishedTrack('video', track);
+          applyVideoLayout('local-media');
           paintCompetitorControls();
         } catch (err) {
           log('Camera switch failed: ' + (err && err.message ? err.message : err), 'error');
@@ -3392,6 +3838,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           await syncPublishedTrack('video', screenVideo);
           if (screenAudio) await syncPublishedTrack('audio', screenAudio);
         }
+        applyVideoLayout('local-media');
         paintCompetitorControls();
       };
       
@@ -3425,6 +3872,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           await acquireCameraVideo();
         }
         await syncPublishedTrack('video', localTrackOf('video'));
+        applyVideoLayout('local-media');
         paintCompetitorControls();
       };
       
@@ -3463,6 +3911,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         // The end button only renders while LIVE; this guard keeps the handler
         // honest for any race (a non-live end would orphan the state).
         if (!competitionData || competitionData.status !== 'live') return;
+        // §15.7.5: no duplicate end request and no start/publish race.
+        if (endInFlight || startInFlight || publishInFlight) return;
         const early = isEarlyEndWindow();
         const confirmText = early
           ? (tr.early_end_confirm || tr.end_competition_confirm || tr.end_stream_confirm)
@@ -3470,6 +3920,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         if (!confirm(confirmText)) return; // cancel sends NOTHING to the server
 
         log('Ending stream...', 'info');
+        endInFlight = true;
+        endUnknown = false;
+        endFailed = false;
+        paintCompetitorControls();
 
         // The official transition must not wait for recorder drain: start the
         // request immediately, then apply the authoritative completed state.
@@ -3477,11 +3931,15 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         let ended = false;
         let endedAt = null;
         let endResult = null;
+        let requestFailed = false;
+        const endAbort = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const endTimer = endAbort ? setTimeout(function() { endAbort.abort(); }, 12000) : null;
         try {
           const endRes = await fetch('/api/competitions/' + competitionId + '/end', {
             method: 'POST',
             headers: competitorAuthHeaders(),
-            body: JSON.stringify({})
+            body: JSON.stringify({}),
+            signal: endAbort ? endAbort.signal : undefined
           });
           const endData = await endRes.json().catch(function() { return null; });
           if (endRes.ok && endData && endData.success !== false) {
@@ -3489,13 +3947,21 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             endedAt = (endData.data && endData.data.ended_at) || null;
             endResult = endData.data || null;
           } else {
+            // 4xx (except 408) is a definite refusal. 5xx/409/timeout may
+            // hide a committed cutoff, so the bounded GET resync decides.
+            requestFailed = endRes.status >= 400 && endRes.status < 500 && endRes.status !== 408;
             log('Warning: ' + ((endData && endData.error) || 'Could not update status'), 'warn');
           }
         } catch (err) {
           log('End stream error: ' + (err && err.message ? err.message : err), 'error');
+        } finally {
+          if (endTimer) clearTimeout(endTimer);
         }
 
         if (ended) {
+          endInFlight = false;
+          endUnknown = false;
+          endFailed = false;
           // No reload: the same page becomes the recording viewer. Track
           // release, timer cleanup and recorder drain are single-shot.
           applyCompetitionState({
@@ -3506,6 +3972,23 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             winner_id: endResult ? endResult.winner_id : null,
           });
           showToast(tr.status_completed, 'success');
+        } else if (requestFailed) {
+          // A definite refusal (permissions/state/validation) is safe to
+          // retry; it is NOT an end and must never show the start button.
+          endInFlight = false;
+          endUnknown = false;
+          endFailed = true;
+          showToast(tr.end_competition_failed, 'error');
+          paintCompetitorControls();
+        } else {
+          // Network/timeout may hide a committed server end. Keep the End
+          // action in "verifying" (no start/end pair) and let the bounded
+          // server resync decide; never guess locally.
+          endInFlight = false;
+          endUnknown = true;
+          endFailed = false;
+          showToast(tr.prep_verifying_end, 'info');
+          paintCompetitorControls();
         }
         // Network/response failure may still hide a committed server end;
         // the bounded GET resync is the authority, never a local guess.
