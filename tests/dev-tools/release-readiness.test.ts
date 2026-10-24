@@ -33,6 +33,16 @@ function goodInput(m = manifest()) {
         pendingText: 'No migrations to apply!\n',
         schema: {
             tables: {
+                // Baseline-0043 surface: server-authoritative early-end fields
+                // and the separate system-credit ledger.
+                competitions: [
+                    'ended_early', 'ended_by_user_id', 'end_reason',
+                    'result_source', 'duration_seconds', 'result_version',
+                ],
+                competition_result_credits: [
+                    'id', 'competition_id', 'competitor_id', 'stars', 'source',
+                    'reason', 'duration_seconds', 'version', 'created_at',
+                ],
                 explore_result_sessions: [
                     'id', 'surface', 'identity_kind', 'identity_key', 'filters_canonical',
                     'lang', 'status', 'total_count', 'chunk_size', 'created_at', 'expires_at',
@@ -83,7 +93,7 @@ function goodInput(m = manifest()) {
                     'user_id', 'expires_at', 'lease_generation', 'object_path', 'max_bytes',
                 ],
             },
-            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread', 'idx_withdrawal_requests_payout_method', 'idx_ratings_competitor', 'idx_competitions_creator', 'idx_competitions_opponent', 'idx_users_active', 'idx_user_blocks_blocked', 'idx_sse_channel_id', 'idx_recording_leases_holder', 'idx_recording_chunks_order', 'idx_recording_chunks_state', 'idx_chunk_keys_lookup', 'idx_chunk_keys_owner', 'idx_chunk_keys_bound'],
+            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread', 'idx_withdrawal_requests_payout_method', 'idx_ratings_competitor', 'idx_competitions_creator', 'idx_competitions_opponent', 'idx_users_active', 'idx_user_blocks_blocked', 'idx_sse_channel_id', 'idx_recording_leases_holder', 'idx_recording_chunks_order', 'idx_recording_chunks_state', 'idx_chunk_keys_lookup', 'idx_chunk_keys_owner', 'idx_chunk_keys_bound', 'idx_competitions_result_source', 'idx_result_credits_competitor'],
         },
     };
 }
@@ -107,9 +117,9 @@ describe('release readiness gate', () => {
         expect(m.known_history).toContain(req.file);
     });
 
-    it('manifest baseline-0042 requires 0034 with a hash matching the repo file', () => {
+    it('manifest baseline-0043 requires 0034 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
         const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -121,9 +131,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_competition_views_day');
     });
 
-    it('manifest baseline-0042 requires 0035 with a hash matching the repo file', () => {
+    it('manifest baseline-0043 requires 0035 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
         const req = m.required_migrations.find((x) => x.file === '0035_comments_video_offset.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -132,9 +142,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.tables.comments).toEqual(expect.arrayContaining(['video_offset']));
     });
 
-    it('manifest baseline-0039 requires 0036 with a hash matching the repo file', () => {
+    it('manifest baseline-0043 requires 0036 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
         const req = m.required_migrations.find((x) => x.file === '0036_managed_documents.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -147,9 +157,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_managed_documents_status');
     });
 
-    it('manifest baseline-0042 requires 0037 with a hash matching the repo file', () => {
+    it('manifest baseline-0043 requires 0037 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
         const req = m.required_migrations.find((x) => x.file === '0037_support_messaging.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -165,9 +175,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_support_messages_thread');
     });
 
-    it('manifest baseline-0042 requires 0038 with a hash matching the repo file', () => {
+    it('manifest baseline-0043 requires 0038 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
         const req = m.required_migrations.find((x) => x.file === '0038_withdrawal_payout_snapshot.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -179,9 +189,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_withdrawal_requests_payout_method');
     });
 
-    it('manifest baseline-0042 requires 0039 with a hash matching the repo file', () => {
+    it('manifest baseline-0043 requires 0039 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
         const req = m.required_migrations.find((x) => x.file === '0039_r4_db_opt1_indexes.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -200,9 +210,9 @@ describe('release readiness gate', () => {
         }
     });
 
-    it('manifest baseline-0042 requires 0040/0041/0042 with hashes matching the repo files', () => {
+    it('manifest baseline-0043 requires 0040/0041/0042 with hashes matching the repo files', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
         for (const file of ['0040_recording_leases.sql', '0041_chunk_index.sql', '0042_chunk_key_binding.sql']) {
             const req = m.required_migrations.find((x) => x.file === file);
             expect(req).toBeTruthy();
@@ -227,6 +237,75 @@ describe('release readiness gate', () => {
         }
     });
 
+    it('manifest baseline-0043 requires 0043 with hash and schema; applied state passes', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        const req = m.required_migrations.find((x) => x.file === '0043_competition_early_end.sql');
+        expect(req).toBeTruthy();
+        expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        expect(m.required_schema.tables.competitions).toEqual(
+            expect.arrayContaining([
+                'ended_early', 'ended_by_user_id', 'end_reason',
+                'result_source', 'duration_seconds', 'result_version',
+            ])
+        );
+        expect(m.required_schema.tables.competition_result_credits).toEqual(
+            expect.arrayContaining([
+                'competition_id', 'competitor_id', 'stars', 'source',
+                'reason', 'duration_seconds', 'version',
+            ])
+        );
+        expect(m.required_schema.indexes).toEqual(
+            expect.arrayContaining(['idx_competitions_result_source', 'idx_result_credits_competitor'])
+        );
+
+        const r = evaluateReadiness(goodInput(m));
+        expect(r.ok).toBe(true);
+        expect(r.unexpected.applied).toEqual([]);
+        expect(r.unexpected.pending).toEqual([]);
+    });
+
+    it('0043 applied but absent from manifest => unexpected-applied FAIL (no blanket bypass)', () => {
+        // This is the production incident this manifest bump fixes: 0043 is
+        // genuinely applied, but a baseline-0042 manifest does not know it.
+        // Removing it from known_history must still fail closed, proving the
+        // fix is a manifest membership update, not a gate bypass.
+        const input = goodInput();
+        input.manifest.known_history = input.manifest.known_history.filter(
+            (f: string) => f !== '0043_competition_early_end.sql'
+        );
+        input.manifest.required_migrations = input.manifest.required_migrations.filter(
+            (x: { file: string }) => x.file !== '0043_competition_early_end.sql'
+        );
+        input.applied = [...input.manifest.known_history, '0043_competition_early_end.sql'];
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.unexpected.applied).toEqual(['0043_competition_early_end.sql']);
+    });
+
+    it('0043 applied but early-end schema incomplete => required-schema FAIL (no silent pass)', () => {
+        const noColumn = goodInput();
+        noColumn.schema.tables.competitions = noColumn.schema.tables.competitions.filter(
+            (c) => c !== 'ended_early'
+        );
+        const rCol = evaluateReadiness(noColumn);
+        expect(rCol.ok).toBe(false);
+        expect(rCol.checks.filter((c) => !c.ok && c.name === 'required-schema').length).toBeGreaterThan(0);
+
+        const noTable = goodInput();
+        delete noTable.schema.tables.competition_result_credits;
+        const rTable = evaluateReadiness(noTable);
+        expect(rTable.ok).toBe(false);
+        expect(rTable.checks.filter((c) => !c.ok && c.name === 'required-schema').length).toBeGreaterThan(0);
+
+        const noIndex = goodInput();
+        noIndex.schema.indexes = noIndex.schema.indexes.filter((i) => i !== 'idx_result_credits_competitor');
+        const rIdx = evaluateReadiness(noIndex);
+        expect(rIdx.ok).toBe(false);
+        expect(rIdx.checks.filter((c) => !c.ok && c.name === 'required-schema').length).toBeGreaterThan(0);
+    });
+
     it('production-shape 0039 + manifest 0042 => required-pending FAIL (0040→0042 not yet applied)', () => {
         // ROW28 post-merge deploy blocker: code merged but production still
         // on the 0039 shape — 0040/0041/0042 pending, lease/index/binding
@@ -240,13 +319,13 @@ describe('release readiness gate', () => {
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
     });
 
-    it('production state (0042 applied, no pending) passes the gate', () => {
-        // Mirrors production after the authorized 0040→0042 apply: the full
-        // known history applied, empty pending, full required schema present.
+    it('production state (0043 applied, no pending) passes the gate', () => {
+        // Mirrors production after the authorized 0043 apply: the full known
+        // history applied, empty pending, full required schema present.
         const r = evaluateReadiness(goodInput());
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
-        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0042');
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0043');
     });
 
     it('production-shape 0037 + manifest 0042 => required-pending FAIL (0038 not yet applied)', () => {
@@ -262,7 +341,7 @@ describe('release readiness gate', () => {
         expect(r.checks.filter((c) => !c.ok).map((c) => c.name)).toContain('required-pending');
     });
 
-    it('production-shape 0039 + manifest 0042 => readiness PASS', () => {
+    it('production state (0043 applied) => readiness PASS', () => {
         const r = evaluateReadiness(goodInput());
         expect(r.ok).toBe(true);
         expect(r.checks.every((c) => c.ok)).toBe(true);
@@ -424,7 +503,7 @@ describe('release readiness gate', () => {
 
         // Working tree must actually be LF right now (no CRLF), or raw-byte
         // pins could not hold — proves the attribute took effect locally.
-        for (const file of ['0040_recording_leases.sql', '0041_chunk_index.sql', '0042_chunk_key_binding.sql']) {
+        for (const file of ['0040_recording_leases.sql', '0041_chunk_index.sql', '0042_chunk_key_binding.sql', '0043_competition_early_end.sql']) {
             const buf = readFileSync(resolve('migrations', file));
             expect(buf.includes(0x0d)).toBe(false);
         }
@@ -463,10 +542,10 @@ describe('release readiness gate', () => {
 
     it('unexpected applied migration => FAIL and recorded (never auto-anything)', () => {
         const input = goodInput();
-        input.applied = [...input.applied, '0035_out_of_band.sql'];
+        input.applied = [...input.applied, '0044_out_of_band.sql'];
         const r = evaluateReadiness(input);
         expect(r.ok).toBe(false);
-        expect(r.unexpected.applied).toEqual(['0035_out_of_band.sql']);
+        expect(r.unexpected.applied).toEqual(['0044_out_of_band.sql']);
     });
 
     it('unexpected pending => FAIL and recorded, no apply path exists', () => {

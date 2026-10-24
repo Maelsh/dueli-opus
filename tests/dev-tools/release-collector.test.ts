@@ -4,9 +4,10 @@ import { resolve } from 'node:path';
 import { SqliteD1 } from '../helpers/sqlite-d1';
 
 // Release-collector regression (Deploy #37771438709): the deploy.yml index
-// snapshot must surface baseline-0039's six indexes even though their tables
-// (ratings/competitions/users/user_blocks/sse_event_log) are OUTSIDE
-// required_schema.tables. Proven here against the REAL migrations by
+// snapshot must surface baseline-0039's six indexes even though most of their
+// tables (ratings/users/user_blocks/sse_event_log) are OUTSIDE
+// required_schema.tables (competitions became required at baseline-0043 for
+// the early-end columns). Proven here against the REAL migrations by
 // executing the exact snapshot SQL shipped in deploy.yml — not a copy of it.
 
 const DEPLOY = readFileSync(resolve('.github/workflows/deploy.yml'), 'utf8');
@@ -14,7 +15,7 @@ const MANIFEST = JSON.parse(readFileSync(resolve('dev-tools/release-schema-manif
     required_schema: { tables: Record<string, string[]>; indexes: string[] };
 };
 
-const OPT1_TABLES = ['ratings', 'competitions', 'users', 'user_blocks', 'sse_event_log'];
+const OUTSIDE_TABLES = ['ratings', 'users', 'user_blocks', 'sse_event_log'];
 
 /** The literal snapshot query, extracted from the deployed collector. */
 function collectorSql(): string {
@@ -35,11 +36,15 @@ describe('release collector: unrestricted index snapshot', () => {
         expect(sql).not.toContain('tbl_name');
     });
 
-    it('0039 tables are outside required_schema.tables (the trap premise)', () => {
+    it('0039 tables outside required_schema.tables stay outside (the trap premise)', () => {
         const requiredTables = Object.keys(MANIFEST.required_schema.tables);
-        for (const t of OPT1_TABLES) {
+        for (const t of OUTSIDE_TABLES) {
             expect(requiredTables, `${t} must stay outside required_schema.tables`).not.toContain(t);
         }
+    });
+
+    it('competitions is now required by 0043, so its indexes are no longer missed', () => {
+        expect(Object.keys(MANIFEST.required_schema.tables)).toContain('competitions');
     });
 
     it('the shipped snapshot surfaces all six 0039 indexes on the real schema', async () => {
@@ -62,7 +67,7 @@ describe('release collector: unrestricted index snapshot', () => {
         }
     });
 
-    it('the old manifest-derived tbl_name form misses exactly those six (bug reproduced)', async () => {
+    it('the old manifest-derived tbl_name form misses indexes on tables outside required_schema (bug reproduced)', async () => {
         const db = new SqliteD1();
         const tables = Object.keys(MANIFEST.required_schema.tables)
             .map((t) => `'${t}'`)
@@ -74,8 +79,6 @@ describe('release collector: unrestricted index snapshot', () => {
         const missing = (MANIFEST.required_schema.indexes as string[]).filter((i) => !names.includes(i));
         expect(missing.sort()).toEqual(
             [
-                'idx_competitions_creator',
-                'idx_competitions_opponent',
                 'idx_ratings_competitor',
                 'idx_sse_channel_id',
                 'idx_user_blocks_blocked',

@@ -1,5 +1,5 @@
 {
-  "manifest_version": "R-RELEASE-1.baseline-0042",
+  "manifest_version": "R-RELEASE-1.baseline-0043",
   "target": {
     "pages_project": "project-8e7c178d",
     "database_name": "dueli-db"
@@ -44,6 +44,10 @@
     {
       "file": "0042_chunk_key_binding.sql",
       "sha256": "373651bc49b6bb9bf69ee46590e2efa11734b134bc88c976e86cc937b935fb80"
+    },
+    {
+      "file": "0043_competition_early_end.sql",
+      "sha256": "0a2f1ae3140a0338ee5b523b0e485740450447f706abbf23e8506d004f6505b3"
     }
   ],
   "known_history": [
@@ -80,19 +84,39 @@
     "0030_chunk_upload_nonces.sql",
     "0031_realtime_tickets.sql",
     "0032_cron_run_guard.sql",
-      "0033_explore_result_sessions.sql",
-      "0034_competition_views.sql",
-      "0035_comments_video_offset.sql",
-      "0036_managed_documents.sql",
-      "0037_support_messaging.sql",
-      "0038_withdrawal_payout_snapshot.sql",
-      "0039_r4_db_opt1_indexes.sql",
-      "0040_recording_leases.sql",
-      "0041_chunk_index.sql",
-      "0042_chunk_key_binding.sql"
-    ],
+    "0033_explore_result_sessions.sql",
+    "0034_competition_views.sql",
+    "0035_comments_video_offset.sql",
+    "0036_managed_documents.sql",
+    "0037_support_messaging.sql",
+    "0038_withdrawal_payout_snapshot.sql",
+    "0039_r4_db_opt1_indexes.sql",
+    "0040_recording_leases.sql",
+    "0041_chunk_index.sql",
+    "0042_chunk_key_binding.sql",
+    "0043_competition_early_end.sql"
+  ],
   "required_schema": {
     "tables": {
+      "competitions": [
+        "ended_early",
+        "ended_by_user_id",
+        "end_reason",
+        "result_source",
+        "duration_seconds",
+        "result_version"
+      ],
+      "competition_result_credits": [
+        "id",
+        "competition_id",
+        "competitor_id",
+        "stars",
+        "source",
+        "reason",
+        "duration_seconds",
+        "version",
+        "created_at"
+      ],
       "explore_result_sessions": [
         "id",
         "surface",
@@ -202,11 +226,11 @@
         "max_bytes"
       ]
     },
-    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method", "idx_ratings_competitor", "idx_competitions_creator", "idx_competitions_opponent", "idx_users_active", "idx_user_blocks_blocked", "idx_sse_channel_id", "idx_recording_leases_holder", "idx_recording_chunks_order", "idx_recording_chunks_state", "idx_chunk_keys_lookup", "idx_chunk_keys_owner", "idx_chunk_keys_bound"]
+    "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method", "idx_ratings_competitor", "idx_competitions_creator", "idx_competitions_opponent", "idx_users_active", "idx_user_blocks_blocked", "idx_sse_channel_id", "idx_recording_leases_holder", "idx_recording_chunks_order", "idx_recording_chunks_state", "idx_chunk_keys_lookup", "idx_chunk_keys_owner", "idx_chunk_keys_bound", "idx_competitions_result_source", "idx_result_credits_competitor"]
   },
   "notes": [
-    "Baseline R-RELEASE-1.baseline-0042 requires migrations 0033 through 0042 applied with the pinned sha256 each (no post-apply rewrite). 0040 (recording_leases + idx_recording_leases_holder), 0041 (recording_chunks + recording_finals + order/state indexes) and 0042 (chunk_keys lease_generation/object_path/max_bytes + idx_chunk_keys_bound) close the ROW28 unsafe window: issuance without fencing/index is rejected by the readiness gate until all three are applied.",
+    "Baseline R-RELEASE-1.baseline-0043 requires migrations 0033 through 0043 applied with the pinned sha256 each (no post-apply rewrite). 0040 (recording_leases + idx_recording_leases_holder), 0041 (recording_chunks + recording_finals + order/state indexes) and 0042 (chunk_keys lease_generation/object_path/max_bytes + idx_chunk_keys_bound) close the ROW28 unsafe window. 0043 adds the server-authoritative early-end fields on competitions plus the separate competition_result_credits ledger (UNIQUE competition/competitor/source; stars 0/10 only), and its columns/table/indexes are now required by the gate.",
     "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
-    "The gate never applies migrations. Unexpected pending is recorded and FAILS the gate; it is never auto-applied."
+    "The gate never applies migrations. Unexpected applied and pending migrations are recorded and FAIL the gate; neither is auto-applied."
   ]
 }
