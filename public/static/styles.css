@@ -553,6 +553,9 @@
   .z-\[2\] {
     z-index: 2;
   }
+  .z-\[90\] {
+    z-index: 90;
+  }
   .z-\[100\] {
     z-index: 100;
   }
@@ -3013,6 +3016,14 @@
         background-color: color-mix(in oklab, var(--color-black) 70%, transparent);
       }
     }
+    .hover\:bg-black\/90:hover {
+      background-color: color-mix(in srgb, #000 90%, transparent);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .hover\:bg-black\/90:hover {
+        background-color: color-mix(in oklab, var(--color-black) 90%, transparent);
+      }
+    }
     .hover\:bg-blue-200:hover {
       background-color: var(--color-blue-200);
     }
@@ -3327,6 +3338,12 @@
     }
     .sm\:inline {
       display: inline;
+    }
+    .sm\:h-24 {
+      height: calc(var(--spacing) * 24);
+    }
+    .sm\:w-24 {
+      width: calc(var(--spacing) * 24);
     }
     .sm\:translate-x-0 {
       --tw-translate-x: 0px;
@@ -4103,18 +4120,99 @@ body.light {
   border-radius: 0.75rem;
   border: 2px solid #a855f7;
 }
-.live-stage.is-expanded {
+.live-stage.is-local-main .live-stage-main {
+  opacity: 0;
+  pointer-events: none;
+}
+.live-stage.is-local-main .live-stage-pip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  z-index: 10;
+  cursor: default;
+}
+.live-stage.is-local-main #localPreviewFrame {
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+.live-stage.is-local-main #localVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.live-stage.is-terminal .live-stage-main, .live-stage.is-terminal .live-stage-pip {
+  display: none;
+}
+.competitor-shell {
+  position: relative;
+}
+.competitor-shell.is-expanded, .competitor-shell:fullscreen, .competitor-shell:-webkit-full-screen {
   position: fixed;
   inset: 0;
   z-index: 70;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #000;
   border-radius: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
 }
-.live-stage.is-expanded video {
+.competitor-shell.is-expanded .live-stage, .competitor-shell:fullscreen .live-stage, .competitor-shell:-webkit-full-screen .live-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto;
+}
+.competitor-shell.is-expanded video, .competitor-shell:fullscreen video, .competitor-shell:-webkit-full-screen video {
   object-fit: contain;
 }
-body.live-stage-locked {
+.competitor-shell.is-expanded #competitorControls, .competitor-shell:fullscreen #competitorControls, .competitor-shell:-webkit-full-screen #competitorControls, .competitor-shell.is-expanded #publishState, .competitor-shell:fullscreen #publishState, .competitor-shell:-webkit-full-screen #publishState {
+  flex: 0 0 auto;
+  background: #111827;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+.competitor-shell:fullscreen .fs-exit-btn, .competitor-shell:-webkit-full-screen .fs-exit-btn, #embeddedViewerSection:fullscreen .fs-exit-btn, #embeddedViewerSection:-webkit-full-screen .fs-exit-btn, #embeddedViewerSection.is-player-fullscreen .fs-exit-btn {
+  display: inline-flex !important;
+}
+#embeddedViewerSection:fullscreen, #embeddedViewerSection:-webkit-full-screen, #embeddedViewerSection.is-player-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+#embeddedViewerSection:fullscreen #embeddedVideoContainer, #embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer, #embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: auto;
+  aspect-ratio: auto;
+}
+#embeddedViewerSection:fullscreen #embeddedVideoContainer video, #embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer video, #embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer video {
+  object-fit: contain;
+}
+#embeddedViewerSection:fullscreen #embeddedLiveControls, #embeddedViewerSection:-webkit-full-screen #embeddedLiveControls, #embeddedViewerSection.is-player-fullscreen #embeddedLiveControls, #embeddedViewerSection:fullscreen #embeddedVodControls, #embeddedViewerSection:-webkit-full-screen #embeddedVodControls, #embeddedViewerSection.is-player-fullscreen #embeddedVodControls {
+  flex: 0 0 auto;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+body.live-stage-locked, body.player-shell-locked {
   overflow: hidden;
 }
 .live-tool {

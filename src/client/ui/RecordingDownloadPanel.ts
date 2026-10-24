@@ -14,6 +14,7 @@
  */
 
 import { getDir, t } from '../../i18n';
+import { DUELI_PRIMARY_GRADIENT, DUELI_PRIMARY_GRADIENT_HOVER } from '../../shared/constants';
 import type {
     DownloadManifest,
     DownloadMode,
@@ -265,7 +266,7 @@ export class RecordingDownloadPanel {
         appendChildren(errorBox, errorText, errorDetail);
 
         const footer = el('div', 'mt-4 flex flex-wrap items-center justify-end gap-2');
-        const startBtn = el('button', 'rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50', t('download_ui.start', this.lang));
+        const startBtn = el('button', `rounded-lg ${DUELI_PRIMARY_GRADIENT} ${DUELI_PRIMARY_GRADIENT_HOVER} px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50`, t('download_ui.start', this.lang));
         startBtn.type = 'button';
         startBtn.disabled = true;
         const cancelBtn = el('button', 'hidden rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600', t('download_ui.cancel', this.lang));

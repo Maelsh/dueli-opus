@@ -92,8 +92,9 @@ export class CompetitionController extends BaseController {
                             ranking.h7TopicRelevance(row, String(filters.category ?? ''), String(filters.subcategory ?? ''), ctx)
                         ),
                         recency: policy.h7RecencyOf({ ...row }, nowMs),
+                        quality_tier: row.quality_tier,
                     }));
-                    const ordered = ranking.h7OrderScored(scored);
+                    const ordered = ranking.h7ApplyPriorityTier(ranking.h7OrderScored(scored));
                     const byId = new Map(rows.map((r) => [r.id, r] as [number, (typeof rows)[number]]));
                     for (const s of ordered) {
                         const r = byId.get(s.id);
@@ -116,9 +117,9 @@ export class CompetitionController extends BaseController {
             const bucket = statusRaw === 'live' || statusRaw === 'recorded' || statusRaw === 'upcoming' ? statusRaw : 'mixed';
             const scored = rows.map((r) => {
                 const { score } = ranking.h7ScoreCard({ ...r, nowMs }, ctx, identity, bucket, profiles);
-                return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs) };
+                return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), quality_tier: r.quality_tier };
             });
-            const ordered = ranking.h7OrderScored(scored);
+            const ordered = ranking.h7ApplyPriorityTier(ranking.h7OrderScored(scored));
             const ids = ordered.map((s) => s.id).slice(offset, offset + limit);
             const cards = await model.findByIds(ids);
             const byId = new Map(cards.map((card) => [card.id, card] as [number, (typeof cards)[number]]));
@@ -872,10 +873,19 @@ export class CompetitionController extends BaseController {
 
             // T1.5: Idempotency guard — a completed competition is never re-finalized
             if (competition.status === 'completed') {
+                const completedRow = competition as {
+                    ended_at?: string | null;
+                    ended_early?: number;
+                    result_source?: string | null;
+                    winner_id?: number | null;
+                };
                 return this.success(c, {
                     ended: true,
                     status: 'completed',
-                    ended_at: (competition as { ended_at?: string | null }).ended_at ?? null,
+                    ended_at: completedRow.ended_at ?? null,
+                    early_end: !!completedRow.ended_early,
+                    result_source: completedRow.result_source ?? null,
+                    winner_id: completedRow.winner_id ?? null,
                     already_completed: true,
                 });
             }
@@ -893,32 +903,70 @@ export class CompetitionController extends BaseController {
             // consumed. Ending is not proof that a recording exists; readiness
             // comes from verified receipts/playlist evidence.
             const completed = await model.complete(id, {
-                youtubeVideoUrl: body?.youtube_video_url
+                youtubeVideoUrl: body?.youtube_video_url,
+                // Session-verified participant; the server computes the
+                // duration and decides early/normal. Any client duration,
+                // winner or bonus field in the body is ignored.
+                actorUserId: user.id,
+                endReason: 'competitor_end',
             });
 
             // B5-1: race — already completed between read and guarded UPDATE.
             // Treat as idempotent success; never schedule finalize_payouts twice.
             if (!completed) {
-                const raced = await model.findById(id) as { ended_at?: string | null } | null;
+                const raced = await model.findById(id) as {
+                    ended_at?: string | null;
+                    ended_early?: number;
+                    result_source?: string | null;
+                    winner_id?: number | null;
+                    opponent_id?: number | null;
+                    elo_applied_at?: string | null;
+                } | null;
+                // A losing simultaneous end may observe the row after the
+                // guarded cutoff but before finalize settles the winner. Never
+                // expose the provisional live winner as the final result.
+                const racedPending = !!raced?.opponent_id && !raced?.elo_applied_at;
                 return this.success(c, {
                     ended: true,
                     status: 'completed',
                     ended_at: raced?.ended_at ?? null,
+                    early_end: !!raced?.ended_early,
+                    result_source: raced?.result_source ?? null,
+                    winner_id: racedPending ? null : raced?.winner_id ?? null,
+                    result_pending: racedPending,
                     already_completed: true,
                 });
             }
 
             let endedAt: string | null = null;
+            let endedEarly = false;
+            let resultSource: string | null = null;
+            let winnerId: number | null = null;
+            let finalizeSettled = false;
             // R4-LIVE-END-RECOVERY-1 (28.5): one terminal event reaches both
             // participants AND viewers on the existing competition channel.
             // The persisted row (status + ended_at) stays authoritative; SSE
             // is display metadata and failure here never rolls back the end.
             try {
-                const endedRow = await model.findById(id) as { ended_at?: string | null } | null;
+                const endedRow = await model.findById(id) as {
+                    ended_at?: string | null;
+                    ended_early?: number;
+                    result_source?: string | null;
+                    winner_id?: number | null;
+                } | null;
                 endedAt = endedRow?.ended_at ?? null;
+                endedEarly = !!endedRow?.ended_early;
+                resultSource = endedRow?.result_source ?? null;
+                // Codex P2: the cutoff event is immediate, but it is NOT the
+                // final result. Omit winner_id and mark it pending; the
+                // post-finalize event from ScheduledTaskService carries the
+                // settled winner so connected viewers never need a reload.
                 await new EventPusher(c.env.DB, c.env).publishCompetitionStatus(id, {
                     status: 'completed',
                     ended_at: endedAt,
+                    early_end: endedEarly,
+                    result_source: resultSource,
+                    result_pending: true,
                     updated_at: new Date().toISOString(),
                 });
             } catch (pushError) {
@@ -961,7 +1009,8 @@ export class CompetitionController extends BaseController {
             // payout ledger tx), so concurrent ends / retries converge.
             try {
                 const taskService = new ScheduledTaskService(c.env.DB);
-                await taskService.finalizeCompetition(id);
+                const finalized = await taskService.finalizeCompetition(id);
+                finalizeSettled = finalized.settled;
             } catch (finalizeError) {
                 console.error(`[End] Finalize failed for ${id}, scheduling retry:`, finalizeError);
                 try {
@@ -973,7 +1022,34 @@ export class CompetitionController extends BaseController {
             }
             await this.broadcastRatingTally(c.env.DB, c.env, id, true);
 
-            return this.success(c, { ended: true, status: 'completed', ended_at: endedAt });
+            // The final winner is written by the idempotent finalize step, so
+            // read it back for the response (the cutoff metadata was already
+            // persisted atomically with the transition).
+            try {
+                const finalRow = await model.findById(id) as {
+                    ended_early?: number;
+                    result_source?: string | null;
+                    winner_id?: number | null;
+                } | null;
+                endedEarly = !!finalRow?.ended_early;
+                resultSource = finalRow?.result_source ?? null;
+                // Only a committed aggregates/ELO batch may expose a final
+                // winner; an unsettled row still holds the provisional live
+                // winner and must stay result_pending until the retry lands.
+                winnerId = finalizeSettled ? finalRow?.winner_id ?? null : null;
+            } catch (readError) {
+                console.error(`[End] Final result read failed for ${id}:`, readError);
+            }
+
+            return this.success(c, {
+                ended: true,
+                status: 'completed',
+                ended_at: endedAt,
+                early_end: endedEarly,
+                result_source: resultSource,
+                winner_id: winnerId,
+                result_pending: !finalizeSettled,
+            });
         } catch (error) {
             return this.serverError(c, error as Error);
         }
@@ -1366,7 +1442,7 @@ export class CompetitionController extends BaseController {
             // Failure never fails the vote; a durable retry is scheduled.
             try {
                 const taskService = new ScheduledTaskService(c.env.DB);
-                await taskService.updateAggregatesAfterVote(competitionId);
+                await taskService.updateAggregatesAfterVote(competitionId, { allowFinalize: false });
             } catch (voteError) {
                 console.error(`[Rate] Aggregate update failed for competition ${competitionId}:`, voteError);
             }
@@ -1455,7 +1531,7 @@ export class CompetitionController extends BaseController {
             }
             if (!replaced) return this.notFound(c, this.t('ratings.no_ratings', c));
             try {
-                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId);
+                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId, { allowFinalize: false });
             } catch (voteError) {
                 console.error(`[Rate:update] Aggregate update failed for ${competitionId}:`, voteError);
             }
@@ -1501,7 +1577,14 @@ export class CompetitionController extends BaseController {
             const ids = [comp.creator_id, comp.opponent_id].filter((v) => typeof v === 'number' && v !== null);
             const competitors = await ratingModel.getSummary(competitionId, ids);
             // R2-V: explicit, localized result status (winner / draw / pending).
-            const compRow = comp as { status?: string; opponent_id?: number | null; winner_id?: number | null };
+            const compRow = comp as {
+                status?: string;
+                opponent_id?: number | null;
+                winner_id?: number | null;
+                ended_early?: number;
+                result_source?: string | null;
+                ended_by_user_id?: number | null;
+            };
             const hasVotes = competitors.some((c) => c.count > 0);
             const resultStatus: 'winner' | 'draw' | 'pending_result' =
                 compRow.winner_id != null
@@ -1510,9 +1593,22 @@ export class CompetitionController extends BaseController {
                         ? 'draw'
                         : 'pending_result';
             const final = compRow.status === 'completed';
+            // UNIT30.4: system stars are exposed as a SEPARATE ledger, never
+            // mixed into the real 1..5 viewer vote counts above. The model
+            // keeps this controller free of SQL and stays migration-lag safe.
+            const systemCredits = await model.getResultCredits(competitionId);
             return this.success(c, {
                 competitors,
-                result: { status: resultStatus, label: this.t(`competition.${resultStatus}`, c) },
+                result: {
+                    status: resultStatus,
+                    label: this.t(`competition.${resultStatus}`, c),
+                    source: compRow.result_source ?? null,
+                    early_end: !!compRow.ended_early,
+                    // Deliberately not named `*_user_id`: the public anonymous
+                    // summary must never echo identity-shaped keys.
+                    ended_by: compRow.ended_by_user_id ?? null,
+                    system_credits: systemCredits,
+                },
                 provisional: !final,
                 final,
             });
@@ -1553,7 +1649,7 @@ export class CompetitionController extends BaseController {
             }
             if (!removed) return this.notFound(c, this.t('ratings.no_ratings', c));
             try {
-                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId);
+                await new ScheduledTaskService(c.env.DB).updateAggregatesAfterVote(competitionId, { allowFinalize: false });
             } catch (voteError) {
                 console.error(`[Rate:withdraw] Aggregate update failed for ${competitionId}:`, voteError);
             }

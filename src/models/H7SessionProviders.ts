@@ -11,15 +11,18 @@ import type { ResultSessionProvider } from '../lib/services/ExploreSessionServic
 import { CompetitionModel, type CompetitionWithDetails } from './CompetitionModel';
 import { RecommendationModel } from './RecommendationModel';
 import { H7SignalsModel } from './H7SignalsModel';
-import { h7ApplyDiscoveryDiversity, h7OrderScored, h7SimilarScore } from '../lib/services/H7RankingService';
-import { h7RecencyOf } from '../lib/services/H7RankingPolicy';
+import { h7ApplyDiscoveryDiversityByTier, h7OrderScored, h7SimilarScore } from '../lib/services/H7RankingService';
+import { H7_DISCOVERY_ORDERING_VERSION, h7RecencyOf } from '../lib/services/H7RankingPolicy';
 import { H7_POLICY_VERSION } from '../lib/services/H7RankingPolicy';
 
 /** Session surface for competition similar rails/cards. */
 export const SIMILAR_SURFACE = 'similar_competitions';
 
 function similarContextKey(refId: number, lang: string, identityKind: 'user' | 'guest'): string {
-    return JSON.stringify(['similar', refId, lang, identityKind, H7_POLICY_VERSION]);
+    return JSON.stringify([
+        'similar', refId, lang, identityKind,
+        `${H7_POLICY_VERSION}+${H7_DISCOVERY_ORDERING_VERSION}`,
+    ]);
 }
 
 /**
@@ -78,13 +81,14 @@ export class SimilarCompetitionProvider implements ResultSessionProvider {
             row: r,
         }));
         const ordered = h7OrderScored(scored);
-        const diverse = h7ApplyDiscoveryDiversity(
+        const diverse = h7ApplyDiscoveryDiversityByTier(
             ordered.map((s) => ({
                 id: s.id,
                 creator_id: s.row.creator_id,
                 opponent_id: s.row.opponent_id,
                 created_at: s.row.created_at,
                 total_views: s.row.total_views,
+                quality_tier: s.row.quality_tier,
             })),
             nowMs
         );

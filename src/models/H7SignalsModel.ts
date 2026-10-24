@@ -33,6 +33,7 @@
  */
 
 import { BaseModel } from './base/BaseModel';
+import { h7QualityTier } from '../lib/services/H7RankingPolicy';
 
 export interface H7CompetitionSignals {
     id: number;
@@ -59,6 +60,13 @@ export interface H7CompetitionSignals {
     stream_ended_at: string | null;
     vod_url: string | null;
     youtube_video_url: string | null;
+    /**
+     * UNIT30.4 official server duration (stored at end, or derived from the
+     * authoritative started_at/ended_at for historical rows). Null when
+     * unknown/inconsistent; tier 1 then, never a guessed short penalty.
+     */
+    duration_seconds?: number | null;
+    quality_tier?: 1 | 2;
 }
 
 export interface H7ViewerContext {
@@ -133,6 +141,12 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
                     COALESCE(c.likes_count, 0) AS likes_count,
                     COALESCE(c.dislikes_count, 0) AS dislikes_count,
                     COALESCE((SELECT SUM(r.rating) FROM ratings r WHERE r.competition_id = c.id), 0) AS stars_sum,
+                    CASE
+                      WHEN c.status = 'completed' AND c.started_at IS NOT NULL AND c.ended_at IS NOT NULL
+                           AND julianday(c.ended_at) >= julianday(c.started_at)
+                        THEN CAST((julianday(c.ended_at) - julianday(c.started_at)) * 86400 AS INTEGER)
+                      ELSE NULL
+                    END AS duration_seconds,
                     c.title, c.description, c.created_at, c.started_at, c.stream_started_at,
                     c.scheduled_at, c.ended_at, c.stream_ended_at, c.vod_url, c.youtube_video_url
                  FROM competitions c
@@ -142,6 +156,9 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
                 ...batch
             );
             for (const r of rows) {
+                const duration = r.duration_seconds === null || r.duration_seconds === undefined
+                    ? null
+                    : Number(r.duration_seconds);
                 out.push({
                     ...r,
                     language: r.language ?? null,
@@ -150,6 +167,8 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
                     likes_count: Number(r.likes_count ?? 0) || 0,
                     dislikes_count: Number(r.dislikes_count ?? 0) || 0,
                     stars_sum: Number(r.stars_sum ?? 0) || 0,
+                    duration_seconds: duration !== null && Number.isFinite(duration) && duration >= 0 ? duration : null,
+                    quality_tier: h7QualityTier(duration),
                 });
             }
         }
@@ -296,13 +315,44 @@ export class H7SignalsModel extends BaseModel<{ id: number }> {
         for (let i = 0; i < unique.length; i += 80) {
             const batch = unique.slice(i, i + 80);
             const placeholders = batch.map(() => '?').join(',');
-            const sums = await this.query<{ competitor_id: number; s: number }>(
-                `SELECT r.competitor_id AS competitor_id, SUM(r.rating) AS s FROM ratings r
-                  JOIN competitions c ON r.competition_id = c.id
-                 WHERE r.competitor_id IN (${placeholders}) AND c.${ACTUAL_PARTICIPATION_WHERE}
-                 GROUP BY r.competitor_id`,
-                ...batch
-            );
+            // UNIT30.4: merge the SYSTEM_EARLY_END credit ledger into the same
+            // aggregate statement. The id CTE binds the batch once, so 80 ids
+            // stay under D1's 100-parameter limit while the ratings and credit
+            // arms share the same ids. `ratings` itself is untouched.
+            //
+            // A deploy that briefly precedes migration 0043 retries the old
+            // ratings-only statement below; normal traffic stays at the same
+            // statement count as before (R4-DB-OPT-1).
+            const idCte = `WITH ids(uid) AS (VALUES ${batch.map(() => '(?)').join(',')})`;
+            let sums: Array<{ competitor_id: number; s: number }>;
+            try {
+                sums = await this.query<{ competitor_id: number; s: number }>(
+                    `${idCte}
+                     SELECT competitor_id, SUM(s) AS s FROM (
+                       SELECT r.competitor_id AS competitor_id, r.rating AS s
+                         FROM ratings r
+                         JOIN competitions c ON r.competition_id = c.id
+                        WHERE r.competitor_id IN (SELECT uid FROM ids)
+                          AND c.${ACTUAL_PARTICIPATION_WHERE}
+                       UNION ALL
+                       SELECT cr.competitor_id AS competitor_id, cr.stars AS s
+                         FROM competition_result_credits cr
+                        WHERE cr.competitor_id IN (SELECT uid FROM ids)
+                          AND cr.source = 'SYSTEM_EARLY_END'
+                     )
+                     GROUP BY competitor_id`,
+                    ...batch
+                );
+            } catch (creditError) {
+                sums = await this.query<{ competitor_id: number; s: number }>(
+                    `SELECT r.competitor_id AS competitor_id, SUM(r.rating) AS s FROM ratings r
+                      JOIN competitions c ON r.competition_id = c.id
+                     WHERE r.competitor_id IN (${placeholders}) AND c.${ACTUAL_PARTICIPATION_WHERE}
+                     GROUP BY r.competitor_id`,
+                    ...batch
+                );
+                console.error('[H7] result credits unavailable; using rating sum only:', creditError);
+            }
             // D1 hotfix: the old single UNION ALL query bound the batch TWICE
             // (creator side + opponent side => up to 160 params > D1's 100
             // hard limit; 51+ ids => production 500). Two single-bind queries

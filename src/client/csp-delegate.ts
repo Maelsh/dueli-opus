@@ -245,6 +245,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'showLogin',
     'showLoginModal',
     'showReportModal',
+    'runLiveAction',
     'startCompetition',
     'submitCampaign',
     'submitRating',

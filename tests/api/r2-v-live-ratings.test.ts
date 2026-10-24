@@ -65,7 +65,7 @@ async function seedV(db: SqliteD1): Promise<{ creator: number; opponent: number 
     await db.prepare(
         `INSERT INTO competitions (id, title, description, rules, category_id, creator_id, opponent_id, language, status, total_views, total_comments, creator_rating, opponent_rating, average_rating, winner_id, started_at)
          VALUES
-          (501, 'V live finals', 'd', 'r', 40, 101, 102, 'ar', 'live', 0, 0, 0, 0, 0, NULL, datetime('now')),
+          (501, 'V live finals', 'd', 'r', 40, 101, 102, 'ar', 'live', 0, 0, 0, 0, 0, NULL, datetime('now', '-10 minutes')),
           (502, 'V pending finals', 'd', 'r', 40, 101, NULL, 'ar', 'pending', 0, 0, 0, 0, 0, NULL, NULL),
           (503, 'V done finals', 'd', 'r', 40, 101, 102, 'ar', 'completed', 0, 0, 0, 0, 0, NULL, datetime('now', '-3 hours'))`,
     ).run();

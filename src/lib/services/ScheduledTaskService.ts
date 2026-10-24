@@ -11,6 +11,24 @@
 
 import { t } from '../../i18n';
 
+/**
+ * Result of one aggregates/ELO pass.
+ *
+ * - `settled`: the atomic batch committed, so `winner_id` in the row is the
+ *   computed result (final when `final` is true).
+ * - `final`: the competition was already completed (not a live provisional
+ *   vote pass).
+ * - `finalClaimed`: this call won the one-time `elo_applied_at` claim. It is
+ *   the only call allowed to announce the settled final result, which makes
+ *   concurrent finalizes and retries converge on exactly one final event.
+ */
+export interface AggregateUpdateResult {
+    settled: boolean;
+    final: boolean;
+    finalClaimed: boolean;
+    winnerId: number | null;
+}
+
 export class ScheduledTaskService {
     constructor(private db: D1Database) { }
 
@@ -27,16 +45,29 @@ export class ScheduledTaskService {
      * duplicate finalize_payouts tasks all converge to exactly one effect.
      * Formulas (winner/ELO/20-80) are untouched — only timing moved to cutoff.
      */
-    async finalizeCompetition(competitionId: number): Promise<{ winnerId: number | null }> {
+    async finalizeCompetition(competitionId: number): Promise<{ winnerId: number | null; settled: boolean }> {
         const { LivePayoutEngine } = await import('./LivePayoutEngine');
 
         // Final aggregates + winner + one-time ELO (idempotent).
         // For a completed competition updateAggregatesAfterVote finalizes ELO.
-        await this.updateAggregatesAfterVote(competitionId);
+        // `settled` is false when the atomic batch failed: in that case the
+        // durable recalc_aggregates retry owns the final settlement and the
+        // final event must NOT be published here.
+        const settlement = await this.updateAggregatesAfterVote(competitionId);
 
-        const row = await this.db.prepare(`
-            SELECT winner_id FROM competitions WHERE id = ?
-        `).bind(competitionId).first<any>();
+        let winnerId: number | null = null;
+        try {
+            const row = await this.db.prepare(`
+                SELECT winner_id FROM competitions WHERE id = ?
+            `).bind(competitionId).first<{ winner_id: number | null }>();
+            // A failed pass may leave a provisional live winner in the row;
+            // never return it as a final result.
+            winnerId = settlement.settled ? row?.winner_id ?? null : null;
+        } catch (e) {
+            // The final event re-reads the row; a failed read here must not
+            // suppress the settled announcement below.
+            console.error(`[Finalize] Winner read failed for #${competitionId}:`, e);
+        }
 
         try {
             await new LivePayoutEngine(this.db).finalizePayouts(competitionId);
@@ -51,7 +82,46 @@ export class ScheduledTaskService {
             }
         }
 
-        return { winnerId: row?.winner_id ?? null };
+        // Codex P2 / UNIT30.4 remediation: the terminal event may already have
+        // gone out as result_pending. Only the invocation that actually
+        // committed the final aggregates+ELO (the one-time elo_applied_at
+        // claim) may emit result_pending:false. A failed batch or a losing
+        // concurrent finalize stays pending and publishes nothing.
+        if (settlement.settled && settlement.final && settlement.finalClaimed) {
+            await this.publishFinalCompetitionStatus(competitionId);
+        }
+        return { winnerId, settled: settlement.settled };
+    }
+
+    private async publishFinalCompetitionStatus(competitionId: number): Promise<boolean> {
+        try {
+            const row = await this.db.prepare(`
+                SELECT status, ended_at, ended_early, result_source, winner_id
+                FROM competitions WHERE id = ?
+            `).bind(competitionId).first<{
+                status: string;
+                ended_at: string | null;
+                ended_early: number | null;
+                result_source: string | null;
+                winner_id: number | null;
+            }>();
+            if (!row || row.status !== 'completed') return false;
+            const { EventPusher } = await import('./EventPusher');
+            await new EventPusher(this.db).publishCompetitionStatus(competitionId, {
+                status: 'completed',
+                ended_at: row.ended_at ?? null,
+                early_end: !!row.ended_early,
+                result_source: row.result_source ?? null,
+                winner_id: row.winner_id ?? null,
+                result_pending: false,
+                updated_at: new Date().toISOString(),
+            });
+            return true;
+        } catch (e) {
+            // SSE is display metadata; the persisted row remains authoritative.
+            console.error(`[Finalize] Final status publish failed for #${competitionId}:`, e);
+            return false;
+        }
     }
 
     /**
@@ -138,11 +208,18 @@ export class ScheduledTaskService {
                 // T1.5: ratings-based automatic distribution (replaces blind 35/35/30)
                 await this.finalizeCompetition(task.competition_id);
                 break;
-            case 'recalc_aggregates':
+            case 'recalc_aggregates': {
                 // B12: durable retry for a failed aggregate/ELO batch —
                 // updateAggregatesAfterVote is idempotent, so re-running is safe.
-                await this.updateAggregatesAfterVote(task.competition_id);
+                // UNIT30.4 remediation: a successful retry must also emit the
+                // final event that the failed finalize could not publish. The
+                // one-time ELO claim makes this exactly once across retries.
+                const settlement = await this.updateAggregatesAfterVote(task.competition_id);
+                if (settlement.settled && settlement.final && settlement.finalClaimed) {
+                    await this.publishFinalCompetitionStatus(task.competition_id);
+                }
                 break;
+            }
             case 'check_disconnection':
                 await this.handleDisconnectionCheck(task);
                 break;
@@ -330,7 +407,19 @@ export class ScheduledTaskService {
         const cutoff = await this.db.prepare(`
             UPDATE competitions
             SET status = 'completed', ended_at = datetime('now'), updated_at = datetime('now'),
-                auto_deleted_reason = 'live_max_2hr'
+                auto_deleted_reason = 'live_max_2hr',
+                duration_seconds = CASE WHEN started_at IS NOT NULL
+                    AND julianday('now') >= julianday(started_at)
+                    THEN CAST((julianday('now') - julianday(started_at)) * 86400 AS INTEGER)
+                    ELSE NULL END,
+                ended_early = CASE WHEN started_at IS NOT NULL
+                    AND (julianday('now') - julianday(started_at)) * 86400 >= 0
+                    AND (julianday('now') - julianday(started_at)) * 86400 < 300
+                    THEN 1 ELSE 0 END,
+                ended_by_user_id = NULL,
+                end_reason = 'auto_end',
+                result_source = 'AUTO',
+                result_version = 1
             WHERE id = ? AND status = 'live'
         `).bind(competitionId).run();
         if (Number(cutoff?.meta?.changes ?? 1) === 0) return false;
@@ -346,6 +435,11 @@ export class ScheduledTaskService {
             await new EventPusher(this.db).publishCompetitionStatus(competitionId, {
                 status: 'completed',
                 ended_at: endedRow?.ended_at ?? null,
+                early_end: false,
+                result_source: 'AUTO',
+                // Codex P2: finalizeCompetition() below emits the settled
+                // winner; this cutoff event only tears down the live surface.
+                result_pending: true,
                 updated_at: new Date().toISOString(),
             });
         } catch (pushError) {
@@ -512,18 +606,40 @@ export class ScheduledTaskService {
      *   => explicit winner_id = NULL + draw ELO (0.5/0.5) once.
      * - Failure never fails the vote: a durable `recalc_aggregates` retry is
      *   scheduled (idempotent re-run via processPendingTasks).
+     *
+     * `allowFinalize` is false for vote callers. A vote request that started
+     * just before the cutoff may read `completed` here after the guarded
+     * live->completed transition; it must NOT run the final aggregates/ELO
+     * pass, because only finalize/retry paths are allowed to claim the
+     * one-time result and announce it. The finalize path recomputes from the
+     * same frozen tally (including the accepted vote) and emits the event.
      */
-    async updateAggregatesAfterVote(competitionId: number): Promise<void> {
+    async updateAggregatesAfterVote(
+        competitionId: number,
+        options?: { allowFinalize?: boolean },
+    ): Promise<AggregateUpdateResult> {
+        const allowFinalize = options?.allowFinalize !== false;
         const { LivePayoutEngine } = await import('./LivePayoutEngine');
         const { computeEloChange } = await import('./EloRatingService');
 
         const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, status, ended_at, elo_applied_at FROM competitions WHERE id = ?
+            SELECT id, creator_id, opponent_id, status, ended_at, elo_applied_at,
+                   result_source, ended_by_user_id, ended_early
+              FROM competitions WHERE id = ?
         `).bind(competitionId).first<any>();
 
-        if (!competition) return;
+        if (!competition) {
+            return { settled: false, final: false, finalClaimed: false, winnerId: null };
+        }
         // R2-V: ratings exist only for live; completed is the finalize path.
-        if (competition.status !== 'live' && competition.status !== 'completed') return;
+        if (competition.status !== 'live' && competition.status !== 'completed') {
+            return { settled: false, final: false, finalClaimed: false, winnerId: null };
+        }
+        // A vote racing the cutoff must leave the final claim/announcement to
+        // finalizeCompetition (or the recalc_aggregates retry).
+        if (!allowFinalize && competition.status === 'completed') {
+            return { settled: false, final: true, finalClaimed: false, winnerId: null };
+        }
 
         const agg = await this.db.prepare(`
             SELECT
@@ -545,16 +661,31 @@ export class ScheduledTaskService {
             else if (opponentAvg > creatorAvg) winnerId = competition.opponent_id;
         }
 
+        // UNIT30.4: a confirmed competitor early End is a withdrawal by that
+        // actor — the opponent wins regardless of (typically absent) viewer
+        // votes. Automatic/admin closes carry no actor and never invent one.
+        if (competition.result_source === 'SYSTEM_EARLY_END' && competition.opponent_id) {
+            if (competition.ended_by_user_id === competition.creator_id) {
+                winnerId = competition.opponent_id;
+            } else if (competition.ended_by_user_id === competition.opponent_id) {
+                winnerId = competition.creator_id;
+            }
+        }
+
         // R2-V: final exactly at the cutoff — no 24h window. Live stays
         // provisional (ELO untouched); completed finalizes ELO once.
         const resultFinal = competition.status === 'completed';
 
+        let settled = false;
+        let finalClaimed = false;
         try {
-            await this.applyAggregatesAndEloOnce(competition, creatorAvg, opponentAvg, overallAvg, winnerId, computeEloChange, resultFinal);
+            finalClaimed = await this.applyAggregatesAndEloOnce(competition, creatorAvg, opponentAvg, overallAvg, winnerId, computeEloChange, resultFinal);
+            settled = true;
         } catch (e) {
             // Do NOT swallow silently and do NOT fail the vote — record a
             // durable scheduled retry instead. processPendingTasks re-runs this
-            // method (idempotent) until aggregates + ELO land.
+            // method (idempotent) until aggregates + ELO land. The caller must
+            // treat this pass as unsettled and must not announce a final result.
             console.error(`[Vote] Aggregate/ELO batch failed for #${competitionId}:`, e);
             try {
                 await this.schedule(competitionId, 'recalc_aggregates', new Date(Date.now() + 60 * 1000));
@@ -568,6 +699,8 @@ export class ScheduledTaskService {
         } catch (e) {
             console.error(`[Vote] Payout recalc failed for #${competitionId}:`, e);
         }
+
+        return { settled, final: resultFinal, finalClaimed, winnerId };
     }
 
     /**
@@ -578,22 +711,27 @@ export class ScheduledTaskService {
      * its guarded writes match 0 rows.
      */
     private async applyAggregatesAndEloOnce(
-        competition: { id: number; creator_id: number; opponent_id: number | null },
+        competition: { id: number; creator_id: number; opponent_id: number | null; elo_applied_at?: string | null },
         creatorAvg: number,
         opponentAvg: number,
         overallAvg: number,
         winnerId: number | null,
         computeElo: (a: number, b: number, w: number | null, c: number, o: number, k?: number) => { creator: number; opponent: number },
         resultFinal: boolean
-    ): Promise<void> {
+    ): Promise<boolean> {
+        // Provisional (live) writes are guarded by status so a vote batch that
+        // was delayed past the cutoff can never overwrite the settled final
+        // aggregates/winner. The final pass is the only one allowed to write
+        // a completed row (and it is already serialized with the ELO claim).
         const statements: D1PreparedStatement[] = [
             this.db.prepare(`
                 UPDATE competitions
                 SET creator_rating = ?, opponent_rating = ?, average_rating = ?, winner_id = ?
-                WHERE id = ?
+                WHERE id = ?${resultFinal ? '' : " AND status = 'live'"}
             `).bind(creatorAvg, opponentAvg, overallAvg, winnerId, competition.id),
         ];
 
+        let hasFinalClaim = false;
         if (resultFinal && competition.opponent_id) {
             const creator = await this.db.prepare(`
                 SELECT id, elo_rating FROM users WHERE id = ?
@@ -622,9 +760,23 @@ export class ScheduledTaskService {
                 UPDATE competitions SET elo_applied_at = ?
                 WHERE id = ? AND elo_applied_at IS NULL
             `).bind(new Date().toISOString(), competition.id));
+            hasFinalClaim = true;
         }
 
-        await this.db.batch(statements);
+        const results = await this.db.batch(statements);
+        if (!hasFinalClaim) return false;
+
+        // The claim is the last statement. `changes = 1` identifies the one
+        // invocation that settled the final result; every concurrent/retried
+        // invocation finds the row already claimed and gets 0.
+        const claim = results[results.length - 1];
+        if (typeof claim?.meta?.changes === 'number') {
+            return claim.meta.changes > 0;
+        }
+        // Fallback for runtimes that omit per-statement changes: the
+        // pre-batch snapshot is the only local evidence. If ELO was already
+        // applied, this invocation did not win the claim.
+        return competition.elo_applied_at == null;
     }
 
     /**

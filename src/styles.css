@@ -187,21 +187,151 @@ body.light {
     border: 2px solid #a855f7;
 }
 
-/* In-page expanded stage (theater): stays inside the document. */
-.live-stage.is-expanded {
+/* UNIT30.4 §15.8 — states 1/3: local preview (or profile fallback) is the
+   large surface and there is no PiP. Same two video elements, CSS roles only. */
+.live-stage.is-local-main .live-stage-main {
+    /* Keep the remote video composited (frame-callback evidence for state 4)
+       while making its last frame invisible in states 1/3. */
+    opacity: 0;
+    pointer-events: none;
+}
+
+.live-stage.is-local-main .live-stage-pip {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    z-index: 10;
+    cursor: default;
+}
+
+.live-stage.is-local-main #localPreviewFrame {
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+}
+
+.live-stage.is-local-main #localVideo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* §15.8.4: terminal server state hides both video slots immediately. */
+.live-stage.is-terminal .live-stage-main,
+.live-stage.is-terminal .live-stage-pip {
+    display: none;
+}
+
+/* In-page expanded stage (theater): the SHELL (video + controls) stays in the
+   document. This is distinct from browser fullscreen below. */
+.competitor-shell {
+    position: relative;
+}
+
+.competitor-shell.is-expanded,
+.competitor-shell:fullscreen,
+.competitor-shell:-webkit-full-screen {
     position: fixed;
     inset: 0;
     z-index: 70;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: #000;
     border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
 }
 
-.live-stage.is-expanded video {
+.competitor-shell.is-expanded .live-stage,
+.competitor-shell:fullscreen .live-stage,
+.competitor-shell:-webkit-full-screen .live-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: auto;
+    aspect-ratio: auto;
+}
+
+.competitor-shell.is-expanded video,
+.competitor-shell:fullscreen video,
+.competitor-shell:-webkit-full-screen video {
     object-fit: contain;
 }
 
-body.live-stage-locked {
+.competitor-shell.is-expanded #competitorControls,
+.competitor-shell:fullscreen #competitorControls,
+.competitor-shell:-webkit-full-screen #competitorControls,
+.competitor-shell.is-expanded #publishState,
+.competitor-shell:fullscreen #publishState,
+.competitor-shell:-webkit-full-screen #publishState {
+    flex: 0 0 auto;
+    background: #111827;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* Visible accessible EXIT, only while native fullscreen is active. */
+.competitor-shell:fullscreen .fs-exit-btn,
+.competitor-shell:-webkit-full-screen .fs-exit-btn,
+#embeddedViewerSection:fullscreen .fs-exit-btn,
+#embeddedViewerSection:-webkit-full-screen .fs-exit-btn,
+#embeddedViewerSection.is-player-fullscreen .fs-exit-btn {
+    display: inline-flex !important;
+}
+
+/* Viewer fullscreen shell: video + LIVE/VOD controls + EXIT, no crop. */
+#embeddedViewerSection:fullscreen,
+#embeddedViewerSection:-webkit-full-screen,
+#embeddedViewerSection.is-player-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+}
+
+#embeddedViewerSection:fullscreen #embeddedVideoContainer,
+#embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer,
+#embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: auto;
+    aspect-ratio: auto;
+}
+
+#embeddedViewerSection:fullscreen #embeddedVideoContainer video,
+#embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer video,
+#embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer video {
+    object-fit: contain;
+}
+
+#embeddedViewerSection:fullscreen #embeddedLiveControls,
+#embeddedViewerSection:-webkit-full-screen #embeddedLiveControls,
+#embeddedViewerSection.is-player-fullscreen #embeddedLiveControls,
+#embeddedViewerSection:fullscreen #embeddedVodControls,
+#embeddedViewerSection:-webkit-full-screen #embeddedVodControls,
+#embeddedViewerSection.is-player-fullscreen #embeddedVodControls {
+    flex: 0 0 auto;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+body.live-stage-locked,
+body.player-shell-locked {
     overflow: hidden;
 }
 

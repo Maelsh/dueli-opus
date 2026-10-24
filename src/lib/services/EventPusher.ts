@@ -220,6 +220,12 @@ export class EventPusher {
             opponent_id?: number | null;
             started_by?: number | null;
             ended_at?: string | null;
+            early_end?: boolean;
+            result_source?: string | null;
+            winner_id?: number | null;
+            /** Codex P2: true on the immediate terminal event; false only
+             *  after finalizeCompetition has settled the real winner. */
+            result_pending?: boolean;
             updated_at?: string;
         }
     ) {

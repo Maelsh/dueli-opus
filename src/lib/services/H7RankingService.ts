@@ -27,7 +27,7 @@ import {
     H7_SIMILAR_WEIGHTS,
     h7Balance,
     h7ProfileSignal,
-    h7Quality,
+    h7QualityForTier,
     h7RecencyOf,
     h7Redistribute,
     h7SearchLayer,
@@ -160,7 +160,7 @@ export function h7ScoreCard(
     profiles: Map<number, { sum: number; count: number }>
 ): { score: number; breakdown: H7ScoreBreakdown } {
     const weights = bucket === 'mixed' ? h7WatchWeightsForCard(identity, row.status) : h7WatchWeights(identity, bucket);
-    const q = h7Quality(row.stars_sum, row.total_views, row.likes_count, row.dislikes_count);
+    const q = h7QualityForTier(row.quality_tier, row.stars_sum, row.total_views, row.likes_count, row.dislikes_count);
     const rec = h7RecencyOf(row, row.nowMs);
     const sub: Record<keyof H7ScoreBreakdown, number | null> = {
         interests: identity === 'guest' ? null : interestsScore(row, ctx),
@@ -210,6 +210,39 @@ export function h7OrderScored<T extends { id: number; score: number; recency: nu
         if (b.recency !== a.recency) return b.recency - a.recency;
         return a.id - b.id;
     });
+}
+
+/**
+ * UNIT30.4 priority layer: all eligible long/normal rows first, then all
+ * trusted short completed rows, preserving the exact H7 order inside each
+ * layer. Applied AFTER eligibility/filtering and H7 scoring, BEFORE paging.
+ */
+export function h7ApplyPriorityTier<T extends { quality_tier?: number }>(ordered: T[]): T[] {
+    const normal: T[] = [];
+    const short: T[] = [];
+    for (const row of ordered) {
+        if (row.quality_tier === 2) short.push(row);
+        else normal.push(row);
+    }
+    return normal.concat(short);
+}
+
+/**
+ * Discovery/diversity per priority layer. Running the existing §6 pass on
+ * each tier separately prevents a short card from being pulled into the
+ * long tier's discovery slots; the concatenated result is long tier first,
+ * short tier after, with no eligible card dropped.
+ */
+export function h7ApplyDiscoveryDiversityByTier<
+    T extends { id: number; creator_id: number; opponent_id: number | null; created_at: string | null; total_views: number; quality_tier?: number }
+>(ordered: T[], nowMs: number): T[] {
+    const normal: T[] = [];
+    const short: T[] = [];
+    for (const row of ordered) {
+        if (row.quality_tier === 2) short.push(row);
+        else normal.push(row);
+    }
+    return h7ApplyDiscoveryDiversity(normal, nowMs).concat(h7ApplyDiscoveryDiversity(short, nowMs));
 }
 
 /**
@@ -335,7 +368,7 @@ export function h7SearchScore(
     ctx: H7ViewerContext,
     topicRelevance: number
 ): number {
-    const q = h7Quality(row.stars_sum, row.total_views, row.likes_count, row.dislikes_count);
+    const q = h7QualityForTier(row.quality_tier, row.stars_sum, row.total_views, row.likes_count, row.dislikes_count);
     const rec = h7RecencyOf(row, row.nowMs);
     const lang = langScore(row, ctx.language);
     const country = countryScore(row, ctx.country);
@@ -388,7 +421,7 @@ export function h7SimilarScore(
     const sameCat = (row.category_slug || '') !== '' && row.category_slug === ref.category_slug;
     const topic = sameSub ? 1 : sameCat ? 0.6 : 0;
     const text = h7TitleSimilarity(row.title || '', ref.title || '');
-    const q = h7Quality(row.stars_sum, row.total_views, row.likes_count, row.dislikes_count);
+    const q = h7QualityForTier(row.quality_tier, row.stars_sum, row.total_views, row.likes_count, row.dislikes_count);
     const rec = h7RecencyOf(row, row.nowMs);
     const lang = langScore(row, ctx.language);
     const country = countryScore(row, ctx.country);

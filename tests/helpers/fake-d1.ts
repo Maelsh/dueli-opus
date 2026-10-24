@@ -170,10 +170,24 @@ class FakeStmt {
             return this.db.competitions.find((c) => c.id === p[0]) ?? null;
         }
         // --- B12: aggregates/ELO selectors used by ScheduledTaskService ---
-        if (q.startsWith('select id, creator_id, opponent_id, status, ended_at, elo_applied_at from competitions where id = ?')) {
+        if (
+            q.startsWith('select id, creator_id, opponent_id, status, ended_at, elo_applied_at')
+            && q.includes('from competitions where id = ?')
+        ) {
             const comp = this.db.competitions.find((c) => c.id === p[0]);
             return comp
-                ? { id: comp.id, creator_id: comp.creator_id, opponent_id: comp.opponent_id ?? null, status: comp.status, ended_at: comp.ended_at ?? null, elo_applied_at: comp.elo_applied_at ?? null }
+                ? {
+                    id: comp.id,
+                    creator_id: comp.creator_id,
+                    opponent_id: comp.opponent_id ?? null,
+                    status: comp.status,
+                    ended_at: comp.ended_at ?? null,
+                    elo_applied_at: comp.elo_applied_at ?? null,
+                    // UNIT30.4 optional end metadata; old fixtures omit it.
+                    result_source: comp.result_source ?? null,
+                    ended_by_user_id: comp.ended_by_user_id ?? null,
+                    ended_early: comp.ended_early ?? 0,
+                }
                 : null;
         }
         // 7.A/7.B: SignalingAuthService loader (status + started_at for session state).

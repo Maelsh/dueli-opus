@@ -366,6 +366,26 @@ export class P2PConnection {
         );
     }
 
+    /**
+     * UNIT30.4 §15.7 — read-only truth for the start/End button. A click or
+     * the competition being LIVE is not publishing; this reports the actual
+     * RTCRtpSender tracks. A muted/disabled track is still published; an
+     * ended/removed sender is not. Missing readyState (test doubles) counts as
+     * live so the adapter contract stays usable outside a browser.
+     */
+    getPublishedMediaState(): { published: boolean; video: boolean; audio: boolean } {
+        if (!this.localPublished || !this.pc) {
+            return { published: false, video: false, audio: false };
+        }
+        const tracks = this.pc.getSenders()
+            .map(sender => sender.track)
+            .filter((track): track is MediaStreamTrack => !!track)
+            .filter(track => !track.readyState || track.readyState === 'live');
+        const video = tracks.some(track => track.kind === 'video');
+        const audio = tracks.some(track => track.kind === 'audio');
+        return { published: video || audio, video, audio };
+    }
+
     private findSender(kind: 'audio' | 'video'): RTCRtpSender | undefined {
         if (!this.pc) return undefined;
         const senders = this.pc.getSenders();

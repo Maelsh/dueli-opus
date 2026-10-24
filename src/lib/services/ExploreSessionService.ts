@@ -34,6 +34,7 @@ import {
 } from '../../models/ExploreResultSessionModel';
 import { ExploreResultChunkModel } from '../../models/ExploreResultChunkModel';
 import { CATEGORY_SUBCATEGORIES } from '../../shared/constants';
+import { H7_DISCOVERY_ORDERING_VERSION, H7_POLICY_VERSION } from './H7RankingPolicy';
 
 /** The only surface B7 ships; D1/D2 add their own surface names later. */
 export const EXPLORE_SURFACE = 'explore_competitions';
@@ -196,13 +197,14 @@ export class ExploreResultProvider implements ResultSessionProvider {
                     row,
                 }));
                 const ordered = ranking.h7OrderScored(scored);
-                const diverse = ranking.h7ApplyDiscoveryDiversity(
+                const diverse = ranking.h7ApplyDiscoveryDiversityByTier(
                     ordered.map((s) => ({
                         id: s.id,
                         creator_id: s.row.creator_id,
                         opponent_id: s.row.opponent_id,
                         created_at: s.row.created_at,
                         total_views: s.row.total_views,
+                        quality_tier: s.row.quality_tier,
                     })),
                     nowMs
                 );
@@ -228,13 +230,14 @@ export class ExploreResultProvider implements ResultSessionProvider {
             return { id: r.id, score, recency: policy.h7RecencyOf({ ...r }, nowMs), row: r };
         });
         const ordered = ranking.h7OrderScored(scored);
-        const diverse = ranking.h7ApplyDiscoveryDiversity(
+        const diverse = ranking.h7ApplyDiscoveryDiversityByTier(
             ordered.map((s) => ({
                 id: s.id,
                 creator_id: s.row.creator_id,
                 opponent_id: s.row.opponent_id,
                 created_at: s.row.created_at,
                 total_views: s.row.total_views,
+                quality_tier: s.row.quality_tier,
             })),
             nowMs
         );
@@ -301,7 +304,16 @@ export class ExploreSessionService {
     }
 
     static canonicalKey(filters: ExploreCanonicalFilters): string {
-        return JSON.stringify([filters.search, filters.category, filters.subcategory, filters.status]);
+        // Explicit ordering-policy version: pre-UNIT30.4 frozen sessions are
+        // not silently reinterpreted with the new priority layer. A mismatch
+        // is the existing 409/refresh transition.
+        return JSON.stringify([
+            filters.search,
+            filters.category,
+            filters.subcategory,
+            filters.status,
+            `${H7_POLICY_VERSION}+${H7_DISCOVERY_ORDERING_VERSION}`,
+        ]);
     }
 
     /**

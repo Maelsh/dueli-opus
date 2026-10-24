@@ -101,8 +101,9 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         // Exactly one call site of the publish contract (the explicit handler).
         expect(page.match(/p2p\.publishLocalStream\(\)/g)?.length).toBe(1);
         const publish = between(page, 'async function publishMedia()', 'window.publishMedia = publishMedia');
-        expect(publish).toContain('if (!p2p || mediaPublished) return;');
+        expect(publish).toContain('if (!p2p || publishInFlight || endInFlight || endUnknown) return;');
         expect(publish).toContain('p2p.publishLocalStream()');
+        expect(publish).toContain('republishPublishedTracks');
         expect(publish).toContain('tr.nothing_to_publish');
         // Acquisition must not publish (initLocalStream is preview-only).
         const init = between(page, 'async function initCompetitorStream()', 'async function publishMedia()');
@@ -118,23 +119,53 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         expect(page).not.toContain('getSenders');
     });
 
-    it('4. honest publish state + no misleading end/start buttons', () => {
+    it('4. one honest tower action; START and PUBLISH are never separate entries', () => {
         const paint = between(page, 'function paintCompetitorControls()', 'function applyStageVisibility()');
-        // Publish line is driven by mediaPublished/prepReady, never by LIVE.
-        expect(paint).toContain('if (mediaPublished) setPublishState(tr.publish_state_on);');
+        // Publish line is driven by actual sender truth + prepReady, never LIVE.
+        expect(paint).toContain('else if (published.published) setPublishState(tr.publish_state_on);');
         expect(paint).toContain('setPublishState(tr.publish_state_off)');
         expect(paint).toContain('setPublishState(tr.media_none)');
-        expect(paint).toContain("setHidden('endBtn', status !== 'live')");
-        expect(paint).toContain("setHidden('startBtn', !canStart)");
-        expect(paint).toContain("const canStart = status === 'accepted' && !!competitionData.opponent_id && !startInFlight;");
-        // Publish appears only with a real local source + p2p, and not twice.
-        expect(paint).toContain("setHidden('publishBtn', !p2p || mediaPublished || !hasMedia)");
-        expect(paint).toContain("setHidden('screenBtn', !supportsScreenShare())");
-        // End is guarded by LIVE state and an explicit confirmation.
+        expect(paint).toContain("setHidden('endBtn', buttons.end === 'hidden')");
+        // ONE tower entry whose action follows state + role + real media.
+        expect(paint).toContain("setHidden('liveActionBtn', buttons.start === 'hidden')");
+        expect(paint).toContain('window.resolveLiveAction');
+        expect(paint).toContain('window.resolveCompetitorButtons');
+        expect(paint).toContain('startInFlight: startInFlight');
+        expect(paint).toContain('publishInFlight: publishInFlight');
+        expect(paint).toContain("const actionBtn = document.getElementById('liveActionBtn')");
+        expect(page).not.toContain('id="startBtn"');
+        expect(page).not.toContain('id="publishBtn"');
+        // The start API and publish consent handler are NOT removed; the one
+        // entry delegates to them. Opponent publish must not become start.
+        expect(page).toMatch(/window\.startCompetition\s*=/);
+        expect(page).toMatch(/window\.publishMedia\s*=/);
+        expect(page).toMatch(/window\.runLiveAction\s*=/);
+        expect(page).toContain('await startCompetition();');
+        expect(page).toContain('await publishMedia();');
+        // End is guarded by LIVE state and an explicit confirmation that
+        // includes the server-authoritative early-withdrawal warning.
         const end = between(page, 'window.endStream = async function()', '// Navigation away never ends');
         expect(end).toContain("competitionData.status !== 'live'");
-        expect(end).toContain('tr.end_competition_confirm');
+        expect(end).toContain('isEarlyEndWindow()');
+        expect(end).toContain('tr.early_end_confirm');
+        expect(end).toContain('if (!confirm(confirmText)) return;');
         expect(end).toContain("'/api/competitions/' + competitionId + '/end'");
+        expect(end).toContain('body: JSON.stringify({})');
+        // Cancel returns before the network call; the client never sends its
+        // own duration/winner/early flag. The server decides.
+        const cancelAt = end.indexOf('if (!confirm(confirmText)) return;');
+        const fetchAt = end.indexOf("fetch('/api/competitions/' + competitionId + '/end'");
+        expect(cancelAt).toBeGreaterThanOrEqual(0);
+        expect(fetchAt).toBeGreaterThan(cancelAt);
+        const arWarning = readSrc('src/i18n/ar.ts').match(/early_end_confirm:\s*'([^']+)'/)?.[1] ?? '';
+        const enWarning = readSrc('src/i18n/en.ts').match(/early_end_confirm:\s*'([^']+)'/)?.[1] ?? '';
+        expect(arWarning).toContain('10');
+        expect(arWarning).toContain('0');
+        expect(arWarning).toContain('الخصم');
+        expect(enWarning).toContain('10');
+        expect(enWarning).toContain('opponent');
+        expect(enWarning.toLowerCase()).toContain('quality');
+        expect(enWarning.toLowerCase()).toContain('0');
     });
 
     it('5. tools mirror the mandatory reference palette, icon-only + translated', () => {
@@ -151,8 +182,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         expect(referenceCss).toMatch(/\.control-btn\s*\{[^}]*width:\s*40px;[^}]*height:\s*40px;/);
 
         const tools: Array<[string, string, string]> = [
-            ['startBtn', 'bg-green-600', 'start_competition'],
-            ['publishBtn', 'bg-green-600', 'prep_publish_host'],
+            ['liveActionBtn', 'bg-green-600', 'start_competition'],
             ['screenBtn', 'bg-blue-600', 'share_screen'],
             ['videoBtn', 'bg-purple-600', 'toggle_camera'],
             ['switchCamBtn', 'bg-indigo-600', 'switch_camera'],
@@ -176,8 +206,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         }
         // Every tool handler is wired in the page and CSP-allowlisted.
         const handlers: Array<[string, string]> = [
-            ['startBtn', 'startCompetition'],
-            ['publishBtn', 'publishMedia'],
+            ['liveActionBtn', 'runLiveAction'],
             ['screenBtn', 'shareScreen'],
             ['videoBtn', 'toggleVideo'],
             ['switchCamBtn', 'switchCamera'],
@@ -192,6 +221,12 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         const csp = readSrc(CSP);
         for (const [id, fn] of handlers) {
             expect(button(page, id), `${id} CSP wiring`).toContain(`data-csp-fn="${fn}"`);
+            expect(page, `${fn} defined`).toMatch(new RegExp(`window\\.${fn}\\s*=`));
+            expect(csp, `${fn} allowlisted`).toContain(`'${fn}'`);
+        }
+        // The delegated APIs stay alive and CSP-safe even though the visual
+        // entries are unified; this preserves the existing start contract.
+        for (const fn of ['startCompetition', 'publishMedia']) {
             expect(page, `${fn} defined`).toMatch(new RegExp(`window\\.${fn}\\s*=`));
             expect(csp, `${fn} allowlisted`).toContain(`'${fn}'`);
         }
@@ -210,15 +245,20 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
         // The only canvas is the hidden recording compositor canvas.
         expect(stage.match(/<canvas/g)?.length).toBe(1);
         expect(stage).toContain('id="compositeCanvas" class="hidden"');
-        // Layouts: normal, in-page expanded, native fullscreen.
+        // Layouts: normal, in-page expanded SHELL (video + toolbar), native
+        // fullscreen (a different mode), and the viewer fullscreen shell.
         const styles = readSrc(STYLES);
         expect(styles).toContain('.live-stage.is-swapped');
-        expect(styles).toContain('.live-stage.is-expanded');
+        expect(styles).toContain('.competitor-shell.is-expanded');
+        expect(styles).toContain('.competitor-shell:fullscreen');
+        expect(styles).toContain('#embeddedViewerSection:fullscreen');
+        expect(styles).toContain('#embeddedViewerSection.is-player-fullscreen');
+        expect(styles).not.toContain('.live-stage.is-expanded');
         expect(styles).toContain('.live-stage-pip');
         expect(styles).toContain('body.live-stage-locked');
         expect(page).toContain('window.toggleExpandStage = function()');
-        expect(page).toContain("stage.classList.toggle('is-swapped', videosSwapped)");
-        expect(page).toContain("stage.classList.toggle('is-expanded', stageExpanded)");
+        expect(page).toContain("stage.classList.toggle('is-swapped', layout === 'remote' && videosSwapped)");
+        expect(page).toContain("shell.classList.toggle('is-expanded', stageExpanded)");
         expect(page).toContain("document.body.classList.toggle('live-stage-locked', stageExpanded)");
         // Small pane is draggable inside bounds, hideable, and resets on swap.
         const pip = between(page, 'function makePipDraggable(el)', 'function setupCompetitorStage()');

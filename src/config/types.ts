@@ -220,9 +220,18 @@ export interface Competition extends TimestampedEntity {
   // Revenue / Rating Data
   creator_rating?: number;
   opponent_rating?: number;
+  average_rating?: number;
+  winner_id?: number | null;
   creator_earnings?: number;
   opponent_earnings?: number;
   ad_revenue?: number;
+  // UNIT30.4: server-authoritative end metadata (optional for old literals).
+  ended_early?: number;
+  ended_by_user_id?: number | null;
+  end_reason?: string | null;
+  result_source?: string | null;
+  duration_seconds?: number | null;
+  result_version?: number;
   is_fake?: number; // C7: 1 = synthetic/demo row, 0 = real (see SyntheticRetirementService)
 }
 
