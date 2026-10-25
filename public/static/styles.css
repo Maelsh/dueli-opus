@@ -4225,6 +4225,9 @@ body.live-stage-locked, body.player-shell-locked {
   transition: background-color 0.2s ease, transform 0.2s ease;
   flex: 0 0 auto;
 }
+.live-tool.hidden {
+  display: none;
+}
 .live-tool:hover {
   transform: translateY(-1px);
 }
