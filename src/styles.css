@@ -347,6 +347,16 @@ body.player-shell-locked {
     flex: 0 0 auto;
 }
 
+/* UNIT30.4 acceptance-gate defect: Tailwind v4 keeps `.hidden` inside
+   @layer utilities, but this unlayered palette rule beats ANY layer at
+   normal importance (CSS Cascade Layers), so a tool carrying the `hidden`
+   class stayed rendered — the Start tower sat beside End while publishing
+   (computed display flex on production). Re-assert the hide at higher
+   specificity, still unlayered, so `.live-tool.hidden` is display:none. */
+.live-tool.hidden {
+    display: none;
+}
+
 .live-tool:hover {
     transform: translateY(-1px);
 }
