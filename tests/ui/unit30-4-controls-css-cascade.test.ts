@@ -24,7 +24,7 @@
  *
  * Note: the condition name below is split ('@' + 'container') so this file
  * stays inert to Tailwind's automatic content extraction — a literal token
- * would mint a stray `.\@container` utility into the built stylesheet.
+ * would mint a stray container-type utility into the built stylesheet.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
