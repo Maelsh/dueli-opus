@@ -103,9 +103,42 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch('/api/settings');
                     const data = await res.json();
                     currentSettings = data.data?.settings || {};
+                    await loadAuthoritativeProfile();
                     renderSettings();
                 } catch (err) {
                     console.error('Failed to load settings:', err);
+                }
+            }
+
+            // R4-PROFILE-SAVE-1 (P-01): the session DTO carries display_name but
+            // NOT bio, and both are stale right after a save. The authoritative
+            // user row is read through the EXISTING user read path
+            // (GET /api/users/:username) so the form shows saved values instead
+            // of in-memory ones. No new endpoint is introduced.
+            async function loadAuthoritativeProfile() {
+                const username = window.currentUser && window.currentUser.username;
+                if (!username) return null;
+                try {
+                    const res = await fetch('/api/users/' + encodeURIComponent(username));
+                    const data = await res.json();
+                    const profile = data && data.success && data.data ? data.data : null;
+                    if (!profile) return null;
+                    applyProfile(profile);
+                    return profile;
+                } catch (err) {
+                    console.error('Failed to load profile:', err);
+                    return null;
+                }
+            }
+
+            function applyProfile(profile) {
+                if (!profile) return;
+                if (!window.currentUser) window.currentUser = {};
+                if (profile.display_name !== undefined && profile.display_name !== null) {
+                    window.currentUser.display_name = profile.display_name;
+                }
+                if (profile.bio !== undefined) {
+                    window.currentUser.bio = profile.bio;
                 }
             }
             
@@ -230,18 +263,28 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         },
                         body: JSON.stringify(settings)
                     });
-                    
-                    if (res.ok) {
+
+                    const data = await res.json().catch(() => null);
+
+                    // R4-PROFILE-SAVE-1 (P-01): a 200 alone is NOT proof of a
+                    // save — the response body decides. A failed save must
+                    // never be reported as a success.
+                    if (res.ok && data && data.success) {
+                        // Adopt the values the server actually persisted.
+                        if (data.data?.settings) currentSettings = Object.assign({}, currentSettings, data.data.settings);
+                        if (data.data?.profile) applyProfile(data.data.profile);
+                        renderSettings();
                         window.dueli?.showToast(\`\${tr.settings_page?.saved || 'Settings saved!'}\`, 'success');
                         // Reload if language changed
                         if (settings.default_language !== lang) {
                             window.location.href = '/settings?lang=' + settings.default_language;
                         }
                     } else {
-                        window.dueli?.showToast(\`\${tr.error_occurred || 'Failed to save settings'}\`, 'error');
+                        window.dueli?.showToast(\`\${data?.error || tr.error_occurred || 'Failed to save settings'}\`, 'error');
                     }
                 } catch (err) {
                     console.error('Failed to save settings:', err);
+                    window.dueli?.showToast(\`\${tr.error_occurred || 'Failed to save settings'}\`, 'error');
                 }
             }
             

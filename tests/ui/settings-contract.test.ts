@@ -12,6 +12,12 @@
  *     (SettingsController.updateSettings — `language` and
  *     `push_notifications` are IGNORED)              (pinned by
  *     tests/e2e/beta-core-path.spec.ts:139-145)
+ *   R4-PROFILE-SAVE-1 (P-01): PUT /api/settings ALSO accepts display_name
+ *     and bio and writes them to the AUTHENTICATED user's own `users` row
+ *     (UserModel). Before the fix the page sent them and the endpoint
+ *     dropped them, so it answered 200 while nothing was saved. The response
+ *     carries the persisted values (`data.profile`), and the page decides
+ *     success from the response BODY, never from the 200 alone.
  *   The only toast API is window.dueli.showToast(message, type)
  *     (src/client/index.ts) — window.dueli.toast does not exist.
  *
@@ -144,5 +150,26 @@ describe('R1.4 /settings save feedback + section strings', () => {
     it('server-rendered shell leaks no raw placeholders', () => {
         const src = readSrc(PAGE);
         expect(src.slice(0, src.indexOf('<script nonce'))).not.toContain('\\${');
+    });
+});
+
+describe('R4-PROFILE-SAVE-1 (P-01) — the profile fields are really saved', () => {
+    it('sends the profile fields the API now persists', () => {
+        const keys = savePayloadKeys(readSrc(PAGE));
+        for (const k of ['display_name', 'bio']) {
+            expect(keys, `save payload must include ${k}`).toContain(k);
+        }
+    });
+
+    it('reads the authoritative profile (the users row) instead of the session copy', () => {
+        const src = readSrc(PAGE);
+        expect(src, 'the page must read the authoritative user row').toContain('/api/users/');
+        expect(src, 'the page must adopt the persisted profile values').toContain('applyProfile');
+    });
+
+    it('decides success from the response body, not from the 200 alone', () => {
+        const src = readSrc(PAGE);
+        expect(src, 'the body must decide the outcome').toContain('data.success');
+        expect(src, 'a status-only check must not be the success test').not.toContain('if (res.ok) {');
     });
 });
