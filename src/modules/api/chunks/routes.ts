@@ -830,8 +830,49 @@ chunksRoutes.get('/playlist/:id', async (c) => {
         }, 200, jsonHeaders);
     };
 
-    const empty = (upstream: string) => {
+    // UNIT30.6 D-02: a completed competition with ZERO index rows and no
+    // active authorized drain can never receive chunks — the recording is
+    // terminally none (production 2263: marker exists with zero counts, no
+    // rows, no lease, yet clients polled "processing" for minutes). The
+    // verdict is computed ONLY here (zero rows + marker present): live
+    // zero-chunk keeps the live-waiting contract and pays no extra reads;
+    // an actively held lease keeps the authorized drain contract. Any read
+    // failure falls back to the legacy bounded-poll behavior.
+    const zeroChunkTerminalNone = async (): Promise<boolean> => {
+        if (!db || !indexFinalized) return false;
+        try {
+            const comp = await db.prepare('SELECT status FROM competitions WHERE id = ?')
+                .bind(compId)
+                .first<{ status: string } | null>();
+            if (!comp || comp.status !== 'completed') return false;
+            const lease = await new RecordingLeaseModel(db).status(compId);
+            return !lease.held;
+        } catch {
+            return false;
+        }
+    };
+
+    const empty = async (upstream: string) => {
         if (hasIndex) return serveIndex(upstream);
+        if (await zeroChunkTerminalNone()) {
+            // Additive authoritative metadata on the SAME IndexMetadata shape
+            // the d1-authority playlist serves — the client resolves to
+            // not-recorded/unavailable immediately, result page unaffected.
+            const merged = mergePlaylistWithIndex([], [], base, indexFinalized, indexFinalizedAt);
+            return c.json({
+                success: true,
+                id: Number(id),
+                chunks: [],
+                chunk_count: 0,
+                max_index: -1,
+                extension: null,
+                total_duration: null,
+                upstream,
+                checked_at: new Date().toISOString(),
+                index_source: 'd1' as const,
+                index_metadata: { ...merged.metadata, recording_state: 'none' as const },
+            }, 200, jsonHeaders);
+        }
         return c.json({
         success: true,
         id: Number(id),

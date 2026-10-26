@@ -1294,6 +1294,8 @@ export const ar = {
     recording_processing: 'جاري تجهيز التسجيل...',
     // ── R4-CHUNK-PLAY-1: حالات المشاهدة للجمهور ──────────────
     recording_not_ready: 'التسجيل غير متاح',
+    // ── UNIT30.6 D-02: حالة صادقة لمنافسة مكتملة بلا تسجيل ──────────────
+    recording_none: 'لا يوجد تسجيل لهذه المنافسة',
     streaming_unavailable: 'خدمة البث غير متاحة',
     connecting_to_stream: 'جارٍ الاتصال بالبث...',
     loading_video: 'جارٍ تحميل الفيديو...',

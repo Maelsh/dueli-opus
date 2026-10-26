@@ -1318,6 +1318,8 @@ export const en = {
     recording_processing: 'Preparing the recording...',
     // ── R4-CHUNK-PLAY-1: audience live/VOD states ──────────────
     recording_not_ready: 'Recording not available',
+    // ── UNIT30.6 D-02: honest state for a completed competition with no recording ──────────────
+    recording_none: 'No recording for this competition',
     streaming_unavailable: 'Streaming service unavailable',
     connecting_to_stream: 'Connecting to stream...',
     loading_video: 'Loading video...',
