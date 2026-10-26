@@ -895,6 +895,9 @@
   .min-h-\[1\.25rem\] {
     min-height: 1.25rem;
   }
+  .min-h-\[48px\] {
+    min-height: 48px;
+  }
   .min-h-\[72px\] {
     min-height: 72px;
   }
@@ -3290,6 +3293,9 @@
   .disabled\:opacity-50:disabled {
     opacity: 50%;
   }
+  .disabled\:opacity-60:disabled {
+    opacity: 60%;
+  }
   @media (prefers-reduced-motion: no-preference) {
     .motion-safe\:animate-pulse {
       animation: var(--animate-pulse);
@@ -3368,6 +3374,9 @@
     }
     .md\:flex {
       display: flex;
+    }
+    .md\:hidden {
+      display: none;
     }
     .md\:h-28 {
       height: calc(var(--spacing) * 28);
