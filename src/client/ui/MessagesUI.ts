@@ -160,19 +160,32 @@ export class MessagesUI {
     }
 
     /**
-     * Mark all messages as read
+     * Mark all messages as read (persisted inbox control).
+     *
+     * R4-MESSAGES-1 / M-05: this used to clear only local state, so the badge
+     * came back on the next poll/reload. The server now owns the read state;
+     * after a confirmed success we re-read both the badge count and the
+     * conversation previews from the API. A failed request changes nothing —
+     * the UI never fabricates a zero inbox.
      */
     static async markAllRead(): Promise<void> {
         try {
-            // No dedicated mark-all-read endpoint exists on the backend
-            // (MessageController marks a conversation read only when its thread
-            // is opened via GET /api/conversations/:id/messages). The header
-            // dropdown is a preview of conversations, so clearing here is a
-            // local badge reset only — it never fabricates a server state.
-            this.unreadCount = 0;
-            this.updateBadge();
-            this.conversations = this.conversations.map(c => ({ ...c, unread_count: 0 }));
-            this.renderList();
+            const response = await ApiClient.post('/api/messages/read-all', {});
+            if (!response || response.success !== true) {
+                console.error('Failed to mark messages as read:', response?.error);
+                return;
+            }
+            await Promise.all([
+                this.loadUnreadCount(),
+                this.loadMessages(),
+            ]);
+            // M-05: other mounted surfaces (the messages page) refresh their
+            // own previews/badges from the same persisted state.
+            try {
+                window.dispatchEvent(new CustomEvent('dueli:messages-read-all', {
+                    detail: { updated: response.data?.updated ?? 0 },
+                }));
+            } catch (e) { /* non-browser / no CustomEvent */ }
         } catch (error) {
             console.error('Failed to mark messages as read:', error);
         }

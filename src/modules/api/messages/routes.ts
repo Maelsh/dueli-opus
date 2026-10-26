@@ -47,16 +47,28 @@ messagesRoutes.post('/conversations/:id/messages', async (c) => {
 /**
  * POST /api/users/:id/message
  * Start new conversation
+ *
+ * Explicit per-route guard (on top of the router wildcard above) so the
+ * generated route inventory records the real protection instead of relying
+ * on wildcard-prefix matching it cannot express (R4-MESSAGES-1).
  */
-messagesRoutes.post('/users/:id/message', async (c) => {
+messagesRoutes.post('/users/:id/message', authMiddleware({ required: true }), async (c) => {
     return controller.startConversation(c);
+});
+
+/**
+ * POST /api/messages/read-all
+ * Persistently mark every received message as read (R4-MESSAGES-1 / M-05)
+ */
+messagesRoutes.post('/messages/read-all', authMiddleware({ required: true }), async (c) => {
+    return controller.markAllRead(c);
 });
 
 /**
  * GET /api/messages/unread
  * Get unread message count
  */
-messagesRoutes.get('/messages/unread', async (c) => {
+messagesRoutes.get('/messages/unread', authMiddleware({ required: true }), async (c) => {
     return controller.getUnreadCount(c);
 });
 

@@ -558,6 +558,14 @@ export const en = {
         no_messages: 'No messages yet',
         type_message: 'Type a message...',
         enter_message: 'Enter your message',
+        back_to_conversations: 'Back to chats',
+        back_to_admin_messages: 'Back to admin messages',
+        send: 'Send',
+        send_failed: 'Could not send the message. Try again.',
+        sending: 'Sending...',
+        composer_hint: 'Enter to send · Shift+Enter for a new line',
+        new_conversation: 'New conversation',
+        load_failed: 'Could not load messages',
     },
 
     // R2-M (H6): support threads / admin inbox

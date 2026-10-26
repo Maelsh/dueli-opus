@@ -260,6 +260,61 @@ describe('B1 — messages schema alignment (0014) on real D1', () => {
         expect(readAsC).toHaveLength(0);
     });
 
+    it('persists mark-all-read only for rows addressed to the caller (receiver scope)', () => {
+        const READER_D = 930001;
+        const OTHER_E = 930002;
+        const OTHER_F = 930003;
+        insertUser(READER_D, 'md');
+        insertUser(OTHER_E, 'me');
+        insertUser(OTHER_F, 'mf');
+
+        const de = getOrCreateConversation(READER_D, OTHER_E);
+        const ef = getOrCreateConversation(OTHER_E, OTHER_F);
+        insertMessage(de, OTHER_E, READER_D, 'read-all target');
+        insertMessage(de, READER_D, OTHER_E, 'reader outgoing');
+        insertMessage(ef, OTHER_E, OTHER_F, 'third-party unread');
+
+        expect(unreadCount(READER_D)).toBe(1);
+        expect(unreadCount(OTHER_E)).toBe(1);
+        expect(unreadCount(OTHER_F)).toBe(1);
+
+        // Mirror of MessageModel.markAllAsRead — receiver_id + is_read = 0.
+        execD1(
+            `UPDATE messages SET is_read = 1, read_at = '2026-09-08 12:00:00' ` +
+                `WHERE receiver_id = ${READER_D} AND is_read = 0`,
+        );
+
+        const target = queryD1(
+            `SELECT is_read, read_at FROM messages WHERE content = 'read-all target'`,
+        ) as unknown as { is_read: number; read_at: string | null }[];
+        expect(target).toHaveLength(1);
+        expect(target[0].is_read).toBe(1);
+        expect(target[0].read_at).not.toBeNull();
+
+        // The caller's outgoing row and the third-party inbox are untouched.
+        const outgoing = queryD1(
+            `SELECT is_read, read_at FROM messages WHERE content = 'reader outgoing'`,
+        ) as unknown as { is_read: number; read_at: string | null }[];
+        expect(outgoing[0].is_read).toBe(0);
+        expect(outgoing[0].read_at).toBeNull();
+        const thirdParty = queryD1(
+            `SELECT is_read, read_at FROM messages WHERE content = 'third-party unread'`,
+        ) as unknown as { is_read: number; read_at: string | null }[];
+        expect(thirdParty[0].is_read).toBe(0);
+        expect(thirdParty[0].read_at).toBeNull();
+
+        expect(unreadCount(READER_D)).toBe(0);
+        expect(unreadCount(OTHER_E)).toBe(1);
+        expect(unreadCount(OTHER_F)).toBe(1);
+
+        // Idempotent on refire.
+        execD1(
+            `UPDATE messages SET is_read = 1, read_at = '2026-09-08 12:01:00' ` +
+                `WHERE receiver_id = ${READER_D} AND is_read = 0`,
+        );
+        expect(unreadCount(READER_D)).toBe(0);
+    });
+
     describe('0014 backfill — legacy messages without conversation_id', () => {
         const LEGACY_A = 920001;
         const LEGACY_B = 920002;

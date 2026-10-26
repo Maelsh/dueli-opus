@@ -534,6 +534,14 @@ export const ar = {
         no_messages: 'لا توجد رسائل',
         type_message: 'اكتب رسالة...',
         enter_message: 'أدخل رسالتك',
+        back_to_conversations: 'العودة إلى المحادثات',
+        back_to_admin_messages: 'العودة إلى رسائل الإدارة',
+        send: 'إرسال',
+        send_failed: 'تعذّر إرسال الرسالة. حاول مرة أخرى.',
+        sending: 'جاري الإرسال...',
+        composer_hint: 'Enter للإرسال · Shift+Enter لسطر جديد',
+        new_conversation: 'محادثة جديدة',
+        load_failed: 'تعذّر تحميل الرسائل',
     },
 
     // R2-M (H6): محادثات الدعم / صندوق الإدارة
