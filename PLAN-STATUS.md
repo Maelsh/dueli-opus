@@ -14,6 +14,7 @@
 - **الملفات:** `src/controllers/SettingsController.ts`، `src/modules/pages/settings-page.ts`، `tests/api/r4-profile-save-1.test.ts` (جديد)، `tests/ui/settings-profile-save.test.ts` (جديد)، `tests/e2e/settings-profile-save.spec.ts` (جديد)، `tests/ui/settings-contract.test.ts` (نص العقد + 3 حالات)، مع هذا السجل و`PLAN-STATUS.md`. لا ملفات أخرى.
 - **NOT TESTED:** لا قراءة/كتابة إنتاج، ولا قبول على staging/preview، ولا CI بعيد على الرأس الجديد بعد الدفع، ولا مرور قارئ شاشة/IME. رحلة المتصفح جُرّبت في Chromium (سطح مكتب، ar + en)؛ لا جهاز فعلي ولا نقر إنتاجي يدوي.
 - **الحالة / NEXT:** `LOCAL VERIFIED — REMOTE PENDING`. غير مدموج وغير منشور ولا «متحقق في الإنتاج»؛ بانتظار المراجعة الخارجية المستقلة.
+- **PR / CI (PR #140):** PR [#140](https://github.com/Maelsh/dueli-opus/pull/140) مقابل `main`؛ commit المصدر `9673d9b96f0fd28f878ed2dfdd0cd25f6a7fe000`. Quality Gate run [40383980286](https://github.com/Maelsh/dueli-opus/actions/runs/40383980286) = **ناجح (1m27s)**؛ وDeploy to Cloudflare Pages run [40383980343](https://github.com/Maelsh/dueli-opus/actions/runs/40383980343) = **ناجح** مع `Quality Gate passed for this SHA` + معاينة Cloudflare Pages = **ناجح** على SHA نفسه. commit الوثائق يتبع على نفس الفرع.
 
 ## 2026-10-26 — UNIT31 / R4-MESSAGES-1 / F-1 · أول إرسال يحمّل تاريخ المحادثة المتبنّاة كاملًا · فرع feat/r4-messages-1 (من 70ce057 = origin/main)
 
