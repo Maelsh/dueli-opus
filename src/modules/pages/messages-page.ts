@@ -711,7 +711,15 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         }
                     }
 
-                    if (!sentMessage && currentConversationId) {
+                    // F-1: a confirmed send is not proof that loadedMessages
+                    // has the whole thread. A ?user= deep link can resume a
+                    // pre-existing conversation that was outside the loaded
+                    // conversations page; the POST response is the first time
+                    // the client learns its id. Always re-read the adopted
+                    // thread from the server so older messages appear now and
+                    // the new row is rendered exactly once (loadMessages
+                    // replaces the array with the authoritative history).
+                    if (currentConversationId) {
                         await loadMessages(currentConversationId);
                     } else {
                         renderMessages();

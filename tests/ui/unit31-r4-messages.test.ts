@@ -71,13 +71,20 @@ function makeRouter(state: PageState) {
             return json(200, { success: true, data: { unread: 0 } });
         }
         if (url.startsWith('/api/conversations?')) {
-            return json(200, { success: true, data: { conversations: state.conversations } });
+            // Emulate res.json(): callers get fresh objects, never the
+            // harness's mutable fixture arrays.
+            return json(200, { success: true, data: { conversations: state.conversations.map((c) => ({ ...c })) } });
         }
         const conv = url.match(/^\/api\/conversations\/(\d+)\/messages$/);
         if (conv && method === 'GET') {
-            return json(200, { success: true, data: { messages: state.messages } });
+            return json(200, { success: true, data: { messages: state.messages.map((m) => ({ ...m })) } });
         }
         if (conv && method === 'POST') {
+            const outcome = state.post ? await state.post(url, body) : json(500, { success: false, error: 'no post handler' });
+            return outcome;
+        }
+        const startConversation = url.match(/^\/api\/users\/(\d+)\/message$/);
+        if (startConversation && method === 'POST') {
             const outcome = state.post ? await state.post(url, body) : json(500, { success: false, error: 'no post handler' });
             return outcome;
         }
@@ -357,6 +364,67 @@ describe('UNIT31 R4-MESSAGES-1 — M-02 ?user= resolution (runtime)', () => {
     });
 });
 
+describe('UNIT31 R4-MESSAGES-1 — F-1 pre-existing conversation outside the first page', () => {
+    it('loads earlier history after the first send adopts the returned conversation id', async () => {
+        const state: PageState = {
+            unread: 0,
+            // The newest conversations page does NOT contain user B. The
+            // only way to learn the old conversation id is the send response.
+            conversations: [
+                { id: 7, other_user_id: 9, other_username: 'sara', other_display_name: 'Sara', last_message: 'recent', unread_count: 0 },
+            ],
+            messages: [],
+            users: {
+                bee: { id: 11, username: 'bee', display_name: 'Bee Display', avatar_url: null },
+            },
+        };
+        state.post = async (url) => {
+            if (url !== '/api/users/11/message') return json(500, { success: false, error: 'unexpected post' });
+            // The server resumed an EXISTING conversation (id 88) that was
+            // outside the loaded list; the thread already had history.
+            state.messages = [
+                { id: 40, conversation_id: 88, sender_id: 11, content: 'historical one', created_at: '2026-10-01T09:00:00Z' },
+                { id: 41, conversation_id: 88, sender_id: 1, content: 'historical two', created_at: '2026-10-01T09:05:00Z' },
+                { id: 42, conversation_id: 88, sender_id: 1, content: 'brand new', created_at: '2026-10-26T12:00:00Z' },
+            ];
+            return json(200, {
+                success: true,
+                data: {
+                    conversation: { id: 88, user1_id: 1, user2_id: 11 },
+                    message: state.messages[2],
+                },
+            });
+        };
+
+        const { h, sandbox, router } = await mountPage(state, '?user=bee&lang=en');
+        await settle();
+
+        // Deep link resolved the profile into a compose state; no send yet.
+        expect(router.calls.some((c) => c.url === '/api/users/11/message')).toBe(false);
+        expect(h.el('chatUserName').textContent).toBe('Bee Display');
+        expect(h.el('messageInput').classList.contains('hidden')).toBe(false);
+
+        h.el('newMessage').value = 'brand new';
+        await sandbox.sendMessage();
+        await settle(20);
+
+        // F-1: the returned conversation id must drive a real history read.
+        const historyReads = router.calls.filter((c) => c.url === '/api/conversations/88/messages' && c.method === 'GET');
+        expect(historyReads.length).toBe(1);
+
+        const html = h.el('messagesArea').innerHTML;
+        expect(html).toContain('historical one');
+        expect(html).toContain('historical two');
+        expect(html).toContain('brand new');
+        expect(html.indexOf('historical one')).toBeLessThan(html.indexOf('historical two'));
+        expect(html.indexOf('historical two')).toBeLessThan(html.indexOf('brand new'));
+        // The confirmed row is rendered exactly once, not duplicated by the
+        // optimistic path plus the history load.
+        expect((html.match(/brand new/g) || []).length).toBe(1);
+        expect(html).not.toContain('Sending...');
+    });
+});
+
 describe('UNIT31 R4-MESSAGES-1 — M-03/M-04 composer + refresh (runtime)', () => {
     it('shows a sent message in order and refreshes previews/badge after send', async () => {
         const state: PageState = {
@@ -460,6 +528,9 @@ describe('UNIT31 R4-MESSAGES-1 — M-03/M-04 composer + refresh (runtime)', () =
         const second = sandbox.sendMessage();
         await settle();
         expect(posts).toBe(1);
+        state.messages = [
+            { id: 55, conversation_id: 7, sender_id: 1, content: 'only once', created_at: '2026-10-26T10:00:00Z' },
+        ];
         release(json(200, {
             success: true,
             data: { message: { id: 55, conversation_id: 7, sender_id: 1, content: 'only once', created_at: '2026-10-26T10:00:00Z' } },
