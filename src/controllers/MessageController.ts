@@ -232,6 +232,25 @@ export class MessageController extends BaseController {
     }
 
     /**
+     * Mark every received message as read (persisted inbox control).
+     * POST /api/messages/read-all
+     */
+    async markAllRead(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+
+            const messageModel = new MessageModel(c.env.DB);
+            const updated = await messageModel.markAllAsRead(user.id);
+
+            return this.success(c, { updated });
+        } catch (error) {
+            console.error('Mark all messages read error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
      * Get unread message count
      * GET /api/messages/unread
      */

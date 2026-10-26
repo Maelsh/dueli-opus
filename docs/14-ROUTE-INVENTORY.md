@@ -1,15 +1,15 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-21T23:48:56.942Z
+> تاريخ التوليد: 2026-10-26T14:19:40.545Z
 
-## الإجمالي: 244 مسار
+## الإجمالي: 245 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 128 |
-| AUTHENTICATED | 69 |
-| UNGUARDED ⚠ | 42 |
+| AUTHENTICATED | 72 |
+| UNGUARDED ⚠ | 40 |
 | SERVICE(origin-only ⚠) | 5 |
 
 ## الحماية على مستوى المجموعات (main.ts)
@@ -190,7 +190,8 @@
 | GET | `/api/matchmaking/online-users` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
 | POST | `/api/matchmaking/opponent-sessions` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
 | GET | `/api/matchmaking/opponent-sessions/:id/page` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/matchmaking/routes.ts` |
-| GET | `/api/messages/unread` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/messages/routes.ts` |
+| POST | `/api/messages/read-all` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/messages/routes.ts` |
+| GET | `/api/messages/unread` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/messages/routes.ts` |
 | GET | `/api/notifications` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
 | POST | `/api/notifications/:id/read` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
 | POST | `/api/notifications/:id/star` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/notifications/routes.ts` |
@@ -256,7 +257,7 @@
 | GET | `/api/users` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | DELETE | `/api/users/:id/follow` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | POST | `/api/users/:id/follow` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
-| POST | `/api/users/:id/message` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/messages/routes.ts` |
+| POST | `/api/users/:id/message` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/messages/routes.ts` |
 | GET | `/api/users/:id/requests` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | GET | `/api/users/:username` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | POST | `/api/users/delete-account` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/users/delete-account.ts` |

@@ -147,6 +147,12 @@ export class MessageModel extends BaseModel<Message> {
 
     /**
      * Get messages in a conversation
+     *
+     * R4-MESSAGES-1 / M-04: the newest page is selected with DESC (so a
+     * long thread still shows its latest messages, not its oldest), then
+     * reversed before returning. Consumers render conversation history in
+     * chronological order and the newest message stays visible at the
+     * bottom. `id` breaks ties for rows written in the same millisecond.
      */
     async getConversationMessages(
         conversationId: number,
@@ -159,10 +165,10 @@ export class MessageModel extends BaseModel<Message> {
             FROM ${this.tableName} m
             JOIN users u ON m.sender_id = u.id
             WHERE m.conversation_id = ?
-            ORDER BY m.created_at DESC
+            ORDER BY m.created_at DESC, m.id DESC
             LIMIT ? OFFSET ?
         `).bind(conversationId, limit, offset).all<MessageWithSender>();
-        return result.results || [];
+        return (result.results || []).slice().reverse();
     }
 
     /**
@@ -190,6 +196,26 @@ export class MessageModel extends BaseModel<Message> {
             SET is_read = 1, read_at = ?
             WHERE conversation_id = ? AND sender_id != ? AND read_at IS NULL
         `).bind(now, conversationId, userId).run();
+    }
+
+    /**
+     * Mark every message received by a user as read.
+     *
+     * R4-MESSAGES-1 / M-05: this is the persisted counterpart of the header's
+     * "mark all read" control. The predicate is scoped to `receiver_id` — a
+     * user can only clear their own inbox, never another participant's read
+     * state. Prepared statement + bind() only.
+     *
+     * @returns number of rows actually updated (0 is a truthful no-op)
+     */
+    async markAllAsRead(userId: number): Promise<number> {
+        const now = new Date().toISOString();
+        const result = await this.db.prepare(`
+            UPDATE ${this.tableName}
+            SET is_read = 1, read_at = ?
+            WHERE receiver_id = ? AND is_read = 0
+        `).bind(now, userId).run();
+        return result.meta.changes || 0;
     }
 
     /**
@@ -281,7 +307,7 @@ export class ConversationModel extends BaseModel<Conversation> {
                 u.username as other_username,
                 u.display_name as other_display_name,
                 u.avatar_url as other_avatar,
-                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
+                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1) as last_message,
                 (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND sender_id != ? AND is_read = 0) as unread_count
             FROM ${this.tableName} c
             JOIN users u ON u.id = CASE WHEN c.user1_id = ? THEN c.user2_id ELSE c.user1_id END

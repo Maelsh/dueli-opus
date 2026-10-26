@@ -42,7 +42,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 <div id="personalPane" class="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg overflow-hidden h-[calc(100vh-240px)]">
                     <div class="flex h-full">
                         <!-- Conversations List -->
-                        <div class="w-full md:w-1/3 border-${rtl ? 'l' : 'r'} border-gray-200 dark:border-gray-700 flex flex-col">
+                        <div id="conversationsPane" class="w-full md:w-1/3 border-${rtl ? 'l' : 'r'} border-gray-200 dark:border-gray-700 flex flex-col md:flex">
                             <!-- Header -->
                             <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                                 <h1 class="text-xl font-bold text-gray-900 dark:text-white">
@@ -61,10 +61,17 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         </div>
                         
                         <!-- Chat Area -->
-                        <div class="hidden md:flex flex-1 flex-col">
+                        <div id="chatPane" class="hidden md:flex flex-1 flex-col">
                             <!-- Chat Header -->
                             <div id="chatHeader" class="p-4 border-b border-gray-200 dark:border-gray-700 hidden">
                                 <div class="flex items-center gap-3">
+                                    <!-- M-01: on mobile the conversation replaces the list;
+                                         this returns to the list on the same page. -->
+                                    <button type="button" data-csp-on="click" data-csp-fn="backToConversations" data-csp-args='[]'
+                                        class="md:hidden shrink-0 w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700"
+                                        aria-label="${tr.messages?.back_to_conversations || 'Back to chats'}">
+                                        <i class="fas fa-arrow-${rtl ? 'right' : 'left'}"></i>
+                                    </button>
                                     <a id="chatUserLink" class="shrink-0 hidden" aria-label="">
                                         <img id="chatUserAvatar" src="" class="w-10 h-10 rounded-full" alt="">
                                     </a>
@@ -84,23 +91,29 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             </div>
                             
                             <!-- Messages Area -->
-                            <div id="messagesArea" class="flex-1 overflow-y-auto p-4 space-y-4 hidden">
+                            <div id="messagesArea" class="flex-1 overflow-y-auto p-4 space-y-4 hidden" aria-live="polite">
                                 <!-- Messages will be loaded here -->
                             </div>
                             
                             <!-- Message Input -->
                             <div id="messageInput" class="p-4 border-t border-gray-200 dark:border-gray-700 hidden">
-                                <form data-csp-on="submit" data-csp-fn="sendMessage" data-csp-args='["@event"]' class="flex gap-2">
-                                    <input 
-                                        type="text" 
+                                <p id="composerError" class="hidden mb-2 text-sm text-red-600 dark:text-red-400" role="alert" aria-live="polite"></p>
+                                <form id="messageForm" data-csp-on="submit" data-csp-fn="sendMessage" data-csp-args='["@event"]' class="flex items-end gap-2">
+                                    <textarea
                                         id="newMessage" 
+                                        rows="1"
+                                        dir="auto"
+                                        enterkeyhint="send"
+                                        aria-label="${tr.messages?.enter_message || 'Enter your message'}"
                                         placeholder="${tr.messages?.type_message || 'Type a message...'}"
-                                        class="flex-1 px-4 py-3 rounded-full bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
-                                    >
-                                    <button type="submit" class="px-6 py-3 ${DUELI_PRIMARY_BTN} hover:opacity-90 transition-colors">
+                                        data-csp-on="keydown" data-csp-fn="handleComposerKeydown" data-csp-args='["@event"]'
+                                        class="flex-1 px-4 py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white resize-none max-h-40 min-h-[48px]"
+                                    ></textarea>
+                                    <button id="sendMessageBtn" type="submit" aria-label="${tr.messages?.send || 'Send'}" class="px-6 py-3 ${DUELI_PRIMARY_BTN} hover:opacity-90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
                                         <i class="fas fa-paper-plane ${rtl ? 'fa-flip-horizontal' : ''}"></i>
                                     </button>
                                 </form>
+                                <p class="mt-1 text-[11px] text-gray-400">${tr.messages?.composer_hint || 'Enter to send · Shift+Enter for a new line'}</p>
                             </div>
                         </div>
                     </div>
@@ -108,7 +121,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 <!-- R2-M: admin-messages pane (own support threads only) -->
                 <div id="supportPane" class="hidden bg-white dark:bg-[#1a1a1a] rounded-xl shadow-lg overflow-hidden h-[calc(100vh-240px)]">
                     <div class="flex h-full">
-                        <div class="w-full md:w-1/3 border-${rtl ? 'l' : 'r'} border-gray-200 dark:border-gray-700 flex flex-col">
+                        <div id="supportThreadsPane" class="w-full md:w-1/3 border-${rtl ? 'l' : 'r'} border-gray-200 dark:border-gray-700 flex flex-col md:flex">
                             <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                                 <h2 class="text-lg font-bold text-gray-900 dark:text-white">
                                     <i class="fas fa-shield-alt ${rtl ? 'ml-2' : 'mr-2'} text-amber-500"></i>
@@ -127,10 +140,19 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                             </div>
                             <div id="supportThreadsList" class="flex-1 overflow-y-auto"></div>
                         </div>
-                        <div class="hidden md:flex flex-1 flex-col">
+                        <div id="supportChatPane" class="hidden md:flex flex-1 flex-col">
                             <div id="supportChatHeader" class="p-4 border-b border-gray-200 dark:border-gray-700 hidden">
-                                <p id="supportChatSubject" class="font-bold text-gray-900 dark:text-white"></p>
-                                <p id="supportChatStatus" class="text-sm text-gray-500"></p>
+                                <div class="flex items-center gap-3">
+                                    <button type="button" data-csp-on="click" data-csp-fn="backToSupportThreads" data-csp-args='[]'
+                                        class="md:hidden shrink-0 w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700"
+                                        aria-label="${tr.messages?.back_to_admin_messages || 'Back to admin messages'}">
+                                        <i class="fas fa-arrow-${rtl ? 'right' : 'left'}"></i>
+                                    </button>
+                                    <div class="min-w-0">
+                                        <p id="supportChatSubject" class="font-bold text-gray-900 dark:text-white truncate"></p>
+                                        <p id="supportChatStatus" class="text-sm text-gray-500"></p>
+                                    </div>
+                                </div>
                             </div>
                             <div id="noSupportThread" class="flex-1 flex items-center justify-center text-gray-400">
                                 <div class="text-center">
@@ -167,6 +189,11 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             let supportThreadsCache = [];
             let conversationsCache = [];
             let pendingUserId = null;
+            let pendingUser = null;
+            let isSending = false;
+            let loadedMessages = [];
+            let messageSession = 0;
+            let messagesRequestSeq = 0;
             function pageParams() {
                 try { return new URLSearchParams(window.location.search); }
                 catch (e) { return new URLSearchParams(''); }
@@ -198,23 +225,32 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function bootMessaging() {
                 await loadUnreadCounts();
                 const params = pageParams();
-                pendingUserId = params.get('user');
+                pendingUserId = null;
+                pendingUser = null;
                 const startTab = params.get('tab') === 'admin' ? 'admin' : 'personal';
                 setMsgTab(startTab, true);
                 await loadConversations();
                 await loadSupportThreads();
                 // Deep links: ?conversation= (personal, incl. message
                 // notifications), ?thread= (admin notifications),
-                // ?user= (profile message button starts a chat).
+                // ?user= (profile message button opens the existing personal
+                // conversation, or a named compose state when none exists).
                 const convId = params.get('conversation');
-                if (convId && startTab !== 'admin') openConversationById(convId);
+                if (convId && startTab !== 'admin') await openConversationById(convId);
                 const threadId = params.get('thread');
-                if (threadId) openSupportThread(threadId);
-                if (pendingUserId && startTab !== 'admin') openPendingUserChat(pendingUserId);
+                if (threadId) await openSupportThread(threadId);
+                const userParam = params.get('user');
+                if (userParam && startTab !== 'admin') await openPendingUserChat(userParam);
             }
             window.addEventListener('dueli:auth-success', () => {
                 if (window.currentUser) bootMessaging();
                 else initPageAuth();
+            });
+            // M-05: the header "mark all read" action is persisted server-side.
+            // Mirror the authoritative state here instead of leaving stale
+            // page badges/list rows until the next reload.
+            window.addEventListener('dueli:messages-read-all', () => {
+                if (window.currentUser) refreshMessageSurfaces();
             });
             window.retryPageAuth = initPageAuth;
 
@@ -245,12 +281,24 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function loadConversations() {
                 const container = document.getElementById('conversationsList');
                 try {
-                    const res = await fetch('/api/conversations');
-                    const data = await res.json();
+                    // M-02: a larger page makes the profile deep link able to
+                    // find an existing conversation even when it is not in the
+                    // header's first 10 preview rows.
+                    const res = await fetch('/api/conversations?limit=100');
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data.success) {
+                        container.innerHTML = \`
+                            <div class="p-8 text-center text-gray-400" role="alert">
+                                <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+                                <p>\${tr.messages?.load_failed || tr.error_loading || 'Could not load messages'}</p>
+                            </div>
+                        \`;
+                        return;
+                    }
                     const conversations = data.data?.conversations || [];
                     conversationsCache = conversations;
                     
-                    if (data.success && conversations.length > 0) {
+                    if (conversations.length > 0) {
                         container.innerHTML = conversations.map(conv => \`
                             <button data-csp-on="click" data-csp-fn="openConversation" data-csp-args='[\${conv.id},\${JSON.stringify((conv.other_username))},\${JSON.stringify((conv.other_avatar || ''))}]' 
                                 class="w-full p-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-800 \${isRTL ? 'text-right' : 'text-left'}">
@@ -276,21 +324,109 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     }
                 } catch (err) {
                     console.error('Failed to load conversations:', err);
+                    container.innerHTML = \`
+                        <div class="p-8 text-center text-gray-400" role="alert">
+                            <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+                            <p>\${tr.messages?.load_failed || tr.error_loading || 'Could not load messages'}</p>
+                        </div>
+                    \`;
                 }
             }
-            
-            async function openConversation(id, username, avatar) {
-                currentConversationId = id;
+
+            // M-01: mobile shows one pane at a time. The md:flex class on the
+            // list keeps the desktop split view intact even when hidden is added.
+            function showChatOnMobile() {
+                const list = document.getElementById('conversationsPane');
+                const chat = document.getElementById('chatPane');
+                if (list) list.classList.add('hidden');
+                if (chat) {
+                    chat.classList.remove('hidden');
+                    chat.classList.add('flex');
+                }
+            }
+
+            function showListOnMobile() {
+                const list = document.getElementById('conversationsPane');
+                const chat = document.getElementById('chatPane');
+                if (list) list.classList.remove('hidden');
+                if (chat) {
+                    chat.classList.add('hidden');
+                    chat.classList.remove('flex');
+                }
+            }
+
+            // M-01 (admin tab): same one-pane mobile flow for support threads.
+            function showSupportChatOnMobile() {
+                const list = document.getElementById('supportThreadsPane');
+                const chat = document.getElementById('supportChatPane');
+                if (list) list.classList.add('hidden');
+                if (chat) {
+                    chat.classList.remove('hidden');
+                    chat.classList.add('flex');
+                }
+            }
+
+            function showSupportListOnMobile() {
+                const list = document.getElementById('supportThreadsPane');
+                const chat = document.getElementById('supportChatPane');
+                if (list) list.classList.remove('hidden');
+                if (chat) {
+                    chat.classList.add('hidden');
+                    chat.classList.remove('flex');
+                }
+            }
+
+            function clearConversationDeepLink() {
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('conversation');
+                    url.searchParams.delete('user');
+                    window.history.replaceState({}, '', url.toString());
+                } catch (e) {}
+            }
+
+            function backToConversations() {
+                messageSession += 1;
+                currentConversationId = null;
                 pendingUserId = null;
-                
-                // Update header
-                document.getElementById('chatHeader').classList.remove('hidden');
-                document.getElementById('noConversation').classList.add('hidden');
-                document.getElementById('messagesArea').classList.remove('hidden');
-                document.getElementById('messageInput').classList.remove('hidden');
-                
-                document.getElementById('chatUserAvatar').src = avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + username;
-                document.getElementById('chatUserName').textContent = username;
+                pendingUser = null;
+                loadedMessages = [];
+                setComposerBusy(false);
+                clearConversationDeepLink();
+                showListOnMobile();
+                document.getElementById('chatHeader').classList.add('hidden');
+                document.getElementById('messagesArea').classList.add('hidden');
+                document.getElementById('messageInput').classList.add('hidden');
+                document.getElementById('noConversation').classList.remove('hidden');
+                const input = document.getElementById('newMessage');
+                if (input) input.value = '';
+                clearComposerError();
+            }
+
+            function backToSupportThreads() {
+                currentSupportThreadId = null;
+                showSupportListOnMobile();
+                document.getElementById('supportChatHeader').classList.add('hidden');
+                document.getElementById('supportMessagesArea').classList.add('hidden');
+                document.getElementById('supportMessageInput').classList.add('hidden');
+                document.getElementById('noSupportThread').classList.remove('hidden');
+                const input = document.getElementById('newSupportMessage');
+                if (input) input.value = '';
+                try {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('thread');
+                    window.history.replaceState({}, '', url.toString());
+                } catch (e) {}
+            }
+
+            function setChatIdentity(name, username, avatar) {
+                const label = String(name || username || (tr.messages?.new_conversation || 'New conversation'));
+                const avatarEl = document.getElementById('chatUserAvatar');
+                if (avatarEl) {
+                    avatarEl.src = avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + (username || 'default');
+                    avatarEl.alt = label;
+                }
+                document.getElementById('chatUserName').textContent = label;
                 // B6: the chat header avatar is a real user's avatar, so it
                 // links to their profile whenever the identity is known.
                 // Hidden otherwise, so a placeholder never becomes a dead link.
@@ -299,105 +435,412 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 if (link) {
                     if (path) {
                         link.setAttribute('href', path);
-                        link.setAttribute('aria-label', username);
+                        link.setAttribute('aria-label', label);
                         link.classList.remove('hidden');
                     } else {
                         link.classList.add('hidden');
                         link.removeAttribute('href');
                     }
                 }
-                
-                // Load messages
-                await loadMessages(id);
             }
-            
-            async function loadMessages(conversationId) {
+
+            // M-04: one rendering path for loaded, optimistic and failed sends.
+            function escapeMessageHtml(value) {
+                return String(value == null ? '' : value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function setComposerBusy(busy) {
+                isSending = !!busy;
+                const button = document.getElementById('sendMessageBtn');
+                if (button) {
+                    button.disabled = !!busy;
+                    button.setAttribute('aria-busy', busy ? 'true' : 'false');
+                }
+            }
+
+            function clearComposerError() {
+                const error = document.getElementById('composerError');
+                if (!error) return;
+                error.textContent = '';
+                error.classList.add('hidden');
+            }
+
+            function showComposerError(message) {
+                const error = document.getElementById('composerError');
+                if (!error) return;
+                error.textContent = String(message || '');
+                error.classList.remove('hidden');
+            }
+
+            function showMessagesLoading() {
                 const container = document.getElementById('messagesArea');
-                container.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin text-2xl text-purple-400"></i></div>';
-                
-                try {
-                    const res = await fetch(\`/api/conversations/\${conversationId}/messages\`);
-                    const data = await res.json();
-                    const messages = data.data?.messages || [];
-                    
-                    if (data.success && messages.length > 0) {
-                        container.innerHTML = messages.map(msg => {
-                            const isMine = msg.sender_id === window.currentUser?.id;
-                            return \`
-                                <div class="flex \${isMine ? (isRTL ? 'justify-start' : 'justify-end') : (isRTL ? 'justify-end' : 'justify-start')}">
-                                    <div class="max-w-[70%] px-4 py-2 rounded-2xl \${isMine ? 'bg-purple-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'}">
-                                        <p>\${msg.content}</p>
-                                        <p class="text-xs opacity-70 mt-1">\${new Date(msg.created_at).toLocaleTimeString()}</p>
-                                    </div>
-                                </div>
-                            \`;
-                        }).join('');
-                        container.scrollTop = container.scrollHeight;
-                    } else {
-                        container.innerHTML = '<div class="text-center text-gray-400">No messages yet</div>';
-                    }
-                } catch (err) {
-                    console.error('Failed to load messages:', err);
+                if (!container) return;
+                container.innerHTML = '<div class="p-8 text-center"><i class="fas fa-spinner fa-spin text-2xl text-purple-400"></i></div>';
+            }
+
+            function showMessagesError(message) {
+                const container = document.getElementById('messagesArea');
+                if (!container) return;
+                container.innerHTML = '<div class="p-8 text-center text-gray-400" role="alert">' +
+                    '<i class="fas fa-exclamation-triangle text-3xl mb-3"></i>' +
+                    '<p>' + escapeMessageHtml(message) + '</p></div>';
+            }
+
+            function messageBubble(message) {
+                const mine = !!window.currentUser && String(message.sender_id) === String(window.currentUser.id);
+                const pending = message.__pending === true;
+                const rawContent = message.content == null ? '' : String(message.content);
+                // Stored messages are already escaped server-side (Sanitize.cleanText);
+                // only the local optimistic bubble needs escaping before innerHTML.
+                const content = pending ? escapeMessageHtml(rawContent) : rawContent;
+                const time = pending
+                    ? ((tr.messages && tr.messages.sending) || 'Sending...')
+                    : (message.created_at ? new Date(message.created_at).toLocaleTimeString() : '');
+                const alignment = mine
+                    ? (isRTL ? 'justify-start' : 'justify-end')
+                    : (isRTL ? 'justify-end' : 'justify-start');
+                const tone = mine
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white';
+                const messageId = message.id != null ? String(message.id) : String(message.local_id || '');
+                return '<div class="flex ' + alignment + '" data-message-id="' + escapeMessageHtml(messageId) + '">' +
+                    '<div class="max-w-[70%] px-4 py-2 rounded-2xl ' + tone + (pending ? ' opacity-60' : '') + '">' +
+                    '<p class="whitespace-pre-wrap break-words">' + content + '</p>' +
+                    '<p class="text-xs opacity-70 mt-1">' + escapeMessageHtml(time) + '</p>' +
+                    '</div></div>';
+            }
+
+            function renderMessages() {
+                const container = document.getElementById('messagesArea');
+                if (!container) return;
+                if (loadedMessages.length === 0) {
+                    container.innerHTML = '<div class="p-8 text-center text-gray-400">' +
+                        escapeMessageHtml((tr.messages && tr.messages.no_messages) || 'No messages yet') + '</div>';
+                    return;
                 }
+                container.innerHTML = loadedMessages.map(messageBubble).join('');
+                container.scrollTop = container.scrollHeight;
             }
-            
-            async function sendMessage(e) {
-                e.preventDefault();
-                const input = document.getElementById('newMessage');
-                const content = input.value.trim();
-                if (!content) return;
 
+            function upsertMessage(message) {
+                if (!message || message.id == null) return;
+                const id = String(message.id);
+                loadedMessages = loadedMessages.filter(function (item) {
+                    return item.__pending === true || String(item.id) !== id;
+                });
+                loadedMessages.push(message);
+                loadedMessages.sort(function (a, b) {
+                    const aTime = Date.parse(a.created_at) || 0;
+                    const bTime = Date.parse(b.created_at) || 0;
+                    if (aTime !== bTime) return aTime - bTime;
+                    return (Number(a.id) || 0) - (Number(b.id) || 0);
+                });
+            }
+
+            function removePendingMessage(localId) {
+                loadedMessages = loadedMessages.filter(function (item) {
+                    return !(item.__pending === true && item.local_id === localId);
+                });
+            }
+
+            function refreshHeaderPreviews() {
                 try {
-                    // ?user= deep link: first send starts the personal
-                    // conversation, later sends use the thread.
-                    if (pendingUserId && !currentConversationId) {
-                        const res = await fetch(\`/api/users/\${pendingUserId}/message\`, {
-                            method: 'POST',
-                            headers: authHeaders({ 'Content-Type': 'application/json' }),
-                            body: JSON.stringify({ content })
-                        });
-                        const data = await res.json().catch(() => ({}));
-                        if (res.ok && data.success) {
-                            input.value = '';
-                            pendingUserId = null;
-                            currentConversationId = data.data.conversation.id;
-                            await loadConversations();
-                            openConversationById(currentConversationId);
-                        }
-                        return;
-                    }
-                    if (!currentConversationId) return;
-                    const res = await fetch(\`/api/conversations/\${currentConversationId}/messages\`, {
-                        method: 'POST',
-                        headers: authHeaders({ 'Content-Type': 'application/json' }),
-                        body: JSON.stringify({ content })
-                    });
-
-                    if (res.ok) {
-                        input.value = '';
-                        loadMessages(currentConversationId);
-                        loadUnreadCounts();
-                    }
-                } catch (err) {
-                    console.error('Failed to send message:', err);
-                }
+                    if (!window.MessagesUI) return;
+                    if (typeof window.MessagesUI.loadUnreadCount === 'function') window.MessagesUI.loadUnreadCount();
+                    if (typeof window.MessagesUI.loadMessages === 'function') window.MessagesUI.loadMessages();
+                } catch (e) {}
             }
 
-            function openConversationById(id) {
-                const conv = conversationsCache.find(c => String(c.id) === String(id));
-                if (conv) openConversation(conv.id, conv.other_username, conv.other_avatar);
+            // M-03: after a send/read, re-read the list previews and both
+            // badges from the API instead of waiting for a poll/reload.
+            async function refreshMessageSurfaces() {
+                await Promise.all([loadUnreadCounts(), loadConversations()]);
+                refreshHeaderPreviews();
             }
 
-            function openPendingUserChat(userId) {
-                currentConversationId = null;
+            async function openConversation(id, username, avatar, displayName) {
+                messageSession += 1;
+                const session = messageSession;
+                const cached = conversationsCache.find(function (item) {
+                    return String(item.id) === String(id);
+                });
+                currentConversationId = id;
+                pendingUserId = null;
+                pendingUser = null;
+                loadedMessages = [];
+                setComposerBusy(false);
+                clearComposerError();
+                const composer = document.getElementById('newMessage');
+                if (composer) composer.value = '';
+                showChatOnMobile();
+
+                // Update header
                 document.getElementById('chatHeader').classList.remove('hidden');
                 document.getElementById('noConversation').classList.add('hidden');
                 document.getElementById('messagesArea').classList.remove('hidden');
                 document.getElementById('messageInput').classList.remove('hidden');
-                document.getElementById('chatUserName').textContent = '#' + userId;
-                document.getElementById('messagesArea').innerHTML = '';
+                setChatIdentity(
+                    displayName || (cached && cached.other_display_name) || username,
+                    username,
+                    avatar || (cached && cached.other_avatar)
+                );
+                renderMessages();
+
+                // Load messages
+                await loadMessages(id);
+                if (session !== messageSession) return;
+                // Opening a thread marks it read server-side; refresh the
+                // list previews and both badges from that authoritative state.
+                await refreshMessageSurfaces();
+            }
+
+            async function loadMessages(conversationId) {
+                const requestSeq = ++messagesRequestSeq;
+                showMessagesLoading();
+
+                try {
+                    const res = await fetch('/api/conversations/' + conversationId + '/messages');
+                    const data = await res.json().catch(function () { return {}; });
+                    if (requestSeq !== messagesRequestSeq || String(currentConversationId) !== String(conversationId)) return;
+                    const messages = data.data?.messages || [];
+
+                    if (!res.ok || !data.success) {
+                        showMessagesError((data && data.error) || (tr.messages && tr.messages.load_failed) || 'Could not load messages');
+                        return;
+                    }
+                    loadedMessages = messages;
+                    renderMessages();
+                } catch (err) {
+                    if (requestSeq !== messagesRequestSeq) return;
+                    console.error('Failed to load messages:', err);
+                    showMessagesError((tr.messages && tr.messages.load_failed) || 'Could not load messages');
+                }
+            }
+            
+            async function sendMessage(e) {
+                if (e && typeof e.preventDefault === 'function') e.preventDefault();
+                if (isSending) return;
                 const input = document.getElementById('newMessage');
-                if (input) input.focus();
+                if (!input) return;
+                const content = input.value.trim();
+                if (!content) {
+                    input.focus();
+                    return;
+                }
+                const targetConversationId = currentConversationId;
+                const targetUser = pendingUser;
+                if (!targetConversationId && !targetUser) return;
+                const sessionAtSend = messageSession;
+                const localId = 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+                const pending = {
+                    __pending: true,
+                    local_id: localId,
+                    sender_id: window.currentUser ? window.currentUser.id : null,
+                    content: content,
+                    created_at: new Date().toISOString()
+                };
+
+                // M-04: show the message immediately, but never claim it was
+                // delivered. The pending bubble is replaced by the server row
+                // only after a confirmed success.
+                loadedMessages.push(pending);
+                renderMessages();
+                input.value = '';
+                clearComposerError();
+                setComposerBusy(true);
+
+                try {
+                    const endpoint = targetConversationId
+                        ? '/api/conversations/' + targetConversationId + '/messages'
+                        : '/api/users/' + targetUser.id + '/message';
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: authHeaders({ 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({ content: content })
+                    });
+                    const data = await res.json().catch(function () { return {}; });
+                    if (sessionAtSend !== messageSession) {
+                        await refreshMessageSurfaces();
+                        return;
+                    }
+                    if (!res.ok || !data.success) {
+                        removePendingMessage(localId);
+                        if (!input.value) input.value = content;
+                        showComposerError((data && data.error) || (tr.messages && tr.messages.send_failed) || 'Could not send the message. Try again.');
+                        renderMessages();
+                        return;
+                    }
+
+                    removePendingMessage(localId);
+                    const sentMessage = data.data && data.data.message;
+                    if (sentMessage) upsertMessage(sentMessage);
+
+                    // ?user= deep link: the first send starts the personal
+                    // conversation; later sends use the thread.
+                    if (!targetConversationId) {
+                        const conversation = data.data && data.data.conversation;
+                        if (conversation && conversation.id != null) {
+                            currentConversationId = conversation.id;
+                            pendingUser = null;
+                            pendingUserId = null;
+                        } else if (sentMessage && sentMessage.conversation_id != null) {
+                            currentConversationId = sentMessage.conversation_id;
+                            pendingUser = null;
+                            pendingUserId = null;
+                        } else {
+                            // Contract violation: never pretend the compose
+                            // state is a saved thread. Re-read the list once.
+                            await loadConversations();
+                            const created = conversationsCache.find(function (item) {
+                                return String(item.other_user_id) === String(targetUser.id);
+                            });
+                            if (created) {
+                                currentConversationId = created.id;
+                                pendingUser = null;
+                                pendingUserId = null;
+                            } else {
+                                showComposerError((tr.messages && tr.messages.send_failed) || 'Could not send the message. Try again.');
+                                renderMessages();
+                                return;
+                            }
+                        }
+                    }
+
+                    // F-1: a confirmed send is not proof that loadedMessages
+                    // has the whole thread. A ?user= deep link can resume a
+                    // pre-existing conversation that was outside the loaded
+                    // conversations page; the POST response is the first time
+                    // the client learns its id. Always re-read the adopted
+                    // thread from the server so older messages appear now and
+                    // the new row is rendered exactly once (loadMessages
+                    // replaces the array with the authoritative history).
+                    if (currentConversationId) {
+                        await loadMessages(currentConversationId);
+                    } else {
+                        renderMessages();
+                    }
+                    await refreshMessageSurfaces();
+                } catch (err) {
+                    console.error('Failed to send message:', err);
+                    if (sessionAtSend === messageSession) {
+                        removePendingMessage(localId);
+                        if (!input.value) input.value = content;
+                        showComposerError((tr.messages && tr.messages.send_failed) || 'Could not send the message. Try again.');
+                        renderMessages();
+                    }
+                } finally {
+                    if (sessionAtSend === messageSession) {
+                        setComposerBusy(false);
+                        input.focus();
+                    }
+                }
+            }
+
+            function handleComposerKeydown(e) {
+                if (!e || e.key !== 'Enter' || e.shiftKey) return;
+                // M-04: the Enter that commits an IME candidate is not a send.
+                if (e.isComposing || e.keyCode === 229) return;
+                e.preventDefault();
+                const form = document.getElementById('messageForm');
+                if (form && typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                    return;
+                }
+                sendMessage(e);
+            }
+
+            async function openConversationById(id) {
+                const conversation = conversationsCache.find(function (item) {
+                    return String(item.id) === String(id);
+                });
+                if (!conversation) return false;
+                await openConversation(conversation.id, conversation.other_username, conversation.other_avatar, conversation.other_display_name);
+                return true;
+            }
+
+            async function openPendingUserChat(userParam) {
+                const requested = String(userParam == null ? '' : userParam).trim();
+                if (!requested) return;
+                const requestedLower = requested.toLowerCase();
+                const numeric = /^\\d+$/.test(requested);
+                let existing = conversationsCache.find(function (item) {
+                    return String(item.other_username || '').toLowerCase() === requestedLower;
+                });
+                if (!existing && numeric) {
+                    // Legacy links used the numeric user id; resolve them
+                    // against the loaded list, never render the id as a name.
+                    existing = conversationsCache.find(function (item) {
+                        return String(item.other_user_id) === requested;
+                    });
+                }
+                if (existing) {
+                    await openConversation(existing.id, existing.other_username, existing.other_avatar, existing.other_display_name);
+                    return;
+                }
+
+                messageSession += 1;
+                const session = messageSession;
+                currentConversationId = null;
+                pendingUser = null;
+                pendingUserId = null;
+                loadedMessages = [];
+                setComposerBusy(false);
+                clearComposerError();
+                const composer = document.getElementById('newMessage');
+                if (composer) composer.value = '';
+                showChatOnMobile();
+                document.getElementById('chatHeader').classList.remove('hidden');
+                document.getElementById('noConversation').classList.add('hidden');
+                document.getElementById('messagesArea').classList.remove('hidden');
+                document.getElementById('messageInput').classList.add('hidden');
+                // M-02: show the username while the profile resolves; the
+                // display name replaces it when the API answers. A numeric id
+                // is never presented as a person's name.
+                const fallbackName = numeric
+                    ? ((tr.messages && tr.messages.new_conversation) || 'New conversation')
+                    : requested;
+                setChatIdentity(fallbackName, numeric ? '' : requested, '');
+                showMessagesLoading();
+
+                try {
+                    if (numeric) {
+                        showMessagesError((tr.messages && tr.messages.load_failed) || 'Could not load messages');
+                        return;
+                    }
+                    const res = await fetch('/api/users/' + encodeURIComponent(requested));
+                    const data = await res.json().catch(function () { return {}; });
+                    if (session !== messageSession) return;
+                    if (!res.ok || !data.success || !data.data) {
+                        const message = res.status === 404
+                            ? ((tr.user_errors && tr.user_errors.not_found) || (tr.messages && tr.messages.load_failed))
+                            : (tr.messages && tr.messages.load_failed);
+                        showMessagesError(message || 'Could not load messages');
+                        return;
+                    }
+                    const profile = data.data;
+                    const username = profile.username || requested;
+                    const displayName = profile.display_name || username;
+                    pendingUser = {
+                        id: profile.id,
+                        username: username,
+                        display_name: profile.display_name || '',
+                        avatar: profile.avatar_url || ''
+                    };
+                    pendingUserId = profile.id;
+                    setChatIdentity(displayName, username, profile.avatar_url || '');
+                    renderMessages();
+                    document.getElementById('messageInput').classList.remove('hidden');
+                    if (composer) composer.focus();
+                } catch (err) {
+                    if (session !== messageSession) return;
+                    console.error('Failed to resolve message recipient:', err);
+                    showMessagesError((tr.messages && tr.messages.load_failed) || 'Could not load messages');
+                }
             }
 
             // ============================
@@ -407,6 +850,10 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                 const personal = tab !== 'admin';
                 document.getElementById('personalPane').classList.toggle('hidden', !personal);
                 document.getElementById('supportPane').classList.toggle('hidden', personal);
+                // Each tab starts on its list on mobile; desktop keeps both
+                // panes visible through md:flex.
+                if (personal) showListOnMobile();
+                else showSupportListOnMobile();
                 const pBtn = document.getElementById('msgTabPersonal');
                 const aBtn = document.getElementById('msgTabAdmin');
                 pBtn.setAttribute('aria-selected', personal ? 'true' : 'false');
@@ -444,8 +891,15 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     ]);
                     const pData = await pRes.json().catch(() => ({}));
                     const sData = await sRes.json().catch(() => ({}));
-                    paintBadge('personalUnreadBadge', (pData.success && pData.data?.unread) || 0);
-                    paintBadge('adminUnreadBadge', (sData.success && sData.data?.unread) || 0);
+                    // M-03: only an authoritative number repaints a badge. A
+                    // failed/malformed response keeps the last known count
+                    // instead of fabricating a zero inbox.
+                    if (pData.success && typeof pData.data?.unread === 'number') {
+                        paintBadge('personalUnreadBadge', pData.data.unread);
+                    }
+                    if (sData.success && typeof sData.data?.unread === 'number') {
+                        paintBadge('adminUnreadBadge', sData.data.unread);
+                    }
                 } catch (e) {}
             }
 
@@ -483,6 +937,7 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function openSupportThread(id) {
                 currentSupportThreadId = id;
                 setMsgTab('admin', true);
+                showSupportChatOnMobile();
                 document.getElementById('supportChatHeader').classList.remove('hidden');
                 document.getElementById('noSupportThread').classList.add('hidden');
                 document.getElementById('supportMessagesArea').classList.remove('hidden');

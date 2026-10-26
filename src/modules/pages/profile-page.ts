@@ -280,7 +280,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                             <i class="fas fa-user-plus \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.follow || 'Follow'}
                         </button>
-                        <a href="/messages?user=\${profileUserId}&lang=\${lang}" 
+                        <a href="/messages?user=\${encodeURIComponent(profileUsername)}&lang=\${lang}"
                             class="px-6 py-2.5 bg-white/20 hover:bg-white/30 rounded-full font-semibold transition-colors">
                             <i class="fas fa-envelope \${isRTL ? 'ml-2' : 'mr-2'}"></i>
                             \${tr.send_message || 'Message'}

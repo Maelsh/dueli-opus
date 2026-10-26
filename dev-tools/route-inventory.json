@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-21T23:48:56.942Z",
-  "total": 244,
+  "generatedAt": "2026-10-26T14:19:40.545Z",
+  "total": 245,
   "routes": [
     {
       "method": "GET",
@@ -1165,10 +1165,17 @@
       "file": "src/modules/api/matchmaking/routes.ts"
     },
     {
+      "method": "POST",
+      "path": "/api/messages/read-all",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/messages/routes.ts"
+    },
+    {
       "method": "GET",
       "path": "/api/messages/unread",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/messages/routes.ts"
     },
     {
@@ -1629,8 +1636,8 @@
     {
       "method": "POST",
       "path": "/api/users/:id/message",
-      "classification": "UNGUARDED ⚠",
-      "guards": "group:rateLimit, group:csrf",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/messages/routes.ts"
     },
     {
