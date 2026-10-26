@@ -1958,7 +1958,14 @@ if (!invitation) {
             const userImmediateComps = await model.findPendingImmediateByCreator(userId, joinedCompetition.id);
 
             for (const comp of userImmediateComps) {
-                await model.delete(comp.id);
+                // UNIT30.6 D-01: cascade delete — every pending competition
+                // owns rows in no-action FK tables (competition_scheduled_tasks
+                // at minimum), so a bare competition DELETE violates the
+                // foreign key and threw AFTER the acceptance had already
+                // committed (production 2262/2263 returned 500 while the
+                // accept persisted). deleteCascade runs the same dependent
+                // survey moderation uses, in ONE atomic batch.
+                await model.deleteCascade(comp.id);
                 deletedCount++;
 
                 await notificationModel.create({
@@ -1990,7 +1997,10 @@ if (!invitation) {
             );
 
             for (const comp of conflictingComps) {
-                await model.delete(comp.id);
+                // UNIT30.6 D-01: same cascade as the immediate branch — a
+                // bare DELETE fails on the no-action FK dependents (see the
+                // immediate branch note above).
+                await model.deleteCascade(comp.id);
                 deletedCount++;
 
                 await notificationModel.create({

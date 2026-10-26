@@ -56,6 +56,17 @@ export interface IndexMetadata {
      * server timestamp to bound its post-finalization recheck window.
      */
     finalized_at: string | null;
+    /**
+     * UNIT30.6 D-02 (additive): authoritative terminal verdict for the
+     * zero-chunk completed competition — 'none' means the competition is
+     * completed, the D1 index has zero rows, and no authorized drain (an
+     * actively held recording lease) can add chunks anymore. Clients must
+     * resolve to not-recorded/unavailable immediately instead of polling a
+     * state that cannot change. Absent in every other case (rows exist /
+     * live waiting / drain tail still possible), so the existing bounded
+     * poll and live-waiting contracts stay byte-identical.
+     */
+    recording_state?: 'none';
 }
 
 /**

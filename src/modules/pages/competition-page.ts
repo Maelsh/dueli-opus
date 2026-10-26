@@ -2265,7 +2265,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   clearInterval(window._statusPollInterval);
                   if (embeddedCurrentPlayer && embeddedCurrentPlayer.stop) embeddedCurrentPlayer.stop();
                   log('🏁 Competition completed - switching to VOD', 'success');
-                  updateEmbeddedMode('vod');
                   await initEmbeddedViewer();
                 }
               } catch(e) { /* تجاهل أخطاء الاستطلاع */ }
@@ -2276,9 +2275,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             // Completed WITHOUT verified chunks is NOT recorded — the
             // playlist fetch below routes to processing/unavailable (bounded
             // poll + manual retry), never the VOD badge/controls.
+            // UNIT30.6 D-02: the badge is EVIDENCE-BASED — hide it now (also
+            // clears any stale LIVE chip from the handover); the recorded
+            // badge paints only after verified receivable chunks exist.
             setEmbeddedStatus(tr.loading_video || 'Loading video...');
             setMediaState('waiting');
-            updateEmbeddedMode('vod');
+            updateEmbeddedMode('none');
 
             // Completed recording: never keep live chrome / a false LIVE chip.
             liveChunkManager = null;
@@ -2319,9 +2321,24 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             }
 
             if (!playlistData.chunks || playlistData.chunks.length === 0) {
+                // UNIT30.6 D-02: a terminal not-recorded verdict (completed +
+                // zero index rows + no active authorized drain) can never
+                // change — resolve immediately to the honest unavailable
+                // state. No minutes-long processing spinner for a recording
+                // that does not exist, no false recorded badge/controls; the
+                // result page and competition details above stay available.
+                if (playlistData.index_metadata && playlistData.index_metadata.recording_state === 'none') {
+                    setMediaState('unavailable');
+                    showStatusOverlay(tr.recording_none || 'No recording for this competition');
+                    return;
+                }
                 handleVodNotReady();
                 return;
             }
+
+            // Verified receivable chunks exist — NOW the recorded badge is
+            // honest (UNIT30.6 D-02: evidence-based badge).
+            updateEmbeddedMode('vod');
             
             embeddedCurrentPlayer = new window.SmartVodPlayer({
               videoElement: videoPlayers[0],
