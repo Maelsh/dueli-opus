@@ -31,6 +31,9 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
     let stats = { competitions: 0, followers: 0, following: 0, wins: 0 };
     let needsLogin = false;
     let userNotFound = false;
+    let viewerId: number | null = null;
+    let viewerUsername: string | null = null;
+    let isOwnerView = false;
 
     // NOTE: no self-fetch here — Preview/Data locality: query D1 directly.
     // (fetch(`${origin}/api/users/...`) from inside the Worker causes
@@ -39,28 +42,34 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
         const { DB } = c.env;
         const userModel = new UserModel(DB);
 
-        // /profile (no username): resolve own profile from session
+        // ROW28.2 / SEC-11 + SEC-07: session resolution matches the canonical
+        // auth source (src/middleware/auth.ts) — Bearer header OR the
+        // `sessionId` cookie ONLY. Raw `?token=` (SEC-11: leaks sessions into
+        // logs/browser history/Referer) and the legacy `session_id` cookie
+        // (SEC-07) are removed so the request fails closed.
+        //
+        // UNIT32.1: resolve the viewer for BOTH `/profile` and
+        // `/profile/:username`; the latter only uses the identity to decide
+        // whether the owner-only collections section is rendered. Invalid
+        // sessions on a public profile simply stay anonymous.
+        const sessionId =
+            c.req.header('Authorization')?.replace('Bearer ', '') ||
+            getCookie(c, 'sessionId');
+        if (sessionId) {
+            const sessionModel = new SessionModel(DB);
+            const result = await sessionModel.findValidSession(sessionId);
+            if (result) {
+                viewerId = Number(result.user.id);
+                viewerUsername = String(result.user.username || '');
+            }
+        }
+
+        // /profile (no username): resolve own profile from the viewer session.
         if (!username) {
-            // ROW28.2 / SEC-11 + SEC-07: own-profile session resolution now
-            // matches the canonical auth source (src/middleware/auth.ts) —
-            // Bearer header OR the `sessionId` cookie ONLY. Raw `?token=`
-            // (SEC-11: leaks sessions into logs/browser history/Referer) and
-            // the legacy `session_id` cookie (SEC-07) are removed so the
-            // request fails closed. Public profiles (/profile/:username) never
-            // reach this branch; email-verification tokens live in verify-page.
-            const sessionId =
-                c.req.header('Authorization')?.replace('Bearer ', '') ||
-                getCookie(c, 'sessionId');
-            if (!sessionId) {
+            if (!viewerUsername) {
                 needsLogin = true;
             } else {
-                const sessionModel = new SessionModel(DB);
-                const result = await sessionModel.findValidSession(sessionId);
-                if (!result) {
-                    needsLogin = true;
-                } else {
-                    username = result.user.username;
-                }
+                username = viewerUsername;
             }
         }
 
@@ -70,6 +79,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 userNotFound = true;
                 console.error(`[Profile] user not found: username=${username} origin=${origin}`);
             } else {
+                isOwnerView = viewerId !== null && Number(user.id) === viewerId;
                 const competitionModel = new CompetitionModel(DB);
                 const followModel = new FollowModel(DB);
                 const { UserSignalsModel } = await import('../../models/UserSignalsModel');
@@ -231,6 +241,78 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                             </div>
                         </div>
                     </div>
+
+                    ${isOwnerView ? `
+                    <!-- UNIT32.1: owner-only collections. Server-rendered only
+                         after the session user is proven to be this profile's
+                         owner; the API re-checks ownership on every call. -->
+                    <section id="profileCollections" data-owner-id="${user.id}"
+                        aria-labelledby="profileCollectionsTitle"
+                        class="mt-8 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl overflow-hidden">
+                        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 id="profileCollectionsTitle" class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <i class="fas fa-bookmark text-purple-600" aria-hidden="true"></i>
+                                ${tr.watch_collections.title}
+                            </h2>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">${tr.watch_collections.hint}</p>
+                        </div>
+                        <div class="flex border-b border-gray-200 dark:border-gray-700" role="tablist" aria-label="${tr.watch_collections.title}">
+                            <button id="collectionsTab-later" type="button" role="tab" tabindex="0"
+                                aria-selected="true" aria-controls="collectionPanel-later"
+                                data-csp-on="click" data-csp-fn="setCollectionsTab" data-csp-args='["later"]'
+                                class="flex-1 px-4 py-4 text-center font-semibold transition-colors border-b-2 border-purple-600 text-purple-600">
+                                <i class="far fa-bookmark ${rtl ? 'ml-2' : 'mr-2'}" aria-hidden="true"></i>
+                                ${tr.watch_collections.tab_later}
+                            </button>
+                            <button id="collectionsTab-history" type="button" role="tab" tabindex="0"
+                                aria-selected="false" aria-controls="collectionPanel-history"
+                                data-csp-on="click" data-csp-fn="setCollectionsTab" data-csp-args='["history"]'
+                                class="flex-1 px-4 py-4 text-center font-semibold transition-colors border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                                <i class="fas fa-history ${rtl ? 'ml-2' : 'mr-2'}" aria-hidden="true"></i>
+                                ${tr.watch_collections.tab_history}
+                            </button>
+                        </div>
+
+                        <div id="collectionPanel-later" role="tabpanel" aria-labelledby="collectionsTab-later" class="p-6">
+                            <div class="flex items-center gap-3 mb-4">
+                                <p id="collectionLaterState" role="status" aria-live="polite" class="text-sm text-gray-500 dark:text-gray-400">${tr.watch_collections.loading}</p>
+                                <button id="collectionLaterRetry" type="button"
+                                    data-csp-on="click" data-csp-fn="retryCollection" data-csp-args='["later"]'
+                                    class="hidden text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline">
+                                    ${tr.watch_collections.retry}
+                                </button>
+                            </div>
+                            <div id="collectionLaterList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                            <div class="text-center mt-6">
+                                <button id="collectionLaterMore" type="button"
+                                    data-csp-on="click" data-csp-fn="loadMoreCollection" data-csp-args='["later"]'
+                                    class="hidden px-6 py-2.5 rounded-full font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 transition-colors">
+                                    ${tr.watch_collections.load_more}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="collectionPanel-history" role="tabpanel" aria-labelledby="collectionsTab-history" class="hidden p-6">
+                            <p class="mb-4 text-xs text-gray-500 dark:text-gray-400">${tr.watch_collections.history_hint}</p>
+                            <div class="flex items-center gap-3 mb-4">
+                                <p id="collectionHistoryState" role="status" aria-live="polite" class="hidden text-sm text-gray-500 dark:text-gray-400"></p>
+                                <button id="collectionHistoryRetry" type="button"
+                                    data-csp-on="click" data-csp-fn="retryCollection" data-csp-args='["history"]'
+                                    class="hidden text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline">
+                                    ${tr.watch_collections.retry}
+                                </button>
+                            </div>
+                            <div id="collectionHistoryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                            <div class="text-center mt-6">
+                                <button id="collectionHistoryMore" type="button"
+                                    data-csp-on="click" data-csp-fn="loadMoreCollection" data-csp-args='["history"]'
+                                    class="hidden px-6 py-2.5 rounded-full font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 transition-colors">
+                                    ${tr.watch_collections.load_more}
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    ` : ''}
                 ` : ''}
             </div>
         </div>
@@ -255,6 +337,12 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     console.error('Auth check failed:', err);
                 }
                 updateProfileActions();
+                // UNIT32.1: deferred app.js has run by DOMContentLoaded, so the
+                // shared card renderer is ready. Loading earlier would paint an
+                // empty list because renderCompetitionCard was not defined yet.
+                if (document.getElementById('profileCollections')) {
+                    loadCollection('later', true);
+                }
             });
             window.addEventListener('dueli:auth-success', updateProfileActions);
             
@@ -505,6 +593,152 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     else alert(data.error || 'Failed to delete');
                 } catch (err) { console.error(err); }
             };
+
+            // =====================================================
+            // UNIT32.1 (R4-PROFILE-COLLECTIONS-1): owner-only lists.
+            // The server rendered this section only for the owner; every
+            // request below is still authenticated and scoped to the session
+            // by /api/watch/*. No list is cached in localStorage.
+            // =====================================================
+            const COLLECTIONS_PAGE_SIZE = 6;
+            const collectionsState = {
+                later: { cursor: null, loaded: false, loading: false, attempted: false, error: false },
+                history: { cursor: null, loaded: false, loading: false, attempted: false, error: false }
+            };
+
+            function collectionEls(kind) {
+                const cap = kind === 'later' ? 'Later' : 'History';
+                return {
+                    list: document.getElementById('collection' + cap + 'List'),
+                    state: document.getElementById('collection' + cap + 'State'),
+                    retry: document.getElementById('collection' + cap + 'Retry'),
+                    more: document.getElementById('collection' + cap + 'More')
+                };
+            }
+
+            function setCollectionsTab(tab) {
+                const isLater = tab === 'later';
+                const laterTab = document.getElementById('collectionsTab-later');
+                const historyTab = document.getElementById('collectionsTab-history');
+                const laterPanel = document.getElementById('collectionPanel-later');
+                const historyPanel = document.getElementById('collectionPanel-history');
+
+                [laterTab, historyTab].forEach(function(el) {
+                    if (!el) return;
+                    el.classList.remove('border-purple-600', 'text-purple-600');
+                    el.classList.add('border-transparent', 'text-gray-500');
+                    el.setAttribute('aria-selected', 'false');
+                });
+                const activeTab = isLater ? laterTab : historyTab;
+                if (activeTab) {
+                    activeTab.classList.remove('border-transparent', 'text-gray-500');
+                    activeTab.classList.add('border-purple-600', 'text-purple-600');
+                    activeTab.setAttribute('aria-selected', 'true');
+                }
+                if (laterPanel) laterPanel.classList.toggle('hidden', !isLater);
+                if (historyPanel) historyPanel.classList.toggle('hidden', isLater);
+
+                if (!isLater && !collectionsState.history.attempted) {
+                    loadCollection('history', true);
+                }
+            }
+
+            async function loadCollection(kind, reset) {
+                const state = collectionsState[kind];
+                if (!state || state.loading) return;
+                const els = collectionEls(kind);
+                if (!els.list || !els.state) return;
+                if (!reset && !state.cursor) return;
+
+                state.loading = true;
+                state.attempted = true;
+                if (reset) {
+                    state.cursor = null;
+                    state.loaded = false;
+                    state.error = false;
+                    els.list.innerHTML = '';
+                    els.state.textContent = tr.watch_collections.loading;
+                    els.state.classList.remove('hidden');
+                    if (els.retry) els.retry.classList.add('hidden');
+                    if (els.more) els.more.classList.add('hidden');
+                }
+
+                try {
+                    const url = '/api/watch/' + (kind === 'later' ? 'later' : 'history')
+                        + '?limit=' + COLLECTIONS_PAGE_SIZE
+                        + (state.cursor ? '&cursor=' + encodeURIComponent(state.cursor) : '');
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error('http_' + res.status);
+                    const payload = await res.json();
+                    const data = payload && payload.success && payload.data ? payload.data : null;
+                    if (!data || !Array.isArray(data.items)) throw new Error('invalid_response');
+
+                    let html = '';
+                    for (let i = 0; i < data.items.length; i += 1) {
+                        const item = data.items[i];
+                        const card = window.renderCompetitionCard ? window.renderCompetitionCard(item, lang) : '';
+                        if (kind === 'later') {
+                            html += card;
+                        } else {
+                            const seconds = Math.max(0, Number(item.watch_duration_seconds) || 0);
+                            const duration = seconds < 60
+                                ? tr.watch_collections.less_than_minute
+                                : Math.round(seconds / 60) + ' ' + tr.watch_collections.minutes_short;
+                            html += '<div data-history-entry="' + item.id + '">' + card
+                                + '<div class="mt-1 text-xs text-gray-500 dark:text-gray-400">'
+                                + tr.watch_collections.watched_for + ': ' + duration
+                                + '</div></div>';
+                        }
+                    }
+                    if (html) els.list.insertAdjacentHTML('beforeend', html);
+
+                    state.cursor = data.nextCursor || null;
+                    state.loaded = true;
+                    state.error = false;
+                    if (els.more) els.more.classList.toggle('hidden', !state.cursor);
+                    if (els.retry) els.retry.classList.add('hidden');
+
+                    if (els.list.innerHTML.trim() === '') {
+                        els.state.textContent = kind === 'later'
+                            ? tr.watch_collections.empty_later
+                            : tr.watch_collections.empty_history;
+                        els.state.classList.remove('hidden');
+                    } else {
+                        els.state.classList.add('hidden');
+                    }
+                } catch (err) {
+                    console.error('Collections load failed:', err);
+                    state.error = true;
+                    state.loaded = false;
+                    els.state.textContent = tr.watch_collections.error;
+                    els.state.classList.remove('hidden');
+                    if (els.retry) els.retry.classList.remove('hidden');
+                    if (els.more) els.more.classList.add('hidden');
+                } finally {
+                    state.loading = false;
+                }
+            }
+
+            function loadMoreCollection(kind) {
+                const state = collectionsState[kind];
+                if (!state || !state.cursor) return;
+                return loadCollection(kind, false);
+            }
+
+            function retryCollection(kind) {
+                const state = collectionsState[kind];
+                if (!state) return;
+                return loadCollection(kind, !state.cursor);
+            }
+
+            // A confirmed removal from any card reloads the authoritative list
+            // instead of trusting local DOM state (pagination stays coherent).
+            window.addEventListener('dueli:watch-later-changed', function(event) {
+                const detail = event && event.detail ? event.detail : {};
+                if (detail.saved === false && collectionsState.later.loaded) {
+                    loadCollection('later', true);
+                }
+            });
         </script>
     `;
 

@@ -20,6 +20,9 @@ export interface CompetitionCardProps extends Competition {
 export function getCompetitionCard(item: CompetitionCardProps, lang: Language): string {
   const tr = translations[getUILanguage(lang)];
   const rtl = isRTL(lang);
+  const collections: Record<string, string> = tr.watch_collections || {};
+  const addLabel = collections.add || 'Save to Watch Later';
+  const removeLabel = collections.remove || 'Remove from Watch Later';
 
   // Determine background color using subcategory priority
   // Controller logic ensures item.category_color is the correct specific color (subcategory or parent fallback)
@@ -68,7 +71,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
   }).join('');
 
   return `
-      <div class="duel-card snap-start">
+      <div class="duel-card snap-start" data-competition-id="${item.id}">
         <a href="/competition/${item.id}?lang=${lang}" class="block">
           <div class="${commonClasses}" data-csp-style="background-color: ${hexColor}">
             <!-- Background Gradient -->
@@ -135,7 +138,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <!-- Views in bottom right, Likes in bottom left -->
             <div class="absolute bottom-3 ${rtl ? 'right-3' : 'left-3'} z-20">
               <span class="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-medium flex items-center gap-3 border border-white/10 shadow-sm">
-                <span class="flex items-center gap-1.5 transition-colors hover:text-green-400" title="${(tr.like as any)?.title || 'Likes'}">
+                <span class="flex items-center gap-1.5 transition-colors hover:text-green-400" title="${tr.like?.title || 'Likes'}">
                   <i class="fas fa-thumbs-up text-green-400"></i>
                   ${(item.likes_count || 0).toLocaleString()}
                 </span>
@@ -156,9 +159,27 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
         </a>
 
         <div class="mt-3 px-1">
-          <a href="/competition/${item.id}?lang=${lang}">
-            <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${(item as any).is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${(tr.demo as any)?.title || 'Demo'}">${(tr.demo as any)?.badge || 'Demo'}</span>` : ''}</h3>
-          </a>
+          <div class="flex items-start justify-between gap-2">
+            <a href="/competition/${item.id}?lang=${lang}" class="min-w-0 flex-1">
+              <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${item.is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${tr.demo?.title || 'Demo'}">${tr.demo?.badge || 'Demo'}</span>` : ''}</h3>
+            </a>
+            <!-- UNIT32.1: explicit Watch Later control (shared by every card).
+                 The label/state is hydrated from the authenticated API; a
+                 guest click opens the existing login modal and never navigates
+                 with a caller-supplied return URL. -->
+            <button type="button"
+              class="duel-card-watch-later shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+              data-csp-on="click" data-csp-fn="WatchLaterUI.toggle" data-csp-args='[${item.id}]'
+              data-csp-stop="1"
+              data-watch-later-toggle="${item.id}"
+              data-saved="0"
+              data-wl-add-label="${addLabel}"
+              data-wl-remove-label="${removeLabel}"
+              data-wl-error="${collections.save_failed || 'Could not update Watch Later.'}"
+              title="${addLabel}" aria-label="${addLabel}" aria-pressed="false">
+              <i class="far fa-bookmark" aria-hidden="true"></i>
+            </button>
+          </div>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-gray-500 font-medium whitespace-nowrap overflow-hidden">
             ${getProfilePath(item.creator_username, lang) ? `<a href="${getProfilePath(item.creator_username, lang)}" class="hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1" data-csp-stop="1">
                ${getUserAvatarLink({
