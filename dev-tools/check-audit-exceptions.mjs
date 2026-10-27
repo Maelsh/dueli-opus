@@ -3,6 +3,7 @@
  *
  * Env overrides (tests only):
  *   DUELI_AUDIT_FIXTURE — path to npm audit JSON fixture
+ *   DUELI_AUDIT_CMD — shell command replacing npm audit (tests: non-zero exit shims)
  *   DUELI_AUDIT_EXCEPTIONS — path to audit-exceptions.json
  *   DUELI_LOCKFILE — path to package-lock.json for installed versions
  */
@@ -17,6 +18,8 @@ const ROOT = join(__dirname, '..');
 const EXCEPTIONS_PATH = process.env.DUELI_AUDIT_EXCEPTIONS || join(__dirname, 'audit-exceptions.json');
 const LOCKFILE_PATH = process.env.DUELI_LOCKFILE || join(ROOT, 'package-lock.json');
 const FIXTURE_PATH = process.env.DUELI_AUDIT_FIXTURE;
+/** Tests only: run this command instead of npm audit (e.g. shim that exits non-zero with valid JSON). */
+const AUDIT_CMD = process.env.DUELI_AUDIT_CMD;
 
 const GHSA_RE = /^GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/i;
 const REQUIRED_EXCEPTION_FIELDS = [
@@ -192,10 +195,34 @@ function assertRecognizedAuditReport(report) {
     if (vulns === null || typeof vulns !== 'object' || Array.isArray(vulns)) {
         fail('npm audit vulnerabilities field must be a plain object');
     }
+    if (report.error !== undefined && report.error !== null) {
+        fail('npm audit output combines error with vulnerabilities; not a recognized audit report');
+    }
     return report;
 }
 
+function execAuditCommand(command, commandLabel) {
+    try {
+        const out = execSync(command, {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            cwd: ROOT,
+            shell: true,
+        });
+        return parseAuditJsonText(out, `${commandLabel} stdout`);
+    } catch (err) {
+        const stdout = err?.stdout?.toString?.() || '';
+        if (stdout.trim()) {
+            return parseAuditJsonText(stdout, `${commandLabel} stdout (non-zero exit)`);
+        }
+        fail(`${commandLabel} failed to run or produce JSON output`);
+    }
+}
+
 function runAuditJson() {
+    if (AUDIT_CMD) {
+        return execAuditCommand(AUDIT_CMD, 'audit command');
+    }
     if (FIXTURE_PATH) {
         let raw;
         try {
@@ -205,20 +232,7 @@ function runAuditJson() {
         }
         return parseAuditJsonText(raw, `audit fixture ${FIXTURE_PATH}`);
     }
-    try {
-        const out = execSync('npm audit --omit=dev --json', {
-            encoding: 'utf8',
-            stdio: ['ignore', 'pipe', 'pipe'],
-            cwd: ROOT,
-        });
-        return parseAuditJsonText(out, 'npm audit stdout');
-    } catch (err) {
-        const stdout = err?.stdout?.toString?.() || '';
-        if (stdout.trim()) {
-            return parseAuditJsonText(stdout, 'npm audit stdout (non-zero exit)');
-        }
-        fail('npm audit failed to run or produce JSON output');
-    }
+    return execAuditCommand('npm audit --omit=dev --json', 'npm audit');
 }
 
 function severityRank(sev) {

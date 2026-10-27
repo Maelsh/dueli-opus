@@ -1,3 +1,11 @@
+## 2026-10-28 — UNIT33.1 P3 / PR #145 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 065d7d0)
+
+- **P3-1:** `DUELI_AUDIT_CMD` + `shim-nonzero-one-high.mjs` tests non-zero exit with valid JSON → blocking without exception.
+- **P3-2:** reject audit JSON combining `error` + `vulnerabilities`.
+- **P3-3:** fixture `missing-severity-field.json` + dedicated test (keeps `invalid-severity.json` for unknown values).
+- **TESTS:** audit checker **22**; home rails **6**; full vitest **2145 pass / 6 fail** (pre-existing Windows `jq` poll tests).
+- **STATUS:** LOCAL VERIFIED — REMOTE re-review pending.
+
 ## 2026-10-27 — UNIT33.1 REM2 / PR #145 F-1+F-2 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 9e38e6b)
 
 - **F-1:** `assertRecognizedAuditReport` — require plain-object `vulnerabilities`; reject npm error JSON (network/registry) and unknown shapes; still parse valid reports from non-zero `npm audit` exit.

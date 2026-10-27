@@ -1,3 +1,8 @@
+## 2026-10-28 — UNIT33.1 P3 / PR #145 · ملاحظات مراجعة غير حاجبة · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc)
+
+- 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** P3-1 shim exit≠0؛ P3-2 رفض error+vulnerabilities؛ P3-3 severity مفقود. **اختبارات audit:** 22.
+- **BASE:** `8e10cdc3ec1f5f2dd1c225feee88ab7d225411cd` · **PR:** #145.
+
 ## 2026-10-27 — UNIT33.1 REM2 / PR #145 · F-1 audit report parsing · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc)
 
 - 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** رفض تقارير npm audit غير المعترف بها (بلا `vulnerabilities`); شدة ثغرة غير صالحة → fail-closed. **اختبارات audit:** 18.

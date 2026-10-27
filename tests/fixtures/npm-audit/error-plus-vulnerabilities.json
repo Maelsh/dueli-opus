@@ -1,0 +1,13 @@
+{
+  "error": {
+    "code": "EPARTIAL",
+    "summary": "partial advisory fetch"
+  },
+  "vulnerabilities": {
+    "fixture-pkg": {
+      "name": "fixture-pkg",
+      "severity": "high",
+      "via": ["https://github.com/advisories/GHSA-abcd-1234-efgh"]
+    }
+  }
+}

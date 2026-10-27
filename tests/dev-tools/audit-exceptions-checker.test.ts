@@ -280,4 +280,57 @@ describe('UNIT33.1 audit exceptions gate', () => {
             expect(stdout).not.toContain('PASS');
         });
     });
+
+    describe('P3 — review follow-ups', () => {
+        const emptyEx = () => writeTempExceptions({ exceptions: [] });
+        const shimNonZero = `node "${join(fixtures, 'shim-nonzero-one-high.mjs')}"`;
+
+        it('P3-1: parses valid JSON from non-zero exit and blocks high vuln without exception', () => {
+            const env = { ...process.env };
+            delete env.DUELI_AUDIT_FIXTURE;
+            env.DUELI_AUDIT_CMD = shimNonZero;
+            env.DUELI_LOCKFILE = join(fixtures, 'mini-lock.json');
+            env.DUELI_AUDIT_EXCEPTIONS = emptyEx();
+            const { stderr, stdout, code } = runGate(env, 1);
+            expect(code).toBe(1);
+            expect(stderr + stdout).toContain('Blocking production advisories');
+            expect(stdout).not.toContain('PASS');
+        });
+
+        it('P3-1: same shim passes when a valid exception matches the advisory', () => {
+            const env = { ...process.env };
+            delete env.DUELI_AUDIT_FIXTURE;
+            env.DUELI_AUDIT_CMD = shimNonZero;
+            env.DUELI_LOCKFILE = join(fixtures, 'mini-lock.json');
+            env.DUELI_AUDIT_EXCEPTIONS = validExceptions;
+            const { stdout } = runGate(env);
+            expect(stdout).toContain('PASS');
+        });
+
+        it('P3-2: rejects report that combines error with vulnerabilities', () => {
+            const { stderr, stdout } = runGate(
+                {
+                    DUELI_AUDIT_FIXTURE: join(fixtures, 'error-plus-vulnerabilities.json'),
+                    DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                    DUELI_AUDIT_EXCEPTIONS: emptyEx(),
+                },
+                1
+            );
+            expect(stderr + stdout).toContain('combines error with vulnerabilities');
+            expect(stdout).not.toContain('PASS');
+        });
+
+        it('P3-3: rejects vulnerability entry with no severity field', () => {
+            const { stderr, stdout } = runGate(
+                {
+                    DUELI_AUDIT_FIXTURE: join(fixtures, 'missing-severity-field.json'),
+                    DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                    DUELI_AUDIT_EXCEPTIONS: emptyEx(),
+                },
+                1
+            );
+            expect(stderr + stdout).toContain('invalid or missing severity');
+            expect(stdout).not.toContain('PASS');
+        });
+    });
 });
