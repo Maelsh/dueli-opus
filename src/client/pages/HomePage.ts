@@ -145,7 +145,7 @@ export class HomePage {
             this.setupAllHoverScroll();
             for (const def of defs) this.wireRetryButton(def.key);
 
-            const progress = { pending: defs.length, hasCards: false };
+            const progress = { pending: defs.length, hasCards: false, hasErrorRails: false };
             for (const def of defs) {
                 void this.bootstrapRail(def, generation, lang, tr, progress);
             }
@@ -165,7 +165,7 @@ export class HomePage {
         generation: number,
         lang: string,
         tr: (typeof translations)['en'],
-        progress: { pending: number; hasCards: boolean }
+        progress: { pending: number; hasCards: boolean; hasErrorRails: boolean }
     ): Promise<void> {
         const container = document.getElementById('home-content');
         try {
@@ -177,6 +177,7 @@ export class HomePage {
 
             if (opened === null) {
                 section.outerHTML = getHomeRailErrorSection(def.key, def.title, def.icon, lang, def.color);
+                progress.hasErrorRails = true;
                 this.wireRetryButton(def.key);
                 return;
             }
@@ -229,6 +230,7 @@ export class HomePage {
             const section = document.getElementById(homeRailSectionId(def.key));
             if (section) {
                 section.outerHTML = getHomeRailErrorSection(def.key, def.title, def.icon, lang, def.color);
+                progress.hasErrorRails = true;
                 this.wireRetryButton(def.key);
             }
         } finally {
@@ -236,6 +238,7 @@ export class HomePage {
             if (
                 progress.pending === 0 &&
                 !progress.hasCards &&
+                !progress.hasErrorRails &&
                 generation === this.railGeneration &&
                 container
             ) {

@@ -1,0 +1,9 @@
+{
+  "name": "fixture-lock",
+  "lockfileVersion": 3,
+  "packages": {
+    "node_modules/fixture-pkg": {
+      "version": "1.2.3"
+    }
+  }
+}

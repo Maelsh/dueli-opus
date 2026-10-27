@@ -20,6 +20,8 @@ class MockClassList {
     contains(token: string): boolean { return this.classes.has(token); }
 }
 
+type ClickableMock = MockElement & { click: () => void };
+
 class MockElement {
     id = '';
     tagName = 'DIV';
@@ -27,13 +29,14 @@ class MockElement {
     innerHTML = '';
     parentElement: MockElement | null = null;
     private htmlStore?: { get: () => string; set: (v: string) => void };
+    private retryButton: ClickableMock | null = null;
     get outerHTML(): string {
         return this.innerHTML;
     }
     set outerHTML(value: string) {
         if (this.htmlStore) {
             const current = this.htmlStore.get();
-            const re = new RegExp(`<section[^>]*id="${this.id}"[\\s\\S]*?</section>`);
+            const re = new RegExp(`<section[^>]*id="${this.id}"[\\s\\S]*?</section>`, 'i');
             if (re.test(current)) {
                 this.htmlStore.set(current.replace(re, value));
             } else {
@@ -52,11 +55,44 @@ class MockElement {
     getAttribute() { return null; }
     addEventListener() { /* noop */ }
     remove() {
+        if (this.htmlStore && this.id) {
+            const current = this.htmlStore.get();
+            const re = new RegExp(`<section[^>]*id="${this.id}"[\\s\\S]*?</section>\\s*`, 'i');
+            this.htmlStore.set(current.replace(re, ''));
+        }
         if (this.parentElement) {
             this.parentElement.children = this.parentElement.children.filter((c) => c !== this);
         }
     }
-    querySelector() { return null; }
+    querySelector(sel: string): ClickableMock | null {
+        if (!this.htmlStore || !this.id) return null;
+        const html = this.htmlStore.get();
+        const secRe = new RegExp(`<section[^>]*id="${this.id}"[\\s\\S]*?</section>`, 'i');
+        const secMatch = secRe.exec(html);
+        if (!secMatch) return null;
+        const secHtml = secMatch[0];
+        if (sel === '[data-home-rail-retry]') {
+            const btnMatch = /data-home-rail-retry="([^"]+)"/.exec(secHtml);
+            if (!btnMatch) {
+                this.retryButton = null;
+                return null;
+            }
+            const railKey = btnMatch[1];
+            if (!this.retryButton) {
+                const listeners: Array<() => void> = [];
+                const btn = new MockElement() as ClickableMock;
+                btn.click = () => listeners.forEach((fn) => fn());
+                btn.addEventListener = (type: string, fn: () => void) => {
+                    if (type === 'click') listeners.push(fn);
+                };
+                btn.getAttribute = (attr: string) =>
+                    attr === 'data-home-rail-retry' ? railKey : null;
+                this.retryButton = btn;
+            }
+            return this.retryButton;
+        }
+        return null;
+    }
     querySelectorAll() { return []; }
     insertAdjacentHTML() { /* noop */ }
     matches() { return false; }
@@ -101,6 +137,28 @@ function wireDom(): { home: MockElement; registry: Map<string, MockElement> } {
     return { home, registry };
 }
 
+function railDef(key: string, overrides: Record<string, unknown> = {}) {
+    return {
+        key,
+        kind: 'suggested',
+        title: key,
+        icon: 'fas fa-fire',
+        color: '#8B5CF6',
+        category: '',
+        subcategory: '',
+        status: 'live',
+        ...overrides,
+    };
+}
+
+function stubHomeLoad() {
+    vi.spyOn(HomePage, 'ensureGuestToken').mockImplementation(() => undefined);
+    vi.spyOn(HomePage, 'setupAllHoverScroll').mockImplementation(() => undefined);
+    vi.spyOn(HomePage, 'armRailObserver').mockImplementation(() => undefined);
+}
+
+const EMPTY_MARKER = 'No competitions yet';
+
 describe('UNIT33 — Home progressive rails', () => {
     beforeEach(() => {
         vi.restoreAllMocks();
@@ -122,31 +180,11 @@ describe('UNIT33 — Home progressive rails', () => {
         const slowKey = 'suggested-live';
         const fastKey = 'cat-dialogue-live';
         vi.spyOn(HomePage, 'buildRailDefs').mockReturnValue([
-            {
-                key: slowKey,
-                kind: 'suggested',
-                title: 'Slow',
-                icon: 'fas fa-fire',
-                color: '#8B5CF6',
-                category: '',
-                subcategory: '',
-                status: 'live',
-            },
-            {
-                key: fastKey,
-                kind: 'category',
-                title: 'Fast',
-                icon: 'fas fa-tag',
-                color: '#8B5CF6',
-                category: 'dialogue',
-                subcategory: '',
-                status: 'live',
-            },
+            railDef(slowKey),
+            railDef(fastKey, { kind: 'category', title: 'Fast', category: 'dialogue' }),
         ]);
-        vi.spyOn(HomePage, 'ensureGuestToken').mockImplementation(() => undefined);
-        vi.spyOn(HomePage, 'setupAllHoverScroll').mockImplementation(() => undefined);
+        stubHomeLoad();
         vi.spyOn(HomePage, 'wireRetryButton').mockImplementation(() => undefined);
-        vi.spyOn(HomePage, 'armRailObserver').mockImplementation(() => undefined);
         vi.spyOn(HomePage, 'openRail').mockImplementation(async (def) => {
             if (def.key === slowKey) {
                 await new Promise((r) => setTimeout(r, 40));
@@ -166,24 +204,11 @@ describe('UNIT33 — Home progressive rails', () => {
     });
 
     it('discards stale bootstrap paint after a new generation', async () => {
-        const { home, registry } = wireDom();
+        const { home } = wireDom();
         const key = 'suggested-live';
-        vi.spyOn(HomePage, 'buildRailDefs').mockReturnValue([
-            {
-                key,
-                kind: 'suggested',
-                title: 'Rail',
-                icon: 'fas fa-fire',
-                color: '#8B5CF6',
-                category: '',
-                subcategory: '',
-                status: 'live',
-            },
-        ]);
-        vi.spyOn(HomePage, 'ensureGuestToken').mockImplementation(() => undefined);
-        vi.spyOn(HomePage, 'setupAllHoverScroll').mockImplementation(() => undefined);
+        vi.spyOn(HomePage, 'buildRailDefs').mockReturnValue([railDef(key)]);
+        stubHomeLoad();
         vi.spyOn(HomePage, 'wireRetryButton').mockImplementation(() => undefined);
-        vi.spyOn(HomePage, 'armRailObserver').mockImplementation(() => undefined);
         let resolveSlow: () => void;
         vi.spyOn(HomePage, 'openRail').mockImplementation(
             () =>
@@ -201,5 +226,81 @@ describe('UNIT33 — Home progressive rails', () => {
         await new Promise((r) => setTimeout(r, 10));
         expect(home.innerHTML).toContain('new context');
         expect(HomePage.rails.size).toBe(0);
+    });
+
+    it('keeps retry UI when all rails fail to open', async () => {
+        const { home, registry } = wireDom();
+        const a = 'rail-a';
+        const b = 'rail-b';
+        vi.spyOn(HomePage, 'buildRailDefs').mockReturnValue([railDef(a), railDef(b, { title: 'B' })]);
+        stubHomeLoad();
+        vi.spyOn(HomePage, 'openRail').mockResolvedValue(null);
+
+        await HomePage.loadCompetitions();
+
+        expect(home.innerHTML).toContain('data-home-rail-retry');
+        expect(home.innerHTML).not.toContain(EMPTY_MARKER);
+        const btnA = registry.get(homeRailSectionId(a))?.querySelector('[data-home-rail-retry]');
+        expect(btnA).toBeTruthy();
+    });
+
+    it('does not replace a failed rail with global empty when another rail is empty-success', async () => {
+        const { home } = wireDom();
+        const okEmpty = 'rail-empty';
+        const failed = 'rail-fail';
+        vi.spyOn(HomePage, 'buildRailDefs').mockReturnValue([
+            railDef(okEmpty),
+            railDef(failed, { title: 'Fail' }),
+        ]);
+        stubHomeLoad();
+        vi.spyOn(HomePage, 'openRail').mockImplementation(async (def) => {
+            if (def.key === okEmpty) {
+                return { items: [], sessionId: 'e1', cursor: null, done: true };
+            }
+            return null;
+        });
+
+        await HomePage.loadCompetitions();
+
+        expect(home.innerHTML).toContain('data-home-rail-retry');
+        expect(home.innerHTML).not.toContain(EMPTY_MARKER);
+    });
+
+    it('shows global empty state when every rail succeeds with no cards', async () => {
+        const { home } = wireDom();
+        vi.spyOn(HomePage, 'buildRailDefs').mockReturnValue([
+            railDef('empty-1'),
+            railDef('empty-2', { title: 'E2' }),
+        ]);
+        stubHomeLoad();
+        vi.spyOn(HomePage, 'openRail').mockResolvedValue({
+            items: [],
+            sessionId: 's',
+            cursor: null,
+            done: true,
+        });
+
+        await HomePage.loadCompetitions();
+
+        expect(home.innerHTML).toContain(EMPTY_MARKER);
+        expect(home.innerHTML).not.toContain('data-home-rail-retry');
+    });
+
+    it('wires retry click to reopenRailSection for a never-opened rail', async () => {
+        const { registry } = wireDom();
+        const key = 'rail-retry';
+        vi.spyOn(HomePage, 'buildRailDefs').mockReturnValue([railDef(key)]);
+        stubHomeLoad();
+        vi.spyOn(HomePage, 'openRail').mockResolvedValue(null);
+        const reopen = vi.spyOn(HomePage, 'reopenRailSection').mockResolvedValue(undefined);
+
+        await HomePage.loadCompetitions();
+
+        const section = registry.get(homeRailSectionId(key));
+        const btn = section?.querySelector('[data-home-rail-retry]');
+        expect(btn).toBeTruthy();
+        HomePage.wireRetryButton(key);
+        btn!.click();
+        expect(reopen).toHaveBeenCalledWith(key);
     });
 });
