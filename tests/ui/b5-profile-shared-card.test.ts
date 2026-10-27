@@ -42,8 +42,8 @@ describe('B5 — profile page design alignment', () => {
         });
         // The competition read model is not the subject here; stub it so the
         // assertions are about rendering, not about the fake SQL layer.
-        findSpy = vi.spyOn(CompetitionModel.prototype, 'findByUser')
-            .mockResolvedValue([competition] as never);
+        findSpy = vi.spyOn(CompetitionModel.prototype, 'findByUserPage')
+            .mockResolvedValue({ items: [competition], next: null } as never);
         vi.spyOn(FollowModel.prototype, 'getFollowersCount').mockResolvedValue(2 as never);
         vi.spyOn(FollowModel.prototype, 'getFollowingCount').mockResolvedValue(3 as never);
     });
@@ -74,7 +74,7 @@ describe('B5 — profile page design alignment', () => {
     });
 
     it('preserves the empty competitions state', async () => {
-        findSpy.mockResolvedValue([] as never);
+        findSpy.mockResolvedValue({ items: [], next: null } as never);
         const html = await (await app.request('/profile/sara?lang=ar', {}, env(db))).text();
         expect(html).not.toContain('duel-card');
         // The profile still renders with its own sections.
