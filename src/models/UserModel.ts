@@ -252,6 +252,23 @@ export class UserModel extends BaseModel<User> {
     }
 
     /**
+     * REM1: whether the user may use in-app password change (not OAuth auto-secret only).
+     */
+    async hasLocalPassword(userId: number): Promise<boolean> {
+        const user = await this.findById(userId);
+        if (!user?.password_hash?.trim() || user.password_hash === 'x') return false;
+        if (!user.oauth_provider) return true;
+        const row = await this.db.prepare(`
+            SELECT 1 AS ok FROM admin_audit_logs
+            WHERE action_type = 'account_password_changed'
+              AND target_entity = 'user'
+              AND target_id = ?
+            LIMIT 1
+        `).bind(userId).first<{ ok: number }>();
+        return !!row;
+    }
+
+    /**
      * Get user with stats
      */
     async findWithStats(username: string): Promise<User | null> {

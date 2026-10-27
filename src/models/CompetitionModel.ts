@@ -363,6 +363,56 @@ export class CompetitionModel extends BaseModel<Competition> {
      * ordering differs (newest-first for a profile shelf); B7 ranking/order
      * semantics are untouched.
      */
+    /**
+     * Keyset page for a user's competition shelf (creator or opponent).
+     * ORDER BY created_at DESC, id DESC — stable cursor { at, id } on created_at.
+     */
+    async findByUserPage(
+        userId: number,
+        limit: number,
+        cursor: { at: string; id: number } | null = null
+    ): Promise<{ items: CompetitionWithDetails[]; next: { at: string; id: number } | null }> {
+        const params: Array<string | number> = [userId, userId];
+        let cursorSql = '';
+        if (cursor) {
+            cursorSql = ` AND (c.created_at < ? OR (c.created_at = ? AND c.id < ?))`;
+            params.push(cursor.at, cursor.at, cursor.id);
+        }
+        params.push(limit + 1);
+
+        const rows = await this.query<CompetitionWithDetails>(`
+            SELECT c.*,
+                   cat.name_ar as category_name_ar,
+                   cat.name_en as category_name_en,
+                   cat.slug as category_slug,
+                   cat.icon as category_icon,
+                   COALESCE(subcat.color, cat.color) as category_color,
+                   subcat.slug as subcategory_slug,
+                   creator.display_name as creator_name,
+                   creator.avatar_url as creator_avatar,
+                   creator.username as creator_username,
+                   opponent.display_name as opponent_name,
+                   opponent.avatar_url as opponent_avatar,
+                   opponent.username as opponent_username
+            FROM competitions c
+            JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
+            JOIN users creator ON c.creator_id = creator.id
+            LEFT JOIN users opponent ON c.opponent_id = opponent.id
+            WHERE (c.creator_id = ? OR c.opponent_id = ?)${cursorSql}
+            ORDER BY c.created_at DESC, c.id DESC
+            LIMIT ?
+        `, ...params);
+
+        const hasMore = rows.length > limit;
+        const items = hasMore ? rows.slice(0, limit) : rows;
+        const last = items[items.length - 1];
+        const next = hasMore && last
+            ? { at: String(last.created_at), id: Number(last.id) }
+            : null;
+        return { items, next };
+    }
+
     async findByUser(userId: number, options: QueryOptions = {}): Promise<CompetitionWithDetails[]> {
         const { limit = 20, offset = 0 } = options;
 

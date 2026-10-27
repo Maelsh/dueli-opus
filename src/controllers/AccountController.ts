@@ -96,7 +96,7 @@ export class AccountController extends BaseController {
             const userModel = new UserModel(c.env.DB);
             const fresh = await userModel.findById(me.id);
             if (!fresh) return this.notFound(c);
-            if (fresh.oauth_provider) {
+            if (fresh.oauth_provider && !(await userModel.hasLocalPassword(me.id))) {
                 return this.error(c, this.t('auth_social_no_password', c), 422);
             }
             if (!(await CryptoUtils.verifyPassword(body.current_password, fresh.password_hash ?? ''))) {

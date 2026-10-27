@@ -616,6 +616,7 @@ export const en = {
         password_reset_cta: 'Reset password via email',
     },
     profile_competitions: {
+        load_more: 'Load more competitions',
         delete_action: 'Delete competition',
         delete_confirm_title: 'Delete this competition?',
         delete_confirm_body: '“{title}” will be permanently deleted. This cannot be undone.',

@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-27T12:37:44.035Z
+> تاريخ التوليد: 2026-10-27T14:42:15.984Z
 
-## الإجمالي: 251 مسار
+## الإجمالي: 252 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 128 |
+| PUBLIC(auth-optional, in-handler check required) | 129 |
 | AUTHENTICATED | 78 |
 | UNGUARDED ⚠ | 40 |
 | SERVICE(origin-only ⚠) | 5 |
@@ -260,6 +260,7 @@
 | POST | `/api/users/:id/message` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/messages/routes.ts` |
 | GET | `/api/users/:id/requests` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | GET | `/api/users/:username` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
+| GET | `/api/users/:username/competitions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | POST | `/api/users/delete-account` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/users/delete-account.ts` |
 | POST | `/api/users/delete-account/verify` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/users/delete-account.ts` |
 | POST | `/api/users/follow-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
