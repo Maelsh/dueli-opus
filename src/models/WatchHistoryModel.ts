@@ -114,9 +114,9 @@ export class WatchHistoryModel {
             WHERE ${where}
             ORDER BY wh.watched_at DESC, wh.competition_id DESC
             LIMIT ?
-        `).bind(...params).all();
+        `).bind(...params).all<Record<string, unknown>>();
 
-        const rows = (result.results || []) as Array<Record<string, unknown>>;
+        const rows = result.results || [];
         const hasMore = rows.length > limit;
         const items = hasMore ? rows.slice(0, limit) : rows;
         const last = items[items.length - 1];

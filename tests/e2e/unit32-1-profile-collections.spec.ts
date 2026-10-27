@@ -203,6 +203,121 @@ test.describe('UNIT32.1 — profile collections', () => {
             await expect(pageA.locator('#collectionsTab-later')).toBeVisible();
             await expect(pageA.locator('#collectionsTab-history')).toBeVisible();
 
+            // Real-browser VOD playback through the shipped inline hook. This
+            // generates a short local video, wires the competition page's
+            // actual `embeddedWireVodWatch`, and proves that five seconds of
+            // non-paused playback reaches the authenticated history endpoint
+            // once. It does not claim the full recording/chunk pipeline; that
+            // path is covered separately by the chunk-player browser suite.
+            await pageA.setViewportSize({ width: 1280, height: 800 });
+            const vodComp = comps[7];
+            let historyPosts = 0;
+            const onHistoryRequest = (request: import('@playwright/test').Request) => {
+                if (request.method() === 'POST' && request.url().includes(`/api/watch/history/${vodComp.id}`)) {
+                    historyPosts += 1;
+                }
+            };
+            pageA.on('request', onHistoryRequest);
+
+            const competitionLoaded = pageA.waitForResponse(
+                (r) => r.request().method() === 'GET'
+                    && r.url().includes(`/api/competitions/${vodComp.id}`),
+                { timeout: 30000 },
+            );
+            await pageA.goto(`/competition/${vodComp.id}?lang=${locale}`, { waitUntil: 'domcontentloaded' });
+            await competitionLoaded;
+            await expect.poll(
+                () => pageA.evaluate(() => (window as any).__mediaState || null),
+                { timeout: 30000 },
+            ).not.toBeNull();
+
+            const historyResponse = pageA.waitForResponse(
+                (r) => r.request().method() === 'POST'
+                    && r.url().includes(`/api/watch/history/${vodComp.id}`),
+                { timeout: 60000 },
+            );
+            const media = await pageA.evaluate(async () => {
+                const hook = (window as any).embeddedWireVodWatch;
+                if (typeof hook !== 'function') return { error: 'embeddedWireVodWatch missing' };
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 160;
+                canvas.height = 120;
+                canvas.style.cssText = 'position:fixed;left:0;top:0;width:160px;height:120px;z-index:9999;';
+                document.body.appendChild(canvas);
+                const context = canvas.getContext('2d');
+                let frame = 0;
+                let animationFrame = 0;
+                const draw = () => {
+                    if (context) {
+                        context.fillStyle = `hsl(${(frame * 17) % 360}, 80%, 50%)`;
+                        context.fillRect(0, 0, 160, 120);
+                        context.fillStyle = '#fff';
+                        context.fillRect((frame * 3) % 160, 40, 24, 24);
+                    }
+                    frame += 1;
+                    animationFrame = requestAnimationFrame(draw);
+                };
+                animationFrame = requestAnimationFrame(draw);
+
+                const stream = canvas.captureStream(15);
+                const candidates = [
+                    'video/webm;codecs=vp9',
+                    'video/webm;codecs=vp8',
+                    'video/webm',
+                ];
+                const mime = candidates.find((candidate) => {
+                    try { return MediaRecorder.isTypeSupported(candidate); } catch { return false; }
+                }) || '';
+                const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+                const chunks: Blob[] = [];
+                recorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) chunks.push(event.data);
+                };
+                recorder.start();
+                await new Promise((resolve) => setTimeout(resolve, 6500));
+                await new Promise<void>((resolve) => {
+                    recorder.onstop = () => resolve();
+                    recorder.stop();
+                });
+                cancelAnimationFrame(animationFrame);
+                canvas.remove();
+
+                const video = document.createElement('video');
+                video.id = 'e2eVodVideo';
+                video.muted = true;
+                video.playsInline = true;
+                video.style.cssText = 'position:fixed;left:0;top:0;width:320px;height:240px;z-index:9999;';
+                const blob = new Blob(chunks, { type: mime || 'video/webm' });
+                const loaded = new Promise<void>((resolve, reject) => {
+                    video.onloadedmetadata = () => resolve();
+                    video.onerror = () => reject(new Error('synthetic VOD failed to load'));
+                });
+                video.src = URL.createObjectURL(blob);
+                document.body.appendChild(video);
+                await loaded;
+                hook(video);
+                await video.play();
+                return { mime, duration: video.duration };
+            }).catch((error) => ({ error: String((error as Error)?.message || error) }));
+
+            expect(media.error, `synthetic VOD setup: ${JSON.stringify(media)}`).toBeUndefined();
+            expect(Number((media as { duration?: number }).duration)).toBeGreaterThan(5);
+            expect((await historyResponse).ok(), 'the VOD history POST succeeds').toBeTruthy();
+
+            // Exactly one report, and the server stored only the history touch:
+            // no seconds and no completion claim from the player.
+            await pageA.waitForTimeout(500);
+            expect(historyPosts, 'one history POST per page load').toBe(1);
+            const historyRow = d1query<{ rows: number; seconds: number; completed: number }>(
+                `SELECT COUNT(*) AS rows, MAX(watch_duration_seconds) AS seconds, MAX(completed) AS completed
+                 FROM watch_history WHERE user_id = ${idA} AND competition_id = ${vodComp.id}`,
+            )[0];
+            expect(historyRow.rows).toBe(1);
+            expect(historyRow.seconds).toBe(0);
+            expect(historyRow.completed).toBe(0);
+            pageA.off('request', onHistoryRequest);
+
             expect(pageErrors, 'the owner profile must not raise page errors').toEqual([]);
         } finally {
             await ctxA.close();

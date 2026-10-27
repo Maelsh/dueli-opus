@@ -80,15 +80,15 @@ export class WatchLaterUI {
         const id = Number(competitionId);
         if (!Number.isSafeInteger(id) || id <= 0) return;
 
-        let user = typeof window !== 'undefined' ? (window as any).currentUser : null;
-        if (!user && typeof window !== 'undefined' && typeof (window as any).checkAuth === 'function') {
+        let user: unknown = typeof window !== 'undefined' ? window.currentUser : null;
+        if (!user && typeof window !== 'undefined' && typeof window.checkAuth === 'function') {
             // Canonical auth resolution may still be in flight on first paint.
             // Reuse it instead of misclassifying a signed-in user as a guest.
             // `checkAuth()` is authoritative even when App.init has not copied
             // the user onto `window.currentUser` yet.
             try {
-                const authenticated = await (window as any).checkAuth();
-                if (authenticated) user = (window as any).currentUser || true;
+                const authenticated = await window.checkAuth();
+                if (authenticated) user = window.currentUser || true;
             } catch {
                 // Fall through: an unresolved session is treated as a guest.
             }
@@ -96,7 +96,7 @@ export class WatchLaterUI {
         if (!user) {
             // Existing login modal = the safe local return: the user stays on
             // the page they were on and no URL parameter is consumed.
-            (window as any).showLoginModal?.();
+            window.showLoginModal?.();
             return;
         }
 
@@ -138,22 +138,22 @@ export class WatchLaterUI {
             const saved = body.data.saved === true;
             for (const button of this.buttons(id)) this.applySavedState(button, saved);
 
-            const lang = typeof window !== 'undefined' ? ((window as any).lang || 'en') : 'en';
-            (window as any).dueli?.showToast?.(
+            const lang = typeof window !== 'undefined' ? (window.lang || 'en') : 'en';
+            window.dueli?.showToast?.(
                 t(saved ? 'watch_collections.added' : 'watch_collections.removed', lang),
                 'success'
             );
 
-            if (typeof window !== 'undefined' && typeof (window as any).dispatchEvent === 'function') {
-                (window as any).dispatchEvent(new CustomEvent('dueli:watch-later-changed', {
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+                window.dispatchEvent(new CustomEvent('dueli:watch-later-changed', {
                     detail: { competitionId: id, saved },
                 }));
             }
         } catch (error) {
             console.error('[WatchLaterUI] toggle failed:', error);
             const message = current[0].dataset.wlError
-                || t('watch_collections.save_failed', (typeof window !== 'undefined' ? (window as any).lang : null) || 'en');
-            (window as any).dueli?.showToast?.(message, 'error');
+                || t('watch_collections.save_failed', (typeof window !== 'undefined' ? window.lang : null) || 'en');
+            window.dueli?.showToast?.(message, 'error');
         } finally {
             for (const button of this.buttons(id)) {
                 delete button.dataset.wlHydrating;
@@ -165,9 +165,9 @@ export class WatchLaterUI {
     /** Paint one button from confirmed server truth. */
     static applySavedState(button: WatchLaterButton, saved: boolean): void {
         const addLabel = button.dataset.wlAddLabel
-            || t('watch_collections.add', (typeof window !== 'undefined' ? (window as any).lang : null) || 'en');
+            || t('watch_collections.add', (typeof window !== 'undefined' ? window.lang : null) || 'en');
         const removeLabel = button.dataset.wlRemoveLabel
-            || t('watch_collections.remove', (typeof window !== 'undefined' ? (window as any).lang : null) || 'en');
+            || t('watch_collections.remove', (typeof window !== 'undefined' ? window.lang : null) || 'en');
         const label = saved ? removeLabel : addLabel;
 
         button.dataset.saved = saved ? '1' : '0';

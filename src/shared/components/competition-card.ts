@@ -20,7 +20,7 @@ export interface CompetitionCardProps extends Competition {
 export function getCompetitionCard(item: CompetitionCardProps, lang: Language): string {
   const tr = translations[getUILanguage(lang)];
   const rtl = isRTL(lang);
-  const collections = ((tr as any).watch_collections || {}) as Record<string, string>;
+  const collections: Record<string, string> = tr.watch_collections || {};
   const addLabel = collections.add || 'Save to Watch Later';
   const removeLabel = collections.remove || 'Remove from Watch Later';
 
@@ -138,7 +138,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
             <!-- Views in bottom right, Likes in bottom left -->
             <div class="absolute bottom-3 ${rtl ? 'right-3' : 'left-3'} z-20">
               <span class="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-xs font-medium flex items-center gap-3 border border-white/10 shadow-sm">
-                <span class="flex items-center gap-1.5 transition-colors hover:text-green-400" title="${(tr.like as any)?.title || 'Likes'}">
+                <span class="flex items-center gap-1.5 transition-colors hover:text-green-400" title="${tr.like?.title || 'Likes'}">
                   <i class="fas fa-thumbs-up text-green-400"></i>
                   ${(item.likes_count || 0).toLocaleString()}
                 </span>
@@ -161,7 +161,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
         <div class="mt-3 px-1">
           <div class="flex items-start justify-between gap-2">
             <a href="/competition/${item.id}?lang=${lang}" class="min-w-0 flex-1">
-              <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${(item as any).is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${(tr.demo as any)?.title || 'Demo'}">${(tr.demo as any)?.badge || 'Demo'}</span>` : ''}</h3>
+              <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${item.is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${tr.demo?.title || 'Demo'}">${tr.demo?.badge || 'Demo'}</span>` : ''}</h3>
             </a>
             <!-- UNIT32.1: explicit Watch Later control (shared by every card).
                  The label/state is hydrated from the authenticated API; a

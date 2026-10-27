@@ -254,6 +254,9 @@ declare global {
         RecordingDownloadPanel: typeof RecordingDownloadPanel;
         openRecordingDownload: (competitionId: number) => RecordingDownloadPanel | null;
 
+        // UNIT32.1: CSP-delegated `WatchLaterUI.toggle` from shared cards.
+        WatchLaterUI: typeof WatchLaterUI;
+
         // Invite Panel (Task 10)
         openInvitePanel: (competitionId: number) => void;
         closeInvitePanel: () => void;
@@ -345,7 +348,7 @@ if (typeof window !== 'undefined') {
     (window as any).SettingsUI = SettingsUI;
     (window as any).NotificationsUI = NotificationsUI;
     // UNIT32.1: CSP-delegated `WatchLaterUI.toggle` from shared cards.
-    (window as any).WatchLaterUI = WatchLaterUI;
+    window.WatchLaterUI = WatchLaterUI;
 
     // Bind Home Page Methods
     window.setMainTab = (tab: any) => HomePage.setMainTab(tab);

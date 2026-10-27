@@ -324,6 +324,35 @@ describe('UNIT32.1 R4-PROFILE-COLLECTIONS-1 — owner-only collections', () => {
         expect(missing.status).toBe(404);
     });
 
+    it('treats the VOD endpoint as an authenticated client signal with no body-controlled state', async () => {
+        // The endpoint cannot prove five seconds of playback on the server:
+        // a direct authenticated POST creates the completed/archived row just
+        // like the player does. The contract is a guarded CLIENT SIGNAL, not
+        // server-side playback evidence. What the server DOES enforce is
+        // identity, VOD status, idempotency, and that no request body can
+        // change watch seconds or completion.
+        await db.prepare(`UPDATE competitions SET status = 'archived' WHERE id = 7`).run();
+
+        const direct = await api(db, 'POST', '/api/watch/history/7', TOK_A, {
+            user_id: 3,
+            watch_duration_seconds: 9999,
+            completed: true,
+            watched_at: '1999-01-01 00:00:00',
+        });
+        expect(direct.status).toBe(200);
+        expect(direct.data.data).toMatchObject({ competition_id: 7, recorded: true });
+
+        const row = await db.prepare(`
+            SELECT watch_duration_seconds AS seconds, completed, watched_at
+            FROM watch_history WHERE user_id = 2 AND competition_id = 7
+        `).first<{ seconds: number; completed: number; watched_at: string }>();
+        expect(Number(row?.seconds), 'body-supplied seconds must be ignored').toBe(0);
+        expect(Number(row?.completed), 'body-supplied completion must be ignored').toBe(0);
+        expect(row?.watched_at).not.toBe('1999-01-01 00:00:00');
+        expect(await countRows(db, 'watch_history', 2)).toBe(1);
+        expect(await countRows(db, 'watch_history', 3), 'body-supplied user_id must be ignored').toBe(0);
+    });
+
     it('keeps unavailable content in history without leaking user-private fields', async () => {
         await db.prepare(`
             INSERT INTO watch_history (user_id, competition_id, watch_duration_seconds, completed, watched_at)

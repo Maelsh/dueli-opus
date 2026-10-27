@@ -2409,20 +2409,84 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       }
       
       // UNIT32.1: a real VOD watch event = the viewer actually played at least
-      // 5 seconds. One POST per page load; live rows are counted by the H1
-      // heartbeat writer instead, so this never creates a second counter.
+      // 5 seconds. The absolute position is NOT proof: a recording may start
+      // at a large offset. Accumulate confirmed forward progress from
+      // timeupdate ticks instead, and reset the clock whenever playback pauses,
+      // buffers, seeks or ends. A large jump is discarded rather than counted.
+      // One POST per page load; live rows are counted by the H1 heartbeat
+      // writer instead, so this never creates a second counter.
+      var VOD_WATCH_REQUIRED_SECONDS = 5;
+      var VOD_WATCH_MAX_TICK_SECONDS = 2.5;
+
+      function embeddedVodWatchState(videoEl) {
+        if (!videoEl) return null;
+        var state = videoEl.__dueliVodWatchState;
+        if (!state) {
+          state = videoEl.__dueliVodWatchState = {
+            progress: 0,
+            lastTime: null,
+            reported: false
+          };
+        }
+        return state;
+      }
+
+      function embeddedResetVodWatchClock(videoEl) {
+        var state = embeddedVodWatchState(videoEl);
+        if (state) state.lastTime = null;
+      }
+
       function embeddedReportVodWatch(videoEl) {
-        if (!videoEl || videoEl.__dueliVodWatchReported === true) return;
-        const status = competitionData && competitionData.status;
+        if (!videoEl) return;
+        var state = embeddedVodWatchState(videoEl);
+        if (!state || state.reported) return;
+        var status = competitionData && competitionData.status;
         if (status !== 'completed' && status !== 'archived') return;
-        if (videoEl.paused) return;
-        if (typeof videoEl.readyState === 'number' && videoEl.readyState < 2) return;
-        if (!(videoEl.currentTime >= 5)) return;
-        videoEl.__dueliVodWatchReported = true;
+        if (videoEl.paused || videoEl.ended || videoEl.seeking) {
+          state.lastTime = null;
+          return;
+        }
+        if (typeof videoEl.readyState === 'number' && videoEl.readyState < 2) {
+          state.lastTime = null;
+          return;
+        }
+        var current = Number(videoEl.currentTime);
+        if (!isFinite(current)) {
+          state.lastTime = null;
+          return;
+        }
+        if (state.lastTime === null) {
+          state.lastTime = current;
+          return;
+        }
+        var delta = current - state.lastTime;
+        state.lastTime = current;
+        // A seek/gap is not playback. Normal timeupdate ticks are sub-second;
+        // discard anything that cannot be a single confirmed tick.
+        if (!(delta > 0) || delta > VOD_WATCH_MAX_TICK_SECONDS) return;
+        state.progress += delta;
+        if (state.progress < VOD_WATCH_REQUIRED_SECONDS) return;
+
+        state.reported = true;
         fetch('/api/watch/history/' + encodeURIComponent(competitionId), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
         }).catch(function() { /* history is best-effort; playback is unaffected */ });
+      }
+
+      function embeddedWireVodWatch(videoEl) {
+        if (!videoEl || videoEl.__dueliVodWatchWired) return;
+        videoEl.__dueliVodWatchWired = true;
+        videoEl.addEventListener('timeupdate', function() { embeddedReportVodWatch(videoEl); });
+        // Paused, buffering, seeking and ended periods are not watch time.
+        ['pause', 'waiting', 'seeking', 'ended'].forEach(function(eventName) {
+          videoEl.addEventListener(eventName, function() { embeddedResetVodWatchClock(videoEl); });
+        });
+        // A new play/seek boundary starts a fresh baseline, so the next
+        // timeupdate cannot inherit a jump from the old position.
+        ['play', 'playing', 'seeked'].forEach(function(eventName) {
+          videoEl.addEventListener(eventName, function() { embeddedResetVodWatchClock(videoEl); });
+        });
       }
 
       // ===== VOD Seekbar Controls =====
@@ -2452,11 +2516,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             const icon = document.getElementById('embeddedPlayPauseIcon');
             if (icon) icon.className = 'fas fa-play text-sm';
           });
-          // UNIT32.1: history means an ACTUAL non-paused VOD watch, never a
-          // page-open/preview. One report per page load, after 5s of real
-          // playback; the server only touches completed/archived rows.
-          videoEl.addEventListener('timeupdate', function() { embeddedReportVodWatch(videoEl); });
         }
+
+        // UNIT32.1: history means an ACTUAL non-paused VOD watch, never a
+        // page-open/preview. One report per page load, after 5s of real
+        // playback; the server only touches completed/archived rows.
+        embeddedWireVodWatch(videoEl);
 
         if (seekbar && !seekbar.__dueliVodWired) {
           seekbar.__dueliVodWired = true;
