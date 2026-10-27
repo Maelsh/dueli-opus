@@ -1,3 +1,8 @@
+## 2026-10-27 — UNIT32.3 candidate / R4-ACCOUNT-COMP-LIFECYCLE-EDGE-1 · تحقيق ملاحظتين (حذف بروفايل + تحميل إعدادات كلمة المرور) · فرع fix/r4-account-comp-lifecycle-edge-32-3 (من bfa09aa = origin/main، بعد دمج PR #143)
+
+- 🔧 **LOCAL VERIFIED — REMOTE PENDING.** لا عيب تنفيذي مُثبت؛ **9** اختبارات regression جديدة تغلق فجوات الأدلة (تأكيد/إلغاء الحذف، عناوين SSR/load-more، حالة التحميل قبل `has_password`). لا تغيير API/مخطط/اعتماديات.
+- **BASE:** `bfa09aa57c38b59b7f55a5168dcd44ae41d6edb7` (= `origin/main` بعد PR #143).
+
 ## 2026-10-27 — UNIT32.2-REM1 / R4-ACCOUNT-COMP-LIFECYCLE-REM1 · متابعة PR #142 · فرع fix/r4-account-comp-lifecycle-rem1 (من 603d826 = origin/main)
 
 - 🔧 **LOCAL VERIFIED — REMOTE PENDING.** A: ترقيم keyset لقائمة منافسات البروفايل (`GET /api/users/:username/competitions` + Load More، `created_at DESC, id DESC`). B: عنوان الحذف في `data-comp-title` و`data-csp-args` بالمعرّف فقط. C: كلمات المرور بلا `.trim()`. D: `has_password` خادمي (OAuth + `account_password_changed` في audit)؛ reset-password يكتب audit. E: تصحيح عدد اختبارات PR #142 المركّزة إلى **13** (2+6+4+1).

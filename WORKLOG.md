@@ -1,3 +1,10 @@
+## 2026-10-27 — UNIT32.3 candidate / R4-ACCOUNT-COMP-LIFECYCLE-EDGE-1 · investigation closure · branch fix/r4-account-comp-lifecycle-edge-32-3 (from bfa09aa = origin/main)
+
+- **NOTE 1 (delete title):** SSR (`renderOwnerCompetitionCard`) and load-more (`profileCompetitionCardHtml`) share the same encoding; `getAttribute('data-comp-title')` feeds confirm text; cancel skips DELETE, confirm sends DELETE. No implementation defect found beyond prior REM1 fix.
+- **NOTE 2 (settings password flash):** SSR `#settingsContent` is spinner-only until `loadSettings` completes; no interactive password form during pending GET. `accountHasPassword` default unused until post-fetch `renderSettings`. No client fix required.
+- **NEW TESTS:** 9 — `tests/ui/unit32-3-profile-delete-confirm.test.ts` (5), `tests/ui/unit32-3-settings-password-loading.test.ts` (4).
+- **STATUS:** LOCAL VERIFIED — PR pending remote CI.
+
 ## 2026-10-27 — UNIT32.2-REM1 / R4-ACCOUNT-COMP-LIFECYCLE-REM1 · PR #142 follow-up · branch fix/r4-account-comp-lifecycle-rem1 (from 603d826 = origin/main)
 
 - **SCOPE:** Profile competition keyset pagination; safe delete title encoding; raw password fields; `has_password` vs OAuth-only; docs fix 13 focused tests for #142.
