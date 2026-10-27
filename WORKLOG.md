@@ -1,3 +1,10 @@
+## 2026-10-27 — UNIT32.2 / R4-ACCOUNT-COMP-LIFECYCLE-1 · password UI + safe creator delete · branch feat/unit32-2-r4-account-comp-lifecycle-1 (from 3b1b6b6 = origin/main)
+
+- **SCOPE:** Settings password change UI wired to existing `PUT /api/account/password`; OAuth accounts get social hint + forgot-password modal (422 on API if forced). Creator `DELETE /api/competitions/:id` now uses atomic `deleteCascadeIfCreatorEligible` (eligible: pending, no opponent, not started); profile owner tab shows delete + confirm. Admin `deleteCascade` unchanged.
+- **BASE:** `3b1b6b64914cbfc861e00063643431c60539a284` (PR #141 merge). UNIT32.1 deployed on same SHA per leader brief; no UNIT32.1 reopen.
+- **TESTS:** 14 new focused tests; full suite 2102 pass locally (6 jq env failures). No migration; routes inventory 251 unchanged.
+- **STATUS:** LOCAL VERIFIED — awaiting PR + remote CI.
+
 ## 2026-10-27 — UNIT32.1 / R4-PROFILE-COLLECTIONS-1 · «المشاهدة لاحقًا» وسجل المشاهدات داخل بروفايل المالك وحده · فرع feat/unit32-1-r4-profile-collections-1 (من 05f0f1f = origin/main)
 
 - **SCOPE / PRESERVE:** تنفيذ UNIT32.1 فقط: تبويبا «المشاهدة لاحقًا» و«سجل المشاهدات» داخل بروفايل صاحبه، بخصوصية يفرضها الخادم وترقيم مؤشر مستقر حتى النهاية. لا تغيير في H7 ولا التقييمات ولا المالية/الإعلانات ولا سياسة المنافسات، ولا حذف/تصدير/مشاركة عامة، ولا migration جديدة، ولا مساس بـPR #110 أو UNIT33/33.1/35. لا دمج ولا نشر ولا كتابة بعيدة.

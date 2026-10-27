@@ -1,3 +1,10 @@
+## 2026-10-27 — UNIT32.2 / R4-ACCOUNT-COMP-LIFECYCLE-1 · واجهة تغيير كلمة المرور + حذف منافسة المنشئ قبل انضمام خصم · فرع feat/unit32-2-r4-account-comp-lifecycle-1 (من 3b1b6b6 = origin/main)
+
+- 🔧 **LOCAL VERIFIED — REMOTE PENDING.** النطاق A: قسم كلمة المرور في `/settings` (حقول حالية/جديدة/تأكيد، OAuth → تلميح + `showForgotPassword`، نجاح → `reauth_required` + `DueliSession.clearLocal` + `showLoginModal`). النطاق B: `DELETE /api/competitions/:id` للمنشئ فقط عبر `deleteCascadeIfCreatorEligible` (ذرّي: `pending` + `opponent_id IS NULL` + `started_at IS NULL` + `creator_id`)؛ واجهة حذف في «منافساتي» للمالك. لا migration ولا endpoint جديد ولا مساس PR #110 أو UNIT33+.
+- **BASE:** `origin/main == 3b1b6b64914cbfc861e00063643431c60539a284` (دمج PR #141 / UNIT32.1). **PLAN MAIN:** `3408b3c102f91aeef63d64a26934622738b1ca7e`؛ NEXT: `32.2 → 33 → 33.1 → 34 → 35–42`.
+- **RED→GREEN:** `tests/api/unit32-2-account-password.test.ts` (3) + `tests/api/unit32-2-competition-delete-lifecycle.test.ts` (6) + `tests/ui/unit32-2-settings-password.test.ts` (4) + `tests/ui/unit32-2-profile-delete.test.ts` (1) = **14/14**. `npm test` = **208 ملف / 2108: 2102 ناجح، 6 فاشل** (كلها `quality-gate-poll` لغياب `jq` محليًا). `tsc`/`build`/SEC AST نظيف؛ `any`=300≤310؛ routes=251 بلا تغيير مسارات.
+- **NOT TESTED:** لا CI بعيد حتى الدفع؛ لا E2E Playwright لهذه الوحدة؛ لا نقر إنتاجي.
+
 ## 2026-10-27 — UNIT32.1 / R4-PROFILE-COLLECTIONS-1 · «المشاهدة لاحقًا» وسجل المشاهدات للمالك وحده بترقيم مستقر · فرع feat/unit32-1-r4-profile-collections-1 (من 05f0f1f = origin/main)
 
 - 🔧 **LOCAL VERIFIED — REMOTE PENDING.** الوحدة فقط: تبويبا Watch Later وViewing History داخل بروفايل صاحبه، بخصوصية يفرضها الخادم وترقيم مؤشر حتى النهاية. لا تغيير في H7/التقييمات/المالية/الإعلانات/سياسة المنافسات، ولا حذف/تصدير/مشاركة عامة، ولا migration جديدة، ولا مساس بـPR #110 أو UNIT33/33.1/35. لا دمج/نشر/كتابة إنتاج.

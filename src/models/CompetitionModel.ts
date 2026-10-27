@@ -825,7 +825,60 @@ export class CompetitionModel extends BaseModel<Competition> {
      * a mid-delete failure can never leave a partially-deleted competition.
      */
     async deleteCascade(competitionId: number): Promise<boolean> {
-        const statements = [
+        const statements = this.buildCascadeDeleteStatements(competitionId);
+        await this.db.batch(statements);
+        return true;
+    }
+
+    /**
+     * UNIT32.2 — creator delete only while pending, no opponent, not started.
+     * Dependents are removed in the same atomic batch and only when the parent
+     * row still matches the eligibility guard (no partial deletes on 409).
+     */
+    async deleteCascadeIfCreatorEligible(competitionId: number, creatorId: number): Promise<boolean> {
+        const eligibleExists = `
+            SELECT 1 FROM competitions
+            WHERE id = ? AND creator_id = ?
+              AND status = 'pending'
+              AND opponent_id IS NULL
+              AND started_at IS NULL
+        `;
+        const dependentSql = (table: string) => `
+            DELETE FROM ${table}
+            WHERE competition_id = ?
+              AND EXISTS (${eligibleExists})
+        `;
+        const tables = [
+            'competition_requests',
+            'competition_invitations',
+            'competition_invites',
+            'ratings',
+            'comments',
+            'chunk_keys',
+            'competition_scheduled_tasks',
+            'scheduled_competitions',
+            'competition_suspensions',
+            'user_hidden_competitions',
+        ];
+        const statements = tables.map((table) =>
+            this.db.prepare(dependentSql(table)).bind(competitionId, competitionId, creatorId)
+        );
+        statements.push(
+            this.db.prepare(`
+                DELETE FROM competitions
+                WHERE id = ? AND creator_id = ?
+                  AND status = 'pending'
+                  AND opponent_id IS NULL
+                  AND started_at IS NULL
+            `).bind(competitionId, creatorId)
+        );
+        const results = await this.db.batch(statements);
+        const main = results[results.length - 1];
+        return (main.meta?.changes ?? 0) > 0;
+    }
+
+    private buildCascadeDeleteStatements(competitionId: number) {
+        return [
             'DELETE FROM competition_requests WHERE competition_id = ?',
             'DELETE FROM competition_invitations WHERE competition_id = ?',
             'DELETE FROM competition_invites WHERE competition_id = ?',
@@ -838,8 +891,6 @@ export class CompetitionModel extends BaseModel<Competition> {
             'DELETE FROM user_hidden_competitions WHERE competition_id = ?',
             'DELETE FROM competitions WHERE id = ?',
         ].map((sql) => this.db.prepare(sql).bind(competitionId));
-        await this.db.batch(statements);
-        return true;
     }
 }
 

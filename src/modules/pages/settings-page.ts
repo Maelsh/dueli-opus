@@ -48,6 +48,8 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const countries = ${JSON.stringify(countries)};
             const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
             let currentSettings = {};
+            let accountUsesSocial = false;
+            let passwordChangeBusy = false;
             
             document.addEventListener('DOMContentLoaded', initPageAuth);
 
@@ -103,6 +105,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch('/api/settings');
                     const data = await res.json();
                     currentSettings = data.data?.settings || {};
+                    accountUsesSocial = !!(data.data?.account?.uses_social_signin);
                     await loadAuthoritativeProfile();
                     renderSettings();
                 } catch (err) {
@@ -220,6 +223,8 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 </label>
                             </div>
                         </div>
+
+                        \${renderPasswordSection()}
                         
                         <!-- Save Button -->
                         <button type="submit" class="w-full py-4 ${DUELI_PRIMARY_BTN} hover:opacity-90 transition-opacity rounded-xl">
@@ -241,6 +246,125 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         </button>
                     </div>
                 \`;
+            }
+
+            function renderPasswordSection() {
+                const sp = tr.settings_page || {};
+                if (accountUsesSocial) {
+                    return \`
+                        <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-6 shadow-lg">
+                            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                                <i class="fas fa-key \${isRTL ? 'ml-2' : 'mr-2'} text-purple-600" aria-hidden="true"></i>
+                                \${sp.password_section || 'Password'}
+                            </h2>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4" role="status">\${sp.password_social_hint || tr.auth_social_no_password}</p>
+                            <button type="button" data-csp-on="click" data-csp-fn="showForgotPassword" data-csp-args='[]'
+                                class="text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline"
+                                aria-label="\${sp.password_reset_cta || tr.forgot_password}">
+                                \${sp.password_reset_cta || tr.forgot_password}
+                            </button>
+                        </div>
+                    \`;
+                }
+                return \`
+                    <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-6 shadow-lg">
+                        <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                            <i class="fas fa-key \${isRTL ? 'ml-2' : 'mr-2'} text-purple-600" aria-hidden="true"></i>
+                            \${sp.password_section || 'Password'}
+                        </h2>
+                        <div class="space-y-4" role="group" aria-labelledby="passwordSectionLegend">
+                            <p id="passwordSectionLegend" class="sr-only">\${sp.password_section || 'Password'}</p>
+                            <div>
+                                <label for="currentPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">\${sp.password_current || 'Current password'}</label>
+                                <input type="password" id="currentPassword" name="current-password" autocomplete="current-password"
+                                    class="w-full px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white">
+                            </div>
+                            <div>
+                                <label for="newPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">\${sp.password_new || 'New password'}</label>
+                                <input type="password" id="newPassword" name="new-password" autocomplete="new-password" minlength="8"
+                                    class="w-full px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white">
+                                <p class="text-xs text-gray-500 mt-1">\${tr.password_min_length}</p>
+                            </div>
+                            <div>
+                                <label for="confirmNewPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">\${sp.password_confirm || 'Confirm new password'}</label>
+                                <input type="password" id="confirmNewPassword" name="new-password" autocomplete="new-password" minlength="8"
+                                    class="w-full px-4 py-3 rounded-lg bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white">
+                            </div>
+                            <p id="passwordFormError" class="hidden text-sm text-red-600 dark:text-red-400" role="alert"></p>
+                            <button type="button" id="passwordSubmitBtn" data-csp-on="click" data-csp-fn="changeAccountPassword" data-csp-args='[]'
+                                class="w-full py-3 \${PRIMARY_BTN} rounded-xl font-semibold disabled:opacity-60">
+                                \${sp.password_change_submit || 'Update password'}
+                            </button>
+                        </div>
+                    </div>
+                \`;
+            }
+
+            function setPasswordFormError(message) {
+                const el = document.getElementById('passwordFormError');
+                if (!el) return;
+                if (!message) {
+                    el.textContent = '';
+                    el.classList.add('hidden');
+                    return;
+                }
+                el.textContent = message;
+                el.classList.remove('hidden');
+            }
+
+            async function changeAccountPassword() {
+                if (passwordChangeBusy) return;
+                const sp = tr.settings_page || {};
+                const current = (document.getElementById('currentPassword')?.value || '').trim();
+                const next = (document.getElementById('newPassword')?.value || '').trim();
+                const confirm = (document.getElementById('confirmNewPassword')?.value || '').trim();
+                setPasswordFormError('');
+                if (!current || !next || !confirm) {
+                    setPasswordFormError(tr.errors?.missing_fields || 'Missing required fields');
+                    return;
+                }
+                if (next.length < 8) {
+                    setPasswordFormError(tr.password_min_length);
+                    return;
+                }
+                if (next !== confirm) {
+                    setPasswordFormError(sp.password_confirm_mismatch || 'Passwords do not match');
+                    return;
+                }
+                const btn = document.getElementById('passwordSubmitBtn');
+                passwordChangeBusy = true;
+                if (btn) btn.disabled = true;
+                try {
+                    const res = await fetch('/api/account/password', {
+                        method: 'PUT',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, window.DueliSession?.headers?.() || {}),
+                        body: JSON.stringify({ current_password: current, new_password: next })
+                    });
+                    const data = await res.json().catch(() => null);
+                    if (res.ok && data && data.success) {
+                        window.dueli?.showToast(data.data?.message || tr.account?.password_updated || 'Password updated', 'success');
+                        window.DueliSession?.clearLocal?.();
+                        try { localStorage.removeItem('user'); } catch (_) { /* ignore */ }
+                        window.currentUser = null;
+                        if (typeof showLoginModal === 'function') {
+                            showLoginModal();
+                        } else {
+                            window.location.href = '/?lang=' + lang;
+                        }
+                        return;
+                    }
+                    if (res.status >= 500) {
+                        setPasswordFormError(tr.error_occurred || 'Server error');
+                        return;
+                    }
+                    setPasswordFormError(data?.error || tr.error_occurred || 'Failed');
+                } catch (err) {
+                    console.error('Password change failed');
+                    setPasswordFormError(tr.error_occurred || 'Network error');
+                } finally {
+                    passwordChangeBusy = false;
+                    if (btn) btn.disabled = false;
+                }
             }
             
             async function saveSettings(e) {

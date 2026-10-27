@@ -3966,6 +3966,14 @@
         background-color: color-mix(in oklab, var(--color-purple-900) 60%, transparent);
       }
     }
+    .dark\:hover\:bg-red-900\/20:where(.dark, .dark *):hover {
+      background-color: color-mix(in srgb, oklch(39.6% 0.141 25.723) 20%, transparent);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .dark\:hover\:bg-red-900\/20:where(.dark, .dark *):hover {
+        background-color: color-mix(in oklab, var(--color-red-900) 20%, transparent);
+      }
+    }
     .dark\:hover\:bg-white\/5:where(.dark, .dark *):hover {
       background-color: color-mix(in srgb, #fff 5%, transparent);
     }

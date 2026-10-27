@@ -49,8 +49,14 @@ export class SettingsController extends BaseController {
 
             const settingsModel = new UserSettingsModel(c.env.DB);
             const settings = await settingsModel.getOrCreate(user.id);
+            const row = await new UserModel(c.env.DB).findById(user.id);
 
-            return this.success(c, { settings });
+            return this.success(c, {
+                settings,
+                account: {
+                    uses_social_signin: !!(row?.oauth_provider),
+                },
+            });
         } catch (error) {
             console.error('Get settings error:', error);
             return this.serverError(c, error as Error);

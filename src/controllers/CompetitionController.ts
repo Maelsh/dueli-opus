@@ -525,12 +525,12 @@ export class CompetitionController extends BaseController {
                 return this.forbidden(c);
             }
 
-            // R4-EVENTS-NOTIFY-1 (N-07): the plain row delete left pending
-            // invites/requests orphaned (or FK-aborted on non-CASCADE
-            // children). deleteCascade removes requests + invitations +
-            // ratings + chunk keys first, then the competition — the
-            // notification rows stay as history (never deleted here).
-            await model.deleteCascade(id);
+            // UNIT32.2: creator delete is allowed only before an opponent joins.
+            // Eligibility is enforced inside the model batch (not UI-only).
+            const deleted = await model.deleteCascadeIfCreatorEligible(id, user.id);
+            if (!deleted) {
+                return this.error(c, this.t('competition_errors.delete_not_allowed', c), 409);
+            }
             return this.success(c, { deleted: true });
         } catch (error) {
             return this.serverError(c, error as Error);
