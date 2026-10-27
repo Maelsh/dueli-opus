@@ -1,14 +1,14 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-26T14:19:40.545Z
+> تاريخ التوليد: 2026-10-27T07:05:29.592Z
 
-## الإجمالي: 245 مسار
+## الإجمالي: 251 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 128 |
-| AUTHENTICATED | 72 |
+| AUTHENTICATED | 78 |
 | UNGUARDED ⚠ | 40 |
 | SERVICE(origin-only ⚠) | 5 |
 
@@ -265,6 +265,12 @@
 | POST | `/api/users/follow-sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | GET | `/api/users/follow-sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
 | PUT | `/api/users/preferences` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/users/routes.ts` |
+| GET | `/api/watch/history` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/watch/routes.ts` |
+| POST | `/api/watch/history/:competitionId` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/watch/routes.ts` |
+| GET | `/api/watch/later` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/watch/routes.ts` |
+| DELETE | `/api/watch/later/:competitionId` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/watch/routes.ts` |
+| POST | `/api/watch/later/:competitionId` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/watch/routes.ts` |
+| GET | `/api/watch/later/status` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/watch/routes.ts` |
 | GET | `/api/withdrawals` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |
 | POST | `/api/withdrawals` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |
 | DELETE | `/api/withdrawals/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |

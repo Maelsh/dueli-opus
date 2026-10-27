@@ -60,6 +60,7 @@ import blocksRoutes from './modules/api/blocks/routes';
 import accountRoutes from './modules/api/account/routes';
 import documentsRoutes from './modules/api/documents/routes';
 import supportRoutes from './modules/api/support/routes';
+import watchRoutes from './modules/api/watch/routes';
 
 // Import Page Routes - استيراد مسارات الصفحات
 import staticPagesRoutes from './modules/pages/static-pages';
@@ -213,6 +214,7 @@ app.route('/api/blocks', blocksRoutes);                     // blocking users (T
 app.route('/api/account', accountRoutes);                   // R2-A: self-service username/password/email
 app.route('/api/documents', documentsRoutes);               // R2-A (H9): published+public managed documents
 app.route('/api/support', supportRoutes);                   // R2-M (H6): user support threads (independent system)
+app.route('/api/watch', watchRoutes);                       // UNIT32.1: owner-only Watch Later + Viewing History
 
 // Mount Static Pages - تركيب الصفحات الثابتة
 app.route('/', staticPagesRoutes);

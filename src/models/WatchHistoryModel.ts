@@ -1,3 +1,10 @@
+import {
+    COMPETITION_CARD_COLUMNS,
+    COMPETITION_CARD_JOINS,
+    type CollectionCursor,
+    type CollectionPage,
+} from './competition-card-columns';
+
 export interface WatchHistory {
     user_id: number;
     competition_id: number;
@@ -73,6 +80,77 @@ export class WatchHistoryModel {
         `).bind(userId, competitionId).first();
 
         return result !== null;
+    }
+
+    /**
+     * R4-PROFILE-COLLECTIONS-1: one stable keyset page of real watch rows.
+     *
+     * Ordering is `watched_at DESC, competition_id DESC`. The id tie-break
+     * makes rows written in the same second deterministic across page
+     * boundaries. Only the row's OWN stored values are returned — never a
+     * derived "completed" claim.
+     */
+    async findPage(
+        userId: number,
+        limit: number,
+        cursor: CollectionCursor | null = null
+    ): Promise<CollectionPage<Record<string, unknown>>> {
+        const params: Array<string | number> = [userId];
+        let where = 'wh.user_id = ?';
+        if (cursor) {
+            where += ' AND (wh.watched_at < ? OR (wh.watched_at = ? AND wh.competition_id < ?))';
+            params.push(cursor.at, cursor.at, cursor.id);
+        }
+        params.push(limit + 1);
+
+        const result = await this.db.prepare(`
+            SELECT ${COMPETITION_CARD_COLUMNS},
+                   wh.watched_at AS watched_at,
+                   wh.watch_duration_seconds AS watch_duration_seconds,
+                   wh.completed AS completed
+            FROM watch_history wh
+            JOIN competitions c ON wh.competition_id = c.id
+            ${COMPETITION_CARD_JOINS}
+            WHERE ${where}
+            ORDER BY wh.watched_at DESC, wh.competition_id DESC
+            LIMIT ?
+        `).bind(...params).all();
+
+        const rows = (result.results || []) as Array<Record<string, unknown>>;
+        const hasMore = rows.length > limit;
+        const items = hasMore ? rows.slice(0, limit) : rows;
+        const last = items[items.length - 1];
+        const next = hasMore && last
+            ? { at: String(last.watched_at), id: Number(last.id) }
+            : null;
+        return { items, next };
+    }
+
+    /**
+     * R4-PROFILE-COLLECTIONS-1: record a REAL VOD playback event.
+     *
+     * This is deliberately narrower than `record()`/`addHeartbeatSeconds()`:
+     * it only moves `watched_at` and never writes `watch_duration_seconds` or
+     * `completed`. H1 live seconds (and therefore the 300s rating
+     * eligibility) stay exactly as the heartbeat wrote them.
+     *
+     * The guarded INSERT ... SELECT refuses non-VOD statuses at the SQL layer,
+     * so a live competition can never have its heartbeat mark reset by a VOD
+     * client (which would zero the next server-derived delta). Missing or
+     * cancelled competitions also produce no row.
+     *
+     * Returns true when a row was opened/touched.
+     */
+    async touchVodWatch(userId: number, competitionId: number): Promise<boolean> {
+        const result = await this.db.prepare(`
+            INSERT INTO watch_history (user_id, competition_id, watch_duration_seconds, completed, watched_at)
+            SELECT ?, c.id, 0, 0, datetime('now')
+            FROM competitions c
+            WHERE c.id = ? AND c.status IN ('completed', 'archived')
+            ON CONFLICT(user_id, competition_id) DO UPDATE SET
+                watched_at = datetime('now')
+        `).bind(userId, competitionId).run();
+        return Number(result.meta?.changes ?? 0) > 0;
     }
 
     /**

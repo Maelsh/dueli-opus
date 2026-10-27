@@ -43,6 +43,7 @@ import { SettingsUI } from './ui/SettingsUI';
 import { InvitePanel } from './ui/InvitePanel';
 import { RecommendationCarousel, CompetitorsMiniStatsCard } from './ui/RecommendationCarousel';
 import { CountdownTimer } from './ui/CountdownTimer';
+import { WatchLaterUI } from './ui/WatchLaterUI';
 import { RecordingDownloadPanel } from './ui/RecordingDownloadPanel';
 
 // Shared Components (View layer - single source of truth)
@@ -157,6 +158,10 @@ export class App {
 
         // Initialize Pages (safe to call as they check for DOM presence)
         HomePage.init();
+
+        // UNIT32.1: hydrate explicit Watch Later toggles (cards + competition
+        // page) from the authenticated server status endpoint.
+        WatchLaterUI.init();
 
         console.log('🔥 Dueli Client loaded successfully!');
     }
@@ -339,6 +344,8 @@ if (typeof window !== 'undefined') {
     (window as any).ScheduleUI = ScheduleUI;
     (window as any).SettingsUI = SettingsUI;
     (window as any).NotificationsUI = NotificationsUI;
+    // UNIT32.1: CSP-delegated `WatchLaterUI.toggle` from shared cards.
+    (window as any).WatchLaterUI = WatchLaterUI;
 
     // Bind Home Page Methods
     window.setMainTab = (tab: any) => HomePage.setMainTab(tab);

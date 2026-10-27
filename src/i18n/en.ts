@@ -700,6 +700,29 @@ export const en = {
         title: 'Similar competitions',
     },
 
+    // UNIT32.1 (R4-PROFILE-COLLECTIONS-1): profile owner collections
+    watch_collections: {
+        title: 'My collections',
+        hint: 'Your saved competitions and viewing history — visible only to you.',
+        tab_later: 'Watch Later',
+        tab_history: 'Viewing History',
+        add: 'Save to Watch Later',
+        remove: 'Remove from Watch Later',
+        added: 'Added to Watch Later',
+        removed: 'Removed from Watch Later',
+        save_failed: 'Could not update Watch Later. Please try again.',
+        loading: 'Loading…',
+        empty_later: 'You have not saved any competition yet. Use the bookmark icon on any card.',
+        empty_history: 'No viewing history yet. Competitions you actually watch appear here.',
+        error: 'Could not load this list.',
+        retry: 'Retry',
+        load_more: 'Load more',
+        history_hint: 'Newest first — only real playback is recorded.',
+        watched_for: 'Watched for',
+        less_than_minute: 'Less than a minute',
+        minutes_short: 'min',
+    },
+
     // Profile page (new)
     wins: 'Wins',
     posts: 'Posts',

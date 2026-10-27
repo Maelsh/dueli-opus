@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-26T14:19:40.545Z",
-  "total": 245,
+  "generatedAt": "2026-10-27T07:05:29.592Z",
+  "total": 251,
   "routes": [
     {
       "method": "GET",
@@ -1688,6 +1688,48 @@
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/users/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/watch/history",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/watch/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/watch/history/:competitionId",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/watch/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/watch/later",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/watch/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/watch/later/:competitionId",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/watch/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/watch/later/:competitionId",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/watch/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/watch/later/status",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/watch/routes.ts"
     },
     {
       "method": "GET",

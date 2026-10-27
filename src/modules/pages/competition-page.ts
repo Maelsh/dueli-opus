@@ -642,6 +642,13 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <i class="fas fa-bell"></i>
                       \${comp.user_reminded ? tr.reminder_set || 'Reminder On' : tr.remind_me || 'Remind Me'}
                     </button>
+                    <button data-csp-on="click" data-csp-fn="WatchLaterUI.toggle" data-csp-args='[\${comp.id}]'
+                      id="competitionWatchLaterBtn" data-watch-later-toggle="\${comp.id}" aria-pressed="false"
+                      data-wl-add-label="\${tr.watch_collections.add}" data-wl-remove-label="\${tr.watch_collections.remove}" data-wl-error="\${tr.watch_collections.save_failed}"
+                      aria-label="\${tr.watch_collections.add}" title="\${tr.watch_collections.add}"
+                      class="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-purple-50 hover:text-purple-500 transition-all">
+                      <i class="far fa-bookmark" aria-hidden="true"></i>
+                    </button>
                     <button data-csp-on="click" data-csp-fn="showReportModal" data-csp-args='[]' aria-label="\${tr.report?.title || tr.submit_report || 'Report'}" title="\${tr.report?.title || tr.submit_report || 'Report'}" class="px-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-red-50 hover:text-red-500 transition-all">
                       <i class="fas fa-flag" aria-hidden="true"></i>
                     </button>
@@ -2401,6 +2408,23 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       }
       
+      // UNIT32.1: a real VOD watch event = the viewer actually played at least
+      // 5 seconds. One POST per page load; live rows are counted by the H1
+      // heartbeat writer instead, so this never creates a second counter.
+      function embeddedReportVodWatch(videoEl) {
+        if (!videoEl || videoEl.__dueliVodWatchReported === true) return;
+        const status = competitionData && competitionData.status;
+        if (status !== 'completed' && status !== 'archived') return;
+        if (videoEl.paused) return;
+        if (typeof videoEl.readyState === 'number' && videoEl.readyState < 2) return;
+        if (!(videoEl.currentTime >= 5)) return;
+        videoEl.__dueliVodWatchReported = true;
+        fetch('/api/watch/history/' + encodeURIComponent(competitionId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        }).catch(function() { /* history is best-effort; playback is unaffected */ });
+      }
+
       // ===== VOD Seekbar Controls =====
       // R4-CHUNK-VIEW-RECOVERY-1 REM1 (28.4.1 / O19-12): the control surface
       // ONLY talks to the player's global timeline. videoEl.duration is a
@@ -2428,6 +2452,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             const icon = document.getElementById('embeddedPlayPauseIcon');
             if (icon) icon.className = 'fas fa-play text-sm';
           });
+          // UNIT32.1: history means an ACTUAL non-paused VOD watch, never a
+          // page-open/preview. One report per page load, after 5s of real
+          // playback; the server only touches completed/archived rows.
+          videoEl.addEventListener('timeupdate', function() { embeddedReportVodWatch(videoEl); });
         }
 
         if (seekbar && !seekbar.__dueliVodWired) {
