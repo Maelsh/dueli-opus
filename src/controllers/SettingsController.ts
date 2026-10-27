@@ -49,12 +49,13 @@ export class SettingsController extends BaseController {
 
             const settingsModel = new UserSettingsModel(c.env.DB);
             const settings = await settingsModel.getOrCreate(user.id);
-            const row = await new UserModel(c.env.DB).findById(user.id);
+            const userModel = new UserModel(c.env.DB);
+            const hasPassword = await userModel.hasLocalPassword(user.id);
 
             return this.success(c, {
                 settings,
                 account: {
-                    uses_social_signin: !!(row?.oauth_provider),
+                    has_password: hasPassword,
                 },
             });
         } catch (error) {

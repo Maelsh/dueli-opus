@@ -592,6 +592,7 @@ export const ar = {
         password_reset_cta: 'إعادة تعيين كلمة المرور بالبريد',
     },
     profile_competitions: {
+        load_more: 'عرض المزيد من المنافسات',
         delete_action: 'حذف المنافسة',
         delete_confirm_title: 'حذف هذه المنافسة؟',
         delete_confirm_body: 'سيتم حذف «{title}» نهائيًا ولا يمكن التراجع.',

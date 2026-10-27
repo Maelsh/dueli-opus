@@ -544,6 +544,16 @@ export class AuthController extends BaseController {
             const passwordHash = await CryptoUtils.hashPassword(body.newPassword);
             await userModel.updatePassword(user.id, passwordHash);
 
+            try {
+                const { AdminAuditLogModel } = await import('../models/AdminAuditLogModel');
+                await new AdminAuditLogModel(DB).log(
+                    user.id, 'account_password_changed', 'user', user.id,
+                    'Password set via reset-password flow'
+                );
+            } catch (auditError) {
+                console.error('[ResetPassword] audit failed:', auditError);
+            }
+
             // T1.4 FIX (BUG-05): destroy all existing sessions so a potential
             // attacker holding an old session is logged out immediately
             const sessionModel = new SessionModel(DB);

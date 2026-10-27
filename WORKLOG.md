@@ -1,3 +1,9 @@
+## 2026-10-27 — UNIT32.2-REM1 / R4-ACCOUNT-COMP-LIFECYCLE-REM1 · PR #142 follow-up · branch fix/r4-account-comp-lifecycle-rem1 (from 603d826 = origin/main)
+
+- **SCOPE:** Profile competition keyset pagination; safe delete title encoding; raw password fields; `has_password` vs OAuth-only; docs fix 13 focused tests for #142.
+- **NEW TESTS:** 6 in `tests/api/unit32-2-rem1-*` and `tests/ui/unit32-2-rem1-*`.
+- **STATUS:** LOCAL VERIFIED — PR pending.
+
 ## 2026-10-27 — UNIT32.2 / R4-ACCOUNT-COMP-LIFECYCLE-1 · password UI + safe creator delete · branch feat/unit32-2-r4-account-comp-lifecycle-1 (from 3b1b6b6 = origin/main)
 
 - **SCOPE:** Settings password change UI wired to existing `PUT /api/account/password`; OAuth accounts get social hint + forgot-password modal (422 on API if forced). Creator `DELETE /api/competitions/:id` now uses atomic `deleteCascadeIfCreatorEligible` (eligible: pending, no opponent, not started); profile owner tab shows delete + confirm. Admin `deleteCascade` unchanged.

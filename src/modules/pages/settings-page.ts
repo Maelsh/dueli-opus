@@ -48,7 +48,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             const countries = ${JSON.stringify(countries)};
             const PRIMARY_BTN = ${JSON.stringify(DUELI_PRIMARY_BTN)};
             let currentSettings = {};
-            let accountUsesSocial = false;
+            let accountHasPassword = true;
             let passwordChangeBusy = false;
             
             document.addEventListener('DOMContentLoaded', initPageAuth);
@@ -105,7 +105,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     const res = await fetch('/api/settings');
                     const data = await res.json();
                     currentSettings = data.data?.settings || {};
-                    accountUsesSocial = !!(data.data?.account?.uses_social_signin);
+                    accountHasPassword = !!(data.data?.account?.has_password);
                     await loadAuthoritativeProfile();
                     renderSettings();
                 } catch (err) {
@@ -250,7 +250,7 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
 
             function renderPasswordSection() {
                 const sp = tr.settings_page || {};
-                if (accountUsesSocial) {
+                if (!accountHasPassword) {
                     return \`
                         <div class="bg-white dark:bg-[#1a1a1a] rounded-xl p-6 shadow-lg">
                             <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-3">
@@ -315,9 +315,9 @@ export const settingsPage = async (c: Context<{ Bindings: Bindings; Variables: V
             async function changeAccountPassword() {
                 if (passwordChangeBusy) return;
                 const sp = tr.settings_page || {};
-                const current = (document.getElementById('currentPassword')?.value || '').trim();
-                const next = (document.getElementById('newPassword')?.value || '').trim();
-                const confirm = (document.getElementById('confirmNewPassword')?.value || '').trim();
+                const current = document.getElementById('currentPassword')?.value || '';
+                const next = document.getElementById('newPassword')?.value || '';
+                const confirm = document.getElementById('confirmNewPassword')?.value || '';
                 setPasswordFormError('');
                 if (!current || !next || !confirm) {
                     setPasswordFormError(tr.errors?.missing_fields || 'Missing required fields');

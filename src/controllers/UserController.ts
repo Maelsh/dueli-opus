@@ -358,6 +358,74 @@ export class UserController extends BaseController {
             return this.serverError(c, error as Error);
         }
     }
+
+    /**
+     * Paginated competitions for a profile shelf.
+     * GET /api/users/:username/competitions
+     */
+    async listCompetitions(c: AppContext) {
+        try {
+            const username = this.getParam(c, 'username');
+            const userModel = new UserModel(c.env.DB);
+            const user = await userModel.findByUsername(username);
+            if (!user) {
+                return this.notFound(c, this.t('user_errors.not_found', c));
+            }
+
+            const limitRaw = c.req.query('limit');
+            let limit = 20;
+            if (limitRaw !== undefined && limitRaw !== '') {
+                if (!/^\d+$/.test(limitRaw)) {
+                    return this.validationError(c, this.t('errors.invalid_request', c));
+                }
+                const parsed = Number(limitRaw);
+                if (!Number.isSafeInteger(parsed) || parsed < 1) {
+                    return this.validationError(c, this.t('errors.invalid_request', c));
+                }
+                limit = Math.min(parsed, 50);
+            }
+
+            let cursor: { at: string; id: number } | null = null;
+            const rawCursor = c.req.query('cursor');
+            if (rawCursor !== undefined && rawCursor !== '') {
+                cursor = this.decodeProfileCompetitionCursor(rawCursor);
+                if (!cursor) {
+                    return this.validationError(c, this.t('errors.invalid_request', c));
+                }
+            }
+
+            const page = await new CompetitionModel(c.env.DB).findByUserPage(user.id, limit, cursor);
+            const nextCursor = page.next
+                ? this.encodeProfileCompetitionCursor(page.next.at, page.next.id)
+                : null;
+
+            return this.success(c, {
+                items: page.items,
+                nextCursor,
+                hasMore: nextCursor !== null,
+            });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    private encodeProfileCompetitionCursor(at: string, id: number): string {
+        return btoa(JSON.stringify({ t: at, i: id }));
+    }
+
+    private decodeProfileCompetitionCursor(raw: string): { at: string; id: number } | null {
+        try {
+            const parsed = JSON.parse(atob(raw)) as { t?: unknown; i?: unknown };
+            if (!parsed || typeof parsed.t !== 'string' || typeof parsed.i !== 'number') {
+                return null;
+            }
+            if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(parsed.t)) return null;
+            if (!Number.isSafeInteger(parsed.i) || parsed.i <= 0) return null;
+            return { at: parsed.t, id: parsed.i };
+        } catch {
+            return null;
+        }
+    }
 }
 
 export default UserController;

@@ -225,6 +225,7 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'saveSettings',
     'changeAccountPassword',
     'confirmDeleteOwnerCompetition',
+    'loadMoreProfileCompetitions',
     'seekToCommentOffset',
     'selectAmount',
     'selectCountry',

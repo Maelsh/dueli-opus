@@ -1,9 +1,15 @@
-## 2026-10-27 — UNIT32.2 / R4-ACCOUNT-COMP-LIFECYCLE-1 · واجهة تغيير كلمة المرور + حذف منافسة المنشئ قبل انضمام خصم · فرع feat/unit32-2-r4-account-comp-lifecycle-1 (من 3b1b6b6 = origin/main)
+## 2026-10-27 — UNIT32.2-REM1 / R4-ACCOUNT-COMP-LIFECYCLE-REM1 · متابعة PR #142 · فرع fix/r4-account-comp-lifecycle-rem1 (من 603d826 = origin/main)
 
-- 🔧 **LOCAL VERIFIED — REMOTE PENDING.** النطاق A: قسم كلمة المرور في `/settings` (حقول حالية/جديدة/تأكيد، OAuth → تلميح + `showForgotPassword`، نجاح → `reauth_required` + `DueliSession.clearLocal` + `showLoginModal`). النطاق B: `DELETE /api/competitions/:id` للمنشئ فقط عبر `deleteCascadeIfCreatorEligible` (ذرّي: `pending` + `opponent_id IS NULL` + `started_at IS NULL` + `creator_id`)؛ واجهة حذف في «منافساتي» للمالك. لا migration ولا endpoint جديد ولا مساس PR #110 أو UNIT33+.
-- **BASE:** `origin/main == 3b1b6b64914cbfc861e00063643431c60539a284` (دمج PR #141 / UNIT32.1). **PLAN MAIN:** `3408b3c102f91aeef63d64a26934622738b1ca7e`؛ NEXT: `32.2 → 33 → 33.1 → 34 → 35–42`.
-- **RED→GREEN:** `tests/api/unit32-2-account-password.test.ts` (3) + `tests/api/unit32-2-competition-delete-lifecycle.test.ts` (6) + `tests/ui/unit32-2-settings-password.test.ts` (4) + `tests/ui/unit32-2-profile-delete.test.ts` (1) = **14/14**. `npm test` = **208 ملف / 2108: 2102 ناجح، 6 فاشل** (كلها `quality-gate-poll` لغياب `jq` محليًا). `tsc`/`build`/SEC AST نظيف؛ `any`=300≤310؛ routes=251 بلا تغيير مسارات.
-- **NOT TESTED:** لا CI بعيد حتى الدفع؛ لا E2E Playwright لهذه الوحدة؛ لا نقر إنتاجي.
+- 🔧 **LOCAL VERIFIED — REMOTE PENDING.** A: ترقيم keyset لقائمة منافسات البروفايل (`GET /api/users/:username/competitions` + Load More، `created_at DESC, id DESC`). B: عنوان الحذف في `data-comp-title` و`data-csp-args` بالمعرّف فقط. C: كلمات المرور بلا `.trim()`. D: `has_password` خادمي (OAuth + `account_password_changed` في audit)؛ reset-password يكتب audit. E: تصحيح عدد اختبارات PR #142 المركّزة إلى **13** (2+6+4+1).
+- **BASE:** `603d826834e3f8490caff3a67db854fb6eedb647` (دمج/نشر PR #142). **PLAN MAIN:** `47f72e8333c25097bb621c65e1004d0caf64eed0`.
+- **اختبارات REM1 الجديدة:** 6 (pagination API 2، title UI 1، OAuth API 2، password raw UI 1). بوابة Quality Gate التاريخية لـ#142: **2107 PASS / 1 skipped** — ليست عدد REM1.
+- **NOT TESTED:** لا E2E؛ لا تزامن D1 متوازي (قرار F).
+
+## 2026-10-27 — UNIT32.2 / R4-ACCOUNT-COMP-LIFECYCLE-1 · واجهة تغيير كلمة المرور + حذف منافسة المنشئ قبل انضمام خصم · فرع feat/unit32-2-r4-account-comp-lifecycle-1 (من 3b1b6b6 = origin/main) · PR #142
+
+- 🔧 **MERGED / DEPLOYED** على `603d826834e3f8490caff3a67db854fb6eedb647`. النطاق A/B كما في PR #142.
+- **اختبارات مركّزة PR #142:** `tests/api/unit32-2-account-password.test.ts` (2) + `tests/api/unit32-2-competition-delete-lifecycle.test.ts` (6) + `tests/ui/unit32-2-settings-password.test.ts` (4) + `tests/ui/unit32-2-profile-delete.test.ts` (1) = **13** (تصحيح من 14).
+- **Quality Gate على merge SHA #142:** 2107 ناجح / 1 skipped (إجمالي المستودع، ليس عدد الاختبارات الجديدة فقط).
 
 ## 2026-10-27 — UNIT32.1 / R4-PROFILE-COLLECTIONS-1 · «المشاهدة لاحقًا» وسجل المشاهدات للمالك وحده بترقيم مستقر · فرع feat/unit32-1-r4-profile-collections-1 (من 05f0f1f = origin/main)
 

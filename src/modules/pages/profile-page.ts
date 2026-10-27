@@ -16,6 +16,21 @@ import { FollowModel } from '../../models/FollowModel';
 
 const profilePageRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+const PROFILE_COMP_PAGE_SIZE = 20;
+
+function escapeHtmlAttr(value: string): string {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function encodeProfileCompetitionCursor(at: string, id: number): string {
+    return btoa(JSON.stringify({ t: at, i: id }));
+}
+
 function isCreatorDeletableCompetition(comp: Record<string, unknown>, ownerId: number): boolean {
     return Number(comp.creator_id) === ownerId
         && comp.status === 'pending'
@@ -36,13 +51,13 @@ function renderOwnerCompetitionCard(
     }
     const pc = tr.profile_competitions || {};
     const rtl = checkRTL(lang);
-    const titleJson = JSON.stringify(String(comp.title ?? ''));
+    const safeTitle = escapeHtmlAttr(String(comp.title ?? ''));
     return `
     <div class="flex flex-col" data-owner-comp-wrap="${comp.id}">
       ${card}
       <div class="mt-2 flex justify-end">
-        <button type="button" data-owner-delete-btn="${comp.id}"
-          data-csp-on="click" data-csp-fn="confirmDeleteOwnerCompetition" data-csp-args='[${comp.id},${titleJson}]'
+        <button type="button" data-owner-delete-btn="${comp.id}" data-comp-title="${safeTitle}"
+          data-csp-on="click" data-csp-fn="confirmDeleteOwnerCompetition" data-csp-args='[${comp.id}]'
           class="px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-60"
           aria-label="${pc.delete_action || 'Delete competition'}">
           <i class="fas fa-trash ${rtl ? 'ml-2' : 'mr-2'}" aria-hidden="true"></i>
@@ -64,6 +79,8 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
 
     let user: Record<string, unknown> | null = null;
     let competitions: unknown[] = [];
+    let profileCompetitionsCursor: string | null = null;
+    let profileCompetitionsHasMore = false;
     let stats = { competitions: 0, followers: 0, following: 0, wins: 0 };
     let needsLogin = false;
     let userNotFound = false;
@@ -120,14 +137,18 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 const followModel = new FollowModel(DB);
                 const { UserSignalsModel } = await import('../../models/UserSignalsModel');
                 const uid = Number(user.id);
-                const [followersCount, followingCount, userCompetitions, competitorProfile] = await Promise.all([
+                const [followersCount, followingCount, competitionPage, competitorProfile] = await Promise.all([
                     followModel.getFollowersCount(uid),
                     followModel.getFollowingCount(uid),
-                    competitionModel.findByUser(uid, { limit: viewerId === uid ? 50 : 10 }).catch(() => [] as unknown[]),
+                    competitionModel.findByUserPage(uid, PROFILE_COMP_PAGE_SIZE, null).catch(() => ({ items: [] as unknown[], next: null })),
                     // R3-D2 Profile SSOT (08/11) — same source as ranking.
                     new UserSignalsModel(DB).getProfile(uid).catch(() => ({ userId: uid, starsSum: 0, competitions: 0, profile: null as number | null })),
                 ]);
-                competitions = Array.isArray(userCompetitions) ? userCompetitions : [];
+                competitions = Array.isArray(competitionPage.items) ? competitionPage.items : [];
+                if (competitionPage.next) {
+                    profileCompetitionsCursor = encodeProfileCompetitionCursor(competitionPage.next.at, competitionPage.next.id);
+                    profileCompetitionsHasMore = true;
+                }
                 stats = {
                     competitions: (user.total_competitions as number) || competitions.length || 0,
                     followers: followersCount,
@@ -256,7 +277,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                         <!-- Competitions Tab -->
                         <div id="content-competitions">
                             ${competitions.length > 0 ? `
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div id="profileCompetitionsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     ${competitions.map((comp: any) => renderOwnerCompetitionCard(
                                         comp as CompetitionCardProps & Record<string, unknown>,
                                         lang,
@@ -264,6 +285,20 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                                         isOwnerView,
                                         tr
                                     )).join('')}
+                                </div>
+                                <p id="profileCompetitionsState" role="status" aria-live="polite"
+                                    class="hidden text-sm text-center text-gray-500 dark:text-gray-400 mt-4"></p>
+                                <div class="text-center mt-6">
+                                    <button id="profileCompetitionsMore" type="button"
+                                        data-csp-on="click" data-csp-fn="loadMoreProfileCompetitions" data-csp-args='[]'
+                                        class="${profileCompetitionsHasMore ? '' : 'hidden '}px-6 py-2.5 rounded-full font-semibold bg-purple-50 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 dark:hover:bg-purple-900/50 transition-colors disabled:opacity-60">
+                                        ${tr.profile_competitions?.load_more || tr.watch_collections?.load_more || 'Load more'}
+                                    </button>
+                                    <button id="profileCompetitionsRetry" type="button"
+                                        data-csp-on="click" data-csp-fn="loadMoreProfileCompetitions" data-csp-args='[]'
+                                        class="hidden text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline mt-2">
+                                        ${tr.watch_collections?.retry || tr.retry || 'Retry'}
+                                    </button>
                                 </div>
                             ` : `
                                 <div class="text-center py-16">
@@ -369,6 +404,10 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
             let ownerCompetitionDeleteBusy = false;
+            let profileCompetitionsCursor = ${JSON.stringify(profileCompetitionsCursor)};
+            let profileCompetitionsHasMore = ${profileCompetitionsHasMore ? 'true' : 'false'};
+            let profileCompetitionsLoading = false;
+            const PROFILE_COMP_PAGE_SIZE = ${PROFILE_COMP_PAGE_SIZE};
             
             document.addEventListener('DOMContentLoaded', async () => {
                 // Post-R1 acceptance: await the canonical resolution (shared
@@ -390,14 +429,97 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
             });
             window.addEventListener('dueli:auth-success', updateProfileActions);
             
-            async function confirmDeleteOwnerCompetition(competitionId, title) {
+            function profileCompetitionDeletable(comp) {
+                return isOwnerProfileView
+                    && Number(comp.creator_id) === Number(profileUserId)
+                    && comp.status === 'pending'
+                    && (comp.opponent_id === null || comp.opponent_id === undefined)
+                    && !comp.started_at;
+            }
+
+            function profileCompetitionCardHtml(comp) {
+                const cardHtml = typeof renderCompetitionCard === 'function'
+                    ? renderCompetitionCard(comp, lang)
+                    : '';
+                if (!profileCompetitionDeletable(comp)) {
+                    return '<div class="flex flex-col">' + cardHtml + '</div>';
+                }
+                const pc = tr.profile_competitions || {};
+                const safeTitle = String(comp.title || '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+                return '<div class="flex flex-col" data-owner-comp-wrap="' + comp.id + '">' + cardHtml
+                    + '<div class="mt-2 flex justify-end"><button type="button" data-owner-delete-btn="' + comp.id + '" data-comp-title="' + safeTitle + '"'
+                    + ' data-csp-on="click" data-csp-fn="confirmDeleteOwnerCompetition" data-csp-args="[' + comp.id + ']"'
+                    + ' class="px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-60"'
+                    + ' aria-label="' + (pc.delete_action || 'Delete') + '"><i class="fas fa-trash ' + (isRTL ? 'ml-2' : 'mr-2') + '" aria-hidden="true"></i>'
+                    + (pc.delete_action || 'Delete') + '</button></div></div>';
+            }
+
+            async function loadMoreProfileCompetitions() {
+                if (profileCompetitionsLoading || !profileCompetitionsHasMore) return;
+                const grid = document.getElementById('profileCompetitionsGrid');
+                const moreBtn = document.getElementById('profileCompetitionsMore');
+                const retryBtn = document.getElementById('profileCompetitionsRetry');
+                const stateEl = document.getElementById('profileCompetitionsState');
+                if (!grid || !profileUsername) return;
+                profileCompetitionsLoading = true;
+                if (moreBtn) moreBtn.disabled = true;
+                if (retryBtn) retryBtn.classList.add('hidden');
+                if (stateEl) {
+                    stateEl.textContent = tr.watch_collections?.loading || tr.loading || 'Loading...';
+                    stateEl.classList.remove('hidden');
+                }
+                try {
+                    const url = '/api/users/' + encodeURIComponent(profileUsername) + '/competitions?limit=' + PROFILE_COMP_PAGE_SIZE
+                        + (profileCompetitionsCursor ? '&cursor=' + encodeURIComponent(profileCompetitionsCursor) : '');
+                    const res = await fetch(url);
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok || !data || !data.success) {
+                        throw new Error((data && data.error) || 'load failed');
+                    }
+                    const items = Array.isArray(data.data?.items) ? data.data.items : [];
+                    const seen = new Set(Array.from(grid.querySelectorAll('[data-competition-id]')).map(function(el) {
+                        return el.getAttribute('data-competition-id');
+                    }));
+                    items.forEach(function(comp) {
+                        const id = String(comp.id);
+                        if (seen.has(id)) return;
+                        seen.add(id);
+                        grid.insertAdjacentHTML('beforeend', profileCompetitionCardHtml(comp));
+                    });
+                    profileCompetitionsCursor = data.data.nextCursor || null;
+                    profileCompetitionsHasMore = !!data.data.hasMore;
+                    if (moreBtn) {
+                        moreBtn.classList.toggle('hidden', !profileCompetitionsHasMore);
+                        moreBtn.disabled = false;
+                    }
+                    if (stateEl) stateEl.classList.add('hidden');
+                } catch (err) {
+                    console.error('Profile competitions load failed:', err);
+                    if (stateEl) {
+                        stateEl.textContent = tr.watch_collections?.error || tr.error_occurred || 'Error';
+                        stateEl.classList.remove('hidden');
+                    }
+                    if (retryBtn) retryBtn.classList.remove('hidden');
+                    if (moreBtn) moreBtn.disabled = false;
+                } finally {
+                    profileCompetitionsLoading = false;
+                }
+            }
+
+            async function confirmDeleteOwnerCompetition(competitionId) {
                 if (!isOwnerProfileView || ownerCompetitionDeleteBusy) return;
+                const btn = document.querySelector('[data-owner-delete-btn="' + competitionId + '"]');
+                const title = btn ? (btn.getAttribute('data-comp-title') || '') : '';
                 const pc = tr.profile_competitions || {};
                 const body = (pc.delete_confirm_body || '').replace('{title}', title || '');
                 const ok = confirm((pc.delete_confirm_title || 'Delete?') + '\\n\\n' + body);
                 if (!ok) return;
                 ownerCompetitionDeleteBusy = true;
-                const btn = document.querySelector('[data-owner-delete-btn="' + competitionId + '"]');
                 if (btn) {
                     btn.disabled = true;
                     btn.setAttribute('aria-busy', 'true');

@@ -34,6 +34,12 @@ usersRoutes.get('/follow-sessions/:id/page', (c) => discovery.readFollowSessionP
 usersRoutes.get('/', (c) => controller.index(c));
 
 /**
+ * Profile competition shelf (keyset pagination)
+ * GET /api/users/:username/competitions
+ */
+usersRoutes.get('/:username/competitions', (c) => controller.listCompetitions(c));
+
+/**
  * Get user profile
  * GET /api/users/:username
  */
