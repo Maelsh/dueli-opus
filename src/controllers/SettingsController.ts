@@ -19,7 +19,7 @@ import { CATEGORY_SUBCATEGORIES } from '../shared/constants';
  * R4-PROFILE-SAVE-1 (P-01) — profile field contract.
  *
  * The bounds are the ones the project already documents for a user update
- * (src/middleware/validation.ts → `userUpdateSchema`): display_name 2..100
+ * (documented user update bounds): display_name 2..100
  * characters, bio at most 500 characters. No new limits are invented here.
  */
 const PROFILE_DISPLAY_NAME_MIN = 2;

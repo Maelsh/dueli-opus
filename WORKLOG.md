@@ -1,3 +1,10 @@
+## 2026-10-27 — UNIT33 + UNIT33.1 / R4-HOME-UX-1 + R4-DEPS-SEC-1 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 8e10cdc = origin/main)
+
+- **UNIT33:** Replaced page-level spinner + `Promise.all` gate with per-rail placeholders (`getHomeRailPlaceholderSection`) and `bootstrapRail()` so fast rails paint before slow ones; `railGeneration` still discards stale responses.
+- **UNIT33.1:** Hono lock → 4.13.13; removed unused `zod` + `src/middleware/validation.ts` (path R); blocking CI via `dev-tools/check-audit-exceptions.mjs` + empty `audit-exceptions.json`; `npm audit --omit=dev` = 0 vulns.
+- **NEW TESTS:** `tests/ui/unit33-home-progressive-rails.test.ts` (2), `tests/dev-tools/audit-exceptions-checker.test.ts` (1).
+- **STATUS:** LOCAL VERIFIED — PR pending.
+
 ## 2026-10-27 — UNIT32.3 candidate / R4-ACCOUNT-COMP-LIFECYCLE-EDGE-1 · investigation closure · branch fix/r4-account-comp-lifecycle-edge-32-3 (from bfa09aa = origin/main)
 
 - **NOTE 1 (delete title):** SSR (`renderOwnerCompetitionCard`) and load-more (`profileCompetitionCardHtml`) share the same encoding; `getAttribute('data-comp-title')` feeds confirm text; cancel skips DELETE, confirm sends DELETE. No implementation defect found beyond prior REM1 fix.
