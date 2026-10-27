@@ -1,0 +1,25 @@
+{
+  "vulnerabilities": {
+    "fixture-pkg": {
+      "name": "fixture-pkg",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 12345,
+          "name": "fixture-pkg",
+          "dependency": "fixture-pkg",
+          "title": "Fixture advisory",
+          "url": "https://github.com/advisories/GHSA-abcd-1234-efgh",
+          "severity": "high",
+          "cwe": ["CWE-770"],
+          "range": "<2.0.0"
+        }
+      ],
+      "effects": [],
+      "range": "<2.0.0",
+      "nodes": ["node_modules/fixture-pkg"],
+      "fixAvailable": false
+    }
+  }
+}

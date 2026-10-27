@@ -112,10 +112,9 @@ jobs:
             echo "::warning::no tests/ directory yet — see docs/13-TEST-STRATEGY.md §8 (week-1 plan)"
           fi
 
-      # ---- npm audit (إنتاج فقط) ----
-      - name: npm audit — production deps, high severity (GRACE-PERIOD)
-        continue-on-error: true
-        run: npm audit --audit-level=high --omit=dev
+      # ---- npm audit (إنتاج فقط) — UNIT33.1 blocking gate ----
+      - name: npm audit — production deps, high severity (blocking)
+        run: node dev-tools/check-audit-exceptions.mjs
 
       # ---- جرد المسارات — يعيد التوليد ويكشف UNGUARDED (تحذيري دوماً، انظر docs/13 §6) ----
       - name: Regenerate route inventory

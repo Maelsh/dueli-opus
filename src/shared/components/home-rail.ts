@@ -165,6 +165,22 @@ export function getHomeRailSection(opts: HomeRailSectionOptions): string {
  * Never a silent 15-row list presented as complete — the rail stays in an
  * explicit retry state until the server answers.
  */
+/** Shell for one rail while its session/page is still opening (H-01). */
+export function getHomeRailPlaceholderSection(opts: {
+    railKey: string;
+    title: string;
+    icon: string;
+    lang: Language;
+    color: string;
+    viewAllHref: string;
+}): string {
+    return getHomeRailSection({
+        ...opts,
+        cardsHtml: '',
+        sentinelMode: 'loading',
+    });
+}
+
 export function getHomeRailErrorSection(
     railKey: string,
     title: string,

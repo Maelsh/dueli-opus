@@ -356,20 +356,20 @@
 
 ---
 
-## SEC-15 🟡 نظافة سلسلة الاعتماديات
+## SEC-15 🟢 نظافة سلسلة الاعتماديات (إنتاج)
 
-**الحالة:** 12 ثغرة `high` (`npm audit`)
+**الحالة (UNIT33.1 / R4-DEPS-SEC-1):** `npm audit --omit=dev` ⇒ **0** ثغرات على HEAD الوحدة. بوابة CI مانعة: `node dev-tools/check-audit-exceptions.mjs` (استثناءات محدودة في `dev-tools/audit-exceptions.json` فقط عند غياب إصلاح منشور).
 
-**تصحيح مهم:** ثغرة Hono تخصّ `hono/jwk` middleware. الفحص: `grep -rn "jwk\|jwt" src` ⇒ **صفر**. المشروع لا يستخدمها ⇒ **غير قابلة للاستغلال حالياً**. الترقية نظافة لا طارئ.
+**Hono (GHSA-5r4p-p66f-jhc7):** تخصّ `serveStatic` (فك ترميز مسار مرتين). الفحص على الكود: **لا `serveStatic` ولا `hono/jwt`/`jwk`** في `src`/`workers`. تم رفع lockfile إلى **≥ 4.13.11** (هدف 4.13.13).
 
-الأثر الفعلي في **سلسلة البناء**: `vite`, `rollup`, `postcss`, `undici`, `sharp`, `browserslist`. تهديد لبيئة البناء والـCI، لا للإنتاج مباشرةً.
+**Zod (GHSA-mrhx-c7xc-m3w5):** مسار **R (إزالة)** — `src/middleware/validation.ts` غير مستورد ولا يوجد مستورد لـ`zod` في المنتج؛ أُزيلت الاعتمادية من `package.json`.
 
-**التوجيه:** رقّ على دفعات (`vite`+`rollup`، ثم `wrangler`+`miniflare`، ثم `hono`)، مع `npm run build` + typecheck + اختبارات بعد كل دفعة. لا ترقية شاملة دفعة واحدة.
+**سلسلة البناء/الاختبار:** ثغرات `high`/`moderate` المتبقية في `--omit=dev` **false** تُسجَّل في تقرير الوحدة (دفعات vite/wrangler/vitest) ولا تُعالَج ضمن 33.1.
 
 **معيار القبول:**
-- [ ] `npm audit` ⇒ صفر `high` في تبعيات الإنتاج
-- [ ] البناء والأنواع والاختبارات تمرّ بعد كل دفعة
-- [ ] موثَّق: ما رُقّي، وما أُجّل، ولماذا
+- [x] `npm audit --omit=dev` ⇒ صفر `high` في تبعيات الإنتاج (بوابة مانعة)
+- [x] البناء والأنواع والاختبارات ذات الصلة على HEAD الوحدة
+- [x] موثَّق في `WORKLOG.md` / `PLAN-STATUS.md`
 
 ---
 

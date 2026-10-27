@@ -1,3 +1,22 @@
+## 2026-10-28 — UNIT33.1 P3 / PR #145 · ملاحظات مراجعة غير حاجبة · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc)
+
+- 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** P3-1 shim exit≠0؛ P3-2 رفض error+vulnerabilities؛ P3-3 severity مفقود. **اختبارات audit:** 22.
+- **BASE:** `8e10cdc3ec1f5f2dd1c225feee88ab7d225411cd` · **PR:** #145.
+
+## 2026-10-27 — UNIT33.1 REM2 / PR #145 · F-1 audit report parsing · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc)
+
+- 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** رفض تقارير npm audit غير المعترف بها (بلا `vulnerabilities`); شدة ثغرة غير صالحة → fail-closed. **اختبارات audit:** 18.
+- **BASE:** `8e10cdc3ec1f5f2dd1c225feee88ab7d225411cd` · **PR:** #145.
+
+## 2026-10-27 — UNIT33 + UNIT33.1 REM1 / PR #145 · إصلاحات مراجعة REMOTE · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc)
+
+- 🔧 **LOCAL VERIFIED — REMOTE PENDING (re-review).** UNIT33: لا `renderEmptyState` عند وجود صفوف خطأ (`hasErrorRails`). UNIT33.1: بوابة استثناءات كاملة (GHSA/نطاق/يتيم/تواريخ). **اختبارات:** UI rails 6 + audit gate 11.
+- **BASE:** `8e10cdc3ec1f5f2dd1c225feee88ab7d225411cd` · **PR:** #145 · **PLAN MAIN:** `266fe4d007fd4534d66e8c3c4489fe29b370d339`.
+
+## 2026-10-27 — UNIT33 + UNIT33.1 / R4-HOME-UX-1 + R4-DEPS-SEC-1 · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc = origin/main)
+
+- 🔧 **superseded by REM1 أعلاه.** H-01 + DEPS كما في PR #145 الأولي.
+
 ## 2026-10-27 — UNIT32.3 candidate / R4-ACCOUNT-COMP-LIFECYCLE-EDGE-1 · تحقيق ملاحظتين (حذف بروفايل + تحميل إعدادات كلمة المرور) · فرع fix/r4-account-comp-lifecycle-edge-32-3 (من bfa09aa = origin/main، بعد دمج PR #143)
 
 - 🔧 **LOCAL VERIFIED — REMOTE PENDING.** لا عيب تنفيذي مُثبت؛ **9** اختبارات regression جديدة تغلق فجوات الأدلة (تأكيد/إلغاء الحذف، عناوين SSR/load-more، حالة التحميل قبل `has_password`). لا تغيير API/مخطط/اعتماديات.

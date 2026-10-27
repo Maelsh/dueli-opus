@@ -4,6 +4,7 @@ import { getCompetitionCard, type CompetitionCardProps } from '../../shared/comp
 import {
     getHomeRailSection,
     getHomeRailErrorSection,
+    getHomeRailPlaceholderSection,
     getRailSentinelHTML,
     homeRailScrollerId,
     homeRailSentinelId,
@@ -103,8 +104,6 @@ export class HomePage {
         const generation = this.railGeneration;
         this.teardownRails();
 
-        container.innerHTML = '<div class="flex flex-col items-center justify-center py-16"><i class="fas fa-spinner fa-spin text-4xl text-purple-400 mb-4"></i></div>';
-
         // One first-party guest identity for every rail opened below: the
         // creates run in parallel, so a lazily-issued per-call token would
         // bind each rail to a DIFFERENT identity (last-write-wins in
@@ -117,78 +116,134 @@ export class HomePage {
             const status = this.tabStatus();
             const defs = this.buildRailDefs(status, lang);
             this.lastDefs = defs;
-            const opened = await Promise.all(defs.map((def) => this.openRail(def)));
-            // A tab/category/language/login switch while opening discards the
-            // whole paint — the newer generation owns the container now.
-            if (generation !== this.railGeneration) return;
 
-            let html = '';
-            const armed: Array<{ def: RailDef; open: RailOpen }> = [];
-            defs.forEach((def, index) => {
-                const result = opened[index];
-                if (result === null) {
-                    html += getHomeRailErrorSection(def.key, def.title, def.icon, lang, def.color);
-                    return;
-                }
-                if (result.items.length === 0) return;
-                const cardsHtml = result.items
-                    .map((item) => getCompetitionCard(item as unknown as CompetitionCardProps, lang))
-                    .join('');
-                html += getHomeRailSection({
-                    railKey: def.key,
-                    title: def.title,
-                    icon: def.icon,
-                    lang,
-                    color: def.color,
-                    cardsHtml,
-                    sentinelMode: result.done ? 'end' : 'idle',
-                    viewAllHref: railViewAllHref({
-                        kind: def.kind,
-                        category: def.category,
-                        subcategory: def.subcategory,
-                        status: def.status,
-                        lang,
-                    }),
-                });
-                if (!result.done) armed.push({ def, open: result });
-            });
-
-            if (!html) {
+            if (defs.length === 0) {
                 container.innerHTML = this.renderEmptyState(tr);
                 return;
             }
 
-            container.innerHTML = html;
-
-            // Setup hover scroll for all sections with scrollable containers
+            // H-01 / UNIT33: paint each rail shell immediately; slow rails must
+            // not block fast ones behind a single page-level spinner.
+            container.innerHTML = defs
+                .map((def) =>
+                    getHomeRailPlaceholderSection({
+                        railKey: def.key,
+                        title: def.title,
+                        icon: def.icon,
+                        lang,
+                        color: def.color,
+                        viewAllHref: railViewAllHref({
+                            kind: def.kind,
+                            category: def.category,
+                            subcategory: def.subcategory,
+                            status: def.status,
+                            lang,
+                        }),
+                    })
+                )
+                .join('');
             this.setupAllHoverScroll();
+            for (const def of defs) this.wireRetryButton(def.key);
 
-            for (const { def, open } of armed) {
-                if (generation !== this.railGeneration) return;
-                const state: RailState = {
-                    ...def,
-                    sessionId: open.sessionId,
-                    cursor: open.cursor,
-                    done: open.done,
-                    loading: false,
-                    seen: new Set<string | number>(),
-                    recreated: false,
-                    generation,
-                    observer: null,
-                };
-                for (const item of open.items) state.seen.add(this.itemKey(item));
-                this.rails.set(def.key, state);
-                this.wireRetryButton(def.key);
-                this.armRailObserver(def.key);
-            }
-            // Error sections painted above need their retry wired too.
+            const progress = { pending: defs.length, hasCards: false, hasErrorRails: false };
             for (const def of defs) {
-                if (!this.rails.has(def.key)) this.wireRetryButton(def.key);
+                void this.bootstrapRail(def, generation, lang, tr, progress);
             }
         } catch (err) {
             console.error(err);
             if (generation !== this.railGeneration) return;
             container.innerHTML = `<div class="text-center py-16 text-red-500">${tr.error_loading || 'Error loading content'}</div>`;
+        }
+    }
+
+    /**
+     * Open one rail session and swap its placeholder/error shell when ready.
+     * Stale generations never paint; tab switches bump railGeneration instead.
+     */
+    static async bootstrapRail(
+        def: RailDef,
+        generation: number,
+        lang: string,
+        tr: (typeof translations)['en'],
+        progress: { pending: number; hasCards: boolean; hasErrorRails: boolean }
+    ): Promise<void> {
+        const container = document.getElementById('home-content');
+        try {
+            const opened = await this.openRail(def);
+            if (generation !== this.railGeneration || !container) return;
+
+            const section = document.getElementById(homeRailSectionId(def.key));
+            if (!section) return;
+
+            if (opened === null) {
+                section.outerHTML = getHomeRailErrorSection(def.key, def.title, def.icon, lang, def.color);
+                progress.hasErrorRails = true;
+                this.wireRetryButton(def.key);
+                return;
+            }
+            if (opened.items.length === 0) {
+                section.remove();
+                return;
+            }
+
+            progress.hasCards = true;
+            const cardsHtml = opened.items
+                .map((item) => getCompetitionCard(item as unknown as CompetitionCardProps, lang))
+                .join('');
+            section.outerHTML = getHomeRailSection({
+                railKey: def.key,
+                title: def.title,
+                icon: def.icon,
+                lang,
+                color: def.color,
+                cardsHtml,
+                sentinelMode: opened.done ? 'end' : 'idle',
+                viewAllHref: railViewAllHref({
+                    kind: def.kind,
+                    category: def.category,
+                    subcategory: def.subcategory,
+                    status: def.status,
+                    lang,
+                }),
+            });
+
+            if (generation !== this.railGeneration) return;
+
+            const state: RailState = {
+                ...def,
+                sessionId: opened.sessionId,
+                cursor: opened.cursor,
+                done: opened.done,
+                loading: false,
+                seen: new Set<string | number>(),
+                recreated: false,
+                generation,
+                observer: null,
+            };
+            for (const item of opened.items) state.seen.add(this.itemKey(item));
+            this.rails.set(def.key, state);
+            this.wireRetryButton(def.key);
+            if (!opened.done) this.armRailObserver(def.key);
+        } catch (err) {
+            console.error('[HomePage] bootstrapRail failed:', def.key, err);
+            if (generation !== this.railGeneration) return;
+            const section = document.getElementById(homeRailSectionId(def.key));
+            if (section) {
+                section.outerHTML = getHomeRailErrorSection(def.key, def.title, def.icon, lang, def.color);
+                progress.hasErrorRails = true;
+                this.wireRetryButton(def.key);
+            }
+        } finally {
+            progress.pending -= 1;
+            if (
+                progress.pending === 0 &&
+                !progress.hasCards &&
+                !progress.hasErrorRails &&
+                generation === this.railGeneration &&
+                container
+            ) {
+                container.innerHTML = this.renderEmptyState(tr);
+            }
         }
     }
 

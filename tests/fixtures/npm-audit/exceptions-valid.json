@@ -1,0 +1,18 @@
+{
+  "exceptions": [
+    {
+      "ghsa": "GHSA-abcd-1234-efgh",
+      "package": "fixture-pkg",
+      "affected_range": "1.2.3",
+      "severity": "high",
+      "no_fix_evidence": "registry check 2026-10-27: no patched release in range",
+      "reachability_evidence": "grep fixture-pkg src => 0 matches",
+      "owner": "owner",
+      "approval_ref": "https://example.com/approval/1",
+      "created": "2026-10-01",
+      "expires": "2026-12-31",
+      "reevaluate_on": "2026-11-01",
+      "tracking": "14 audit exception log row FIX-1"
+    }
+  ]
+}

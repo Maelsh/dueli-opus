@@ -1,3 +1,32 @@
+## 2026-10-28 — UNIT33.1 P3 / PR #145 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 065d7d0)
+
+- **P3-1:** `DUELI_AUDIT_CMD` + `shim-nonzero-one-high.mjs` tests non-zero exit with valid JSON → blocking without exception.
+- **P3-2:** reject audit JSON combining `error` + `vulnerabilities`.
+- **P3-3:** fixture `missing-severity-field.json` + dedicated test (keeps `invalid-severity.json` for unknown values).
+- **TESTS:** audit checker **22**; home rails **6**; full vitest **2145 pass / 6 fail** (pre-existing Windows `jq` poll tests).
+- **STATUS:** LOCAL VERIFIED — REMOTE re-review pending.
+
+## 2026-10-27 — UNIT33.1 REM2 / PR #145 F-1+F-2 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 9e38e6b)
+
+- **F-1:** `assertRecognizedAuditReport` — require plain-object `vulnerabilities`; reject npm error JSON (network/registry) and unknown shapes; still parse valid reports from non-zero `npm audit` exit.
+- **F-2:** invalid/missing `severity` on vulnerability entries fails closed (no silent skip via `severityRank === 0`).
+- **TESTS:** +7 in `audit-exceptions-checker.test.ts` (18 total); fixtures `network-error.json`, `missing-vulnerabilities.json`, `invalid-severity.json`, `broken-audit.json`.
+- **STATUS:** LOCAL VERIFIED — REMOTE re-review pending.
+
+## 2026-10-27 — UNIT33 + UNIT33.1 REM1 / PR #145 post–REMOTE review · branch feat/unit33-r4-home-ux-deps-sec-1 (BASE 8e10cdc)
+
+- **UNIT33:** `bootstrapRail()` tracks `progress.hasErrorRails` so `renderEmptyState` runs only when all rails succeed with zero cards (no wipe of per-rail retry/error UI).
+- **UNIT33.1:** Hardened `check-audit-exceptions.mjs` — GHSA from `via[].url` (string `via` supported), required exception fields, orphan detection, `affected_range` vs lockfile, ISO dates/expiry logging, fail-closed fixtures via `DUELI_*` env (tests only).
+- **NEW/UPDATED TESTS:** `tests/ui/unit33-home-progressive-rails.test.ts` (6), `tests/dev-tools/audit-exceptions-checker.test.ts` (11), fixtures under `tests/fixtures/npm-audit/`.
+- **STATUS:** LOCAL VERIFIED — PR #145 pending REMOTE re-review.
+
+## 2026-10-27 — UNIT33 + UNIT33.1 / R4-HOME-UX-1 + R4-DEPS-SEC-1 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 8e10cdc = origin/main)
+
+- **UNIT33:** Replaced page-level spinner + `Promise.all` gate with per-rail placeholders (`getHomeRailPlaceholderSection`) and `bootstrapRail()` so fast rails paint before slow ones; `railGeneration` still discards stale responses.
+- **UNIT33.1:** Hono lock → 4.13.13; removed unused `zod` + `src/middleware/validation.ts` (path R); blocking CI via `dev-tools/check-audit-exceptions.mjs` + empty `audit-exceptions.json`; `npm audit --omit=dev` = 0 vulns.
+- **NEW TESTS:** `tests/ui/unit33-home-progressive-rails.test.ts` (2), `tests/dev-tools/audit-exceptions-checker.test.ts` (1).
+- **STATUS:** superseded by REM1 entry above.
+
 ## 2026-10-27 — UNIT32.3 candidate / R4-ACCOUNT-COMP-LIFECYCLE-EDGE-1 · investigation closure · branch fix/r4-account-comp-lifecycle-edge-32-3 (from bfa09aa = origin/main)
 
 - **NOTE 1 (delete title):** SSR (`renderOwnerCompetitionCard`) and load-more (`profileCompetitionCardHtml`) share the same encoding; `getAttribute('data-comp-title')` feeds confirm text; cancel skips DELETE, confirm sends DELETE. No implementation defect found beyond prior REM1 fix.
