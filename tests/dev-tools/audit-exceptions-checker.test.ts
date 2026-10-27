@@ -188,4 +188,96 @@ describe('UNIT33.1 audit exceptions gate', () => {
         });
         expect(stdout).toContain('PASS');
     });
+
+    describe('F-1 — audit report shape (fail-closed)', () => {
+        const emptyEx = () => writeTempExceptions({ exceptions: [] });
+
+        it('rejects npm-style network/registry error JSON without vulnerabilities (F-1)', () => {
+            const { stderr, stdout } = runGate(
+                {
+                    DUELI_AUDIT_FIXTURE: join(fixtures, 'network-error.json'),
+                    DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                    DUELI_AUDIT_EXCEPTIONS: emptyEx(),
+                },
+                1
+            );
+            const out = stderr + stdout;
+            expect(out).not.toContain('PASS');
+            expect(out).toMatch(/vulnerability report|vulnerabilities/i);
+        });
+
+        it('accepts a clean report with vulnerabilities: {}', () => {
+            const { stdout } = runGate({
+                DUELI_AUDIT_FIXTURE: join(fixtures, 'clean.json'),
+                DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                DUELI_AUDIT_EXCEPTIONS: emptyEx(),
+            });
+            expect(stdout).toContain('PASS');
+        });
+
+        it('processes blocking vulns from a valid report (non-zero exit shape via fixture)', () => {
+            const { stderr, stdout } = runGate(
+                {
+                    DUELI_AUDIT_FIXTURE: join(fixtures, 'one-high.json'),
+                    DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                    DUELI_AUDIT_EXCEPTIONS: emptyEx(),
+                },
+                1
+            );
+            expect(stderr + stdout).toContain('Blocking production advisories');
+            expect(stdout).not.toContain('PASS');
+        });
+
+        it('rejects audit JSON missing vulnerabilities field', () => {
+            const { stderr, stdout } = runGate(
+                {
+                    DUELI_AUDIT_FIXTURE: join(fixtures, 'missing-vulnerabilities.json'),
+                    DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                    DUELI_AUDIT_EXCEPTIONS: emptyEx(),
+                },
+                1
+            );
+            expect(stderr + stdout).toContain('missing required vulnerabilities');
+            expect(stdout).not.toContain('PASS');
+        });
+
+        it('rejects malformed audit JSON fixture', () => {
+            const { stderr, stdout } = runGate(
+                {
+                    DUELI_AUDIT_FIXTURE: join(fixtures, 'broken-audit.json'),
+                    DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                    DUELI_AUDIT_EXCEPTIONS: emptyEx(),
+                },
+                1
+            );
+            expect(stderr + stdout).toContain('invalid JSON');
+        });
+
+        it('fails when npm audit cannot reach registry (live npm, F-1)', () => {
+            const env = { ...process.env };
+            delete env.DUELI_AUDIT_FIXTURE;
+            delete env.DUELI_LOCKFILE;
+            env.DUELI_AUDIT_EXCEPTIONS = join(root, 'dev-tools/audit-exceptions.json');
+            env.npm_config_registry = 'http://127.0.0.1:9/';
+            const { stderr, stdout, code } = runGate(env, 1);
+            expect(code).toBe(1);
+            expect(stdout).not.toContain('PASS');
+            expect(stderr + stdout).toMatch(/vulnerability report|ECONNREFUSED|request failed/i);
+        }, 120_000);
+    });
+
+    describe('F-2 — invalid vulnerability severity', () => {
+        it('does not silently ignore entries with invalid severity', () => {
+            const { stderr, stdout } = runGate(
+                {
+                    DUELI_AUDIT_FIXTURE: join(fixtures, 'invalid-severity.json'),
+                    DUELI_LOCKFILE: join(fixtures, 'mini-lock.json'),
+                    DUELI_AUDIT_EXCEPTIONS: writeTempExceptions({ exceptions: [] }),
+                },
+                1
+            );
+            expect(stderr + stdout).toContain('invalid or missing severity');
+            expect(stdout).not.toContain('PASS');
+        });
+    });
 });

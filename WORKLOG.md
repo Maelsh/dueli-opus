@@ -1,3 +1,10 @@
+## 2026-10-27 — UNIT33.1 REM2 / PR #145 F-1+F-2 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 9e38e6b)
+
+- **F-1:** `assertRecognizedAuditReport` — require plain-object `vulnerabilities`; reject npm error JSON (network/registry) and unknown shapes; still parse valid reports from non-zero `npm audit` exit.
+- **F-2:** invalid/missing `severity` on vulnerability entries fails closed (no silent skip via `severityRank === 0`).
+- **TESTS:** +7 in `audit-exceptions-checker.test.ts` (18 total); fixtures `network-error.json`, `missing-vulnerabilities.json`, `invalid-severity.json`, `broken-audit.json`.
+- **STATUS:** LOCAL VERIFIED — REMOTE re-review pending.
+
 ## 2026-10-27 — UNIT33 + UNIT33.1 REM1 / PR #145 post–REMOTE review · branch feat/unit33-r4-home-ux-deps-sec-1 (BASE 8e10cdc)
 
 - **UNIT33:** `bootstrapRail()` tracks `progress.hasErrorRails` so `renderEmptyState` runs only when all rails succeed with zero cards (no wipe of per-rail retry/error UI).

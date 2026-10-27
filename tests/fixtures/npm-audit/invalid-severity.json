@@ -1,0 +1,10 @@
+{
+  "vulnerabilities": {
+    "fixture-pkg": {
+      "name": "fixture-pkg",
+      "severity": "URGENT",
+      "via": ["https://github.com/advisories/GHSA-abcd-1234-efgh"],
+      "range": "<2.0.0"
+    }
+  }
+}

@@ -163,13 +163,47 @@ function loadExceptionsFile() {
     return validated;
 }
 
+function parseAuditJsonText(text, contextLabel) {
+    let parsed;
+    try {
+        parsed = JSON.parse(text);
+    } catch {
+        fail(`invalid JSON in ${contextLabel}`);
+    }
+    return assertRecognizedAuditReport(parsed);
+}
+
+/**
+ * npm audit --json must include a plain-object `vulnerabilities` map.
+ * Registry/network failures and other CLI errors are JSON objects without it — fail closed.
+ */
+function assertRecognizedAuditReport(report) {
+    if (!report || typeof report !== 'object' || Array.isArray(report)) {
+        fail('npm audit output is not a recognized audit report (expected object with vulnerabilities)');
+    }
+    if (!Object.prototype.hasOwnProperty.call(report, 'vulnerabilities')) {
+        if (report.error || report.message) {
+            const detail = report.message || report.error?.code || JSON.stringify(report.error);
+            fail(`npm audit did not return a vulnerability report (${detail})`);
+        }
+        fail('npm audit output missing required vulnerabilities field');
+    }
+    const vulns = report.vulnerabilities;
+    if (vulns === null || typeof vulns !== 'object' || Array.isArray(vulns)) {
+        fail('npm audit vulnerabilities field must be a plain object');
+    }
+    return report;
+}
+
 function runAuditJson() {
     if (FIXTURE_PATH) {
+        let raw;
         try {
-            return JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
+            raw = readFileSync(FIXTURE_PATH, 'utf8');
         } catch {
             fail(`invalid audit fixture: ${FIXTURE_PATH}`);
         }
+        return parseAuditJsonText(raw, `audit fixture ${FIXTURE_PATH}`);
     }
     try {
         const out = execSync('npm audit --omit=dev --json', {
@@ -177,17 +211,13 @@ function runAuditJson() {
             stdio: ['ignore', 'pipe', 'pipe'],
             cwd: ROOT,
         });
-        return JSON.parse(out);
+        return parseAuditJsonText(out, 'npm audit stdout');
     } catch (err) {
         const stdout = err?.stdout?.toString?.() || '';
         if (stdout.trim()) {
-            try {
-                return JSON.parse(stdout);
-            } catch {
-                // fall through
-            }
+            return parseAuditJsonText(stdout, 'npm audit stdout (non-zero exit)');
         }
-        fail('npm audit failed to run or parse JSON output');
+        fail('npm audit failed to run or produce JSON output');
     }
 }
 
@@ -197,14 +227,19 @@ function severityRank(sev) {
 }
 
 function collectBlockingAdvisories(report) {
-    const vulns = Object.values(report.vulnerabilities || {});
+    const vulns = Object.values(report.vulnerabilities);
     const threshold = severityRank('high');
     const advisories = [];
     for (const v of vulns) {
-        const sev = v.severity || 'unknown';
-        if (severityRank(sev) < threshold) continue;
+        if (!v || typeof v !== 'object') fail('audit vulnerability entry must be an object');
         const pkg = v.name;
         if (!pkg) fail('audit entry missing package name');
+        const sev = v.severity;
+        const rank = severityRank(sev);
+        if (!sev || rank === 0) {
+            fail(`audit vulnerability ${pkg} has invalid or missing severity`);
+        }
+        if (rank < threshold) continue;
         const installed = readInstalledVersion(pkg);
         if (!installed) fail(`cannot determine installed version for ${pkg}`);
         const via = Array.isArray(v.via) ? v.via : [];
