@@ -453,7 +453,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     .replace(/>/g, '&gt;');
                 return '<div class="flex flex-col" data-owner-comp-wrap="' + comp.id + '">' + cardHtml
                     + '<div class="mt-2 flex justify-end"><button type="button" data-owner-delete-btn="' + comp.id + '" data-comp-title="' + safeTitle + '"'
-                    + ' data-csp-on="click" data-csp-fn="confirmDeleteOwnerCompetition" data-csp-args=\'[' + comp.id + ']\''
+                    + ' data-csp-on="click" data-csp-fn="confirmDeleteOwnerCompetition" data-csp-args="[' + comp.id + ']"'
                     + ' class="px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-60"'
                     + ' aria-label="' + (pc.delete_action || 'Delete') + '"><i class="fas fa-trash ' + (isRTL ? 'ml-2' : 'mr-2') + '" aria-hidden="true"></i>'
                     + (pc.delete_action || 'Delete') + '</button></div></div>';
@@ -520,7 +520,6 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 const ok = confirm((pc.delete_confirm_title || 'Delete?') + '\\n\\n' + body);
                 if (!ok) return;
                 ownerCompetitionDeleteBusy = true;
-                const btn = document.querySelector('[data-owner-delete-btn="' + competitionId + '"]');
                 if (btn) {
                     btn.disabled = true;
                     btn.setAttribute('aria-busy', 'true');
