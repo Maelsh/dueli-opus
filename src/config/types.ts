@@ -171,6 +171,8 @@ export interface User extends BaseEntity {
   // hand-built User literals (sessions, tests) omit it. Read-only use —
   // never serialize it (DTOs pick explicit fields).
   password_hash?: string;
+  oauth_provider?: string | null;
+  oauth_id?: string | null;
   // NOTE: `users.email_verified` exists in the DB schema (0001_initial_schema.sql) but is
   // dead — nothing in the codebase reads or writes it. `is_verified` above is the column
   // actually used for verification status. Kept in the DB (not dropped) because SQLite/D1

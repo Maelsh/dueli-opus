@@ -16,6 +16,42 @@ import { FollowModel } from '../../models/FollowModel';
 
 const profilePageRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
+function isCreatorDeletableCompetition(comp: Record<string, unknown>, ownerId: number): boolean {
+    return Number(comp.creator_id) === ownerId
+        && comp.status === 'pending'
+        && (comp.opponent_id === null || comp.opponent_id === undefined)
+        && !comp.started_at;
+}
+
+function renderOwnerCompetitionCard(
+    comp: CompetitionCardProps & Record<string, unknown>,
+    lang: Language,
+    ownerId: number,
+    isOwner: boolean,
+    tr: (typeof translations)['en']
+): string {
+    const card = getCompetitionCard(comp, lang);
+    if (!isOwner || !isCreatorDeletableCompetition(comp, ownerId)) {
+        return card;
+    }
+    const pc = tr.profile_competitions || {};
+    const rtl = checkRTL(lang);
+    const titleJson = JSON.stringify(String(comp.title ?? ''));
+    return `
+    <div class="flex flex-col" data-owner-comp-wrap="${comp.id}">
+      ${card}
+      <div class="mt-2 flex justify-end">
+        <button type="button" data-owner-delete-btn="${comp.id}"
+          data-csp-on="click" data-csp-fn="confirmDeleteOwnerCompetition" data-csp-args='[${comp.id},${titleJson}]'
+          class="px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-60"
+          aria-label="${pc.delete_action || 'Delete competition'}">
+          <i class="fas fa-trash ${rtl ? 'ml-2' : 'mr-2'}" aria-hidden="true"></i>
+          ${pc.delete_action || 'Delete competition'}
+        </button>
+      </div>
+    </div>`;
+}
+
 /**
  * Profile Page Handler
  */
@@ -87,7 +123,7 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 const [followersCount, followingCount, userCompetitions, competitorProfile] = await Promise.all([
                     followModel.getFollowersCount(uid),
                     followModel.getFollowingCount(uid),
-                    competitionModel.findByUser(uid, { limit: 10 }).catch(() => [] as unknown[]),
+                    competitionModel.findByUser(uid, { limit: viewerId === uid ? 50 : 10 }).catch(() => [] as unknown[]),
                     // R3-D2 Profile SSOT (08/11) — same source as ranking.
                     new UserSignalsModel(DB).getProfile(uid).catch(() => ({ userId: uid, starsSum: 0, competitions: 0, profile: null as number | null })),
                 ]);
@@ -221,7 +257,13 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                         <div id="content-competitions">
                             ${competitions.length > 0 ? `
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    ${competitions.map((comp: any) => getCompetitionCard(comp as CompetitionCardProps, lang)).join('')}
+                                    ${competitions.map((comp: any) => renderOwnerCompetitionCard(
+                                        comp as CompetitionCardProps & Record<string, unknown>,
+                                        lang,
+                                        Number(user.id),
+                                        isOwnerView,
+                                        tr
+                                    )).join('')}
                                 </div>
                             ` : `
                                 <div class="text-center py-16">
@@ -322,9 +364,11 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
         <script nonce="${(c.get('cspNonce') as string) ?? ''}">
             const profileUsername = ${JSON.stringify(username ?? '')};
             const profileUserId = ${user?.id || 'null'};
+            const isOwnerProfileView = ${isOwnerView ? 'true' : 'false'};
             const lang = ${JSON.stringify(getUILanguage(lang))};
             const isRTL = ${rtl};
             const tr = ${JSON.stringify(tr)};
+            let ownerCompetitionDeleteBusy = false;
             
             document.addEventListener('DOMContentLoaded', async () => {
                 // Post-R1 acceptance: await the canonical resolution (shared
@@ -346,6 +390,42 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
             });
             window.addEventListener('dueli:auth-success', updateProfileActions);
             
+            async function confirmDeleteOwnerCompetition(competitionId, title) {
+                if (!isOwnerProfileView || ownerCompetitionDeleteBusy) return;
+                const pc = tr.profile_competitions || {};
+                const body = (pc.delete_confirm_body || '').replace('{title}', title || '');
+                const ok = confirm((pc.delete_confirm_title || 'Delete?') + '\\n\\n' + body);
+                if (!ok) return;
+                ownerCompetitionDeleteBusy = true;
+                const btn = document.querySelector('[data-owner-delete-btn="' + competitionId + '"]');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.setAttribute('aria-busy', 'true');
+                }
+                try {
+                    const res = await fetch('/api/competitions/' + competitionId, {
+                        method: 'DELETE',
+                        headers: Object.assign({ 'Content-Type': 'application/json' }, window.DueliSession?.headers?.() || {})
+                    });
+                    const data = await res.json().catch(() => null);
+                    if (res.ok && data && data.success) {
+                        document.querySelector('[data-owner-comp-wrap="' + competitionId + '"]')?.remove();
+                        window.dueli?.showToast(pc.delete_success || 'Deleted', 'success');
+                        return;
+                    }
+                    window.dueli?.showToast((data && data.error) || pc.delete_failed || 'Failed', 'error');
+                } catch (err) {
+                    console.error('Competition delete failed');
+                    window.dueli?.showToast(pc.delete_failed || 'Failed', 'error');
+                } finally {
+                    ownerCompetitionDeleteBusy = false;
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.removeAttribute('aria-busy');
+                    }
+                }
+            }
+
             function updateProfileActions() {
                 const container = document.getElementById('profileActions');
                 if (!container || !profileUserId) return;

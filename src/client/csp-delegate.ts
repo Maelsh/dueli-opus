@@ -223,6 +223,8 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'saveAccountUsername',
     'saveAdminDoc',
     'saveSettings',
+    'changeAccountPassword',
+    'confirmDeleteOwnerCompetition',
     'seekToCommentOffset',
     'selectAmount',
     'selectCountry',
