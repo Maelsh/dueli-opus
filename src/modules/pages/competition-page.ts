@@ -2951,10 +2951,15 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
 
         const localBtn = document.getElementById('localVideoBtn');
         if (localBtn) {
-          localBtn.classList.toggle('is-active', !localVideoVisible);
-          localBtn.innerHTML = localVideoVisible
-            ? '<i class="fas fa-eye" aria-hidden="true"></i>'
-            : '<i class="fas fa-eye-slash" aria-hidden="true"></i>';
+          const pipActive = competitorVideoLayout === 'remote';
+          localBtn.classList.toggle('hidden', !pipActive);
+          localBtn.disabled = !pipActive;
+          if (pipActive) {
+            localBtn.classList.toggle('is-active', !localVideoVisible);
+            localBtn.innerHTML = localVideoVisible
+              ? '<i class="fas fa-eye" aria-hidden="true"></i>'
+              : '<i class="fas fa-eye-slash" aria-hidden="true"></i>';
+          }
         }
 
         // The prep/publish line never claims publishing because the
@@ -3119,7 +3124,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const track = localTrackOf('video');
         const videoOn = !!(track && track.enabled
           && (!track.readyState || track.readyState === 'live'));
-        const showVideo = videoOn && localVideoVisible;
+        const pipActive = competitorVideoLayout === 'remote';
+        const showVideo = videoOn && (!pipActive || localVideoVisible);
         if (video) video.classList.toggle('hidden', !showVideo);
         if (fallback) {
           fallback.classList.toggle('hidden', showVideo);

@@ -855,17 +855,23 @@ export class HomePage {
         // Competitions section
         if (competitions && competitions.length > 0) {
             html += `<div class="p-2 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ${users?.length ? 'border-t border-gray-200 dark:border-gray-700 mt-1' : ''}">${tr.competitions || 'Competitions'}</div>`;
-            html += competitions.slice(0, 5).map((item: any) => `
+            html += competitions.slice(0, 5).map((item: any) => {
+                const creatorLabel = item.creator_name || item.creator_display_name || item.creator_username;
+                const creatorLine = creatorLabel
+                    ? `<p class="text-xs text-gray-500 truncate">${creatorLabel}</p>`
+                    : '';
+                return `
               <a href="/competition/${item.id}?lang=${lang}" class="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
                 <div class="w-12 h-8 rounded bg-gradient-to-br ${item.category_id === 1 ? 'from-purple-500 to-indigo-600' : item.category_id === 2 ? 'from-cyan-500 to-blue-600' : 'from-amber-500 to-orange-600'} flex items-center justify-center">
                   <i class="fas fa-trophy text-white text-xs"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-gray-900 dark:text-white truncate">${item.title}</p>
-                  <p class="text-xs text-gray-500">${item.creator_name || 'Unknown'}</p>
+                  ${creatorLine}
                 </div>
               </a>
-            `).join('');
+            `;
+            }).join('');
         }
 
         // View all link

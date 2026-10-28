@@ -27,6 +27,7 @@ import {
     Mp4AssemblyError,
     readMp4DurationMs,
 } from '../../lib/media/Mp4FragmentAssembler';
+import { measureMp4DurationMs } from '../../lib/services/MediaDuration';
 import { FfmpegWorkerClient, FfmpegWorkerError } from './FfmpegWorkerClient';
 
 /** Emscripten `getHeapMax()` in @ffmpeg/core 0.12.10 — measured, not policy. */
@@ -767,6 +768,15 @@ export class RecordingDownloadService {
 
         let cursor = 0;
         const inputs = loaded.map(({ chunk, data }) => {
+            let durationMs = chunk.duration_ms;
+            const measured = measureMp4DurationMs(data);
+            if (measured !== null && measured > 0) {
+                // Fragment bytes are authoritative: D1 can disagree when mvhd
+                // or registration over-reported a growing movie header.
+                if (Math.abs(measured - durationMs) > 25) {
+                    durationMs = measured;
+                }
+            }
             if (manifest.complete && Math.abs(cursor - chunk.timeline_start_ms) > 2) {
                 throw new Mp4AssemblyError(
                     'schedule_non_monotonic',
@@ -776,10 +786,10 @@ export class RecordingDownloadService {
             const input = {
                 sequence: chunk.sequence,
                 data,
-                durationMs: chunk.duration_ms,
+                durationMs,
                 timelineStartMs: cursor,
             };
-            cursor += chunk.duration_ms;
+            cursor += durationMs;
             return input;
         });
 

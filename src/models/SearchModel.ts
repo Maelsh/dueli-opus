@@ -154,7 +154,7 @@ export class SearchModel {
             SELECT
                 c.*,
                 u.username as creator_username,
-                u.display_name as creator_display_name,
+                u.display_name as creator_name,
                 u.avatar_url as creator_avatar,
                 cat.name_ar as category_name_ar,
                 cat.name_en as category_name_en,
@@ -323,7 +323,7 @@ export class SearchModel {
                 SELECT
                     c.*,
                     u.username as creator_username,
-                    u.display_name as creator_display_name,
+                    u.display_name as creator_name,
                     u.avatar_url as creator_avatar,
                     cat.name_ar as category_name_ar,
                     cat.name_en as category_name_en,

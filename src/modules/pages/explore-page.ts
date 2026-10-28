@@ -316,7 +316,130 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         const initialFilterValid = ${filterError ? 'false' : 'true'};
         const taxonomyChildren = ${JSON.stringify(CATEGORY_SUBCATEGORIES)};
         const params = new URLSearchParams(window.location.search);
-        const search = params.get('search') || '';
+        var searchQuery = (params.get('search') || '').trim();
+        var exploreFetchGen = 0;
+        var exploreSearchDebounce = null;
+
+        function refreshSearchQueryFromUi() {
+          var input = document.getElementById('searchInput');
+          if (input && typeof input.value === 'string') searchQuery = input.value.trim();
+        }
+
+        function syncExploreUrlFromUi() {
+          var p = new URLSearchParams();
+          if (searchQuery) p.set('search', searchQuery);
+          var cat = categoryParam();
+          if (cat) p.set('category', cat);
+          var sub = subcategoryParam();
+          if (sub) p.set('subcategory', sub);
+          var st = statusParam();
+          if (st) p.set('status', st);
+          if (viewMode) p.set('view', viewMode);
+          p.set('lang', lang);
+          var next = '/explore?' + p.toString();
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', next);
+          }
+        }
+
+        function resetExplorePagingState() {
+          compSessionId = null;
+          compCursor = null;
+          compSessionRetried = false;
+          compHintConsumed = false;
+          compSeen.clear();
+          compDone = false;
+          compLoading = false;
+          userOffset = 0;
+          userSeen.clear();
+          userDone = false;
+          userLoading = false;
+        }
+
+        function paintSearchQueryBanner() {
+          if (!searchQuery) {
+            const display = document.getElementById('searchQueryDisplay');
+            if (display) display.innerHTML = '';
+            return;
+          }
+          const display = document.getElementById('searchQueryDisplay');
+          if (!display) return;
+          display.textContent = '';
+          const box = document.createElement('div');
+          box.className = 'bg-purple-50 dark:bg-purple-900/20 rounded-xl px-4 py-3 flex items-center gap-3';
+          const icon = document.createElement('i');
+          icon.className = 'fas fa-search text-purple-500';
+          icon.setAttribute('aria-hidden', 'true');
+          const label = document.createElement('span');
+          label.className = 'text-gray-700 dark:text-gray-300';
+          label.textContent = (tr.search_results_for || 'Search results for') + ': ';
+          const strong = document.createElement('strong');
+          strong.className = 'break-words';
+          strong.setAttribute('dir', 'auto');
+          strong.textContent = searchQuery;
+          label.appendChild(strong);
+          box.appendChild(icon);
+          box.appendChild(label);
+          display.appendChild(box);
+        }
+
+        function clientFiltersValid() {
+          if (!initialFilterValid) return false;
+          var catSel = document.getElementById('categoryFilter');
+          var subSel = document.getElementById('subcategoryFilter');
+          var rawCat = (catSel && catSel.value ? catSel.value : initialCategory || '').trim();
+          var rawSub = (subSel && subSel.value ? subSel.value : initialSubcategory || '').trim();
+          if (rawCat.trim() !== '' && categoryParam() === '') return false;
+          if (rawSub.trim() !== '' && subcategoryParam() === '') return false;
+          if (categoryParam() !== '' && subcategoryParam() !== ''
+            && parentOfSubcategory(subcategoryParam()) !== categoryParam()) return false;
+          return true;
+        }
+
+        async function runExploreLiveSearch() {
+          refreshSearchQueryFromUi();
+          syncExploreUrlFromUi();
+          paintSearchQueryBanner();
+          resetExplorePagingState();
+          var gen = ++exploreFetchGen;
+          await loadSearchResults();
+          if (gen !== exploreFetchGen) return;
+        }
+
+        function bindExploreLiveSearch() {
+          var form = document.querySelector('form[role="search"]');
+          if (form && !form.getAttribute('data-live-bound')) {
+            form.setAttribute('data-live-bound', '1');
+            form.addEventListener('submit', function(ev) {
+              ev.preventDefault();
+              runExploreLiveSearch();
+            });
+          }
+          var input = document.getElementById('searchInput');
+          if (input && !input.getAttribute('data-live-bound')) {
+            input.setAttribute('data-live-bound', '1');
+            input.addEventListener('input', function() {
+              clearTimeout(exploreSearchDebounce);
+              exploreSearchDebounce = setTimeout(function() { runExploreLiveSearch(); }, 300);
+            });
+          }
+          ['categoryFilter', 'subcategoryFilter', 'statusFilter'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el && !el.getAttribute('data-live-bound')) {
+              el.setAttribute('data-live-bound', '1');
+              el.addEventListener('change', function() { runExploreLiveSearch(); });
+            }
+          });
+        }
+
+        function parentOfSubcategory(sub) {
+          for (var parent in taxonomyChildren) {
+            if (!Object.prototype.hasOwnProperty.call(taxonomyChildren, parent)) continue;
+            var children = taxonomyChildren[parent];
+            if (children && children.indexOf(sub) !== -1) return parent;
+          }
+          return '';
+        }
         const viewMode = params.get('view') === 'competitions' || params.get('view') === 'users'
           ? params.get('view')
           : initialView;
@@ -328,33 +451,12 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         var PREVIEW_USERS = 6;
         
         // Display search query (R1.1: safe sink — untrusted value via textContent only)
-        if (search) {
-          const display = document.getElementById('searchQueryDisplay');
-          if (display) {
-            display.textContent = '';
-            const box = document.createElement('div');
-            box.className = 'bg-purple-50 dark:bg-purple-900/20 rounded-xl px-4 py-3 flex items-center gap-3';
-            const icon = document.createElement('i');
-            icon.className = 'fas fa-search text-purple-500';
-            icon.setAttribute('aria-hidden', 'true');
-            const label = document.createElement('span');
-            label.className = 'text-gray-700 dark:text-gray-300';
-            label.textContent = (tr.search_results_for || 'Search results for') + ': ';
-            const strong = document.createElement('strong');
-            strong.className = 'break-words';
-            strong.setAttribute('dir', 'auto');
-            strong.textContent = search;
-            label.appendChild(strong);
-            box.appendChild(icon);
-            box.appendChild(label);
-            display.appendChild(box);
-          }
-        }
+        paintSearchQueryBanner();
 
         // Keep the on-page controls in sync with the URL (back-nav safe).
         var searchInput = document.getElementById('searchInput');
         if (searchInput && typeof searchInput.value === 'string' && document.activeElement !== searchInput) {
-          searchInput.value = search;
+          searchInput.value = searchQuery;
         }
         
         // Wait for client bundle to load (only need renderCompetitionCards - users are inline now)
@@ -376,7 +478,8 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         async function loadSearchResults() {
           applyViewMode();
           bindSubcategoryReset();
-          if (!initialFilterValid) {
+          bindExploreLiveSearch();
+          if (!clientFiltersValid()) {
             showInvalidFilter('competitionsContainer');
             await loadUsersPreview();
             return;
@@ -424,20 +527,23 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         }
 
         function categoryParam() {
-          const v = (initialCategory || '').toLowerCase();
+          var sel = document.getElementById('categoryFilter');
+          const v = ((sel && sel.value) || initialCategory || '').toLowerCase();
           return v === 'dialogue' || v === 'science' || v === 'talents' ? v : '';
         }
 
         // Server-normalised subcategory slug ('' = All, explicit user choice).
         function subcategoryParam() {
-          var v = (initialSubcategory || '').toLowerCase();
+          var sel = document.getElementById('subcategoryFilter');
+          var v = ((sel && sel.value) || initialSubcategory || '').toLowerCase();
           var pool = taxonomyChildren[categoryParam()];
           if (v && categoryParam() && pool && pool.indexOf(v) === -1) return '';
           return v;
         }
 
         function statusParam() {
-          const v = (initialStatus || '').toLowerCase();
+          var sel = document.getElementById('statusFilter');
+          const v = ((sel && sel.value) || initialStatus || '').toLowerCase();
           return v === 'live' || v === 'recorded' || v === 'upcoming' ? v : '';
         }
 
@@ -459,7 +565,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
 
         function competitionsUrl(limit, offset) {
           let url = '/api/competitions?limit=' + limit + '&offset=' + offset;
-          if (search) url += '&search=' + encodeURIComponent(search);
+          if (searchQuery) url += '&search=' + encodeURIComponent(searchQuery);
           const cat = categoryParam();
           if (cat) url += '&category=' + encodeURIComponent(cat);
           const st = statusParam();
@@ -500,13 +606,13 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         }
 
         function sessionCreateBody() {
-          return JSON.stringify({ search: search, category: categoryParam(), subcategory: subcategoryParam(), status: statusParam() });
+          return JSON.stringify({ search: searchQuery, category: categoryParam(), subcategory: subcategoryParam(), status: statusParam() });
         }
 
         function sessionPageUrl(sid, limit, cursor) {
           var url = '/api/competitions/explore-sessions/' + encodeURIComponent(sid) + '/page?limit=' + limit;
           if (cursor) url += '&cursor=' + encodeURIComponent(cursor);
-          if (search) url += '&search=' + encodeURIComponent(search);
+          if (searchQuery) url += '&search=' + encodeURIComponent(searchQuery);
           var cat = categoryParam();
           if (cat) url += '&category=' + encodeURIComponent(cat);
           var sub = subcategoryParam();
@@ -584,16 +690,20 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
 
         // Preview: first 6 of the frozen session, no progressive loading here.
         async function loadCompetitionsPreview() {
+          const runGen = exploreFetchGen;
           const container = document.getElementById('competitionsContainer');
           if (!container) return;
           try {
             const sid = await ensureCompSession();
+            if (runGen !== exploreFetchGen) return;
             const res = await fetch(sessionPageUrl(sid, PREVIEW_COMPETITIONS, null), { headers: exploreHeaders({}) });
+            if (runGen !== exploreFetchGen) return;
             if (res.status === 410) { showSessionExpired('competitionsContainer'); return; }
             if (!res.ok) throw new Error('status ' + res.status);
             const data = await res.json();
             const payload = (data && data.success && data.data) ? data.data : null;
             const items = payload && payload.items ? payload.items : [];
+            if (runGen !== exploreFetchGen) return;
             renderPreviewGrid(container, 'competitionsGrid', items.slice(0, PREVIEW_COMPETITIONS),
               'compsCount', 'competitions');
           } catch (err) {
@@ -604,10 +714,11 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
 
         // Preview: first 6 users only, no progressive loading here.
         async function loadUsersPreview() {
+          const runGen = exploreFetchGen;
           const container = document.getElementById('usersContainer');
           if (!container) return;
           // Both /api/search/users and /api/users require q
-          if (!search || search.length < 2) {
+          if (!searchQuery || searchQuery.length < 2) {
             container.innerHTML = \`
               <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
                 <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
@@ -621,12 +732,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             return;
           }
           try {
-            const url = '/api/search/users?q=' + encodeURIComponent(search) +
+            const url = '/api/search/users?q=' + encodeURIComponent(searchQuery) +
                         '&limit=' + PREVIEW_USERS + '&offset=0';
             const res = await fetch(url);
+            if (runGen !== exploreFetchGen) return;
             if (!res.ok) throw new Error('status ' + res.status);
             const data = await res.json();
             const users = (data.data && data.data.items) ? data.data.items : (data.data || []);
+            if (runGen !== exploreFetchGen) return;
             renderPreviewGrid(container, 'usersGrid', users.slice(0, PREVIEW_USERS),
               'usersCount', 'users');
           } catch (err) {
@@ -950,7 +1063,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         async function loadUsers(opts) {
           const append = !!(opts && opts.append);
           // Both /api/search/users and /api/users require q
-          if (!search || search.length < 2) {
+          if (!searchQuery || searchQuery.length < 2) {
             document.getElementById('usersContainer').innerHTML = \`
               <div class="text-center py-12 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
                 <div class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mx-auto mb-4">
@@ -971,7 +1084,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           setUserStatus('loading');
 
           try {
-            const url = '/api/search/users?q=' + encodeURIComponent(search) +
+            const url = '/api/search/users?q=' + encodeURIComponent(searchQuery) +
                         '&limit=' + USER_BATCH + '&offset=' + userOffset;
             const res = await fetch(url);
             if (!res.ok) throw new Error('status ' + res.status);

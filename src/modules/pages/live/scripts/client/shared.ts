@@ -1761,6 +1761,10 @@ class SmartVodPlayer {
             : this.seekPending;
         
         testLog('▶️ Playing chunk ' + (index + 1) + '/' + this.chunks.length, 'info');
+
+        try { this.videoElement.pause(); } catch (e) {}
+        this.videoElement.onended = null;
+        this.videoElement.muted = true;
         
         // تحميل إذا لم تكن محملة
         if (this.loadedChunks[index] === undefined) {
@@ -2422,22 +2426,30 @@ window.toggleLocalVideoVisibility = function() {
     const localWrapper = document.getElementById('localVideoWrapper');
     const remoteWrapper = document.getElementById('remoteVideoWrapper');
     const icon = document.getElementById('hideLocalIcon');
-    
+    const hideBtn = document.getElementById('hideLocalBtn');
+
     if (!localWrapper || !remoteWrapper) return;
-    
+
+    // UNIT35.1: eye toggles PiP visibility only when a PiP lane is active
+    // (both wrappers visible). It never stops camera tracks or resizes the
+    // main preview when only the local large surface is shown.
+    const remotePiPActive = !remoteWrapper.classList.contains('video-wrapper-hidden')
+        && remoteWrapper.style.display !== 'none';
+    const localPiPActive = !localWrapper.classList.contains('video-wrapper-hidden')
+        && localWrapper.style.display !== 'none';
+    const pipLaneActive = remotePiPActive && localPiPActive
+        && (localWrapper.classList.contains('live-stage-pip')
+            || remoteWrapper.classList.contains('live-stage-pip'));
+    if (hideBtn) hideBtn.classList.toggle('hidden', !pipLaneActive);
+    if (!pipLaneActive) return;
+
     const isVisible = !localWrapper.classList.contains('video-wrapper-hidden');
-    
+
     if (isVisible) {
         localWrapper.classList.add('video-wrapper-hidden');
-        localWrapper.classList.remove('w-full', 'md:w-[48%]');
-        remoteWrapper.classList.remove('w-full', 'md:w-[48%]');
-        remoteWrapper.classList.add('w-full', 'md:w-[80%]');
         if (icon) icon.className = 'fas fa-eye-slash text-white';
     } else {
         localWrapper.classList.remove('video-wrapper-hidden');
-        localWrapper.classList.add('w-full', 'md:w-[48%]');
-        remoteWrapper.classList.remove('w-full', 'md:w-[80%]');
-        remoteWrapper.classList.add('w-full', 'md:w-[48%]');
         if (icon) icon.className = 'fas fa-eye text-white';
     }
 }
