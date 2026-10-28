@@ -429,7 +429,7 @@ export const en = {
     success: 'Success',
 
     // Footer
-    footer: '© 2025 Dueli. All rights reserved.',
+    footer: '© 2026 Dueli. All rights reserved.',
     about: 'About',
     contact: 'Contact Us',
     terms: 'Terms of Service',
@@ -661,6 +661,7 @@ export const en = {
         reminder_set: 'Reminder set!',
         reminder_removed: 'Reminder removed',
         not_scheduled: 'Competition is not scheduled',
+        not_eligible: 'Reminders are not available for this competition status',
         already_set: 'Reminder already set',
         not_found: 'Reminder not found',
     },
@@ -1361,6 +1362,10 @@ export const en = {
         not_eligible: 'Watch 300 seconds of the broadcast to unlock rating',
         update_rating: 'Update rating',
         withdraw_rating: 'Withdraw rating',
+        unique_raters: 'Unique raters',
+        score_scale_hint: 'Score out of 5',
+        draw_label: 'Draw',
+        zero_score: 'No score yet',
     },
 
     // ── T1.3: Streaming ──────────────
@@ -1415,6 +1420,7 @@ export const en = {
         already_has_opponent: 'Competition already has an opponent',
         competition_not_open: 'Competition is not open for invites',
         compatibility: 'Compatibility',
+        compatibility_unavailable: 'Unavailable',
         wins_label: 'Wins',
         competitions_label: 'Competitions',
         rating_label: 'Rating',

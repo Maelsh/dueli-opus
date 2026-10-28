@@ -1584,6 +1584,7 @@ export class CompetitionController extends BaseController {
             const comp = competition;
             const ids = [comp.creator_id, comp.opponent_id].filter((v) => typeof v === 'number' && v !== null);
             const competitors = await ratingModel.getSummary(competitionId, ids);
+            const uniqueRaterCount = await ratingModel.countUniqueRaters(competitionId);
             // R2-V: explicit, localized result status (winner / draw / pending).
             const compRow = comp as {
                 status?: string;
@@ -1607,6 +1608,7 @@ export class CompetitionController extends BaseController {
             const systemCredits = await model.getResultCredits(competitionId);
             return this.success(c, {
                 competitors,
+                unique_rater_count: uniqueRaterCount,
                 result: {
                     status: resultStatus,
                     label: this.t(`competition.${resultStatus}`, c),

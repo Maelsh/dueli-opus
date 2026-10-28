@@ -40,6 +40,11 @@ export class ScheduleController extends BaseController {
                 return this.validationError(c, this.t('schedule.not_scheduled', c));
             }
 
+            const status = String(competition.status || '');
+            if (status === 'live' || status === 'completed' || status === 'ended' || status === 'cancelled') {
+                return this.validationError(c, this.t('schedule.not_eligible', c));
+            }
+
             const body = await this.getBody<{ remind_before_minutes?: number }>(c);
             const beforeMinutes = body?.remind_before_minutes || 30;
 

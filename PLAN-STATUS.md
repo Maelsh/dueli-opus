@@ -1,3 +1,7 @@
+## 2026-10-28 — UNIT35 / R4-UX-I18N-1 · فرع feat/unit35-r4-ux-i18n-1 (من a6c1802 = origin/main)
+
+- 🔧 **LOCAL VERIFIED — REMOTE Protocol 10 pending.** ركائز A–F الأساسية + اختبارات unit35؛ مصفوفة §4 الكاملة (34 بندًا) تتطلب مراجعة REMOTE (PLAN غير متاح محليًا). لا UNIT35.1 ولا merge/deploy.
+
 ## 2026-10-28 — UNIT34 REM1 / R4-DB-MEASURE-1 · فرع feat/unit34-r4-db-measure-1 · PR #146 (من 20c16dc)
 
 - 🔧 **LOCAL VERIFIED — REMOTE Protocol 10 pending.** أدلة قياس كاملة (رحلات SSE/chunk/search/H7)، تقرير صادق (rowsRead غير متاح محلياً)، إصلاح تسريب كاش CI + إزالة كاش T0 الخاطئ، اختبارات كاش/تدهور/requestId. لا merge/deploy.

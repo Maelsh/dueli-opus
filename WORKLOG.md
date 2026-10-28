@@ -1,3 +1,10 @@
+## 2026-10-28 — UNIT35 / R4-UX-I18N-1 · branch feat/unit35-r4-ux-i18n-1 (BASE a6c1802)
+
+- **A–F:** InvitePanel compatibility + mojibake; VIS-04 z-index stack; guest-only header Help; reminder icon-only + server live guard; rating summary bars + unique_rater_count; player/comment RTL layout hooks.
+- **TESTS:** unit35 lib/ui/api **8**; build:css + tsc + build pass; r3-c1 + rtl-dark-mobile regression pass.
+- **SCOPE NOTE:** Full §4 matrix (34 items) not exhaustively re-audited — PLAN repo files returned 404 from this agent; remaining G items need REMOTE matrix pass.
+- **STATUS:** LOCAL VERIFIED — PR pending; no merge/deploy; UNIT35.1 not started.
+
 ## 2026-10-28 — UNIT34 REM1 / R4-DB-MEASURE-1 · branch feat/unit34-r4-db-measure-1 (PR #146, BASE 20c16dc)
 
 - **REM:** Full journey harness (SSE, notifications, chunk_index seek, UserSignals); honest report (measured vs unavailable); `vitest.setup` clears `PublicSurfaceCache` between tests.

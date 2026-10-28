@@ -12,6 +12,7 @@ import { ApiClient } from '../core/ApiClient';
 import { State } from '../core/State';
 import { Toast } from './Toast';
 import { t } from '../../i18n';
+import { formatInviteCompatibilityPercent } from '../../lib/inviteCompatibility';
 
 interface OnlineUser {
     id: number;
@@ -232,11 +233,10 @@ export class InvitePanel {
     }
 
     /**
-     * Get compatibility bar width %
+     * Get compatibility bar width % (presentation only; invalid → unavailable).
      */
-    private static getCompatibilityPercent(score: number): number {
-        // Max possible score â‰ˆ 100 (30+25+20+15+10+5), normalize to percentage
-        return Math.min(Math.round((score / 100) * 100), 100);
+    private static getCompatibilityPercent(score: unknown): number | null {
+        return formatInviteCompatibilityPercent(score, State.lang).percent;
     }
 
     /**
@@ -251,7 +251,7 @@ export class InvitePanel {
 
         const overlay = document.createElement('div');
         overlay.id = 'invitePanelOverlay';
-        overlay.className = 'fixed inset-0 z-[9999] flex items-end sm:items-center justify-center transition-opacity duration-300';
+        overlay.className = 'invite-panel-overlay fixed inset-0 flex items-end sm:items-center justify-center transition-opacity duration-300';
         overlay.style.background = 'rgba(0,0,0,0.5)';
         overlay.style.backdropFilter = 'blur(4px)';
 
@@ -348,7 +348,8 @@ export class InvitePanel {
 
         container.innerHTML = this.users.map((user, index) => {
             const isSent = this.sentInvites.has(user.id);
-            const compatPercent = this.getCompatibilityPercent(user.compatibility_score);
+            const compat = formatInviteCompatibilityPercent(user.compatibility_score, State.lang);
+            const compatPercent = compat.percent;
             const avatar = user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.display_name || user.username)}&background=7c3aed&color=fff&size=80`;
             const rating = user.average_rating ? user.average_rating.toFixed(1) : '—';
 
@@ -378,19 +379,21 @@ export class InvitePanel {
                                     ${user.display_name || user.username}
                                 </span>
                             </div>
-                            <div class="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                            <div class="flex items-center gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
                                 <span>${this.getStatusText(user)}</span>
-                                <span>آ·</span>
-                                <span>â­گ ${rating}</span>
-                                <span>آ·</span>
-                                <span>ًںڈ† ${user.total_wins || 0}</span>
+                                <span class="opacity-60" aria-hidden="true">·</span>
+                                <span class="inline-flex items-center gap-0.5"><i class="fas fa-star text-[10px] text-amber-400" aria-hidden="true"></i> ${rating}</span>
+                                <span class="opacity-60" aria-hidden="true">·</span>
+                                <span class="inline-flex items-center gap-0.5"><i class="fas fa-trophy text-[10px] text-amber-500" aria-hidden="true"></i> ${user.total_wins || 0}</span>
                             </div>
                             <!-- Compatibility Bar -->
                             <div class="flex items-center gap-2 mt-1.5">
+                                ${compatPercent !== null ? `
                                 <div class="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                                     <div class="h-full rounded-full transition-all duration-500 ${compatPercent > 60 ? 'bg-green-500' : compatPercent > 30 ? 'bg-yellow-500' : 'bg-gray-400'}" data-csp-style="width: ${compatPercent}%"></div>
                                 </div>
-                                <span class="text-[10px] text-gray-400 font-medium flex-shrink-0">${compatPercent}%</span>
+                                <span class="text-[10px] text-gray-400 font-medium flex-shrink-0">${compat.label}</span>
+                                ` : `<span class="text-[10px] text-gray-400 font-medium">${compat.label}</span>`}
                             </div>
                         </div>
 
@@ -419,7 +422,7 @@ export class InvitePanel {
         if (statusEl) {
             statusEl.innerHTML = `
                 <i class="fas fa-circle text-green-500 text-[6px] mr-1 animate-pulse"></i>
-                ${this.total} ${t('users', State.lang)} آ· ${t('matchmaking.auto_updating', State.lang)}
+                ${this.total} ${t('users', State.lang)} · ${t('matchmaking.auto_updating', State.lang)}
             `;
         }
     }
@@ -475,8 +478,8 @@ export class InvitePanel {
         const card = document.createElement('div');
         card.id = 'inviteHoverCard';
         card.dir = isRtl ? 'rtl' : 'ltr';
-        card.style.cssText = `position:fixed; top:${top}px; left:${left}px; width:${cardWidth}px; z-index:70;`;
-        card.className = 'bg-white dark:bg-[#1a1a2e] rounded-2xl shadow-2xl border border-gray-200 dark:border-purple-900/40 p-4 animate-fade-in-card pointer-events-auto';
+        card.style.cssText = `position:fixed; top:${top}px; left:${left}px; width:${cardWidth}px;`;
+        card.className = 'invite-hover-card bg-white dark:bg-[#1a1a2e] rounded-2xl shadow-2xl border border-gray-200 dark:border-purple-900/40 p-4 animate-fade-in-card pointer-events-auto';
         card.onmouseleave = () => this.hideHoverCard();
 
         card.innerHTML = `
@@ -494,15 +497,15 @@ export class InvitePanel {
             <div class="grid grid-cols-3 gap-2 text-center mb-3">
                 <div class="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-2">
                     <div class="text-lg font-black text-purple-600 dark:text-purple-400">${user.average_rating ? user.average_rating.toFixed(1) : '—'}</div>
-                    <div class="text-[10px] text-gray-500">â­گ ${t('matchmaking.rating_label', lang)}</div>
+                    <div class="text-[10px] text-gray-500"><i class="fas fa-star text-amber-400 me-0.5" aria-hidden="true"></i> ${t('matchmaking.rating_label', lang)}</div>
                 </div>
                 <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-2">
                     <div class="text-lg font-black text-blue-600 dark:text-blue-400">${user.total_competitions ?? total}</div>
-                    <div class="text-[10px] text-gray-500">ًںژ¯ ${t('matchmaking.competitions_label', lang)}</div>
+                    <div class="text-[10px] text-gray-500"><i class="fas fa-bullseye text-blue-500 me-0.5" aria-hidden="true"></i> ${t('matchmaking.competitions_label', lang)}</div>
                 </div>
                 <div class="bg-green-50 dark:bg-green-900/20 rounded-xl p-2">
                     <div class="text-lg font-black text-green-600 dark:text-green-400">${winRate !== null ? winRate + '%' : '—'}</div>
-                    <div class="text-[10px] text-gray-500">ًںڈ† ${t('matchmaking.stats_winrate', lang)}</div>
+                    <div class="text-[10px] text-gray-500"><i class="fas fa-trophy text-green-600 me-0.5" aria-hidden="true"></i> ${t('matchmaking.stats_winrate', lang)}</div>
                 </div>
             </div>
 

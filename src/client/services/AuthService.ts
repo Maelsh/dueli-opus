@@ -16,6 +16,7 @@ import { NotificationsUI } from '../ui/NotificationsUI';
 import { MessagesUI } from '../ui/MessagesUI';
 import { SseService } from './SseService';
 import { t } from '../../i18n';
+import { readReturnToFromSearch, appendLangQuery } from '../../lib/safeReturnPath';
 
 /**
  * API Response Types
@@ -328,8 +329,8 @@ export class AuthService {
             // Show upcoming tab for logged-in users
             if (upcomingTab) upcomingTab.classList.remove('hidden');
 
-            // R3-C1: the Help entry is visible to everyone (guests and members).
-            if (helpIcon) helpIcon.classList.remove('auth-hidden');
+            // R3-C1: Help in header for guests only (members use account menu).
+            if (helpIcon) helpIcon.classList.add('auth-hidden');
 
             // R2-A: admin entry — visible only for admins (server + API
             // guards remain authoritative; this is navigation only).
@@ -375,6 +376,12 @@ export class AuthService {
             if ((ok || user) && user && (user.id || user.user_id || user.email)) {
                 Modal.hideLogin();
                 Toast.success(t('auth.login_success', State.lang));
+
+                const returnPath = readReturnToFromSearch(window.location.search);
+                if (returnPath) {
+                    window.location.href = appendLangQuery(returnPath, State.lang);
+                    return;
+                }
 
                 setTimeout(() => {
                     window.location.reload();
@@ -426,6 +433,13 @@ export class AuthService {
                 this.updateAuthUI();
                 Modal.hideLogin();
                 Toast.success(t('client.toast.welcome', State.lang));
+                const returnPath = typeof window !== 'undefined'
+                    ? readReturnToFromSearch(window.location.search)
+                    : null;
+                if (returnPath) {
+                    window.location.href = appendLangQuery(returnPath, State.lang);
+                    return;
+                }
                 // B1: let page scripts (My Competitions, …) refresh immediately
                 // instead of waiting for a full reload.
                 this.emitAuthSuccess(user);

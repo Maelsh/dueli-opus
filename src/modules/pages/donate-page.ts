@@ -22,7 +22,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
         ${getNavigation(lang)}
         ${getLoginModal(lang)}
         
-        <div class="flex-1 bg-gray-50 dark:bg-[#0f0f0f]">
+        <main class="flex-1 bg-gray-50 dark:bg-[#0f0f0f]" tabindex="-1">
             <div class="container mx-auto px-4 py-8 max-w-4xl">
                 <!-- Hero Section -->
                 <div class="text-center mb-12">
@@ -114,7 +114,7 @@ export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Var
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
         
         ${getFooter(lang)}
         

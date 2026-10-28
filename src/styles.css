@@ -973,8 +973,57 @@ body.dark .user-menu-item:hover {
     padding: 14px 24px;
     border-radius: 12px;
     font-weight: 500;
-    z-index: 200;
+    z-index: 9200;
     animation: slide-in 0.3s ease;
+}
+
+/* UNIT35 VIS-04: invite overlay, hover detail card, toast stacking */
+.invite-panel-overlay {
+    z-index: 9000;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+#invitePanel {
+    overflow: visible;
+}
+
+#invitePanelUserList {
+    overflow-x: visible;
+}
+
+.invite-hover-card {
+    z-index: 9100;
+}
+
+.embedded-vod-controls-inner,
+.embedded-live-controls-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.embedded-vod-controls-inner .embedded-time-display,
+.embedded-live-controls-inner .embedded-time-display {
+    flex-shrink: 0;
+    min-width: 5.75rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.embedded-vod-controls-inner input[type="range"],
+.embedded-live-controls-inner input[type="range"] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+@media (max-width: 390px) {
+    #notificationsDropdown,
+    #messagesDropdown {
+        width: min(20rem, calc(100vw - 1rem)) !important;
+        max-width: calc(100vw - 1rem);
+    }
 }
 
 .toast-success {

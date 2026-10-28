@@ -329,12 +329,6 @@ export class RatingModel extends BaseModel<Rating> {
         return (result.results as unknown) as Array<Pick<Rating, 'id' | 'competition_id' | 'competitor_id' | 'rating' | 'created_at'>>;
     }
 
-    /**
-     * B11: anonymous per-competitor summary via SQL GROUP BY aggregation.
-     * Never fetches rating rows into JS — average/count/distribution all
-     * come from the aggregation query. NULL average when count = 0
-     * (no division by zero, no NaN). No user_id/username/email anywhere.
-     */
     async getSummary(competitionId: number, competitorIds: number[]): Promise<RatingSummaryEntry[]> {
         const result = await this.db.prepare(`
             SELECT competitor_id,
@@ -372,6 +366,14 @@ export class RatingModel extends BaseModel<Rating> {
                 },
             };
         });
+    }
+
+    /** Distinct viewers who rated at least one competitor (never double-count dual ratings). */
+    async countUniqueRaters(competitionId: number): Promise<number> {
+        const row = await this.db.prepare(
+            `SELECT COUNT(DISTINCT user_id) AS n FROM ratings WHERE competition_id = ?`
+        ).bind(competitionId).first<{ n: number }>();
+        return Number(row?.n ?? 0);
     }
 
     /**

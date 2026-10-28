@@ -153,14 +153,24 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           subCats.map(c => \`<option value="\${c.id}">\${lang === 'ar' ? (c.name_ar || c.name_en) : (c.name_en || c.name_ar)}</option>\`).join('');
       }
       
+      let createSubmitting = false;
+
       async function handleCreate(e) {
         e.preventDefault();
+        if (createSubmitting) return;
         const form = e.target;
+        const submitBtn = form.querySelector('button[type="submit"]');
         
         if (!window.currentUser) {
           alert(tr.login_required || 'Please login first');
           showLoginModal();
           return;
+        }
+
+        createSubmitting = true;
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.setAttribute('aria-busy', 'true');
         }
         
         try {
@@ -183,15 +193,21 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           });
           
           const data = await res.json();
-          if (data.success) {
+          if (data.success && (res.status === 201 || res.status === 200)) {
             // T2.1: redirect with invite=1 so the invite panel auto-opens
             window.location.href = '/competition/' + data.data.id + '?lang=' + lang + '&invite=1';
-          } else {
-            alert(data.error || tr.error_occurred || 'Error creating competition');
+            return;
           }
+          alert(data.error || tr.error_occurred || 'Error creating competition');
         } catch (err) {
           console.error(err);
           alert(tr.error_occurred || 'An error occurred');
+        } finally {
+          createSubmitting = false;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.removeAttribute('aria-busy');
+          }
         }
       }
     </script>
