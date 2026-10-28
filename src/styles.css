@@ -1204,4 +1204,34 @@ body.dark .user-menu-item:hover {
                 background: rgba(107, 114, 128, 0.15);
                 border-color: rgba(107, 114, 128, 0.3);
             }
-        
+
+/* UNIT 35.2 — English-baseline i18n auto-fit + truncation tooltips */
+.i18n-auto-fit {
+    font-size: calc(1em * var(--i18n-font-scale, 1));
+}
+
+[data-dueli-truncate] {
+    min-width: 0;
+}
+
+.dueli-truncate-tooltip {
+    position: fixed;
+    z-index: 10050;
+    max-width: min(90vw, 24rem);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: normal;
+    word-break: break-word;
+    background: rgb(17 24 39);
+    color: rgb(243 244 246);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+}
+
+.dark .dueli-truncate-tooltip {
+    background: rgb(243 244 246);
+    color: rgb(17 24 39);
+}
+

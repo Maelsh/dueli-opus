@@ -1,6 +1,8 @@
 import { translations, getUILanguage, isRTL } from '../../i18n';
 import type { Competition, Language } from '../../config/types';
 import { getUserAvatarLink, getProfilePath } from './user-avatar';
+import { dueliTruncateAttrs } from '../../lib/userTextDisplay';
+import { Sanitize } from '../../lib/services/Sanitize';
 
 export interface CompetitionCardProps extends Competition {
   subcategory_slug?: string;
@@ -161,7 +163,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
         <div class="mt-3 px-1">
           <div class="flex items-start justify-between gap-2">
             <a href="/competition/${item.id}?lang=${lang}" class="min-w-0 flex-1">
-              <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200" title="${item.title}">${item.title}${item.is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${tr.demo?.title || 'Demo'}">${tr.demo?.badge || 'Demo'}</span>` : ''}</h3>
+              <h3 class="text-sm font-bold text-gray-900 dark:text-white line-clamp-2 leading-tight hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 min-w-0" ${dueliTruncateAttrs(item.title)}>${item.title}${item.is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${Sanitize.escapeHtml(tr.demo?.title || 'Demo')}">${tr.demo?.badge || 'Demo'}</span>` : ''}</h3>
             </a>
             <!-- UNIT32.1: explicit Watch Later control (shared by every card).
                  The label/state is hydrated from the authenticated API; a
@@ -191,7 +193,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
                  imgClassName: 'w-4 h-4 rounded-full bg-gray-200',
                  linkToProfile: false
                })}
-               <span class="truncate max-w-[80px]">${item.creator_name || 'User'}</span>
+               <span class="truncate max-w-[80px] min-w-0" ${dueliTruncateAttrs(item.creator_name || 'User')}>${item.creator_name || 'User'}</span>
             </a>` : `<span class="flex items-center gap-1">
                ${getUserAvatarLink({
                  username: item.creator_username,
@@ -201,7 +203,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
                  lang,
                  imgClassName: 'w-4 h-4 rounded-full bg-gray-200'
                })}
-               <span class="truncate max-w-[80px]">${item.creator_name || 'User'}</span>
+               <span class="truncate max-w-[80px] min-w-0" ${dueliTruncateAttrs(item.creator_name || 'User')}>${item.creator_name || 'User'}</span>
             </span>`}
             <span class="mx-0.5 text-gray-300 flex items-center">
                 <img src="/static/dueli-icon.png" alt="" aria-hidden="true" width="20" height="20" decoding="async" class="w-5 h-5 object-contain grayscale opacity-50">
@@ -218,7 +220,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
                   imgClassName: 'w-4 h-4 rounded-full bg-gray-200',
                   linkToProfile: false
                 })}
-                <span class="truncate max-w-[80px]">${item.opponent_name}</span>
+                <span class="truncate max-w-[80px] min-w-0" ${dueliTruncateAttrs(item.opponent_name || '')}>${item.opponent_name}</span>
               </a>` : `<span class="flex items-center gap-1">
                 ${getUserAvatarLink({
                   username: item.opponent_username,
@@ -228,7 +230,7 @@ export function getCompetitionCard(item: CompetitionCardProps, lang: Language): 
                   lang,
                   imgClassName: 'w-4 h-4 rounded-full bg-gray-200'
                 })}
-                <span class="truncate max-w-[80px]">${item.opponent_name}</span>
+                <span class="truncate max-w-[80px] min-w-0" ${dueliTruncateAttrs(item.opponent_name || '')}>${item.opponent_name}</span>
               </span>`) :
       `<span class="text-gray-400">?</span>`
     }

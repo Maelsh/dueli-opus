@@ -1,3 +1,7 @@
+## 2026-10-29 — UNIT35.2 / R4-EXPLORE-OBSERVER-I18N-FIT-1 · فرع feat/unit35-2-explore-observer-i18n-fit-1 (BASE c401b5d5)
+
+- 🔧 **LOCAL IN PROGRESS — REMOTE review pending.** إصلاح إعادة ربط `IntersectionObserver` في Explore بعد إعادة بناء الحاوية + محرك `i18nAutoFit` وقص النص الديناميكي مع tooltip. اختبارات: unit35-2-explore-intersection-observer، i18n-auto-fit، user-text-display. لا merge/deploy.
+
 ## 2026-10-28 — UNIT35.1 / PR #148 · فرع feat/unit35-1-r4-media-controls-download-rem1 (BASE 12181265)
 
 - 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** إصلاح تراكم Explore في `view=competitions|users` + تعارض MP4 `manifest.complete` مع المدة المقاسة + مشاركة صفحة المنافسة (قرار مالك). اختبارات: explore-live-search-view-modes، competition-share، recording-download-service (UNIT35.1). معاينات OG للمنصات غير مثبتة (SPA). لا merge/deploy.

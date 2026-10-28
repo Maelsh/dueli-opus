@@ -559,6 +559,9 @@
   .z-\[100\] {
     z-index: 100;
   }
+  .z-\[120\] {
+    z-index: 120;
+  }
   .z-\[9999\] {
     z-index: 9999;
   }
@@ -814,6 +817,9 @@
   .h-10 {
     height: calc(var(--spacing) * 10);
   }
+  .h-11 {
+    height: calc(var(--spacing) * 11);
+  }
   .h-12 {
     height: calc(var(--spacing) * 12);
   }
@@ -1029,6 +1035,9 @@
   }
   .max-w-\[85\%\] {
     max-width: 85%;
+  }
+  .max-w-full {
+    max-width: 100%;
   }
   .max-w-lg {
     max-width: var(--container-lg);
@@ -1323,6 +1332,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .overflow-auto {
+    overflow: auto;
   }
   .overflow-hidden {
     overflow: hidden;
@@ -4967,6 +4979,31 @@ body.dark .user-menu-item:hover {
 .dark .countdown-expired {
   background: rgba(107, 114, 128, 0.15);
   border-color: rgba(107, 114, 128, 0.3);
+}
+.i18n-auto-fit {
+  font-size: calc(1em * var(--i18n-font-scale, 1));
+}
+[data-dueli-truncate] {
+  min-width: 0;
+}
+.dueli-truncate-tooltip {
+  position: fixed;
+  z-index: 10050;
+  max-width: min(90vw, 24rem);
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  white-space: normal;
+  word-break: break-word;
+  background: rgb(17 24 39);
+  color: rgb(243 244 246);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.dark .dueli-truncate-tooltip {
+  background: rgb(243 244 246);
+  color: rgb(17 24 39);
 }
 @property --tw-translate-x {
   syntax: "*";

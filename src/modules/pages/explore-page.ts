@@ -308,6 +308,15 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
       (function() {
         const lang = ${JSON.stringify(uiLang)};
         const tr = ${JSON.stringify(tr)};
+        const trEn = ${JSON.stringify(translations.en)};
+
+        function escAttr(value) {
+          return String(value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function refreshExploreLayout(root) {
+          if (typeof window.refreshI18nLayout === 'function') window.refreshI18nLayout(root || document);
+        }
         const rtl = ${rtl};
         const initialCategory = ${JSON.stringify(category)};
         const initialSubcategory = ${JSON.stringify(subcategory)};
@@ -342,6 +351,20 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           }
         }
 
+        function disconnectCompObserver() {
+          if (compObserver) {
+            try { compObserver.disconnect(); } catch (e) { /* ignore */ }
+            compObserver = null;
+          }
+        }
+
+        function disconnectUserObserver() {
+          if (userObserver) {
+            try { userObserver.disconnect(); } catch (e) { /* ignore */ }
+            userObserver = null;
+          }
+        }
+
         function resetExplorePagingState() {
           compSessionId = null;
           compCursor = null;
@@ -354,6 +377,8 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           userSeen.clear();
           userDone = false;
           userLoading = false;
+          disconnectCompObserver();
+          disconnectUserObserver();
         }
 
         function paintSearchQueryBanner() {
@@ -813,6 +838,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         function resetCompResultsShell() {
           const container = document.getElementById('competitionsContainer');
           if (!container) return null;
+          disconnectCompObserver();
           container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="competitionsGrid"></div>' +
                                 '<div id="competitionsStatus" class="text-center mt-4"></div>';
           return container;
@@ -843,19 +869,21 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             status.innerHTML = \`<p class="text-sm text-gray-400" data-explore-state="end">\${tr.discovery?.no_more_results || 'No more results'}</p>\`;
             return;
           }
-          status.innerHTML = \`<button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-semibold" data-action="load-more-competitions">
+          status.innerHTML = \`<button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full text-sm font-semibold i18n-auto-fit max-w-full min-w-0 truncate" data-i18n-fit="1" data-i18n-en="\${(trEn.load_more || 'Load more').replace(/"/g, '&quot;')}" data-action="load-more-competitions">
             \${tr.load_more || 'Load more'}
           </button>\`;
           const more = status.querySelector('[data-action="load-more-competitions"]');
           if (more) more.addEventListener('click', () => loadCompetitions({ append: true }));
+          observeCompEnd();
         }
 
         // Auto-append near the end of the list; the button above is the
         // keyboard-accessible fallback, so it is never IO-only.
         function observeCompEnd() {
-          if (compObserver || typeof IntersectionObserver === 'undefined') return;
+          if (typeof IntersectionObserver === 'undefined') return;
           const status = document.getElementById('competitionsStatus');
           if (!status) return;
+          disconnectCompObserver();
           compObserver = new IntersectionObserver((entries) => {
             if (entries.some(e => e.isIntersecting)) loadCompetitions({ append: true });
           }, { rootMargin: '200px' });
@@ -941,8 +969,8 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
               setCompStatus('end');
             } else {
               setCompStatus('more');
-              observeCompEnd();
             }
+            refreshExploreLayout(container);
           } catch (err) {
             console.error('Failed to load competitions:', err);
             if (!append && compCursor === null) {
@@ -978,6 +1006,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         function resetUserResultsShell() {
           const container = document.getElementById('usersContainer');
           if (!container) return null;
+          disconnectUserObserver();
           container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="usersGrid"></div>' +
                                 '<div id="usersStatus" class="text-center mt-4"></div>';
           return container;
@@ -1008,17 +1037,19 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             status.innerHTML = \`<p class="text-sm text-gray-400" data-explore-state="end">\${tr.discovery?.no_more_results || 'No more results'}</p>\`;
             return;
           }
-          status.innerHTML = \`<button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold" data-action="load-more-users">
+          status.innerHTML = \`<button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold i18n-auto-fit max-w-full min-w-0 truncate" data-i18n-fit="1" data-i18n-en="\${(trEn.load_more || 'Load more').replace(/"/g, '&quot;')}" data-action="load-more-users">
             \${tr.load_more || 'Load more'}
           </button>\`;
           const more = status.querySelector('[data-action="load-more-users"]');
           if (more) more.addEventListener('click', () => loadUsers({ append: true }));
+          observeUserEnd();
         }
 
         function observeUserEnd() {
-          if (userObserver || typeof IntersectionObserver === 'undefined') return;
+          if (typeof IntersectionObserver === 'undefined') return;
           const status = document.getElementById('usersStatus');
           if (!status) return;
+          disconnectUserObserver();
           userObserver = new IntersectionObserver((entries) => {
             if (entries.some(e => e.isIntersecting)) loadUsers({ append: true });
           }, { rootMargin: '200px' });
@@ -1056,10 +1087,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
                   
                   <!-- User Info -->
                   <div class="flex-1 min-w-0">
-                    <h3 class="font-bold text-gray-900 dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    <h3 class="font-bold text-gray-900 dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors min-w-0" data-dueli-truncate="1" title="\${escAttr(user.display_name || user.username)}" data-full-text="\${escAttr(user.display_name || user.username)}">
                       \${user.display_name || user.username}
                     </h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 truncate">@\${user.username}</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 truncate min-w-0" data-dueli-truncate="1" title="\${escAttr('@' + user.username)}" data-full-text="\${escAttr('@' + user.username)}">@\${user.username}</p>
                     
                     <!-- Rating -->
                     <div class="text-yellow-500 text-sm mt-1" title="\${tr.average_rating || 'Rating'}: \${user.average_rating || 0}%">
@@ -1168,8 +1199,8 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
               setUserStatus('end');
             } else {
               setUserStatus('more');
-              observeUserEnd();
             }
+            refreshExploreLayout(container);
           } catch (err) {
             console.error('Failed to load users:', err);
             if (userOffset === 0) {

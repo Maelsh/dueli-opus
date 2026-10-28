@@ -7,6 +7,7 @@
  */
 
 import { translations, getUILanguage, isRTL, type Language } from '../../i18n';
+import { dueliTruncateAttrs } from '../../lib/userTextDisplay';
 
 export interface UserCardProps {
     id: number;
@@ -53,11 +54,11 @@ export function getUserCard(user: UserCardProps, lang: Language): string {
         
         <!-- Info -->
         <div class="flex-1 min-w-0">
-          <h3 class="font-bold text-gray-900 dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+          <h3 class="font-bold text-gray-900 dark:text-white truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors min-w-0" ${dueliTruncateAttrs(displayName)}>
             ${displayName}${user.is_fake ? ` <span data-demo-badge="1" class="inline-block align-middle text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-950" title="${(tr.demo as any)?.title || 'Demo'}">${(tr.demo as any)?.badge || 'Demo'}</span>` : ''}
           </h3>
-          <p class="text-sm text-gray-500 truncate">@${user.username}</p>
-          ${user.bio ? `<p class="text-xs text-gray-400 mt-1 line-clamp-1">${user.bio}</p>` : ''}
+          <p class="text-sm text-gray-500 truncate min-w-0" ${dueliTruncateAttrs(`@${user.username}`)}>@${user.username}</p>
+          ${user.bio ? `<p class="text-xs text-gray-400 mt-1 line-clamp-1 min-w-0" ${dueliTruncateAttrs(user.bio)}>${user.bio}</p>` : ''}
         </div>
         
         <!-- Stats -->

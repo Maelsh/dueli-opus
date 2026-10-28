@@ -5,12 +5,14 @@
 
 import type { Language } from '../../config/types';
 import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
+import { Sanitize } from '../../lib/services/Sanitize';
 
 /**
  * Get Navigation HTML - الحصول على HTML الملاحة
  */
 export function getNavigation(lang: Language): string {
   const tr = translations[getUILanguage(lang)];
+  const trEn = translations.en;
   const isRTL = checkRTL(lang);
 
   return `
@@ -19,7 +21,7 @@ export function getNavigation(lang: Language): string {
         <!-- Logo -->
         <a href="/?lang=${lang}" class="flex items-center gap-2 cursor-pointer group min-w-0 flex-shrink" title="${tr.app_title}">
           <img src="/static/dueli-icon.png" alt="Dueli" class="w-9 h-9 sm:w-10 sm:h-10 object-contain flex-shrink-0">
-          <span class="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 hidden sm:inline truncate">
+          <span class="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 hidden sm:inline truncate min-w-0 i18n-auto-fit" data-i18n-fit="1" data-i18n-en="${Sanitize.escapeHtml(trEn.app_title)}">
             ${tr.app_title}
           </span>
         </a>
