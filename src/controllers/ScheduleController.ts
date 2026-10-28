@@ -80,15 +80,6 @@ export class ScheduleController extends BaseController {
                 return this.validationError(c, this.t('errors.invalid_id', c));
             }
 
-            const competitionModel = new CompetitionModel(c.env.DB);
-            const competition = await competitionModel.findById(competitionId);
-            if (competition) {
-                const status = String(competition.status || '');
-                if (status === 'live' || status === 'completed' || status === 'ended' || status === 'cancelled') {
-                    return this.validationError(c, this.t('schedule.not_eligible', c));
-                }
-            }
-
             const scheduleModel = new ScheduleModel(c.env.DB);
             const removed = await scheduleModel.removeReminder(competitionId, user.id);
 

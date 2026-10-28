@@ -696,9 +696,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             </div>
           </div>
         \`;
+        syncReminderButton();
       }
       
-      // R4-LIVE-ENTRY-RECOVERY-REM1: start the competition IN PLACE. The old
+      // R4-LIVE-ENTRY-RECOVERY-REM1: start the competition IN PLACE.
       // flow redirected to /live/:id, which tore down the preview/PC and made
       // the audience surface the source of truth. /competition/:id now stays
       // mounted; status chrome, recording eligibility and both parties update
@@ -932,6 +933,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           : 'hidden';
         if (text) text.textContent = statusLabel(status);
         paintCompetitorControls();
+        syncReminderButton();
       }
 
       function paintCompetitionTimer() {
@@ -1490,6 +1492,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           setInterval(sendWatchHeartbeat, 30000),
           setInterval(refreshPresence, 30000)
         ];
+        syncReminderButton();
       }
 
       // R2-L1: one watch intent per page view (H2) + bounded live pulses

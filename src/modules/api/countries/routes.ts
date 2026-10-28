@@ -20,7 +20,10 @@ countriesRoutes.get('/', async (c) => {
   const lang = (c.get('lang') || 'en') as Language;
 
   try {
-    const result = await DB.prepare('SELECT * FROM countries ORDER BY name_en').all();
+    const result =
+      lang === 'ar'
+        ? await DB.prepare('SELECT * FROM countries ORDER BY name_ar').all()
+        : await DB.prepare('SELECT * FROM countries ORDER BY name_en').all();
     return c.json<ApiResponse>({
       success: true,
       data: result.results

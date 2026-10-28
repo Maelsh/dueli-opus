@@ -16,6 +16,7 @@ import { NotificationsUI } from '../ui/NotificationsUI';
 import { MessagesUI } from '../ui/MessagesUI';
 import { SseService } from './SseService';
 import { t } from '../../i18n';
+import { readReturnToFromSearch, appendLangQuery } from '../../lib/safeReturnPath';
 
 /**
  * API Response Types
@@ -376,6 +377,12 @@ export class AuthService {
                 Modal.hideLogin();
                 Toast.success(t('auth.login_success', State.lang));
 
+                const returnPath = readReturnToFromSearch(window.location.search);
+                if (returnPath) {
+                    window.location.href = appendLangQuery(returnPath, State.lang);
+                    return;
+                }
+
                 setTimeout(() => {
                     window.location.reload();
                 }, 1000);
@@ -426,6 +433,13 @@ export class AuthService {
                 this.updateAuthUI();
                 Modal.hideLogin();
                 Toast.success(t('client.toast.welcome', State.lang));
+                const returnPath = typeof window !== 'undefined'
+                    ? readReturnToFromSearch(window.location.search)
+                    : null;
+                if (returnPath) {
+                    window.location.href = appendLangQuery(returnPath, State.lang);
+                    return;
+                }
                 // B1: let page scripts (My Competitions, …) refresh immediately
                 // instead of waiting for a full reload.
                 this.emitAuthSuccess(user);

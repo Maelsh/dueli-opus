@@ -157,9 +157,10 @@ export const countries: Record<string, Country> = {
 }
 
 // Get sorted list of countries for display
-export const getCountriesList = (): Country[] => {
+export const getCountriesList = (lang?: string): Country[] => {
+    const locale = lang === 'ar' ? 'ar' : 'en';
     return Object.values(countries).sort((a, b) =>
-        a.nativeName.localeCompare(b.nativeName, a.primaryLang)
+        a.nativeName.localeCompare(b.nativeName, locale)
     )
 }
 

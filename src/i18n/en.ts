@@ -429,7 +429,7 @@ export const en = {
     success: 'Success',
 
     // Footer
-    footer: '© 2025 Dueli. All rights reserved.',
+    footer: '© 2026 Dueli. All rights reserved.',
     about: 'About',
     contact: 'Contact Us',
     terms: 'Terms of Service',

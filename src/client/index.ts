@@ -96,7 +96,7 @@ const CountryFunctions = {
         if (!container) return;
 
         const currentCountry = this.getCurrentCode();
-        const countries = getCountriesList();
+        const countries = getCountriesList(State.lang);
         const filtered = filter
             ? countries.filter(c =>
                 c.nativeName.toLowerCase().includes(filter.toLowerCase()) ||
