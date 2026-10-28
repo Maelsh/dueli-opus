@@ -810,6 +810,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           return container;
         }
 
+        function resetCompResultsShell() {
+          const container = document.getElementById('competitionsContainer');
+          if (!container) return null;
+          container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" id="competitionsGrid"></div>' +
+                                '<div id="competitionsStatus" class="text-center mt-4"></div>';
+          return container;
+        }
+
         function setCompStatus(state) {
           const status = document.getElementById('competitionsStatus');
           if (!status) return;
@@ -856,8 +864,15 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
 
         async function loadCompetitions(opts) {
           const append = !!(opts && opts.append);
+          const runGen = exploreFetchGen;
           if (compLoading) return;
-          const container = ensureCompShell();
+          if (!append) {
+            compSeen.clear();
+            resetCompResultsShell();
+          } else {
+            ensureCompShell();
+          }
+          const container = document.getElementById('competitionsContainer');
           if (!container) return;
           if (append && compDone) { setCompStatus('end'); return; }
 
@@ -866,8 +881,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
 
           try {
             const sid = await ensureCompSession();
+            if (runGen !== exploreFetchGen) return;
             const res = await fetch(sessionPageUrl(sid, COMP_BATCH, append ? compCursor : null),
               { headers: exploreHeaders({}) });
+            if (runGen !== exploreFetchGen) return;
             if (res.status === 410) {
               compDone = true;
               showSessionExpired('competitionsContainer');
@@ -889,6 +906,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             if (!payload || !Array.isArray(payload.items)) throw new Error('bad payload');
 
             const items = payload.items;
+            if (runGen !== exploreFetchGen) return;
             const countEl = document.getElementById('compsCount');
             if (countEl) countEl.textContent = '(' + compSeen.size + ')';
 
@@ -908,7 +926,11 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             const grid = document.getElementById('competitionsGrid');
             if (grid) {
               const html = compCardHtml(items);
-              if (html) grid.insertAdjacentHTML('beforeend', html);
+              if (append) {
+                if (html) grid.insertAdjacentHTML('beforeend', html);
+              } else {
+                grid.innerHTML = html || '';
+              }
             }
 
             compCursor = payload.nextCursor || null;
@@ -950,6 +972,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="usersGrid"></div>' +
                                   '<div id="usersStatus" class="text-center mt-4"></div>';
           }
+          return container;
+        }
+
+        function resetUserResultsShell() {
+          const container = document.getElementById('usersContainer');
+          if (!container) return null;
+          container.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="usersGrid"></div>' +
+                                '<div id="usersStatus" class="text-center mt-4"></div>';
           return container;
         }
 
@@ -1065,6 +1095,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
 
         async function loadUsers(opts) {
           const append = !!(opts && opts.append);
+          const runGen = exploreFetchGen;
           // Both /api/search/users and /api/users require q
           if (!searchQuery || searchQuery.length < 2) {
             document.getElementById('usersContainer').innerHTML = \`
@@ -1079,7 +1110,14 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             return;
           }
           if (userLoading) return;
-          const container = ensureUserShell();
+          if (!append) {
+            userSeen.clear();
+            userOffset = 0;
+            resetUserResultsShell();
+          } else {
+            ensureUserShell();
+          }
+          const container = document.getElementById('usersContainer');
           if (!container) return;
           if (append && userDone) { setUserStatus('end'); return; }
 
@@ -1090,8 +1128,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
             const url = '/api/search/users?q=' + encodeURIComponent(searchQuery) +
                         '&limit=' + USER_BATCH + '&offset=' + userOffset;
             const res = await fetch(url);
+            if (runGen !== exploreFetchGen) return;
             if (!res.ok) throw new Error('status ' + res.status);
             const data = await res.json();
+            if (runGen !== exploreFetchGen) return;
 
             const users = (data.data && data.data.items) ? data.data.items : (data.data || []);
             const countEl = document.getElementById('usersCount');
@@ -1115,7 +1155,11 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
               const fresh = users.filter(u => u && u.username && !userSeen.has(u.username));
               fresh.forEach(u => userSeen.add(u.username));
               const html = fresh.map(renderUserCard).join('');
-              if (html) grid.insertAdjacentHTML('beforeend', html);
+              if (append) {
+                if (html) grid.insertAdjacentHTML('beforeend', html);
+              } else {
+                grid.innerHTML = html || '';
+              }
             }
 
             userOffset += users.length;
@@ -1147,14 +1191,16 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           waitForBundle(loadSearchResults);
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
+        function bootExplorePage() {
           if (typeof checkAuth === 'function') checkAuth();
+          bindExploreLiveSearch();
           startExploreInit();
-        });
+        }
+
+        document.addEventListener('DOMContentLoaded', bootExplorePage);
 
         if (document.readyState !== 'loading') {
-          if (typeof checkAuth === 'function') checkAuth();
-          startExploreInit();
+          bootExplorePage();
         }
       })();
     </script>

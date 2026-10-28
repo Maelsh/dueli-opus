@@ -475,6 +475,20 @@ export const ar = {
 
     // صفحة المنافسة
     competitors: 'المتنافسون',
+    competition_share: {
+        share_button: 'مشاركة المنافسة',
+        dialog_title: 'شارك هذه المنافسة',
+        copy_link: 'نسخ الرابط',
+        copy_success: 'تم نسخ الرابط',
+        copy_failed: 'تعذّر نسخ الرابط',
+        close: 'إغلاق',
+        platform_whatsapp: 'واتساب',
+        platform_telegram: 'تيليجرام',
+        platform_facebook: 'فيسبوك',
+        platform_x: 'X',
+        platform_linkedin: 'لينكدإن',
+        platform_email: 'البريد',
+    },
     awaiting_opponent: 'بانتظار منافس',
     login_to_compete: 'سجل دخول للمنافسة',
     stream_not_available: 'البث غير متاح',

@@ -1,3 +1,11 @@
+## 2026-10-28 — UNIT35.1 / PR #148 · branch feat/unit35-1-r4-media-controls-download-rem1 (BASE 12181265)
+
+- **BLOCKERS:** Explore `view=competitions|users` live search — replace grid on non-append loads, `exploreFetchGen` guards after awaits, `bootExplorePage` binds live search when `readyState !== 'loading'`. MP4 — validate D1 timeline on manifest rows only; assembly cursor uses measured durations without comparing to D1 `timeline_start_ms`.
+- **OG/meta:** client `document.title` + `og:*` after load — **does not prove** social crawler card previews (SPA).
+- **TESTS:** explore-live-search-view-modes (5), competition-share (4), recording-download-service UNIT35.1 (tfdt timeline + D1 guard), B7 assertion update.
+- **NOT PROVEN:** Real production MP4 fixture for 2min→10min inflation; browser Web Share / platform preview cards; LIVE/VOD manual playback.
+- **STATUS:** LOCAL VERIFIED — push + CI on HEAD pending; no merge/deploy.
+
 ## 2026-10-28 — UNIT35 / R4-UX-I18N-1 · branch feat/unit35-r4-ux-i18n-1 (BASE a6c1802)
 
 - **A–F:** InvitePanel compatibility + mojibake; VIS-04 z-index stack; guest-only header Help; reminder icon-only + server live guard; rating summary bars + unique_rater_count; player/comment RTL layout hooks.

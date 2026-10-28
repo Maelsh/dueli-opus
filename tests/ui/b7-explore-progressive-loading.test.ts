@@ -177,7 +177,7 @@ describe('B7 — explore competitions result session', () => {
         expect(pages[0]?.url).toContain('limit=12');
         expect(pages[0]?.url).toContain('search=finals');
         const grid = h.el('competitionsGrid');
-        expect(grid.appendLog).toHaveLength(1);
+        expect(grid.appendLog).toHaveLength(0);
         expect(grid.innerHTML).toContain('data-comp="1"');
         expect(grid.innerHTML).toContain('data-comp="12"');
         // No navigation: the query stays where it is.
@@ -220,7 +220,7 @@ describe('B7 — explore competitions result session', () => {
         expect(pages).toHaveLength(2);
         expect(pages[1]?.url).toContain('cursor=c12');
         const grid = h.el('competitionsGrid');
-        expect(grid.appendLog).toHaveLength(2);
+        expect(grid.appendLog).toHaveLength(1);
         // The overlapping id 12 is not rendered twice.
         expect(grid.innerHTML.match(/data-comp="12"/g)).toHaveLength(1);
         expect(grid.innerHTML).toContain('data-comp="14"');

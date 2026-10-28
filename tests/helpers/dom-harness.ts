@@ -23,6 +23,7 @@ export interface ShimElement {
     querySelector(selector: string): ShimElement | null;
     querySelectorAll(selector: string): ShimElement[];
     click(): void;
+    dispatchEvent(ev: { type: string; preventDefault?: () => void }): void;
 }
 
 const DATA_ACTION = /\[data-action="([^"]+)"\]/;
@@ -81,6 +82,9 @@ function makeElement(id: string): ShimElement {
         },
         click() {
             for (const fn of listeners.click || []) fn({ type: 'click' });
+        },
+        dispatchEvent(ev: { type: string; preventDefault?: () => void }) {
+            for (const fn of listeners[ev.type] || []) fn(ev);
         },
     };
     return el;

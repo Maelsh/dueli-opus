@@ -766,6 +766,20 @@ export class RecordingDownloadService {
             totalBytes: manifest.total_bytes,
         });
 
+        if (manifest.complete) {
+            const ordered = [...manifest.chunks].sort((a, b) => a.sequence - b.sequence);
+            let d1Cursor = 0;
+            for (const row of ordered) {
+                if (Math.abs(d1Cursor - row.timeline_start_ms) > 2) {
+                    throw new Mp4AssemblyError(
+                        'schedule_non_monotonic',
+                        `Manifest timeline ${row.timeline_start_ms} disagrees with the D1 cursor ${d1Cursor} at sequence ${row.sequence}`
+                    );
+                }
+                d1Cursor += row.duration_ms;
+            }
+        }
+
         let cursor = 0;
         const inputs = loaded.map(({ chunk, data }) => {
             let durationMs = chunk.duration_ms;
@@ -776,12 +790,6 @@ export class RecordingDownloadService {
                 if (Math.abs(measured - durationMs) > 25) {
                     durationMs = measured;
                 }
-            }
-            if (manifest.complete && Math.abs(cursor - chunk.timeline_start_ms) > 2) {
-                throw new Mp4AssemblyError(
-                    'schedule_non_monotonic',
-                    `D1 timeline ${chunk.timeline_start_ms} disagrees with the assembled cursor ${cursor}`
-                );
             }
             const input = {
                 sequence: chunk.sequence,
