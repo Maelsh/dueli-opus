@@ -6,6 +6,7 @@ export default defineConfig({
         include: ['tests/**/*.test.ts'],
         exclude: ['tests/integration/**'],
         testTimeout: 30000,
-        pool: 'forks'
+        pool: 'forks',
+        setupFiles: ['tests/vitest.setup.ts'],
     }
 });

@@ -6,10 +6,14 @@
 import { describe, expect, it } from 'vitest';
 import app from '../../src/main';
 import { SqliteD1 } from '../helpers/sqlite-d1';
-import { CountingDb } from '../helpers/d1-measurement';
+import { CountingDb, InstrumentedDb } from '../helpers/d1-measurement';
 import { SearchModel } from '../../src/models/SearchModel';
 import { H7SignalsModel } from '../../src/models/H7SignalsModel';
+import { UserSignalsModel } from '../../src/models/UserSignalsModel';
+import { ChunkIndexModel } from '../../src/models/ChunkIndexModel';
+import { SessionModel } from '../../src/models/SessionModel';
 import { clearPublicSurfaceCache } from '../../src/lib/services/PublicSurfaceCache';
+import type { D1Database } from '@cloudflare/workers-types';
 
 type Env = Parameters<typeof app.request>[2];
 const envOf = (db: unknown): Env => ({ DB: db }) as unknown as Env;
@@ -88,7 +92,7 @@ describe('UNIT34-B measurement harness', () => {
         process.stdout.write(`[UNIT34 measure] explore T0=${t0} continuation=${continuation}\n`);
     });
 
-    it('3) H7SignalsModel + UserSignalsModel load paths (statement counts)', async () => {
+    it('3) H7SignalsModel load paths (statement counts)', async () => {
         const raw = new SqliteD1();
         await seedOpt1Style(raw);
         const db = new CountingDb(raw);
@@ -132,5 +136,83 @@ describe('UNIT34-B measurement harness', () => {
         const text = plan.results.map((r) => r.detail).join(' ');
         expect(text.length).toBeGreaterThan(0);
         process.stdout.write(`[UNIT34 measure] EXPLAIN sample: ${text.slice(0, 120)}…\n`);
+    });
+
+    it('6) SSE poll query (sse_event_log) — stmts + sqlite row-touch approx', async () => {
+        const raw = new SqliteD1();
+        await raw.prepare(`INSERT INTO sse_event_log (channel, event_type, payload) VALUES ('competition:1', 'comment', '{}')`).run();
+        const db = new InstrumentedDb(raw);
+        const before = db.statements;
+        await db
+            .prepare(`SELECT * FROM sse_event_log WHERE channel = ? AND id > ? ORDER BY id ASC LIMIT 20`)
+            .bind('competition:1', 0)
+            .all();
+        const stmts = db.statements - before;
+        process.stdout.write(
+            `[UNIT34 measure] SSE poll stmts=${stmts} rowsReadApprox=${db.rowsReadApprox} rowsWrittenApprox=${db.rowsWrittenApprox}\n`
+        );
+        expect(stmts).toBe(1);
+        expect(db.rowsReadApprox).toBeGreaterThan(0);
+    });
+
+    it('7) GET /api/notifications — stmts + row-touch approx', async () => {
+        const raw = new SqliteD1();
+        await raw
+            .prepare(
+                `INSERT INTO users (id, email, username, password_hash, display_name, is_active) VALUES (9, 'n@local', 'noteuser', 'x', 'N', 1)`
+            )
+            .run();
+        const session = await new SessionModel(raw as unknown as D1Database).create({ user_id: 9 });
+        await raw
+            .prepare(
+                `INSERT INTO notifications (user_id, type, title, message, is_read) VALUES (9, 'system', 't', 'm', 0)`
+            )
+            .run();
+        const db = new InstrumentedDb(raw);
+        const before = db.statements;
+        const res = await app.request(
+            '/api/notifications?lang=en',
+            { headers: { Authorization: `Bearer ${session.id}`, 'X-CSRF-Token': 'unit34-measure' } },
+            envOf(db)
+        );
+        expect(res.status).toBe(200);
+        const stmts = db.statements - before;
+        process.stdout.write(
+            `[UNIT34 measure] notifications GET stmts=${stmts} rowsReadApprox=${db.rowsReadApprox}\n`
+        );
+        expect(stmts).toBeGreaterThan(0);
+    });
+
+    it('8) chunk_index timeline + seek lookup — stmts + row-touch approx', async () => {
+        const raw = new SqliteD1();
+        await raw.prepare(`INSERT INTO users (id, email, username, password_hash, display_name, is_active) VALUES (1,'h@l','host','x','H',1)`).run();
+        await raw.prepare(`INSERT INTO categories (id, slug, name_ar, name_en) VALUES (1,'t','T','T')`).run();
+        await raw
+            .prepare(`INSERT INTO competitions (id, title, rules, category_id, creator_id, status) VALUES (50,'T','R',1,1,'live')`)
+            .run();
+        const db = new InstrumentedDb(raw);
+        const model = new ChunkIndexModel(db as unknown as D1Database);
+        await model.recordChunk(50, { sequence: 1, object_path: 'live/match_50/chunk_0001.mp4', container: 'mp4' }, 1);
+        await model.confirmChunk(50, 1, { duration_ms: 5000 });
+        const before = db.statements;
+        const tl = await model.timeline(50);
+        await model.timeLookup(50, 2500);
+        const stmts = db.statements - before;
+        expect(tl.entries.length).toBeGreaterThan(0);
+        process.stdout.write(
+            `[UNIT34 measure] chunk_index timeline+seek stmts=${stmts} rowsReadApprox=${db.rowsReadApprox} rowsWrittenApprox=${db.rowsWrittenApprox}\n`
+        );
+    });
+
+    it('9) UserSignalsModel.loadUsers — statement count', async () => {
+        const raw = new SqliteD1();
+        await seedOpt1Style(raw);
+        const db = new CountingDb(raw);
+        const us = new UserSignalsModel(db as never);
+        const before = db.statements;
+        await us.loadUsers([2, 3]);
+        const stmts = db.statements - before;
+        expect(stmts).toBeGreaterThan(0);
+        process.stdout.write(`[UNIT34 measure] UserSignalsModel.loadUsers stmts=${stmts}\n`);
     });
 });

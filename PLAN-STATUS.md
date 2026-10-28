@@ -1,6 +1,10 @@
+## 2026-10-28 — UNIT34 REM1 / R4-DB-MEASURE-1 · فرع feat/unit34-r4-db-measure-1 · PR #146 (من 20c16dc)
+
+- 🔧 **LOCAL VERIFIED — REMOTE Protocol 10 pending.** أدلة قياس كاملة (رحلات SSE/chunk/search/H7)، تقرير صادق (rowsRead غير متاح محلياً)، إصلاح تسريب كاش CI + إزالة كاش T0 الخاطئ، اختبارات كاش/تدهور/requestId. لا merge/deploy.
+
 ## 2026-10-28 — UNIT34 / R4-DB-MEASURE-1 · فرع feat/unit34-r4-db-measure-1 (من 20c16dc = origin/main)
 
-- 🔧 **LOCAL VERIFIED — REMOTE/merge pending.** ركائز A–D: requestId/logging، قياس D1 محلي، كاش عام محدود للضيف، تقرير `docs/unit34-d1-measurement-report.md`. لا MySQL ولا استنزاف حصة إنتاج.
+- 🔧 **superseded by REM1.** ركائز A–D الأولية على PR #146.
 - **BASE:** `20c16dc7bbda3af1aa3b0597f0f147a59c44b1c4` · **PLAN:** `dc5bc1efd7d94dfa1c19604b7277b8104cdb93ad`.
 
 ## 2026-10-28 — UNIT33.1 P3 / PR #145 · ملاحظات مراجعة غير حاجبة · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc)

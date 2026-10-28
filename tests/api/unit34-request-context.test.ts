@@ -35,4 +35,27 @@ describe('UNIT34-A request context', () => {
         expect(logged).not.toMatch(/D1_ERROR|select .* from/i);
         errSpy.mockRestore();
     });
+
+    it('home-rails session create returns 500 with X-Request-Id when D1 fails', async () => {
+        const res = await app.request(
+            '/api/home-rails/sessions?lang=en',
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'unit34-outage' },
+                body: JSON.stringify({ kind: 'suggested', status: 'live' }),
+            },
+            envOf(new FailingDb())
+        );
+        expect(res.status).toBe(500);
+        expect(res.headers.get('X-Request-Id')).toBeTruthy();
+        const text = await res.text();
+        expect(text).not.toMatch(/D1_ERROR/i);
+    });
+
+    it('does not expose internal D1 exception text in JSON error bodies', async () => {
+        const res = await app.request('/api/search/users?lang=en&q=testuser', {}, envOf(new FailingDb()));
+        expect(res.status).toBe(500);
+        const body = await res.text();
+        expect(body).not.toMatch(/D1_ERROR|database is unavailable/i);
+    });
 });

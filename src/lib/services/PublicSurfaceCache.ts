@@ -1,6 +1,10 @@
 /**
  * UNIT34-C — bounded in-isolate TTL cache for public, non-personalized reads.
  * Keys isolate surface/category/subcategory/status/lang/policy_version.
+ *
+ * Do not cache home-rail ordered id lists across session creates — each POST
+ * must freeze a fresh T0 (R3-RAILS). Attach only to paths with explicit
+ * invalidation or non-snapshot data.
  */
 
 const DEFAULT_TTL_MS = 15_000;
