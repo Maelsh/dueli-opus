@@ -48,7 +48,6 @@ import { H7SignalsModel } from './H7SignalsModel';
 import { h7ApplyDiscoveryDiversityByTier, h7OrderScored, h7ScoreCard } from '../lib/services/H7RankingService';
 import { H7_DISCOVERY_ORDERING_VERSION, H7_POLICY_VERSION, h7RecencyOf } from '../lib/services/H7RankingPolicy';
 import type { H7StatusBucket } from '../lib/services/H7RankingPolicy';
-
 /**
  * Policy + ordering version pinned into every rail context. h7-v1 weights
  * are unchanged; the suffix names the UNIT30.4 priority layer so a frozen
@@ -368,6 +367,10 @@ export class CategoryRailProvider implements ResultSessionProvider {
     }
 
     async buildOrderedIds(db: D1Database): Promise<number[]> {
+        return this.buildOrderedIdsUncached(db);
+    }
+
+    private async buildOrderedIdsUncached(db: D1Database): Promise<number[]> {
         const eligible = await new CompetitionModel(db).findHomeRailIds({
             status: this.status,
             category: this.category,

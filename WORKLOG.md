@@ -1,3 +1,19 @@
+## 2026-10-28 — UNIT34 REM1 / R4-DB-MEASURE-1 · branch feat/unit34-r4-db-measure-1 (PR #146, BASE 20c16dc)
+
+- **REM:** Full journey harness (SSE, notifications, chunk_index seek, UserSignals); honest report (measured vs unavailable); `vitest.setup` clears `PublicSurfaceCache` between tests.
+- **FIX:** Removed ordered-id cache from `buildOrderedIds` (broke R3 T0 freshness / CI); `PublicSurfaceCache` keys+TTL tested at module level only.
+- **A–D:** +request body redaction test, home-rails D1 outage 500, cache key dimensions, rail open backoff recovery; docs `unit34-d1-measurement-report.md` updated.
+- **TESTS:** unit34 **76** with regression trio + unit33 rails; `tsc` + `build` pass.
+- **STATUS:** LOCAL VERIFIED — push for REMOTE review; no merge/deploy.
+
+## 2026-10-28 — UNIT34 / R4-DB-MEASURE-1 · branch feat/unit34-r4-db-measure-1 (from 20c16dc = origin/main)
+
+- **A:** `requestContextMiddleware` + `structured-server-log` (`X-Request-Id`, JSON 5xx logs, redaction).
+- **B:** `tests/api/unit34-d1-measurement.test.ts` + `tests/helpers/d1-measurement.ts`; report `docs/unit34-d1-measurement-report.md` (stmt counts local; rowsRead N/A).
+- **C:** `PublicSurfaceCache` utility; `HomePage.openRail` bounded retry (2×); tests cache + retry.
+- **TESTS (focused):** unit34 request 3, measure 5, cache 1, home retry 1 (+ unit33 rails 6 regression).
+- **STATUS:** superseded by REM1 entry above.
+
 ## 2026-10-28 — UNIT33.1 P3 / PR #145 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 065d7d0)
 
 - **P3-1:** `DUELI_AUDIT_CMD` + `shim-nonzero-one-high.mjs` tests non-zero exit with valid JSON → blocking without exception.
