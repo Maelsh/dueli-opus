@@ -858,7 +858,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             return '<div class="mb-3">' +
               '<div class="flex justify-between gap-2 text-xs mb-1"><span class="font-semibold truncate">' + name + '</span><span class="flex-shrink-0">' + avgLabel + '</span></div>' +
               '<div class="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="presentation">' +
-              '<div class="h-full ' + barTone + ' transition-all" style="width:' + pct + '%"></div></div>' +
+              '<div class="h-full ' + barTone + ' transition-all" data-csp-style="width:' + pct + '%"></div></div>' +
               '<div class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">' + e.count + ' · ' + ((tr.ratings && tr.ratings.score_scale_hint) || '') + '</div></div>';
           }).join('');
           const meta = [];
