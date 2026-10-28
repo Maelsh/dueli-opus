@@ -1380,6 +1380,9 @@ export const en = {
         score_scale_hint: 'Score out of 5',
         draw_label: 'Draw',
         zero_score: 'No score yet',
+        live_awaiting: 'Awaiting audience ratings',
+        zero_completed: '—',
+        early_withdrawal_closed: 'This competition ended by early withdrawal before audience ratings finished — see the system result above.',
     },
 
     // ── T1.3: Streaming ──────────────

@@ -128,4 +128,39 @@ describe('R4-CHUNK-DOWNLOAD-1 structural fMP4 remux', () => {
         expect(inspectMp4Tracks(finalized).map((t) => t.handler)).toEqual(['vide', 'soun']);
         expect(readMp4DurationMs(finalized)).toBe(0);
     });
+
+    it('rewrites consecutive moofs inside one chunk with a continuous tfdt timeline', () => {
+        const sliceMs = 5000;
+        const baseChunk = buildDownloadFmp4Chunk(init, tracks, {
+            sequence: 1,
+            timelineStartMs: 0,
+            durationMs: sliceMs,
+        });
+        const staleTail = buildDownloadFmp4Chunk(init, tracks, {
+            sequence: 2,
+            timelineStartMs: 600_000,
+            durationMs: sliceMs,
+        });
+        const tailBoxes = parseTopLevelBoxes(staleTail);
+        const moofStart = tailBoxes.find((b) => b.type === 'moof')!.start;
+        const dualMoofChunk = new Uint8Array(baseChunk.length + (staleTail.length - moofStart));
+        dualMoofChunk.set(baseChunk, 0);
+        dualMoofChunk.set(staleTail.subarray(moofStart), baseChunk.length);
+
+        const result = assembleFragmentedMp4([{
+            sequence: 1,
+            timelineStartMs: 0,
+            durationMs: sliceMs * 2,
+            data: dualMoofChunk,
+        }]);
+        expect(result.durationMs).toBe(sliceMs * 2);
+        expect(result.fragmentCount).toBe(2);
+        const output = new Uint8Array(result.byteLength);
+        let offset = 0;
+        for (const part of result.parts) {
+            output.set(part, offset);
+            offset += part.length;
+        }
+        expect(readMp4DurationMs(output)).toBe(sliceMs * 2);
+    });
 });

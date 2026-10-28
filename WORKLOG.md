@@ -1,3 +1,9 @@
+## 2026-10-29 — PR #149 STOP-THE-LINE (competition 2266 live defects 1–6) · feat/unit35-2-explore-observer-i18n-fit-1
+
+- **Scope:** Six production defects on `/competition/2266` — mobile nav dropdowns (CSS fixed), competitor `@handle` RTL (`dir=ltr` + truncate), rating card early-withdrawal copy, embedded fullscreen/player LTR controls + single exit, `Mp4FragmentAssembler` multi-`moof` continuous `tfdt`, no SSE on terminal competitions + unmute only after successful `play()`.
+- **Tests:** `competition-sse-policy`, `competition-rating-display`, extended `mp4-fragment-assembler` multi-moof; `build:css`, `tsc`, focused Vitest GREEN.
+- **Status:** 🔧 resubmit PR #149 — awaiting remote review after push.
+
 ## 2026-10-29 — UNIT35.2 / R4-EXPLORE-OBSERVER-I18N-FIT-1 · branch feat/unit35-2-explore-observer-i18n-fit-1 (BASE c401b5d5)
 
 - **SCOPE:** Explore IO disconnect/rebind on shell reset + English-baseline `i18nAutoFit` (`--i18n-font-scale`) + dynamic text truncation/tooltip on cards.

@@ -784,12 +784,8 @@ export class RecordingDownloadService {
         const inputs = loaded.map(({ chunk, data }) => {
             let durationMs = chunk.duration_ms;
             const measured = measureMp4DurationMs(data);
-            if (measured !== null && measured > 0) {
-                // Fragment bytes are authoritative: D1 can disagree when mvhd
-                // or registration over-reported a growing movie header.
-                if (Math.abs(measured - durationMs) > 25) {
-                    durationMs = measured;
-                }
+            if (measured !== null && measured > 0 && measured < durationMs - 25) {
+                durationMs = measured;
             }
             const input = {
                 sequence: chunk.sequence,

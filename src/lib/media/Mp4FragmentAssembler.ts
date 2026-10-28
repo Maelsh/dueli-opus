@@ -397,12 +397,48 @@ function patchInit(moov: Mp4Box, movie: MovieInfo, totalMs: number): Uint8Array 
     return serialize(moov);
 }
 
+function readTfhdDefaultDuration(tfhd: Mp4Box): number {
+    const flags = ((tfhd.data[1] << 16) | (tfhd.data[2] << 8) | tfhd.data[3]) >>> 0;
+    let p = 8;
+    if (flags & 0x000001) p += 8;
+    if (flags & 0x000002) p += 4;
+    if (flags & 0x000008) return readU32(tfhd.data, p);
+    return 0;
+}
+
+/** Sum sample durations in one traf's trun (ISO trun flag layout). */
+export function sumTrunSampleDurationUnits(traf: Mp4Box): number {
+    const tfhd = findBox(traf, 'tfhd');
+    const trun = findBox(traf, 'trun');
+    if (!trun) return 0;
+    const defaultDuration = tfhd ? readTfhdDefaultDuration(tfhd) : 0;
+    const flags = ((trun.data[1] << 16) | (trun.data[2] << 8) | trun.data[3]) >>> 0;
+    const sampleCount = readU32(trun.data, 4);
+    let p = 8;
+    if (flags & 0x000001) p += 4;
+    if (flags & 0x000004) p += 4;
+    let sum = 0;
+    for (let i = 0; i < sampleCount; i++) {
+        if (flags & 0x000100) {
+            if (p + 4 > trun.data.length) break;
+            sum += readU32(trun.data, p);
+            p += 4;
+        } else {
+            sum += defaultDuration;
+        }
+        if (flags & 0x000200) p += 4;
+        if (flags & 0x000400) p += 4;
+        if (flags & 0x000800) p += 4;
+    }
+    return sum;
+}
+
 function patchFragment(
     moof: Mp4Box,
     movie: MovieInfo,
     sequence: number,
-    timelineStartMs: number,
-    newMoofStart: number
+    newMoofStart: number,
+    trackBaseUnits: Map<number, bigint>
 ): Uint8Array {
     const mfhd = findBox(moof, 'mfhd');
     if (!mfhd) throw new Mp4AssemblyError('invalid_box', 'moof has no mfhd');
@@ -432,7 +468,9 @@ function patchFragment(
 
         const tfdtData = mutableData(tfdt);
         const version = tfdtData[0];
-        const base = BigInt(Math.max(0, Math.round((timelineStartMs * track.timescale) / 1000)));
+        const base = trackBaseUnits.has(trackId)
+            ? trackBaseUnits.get(trackId)!
+            : 0n;
         if (version === 1) {
             writeU64(tfdtData, 4, base);
         } else {
@@ -446,6 +484,70 @@ function patchFragment(
         throw new Mp4AssemblyError('unsupported_layout', `moof size changed (${moof.size} -> ${bytes.length})`);
     }
     return bytes;
+}
+
+function appendBoxesUntilNextMoof(
+    boxes: Mp4Box[],
+    moofIndex: number,
+    chunkData: Uint8Array,
+    parts: Uint8Array[],
+    outputOffsetRef: { value: number },
+    bytesTotalRef: { value: number },
+    chunkSequence: number
+): void {
+    let mdatCount = 0;
+    for (let i = moofIndex + 1; i < boxes.length && boxes[i].type !== 'moof'; i++) {
+        const box = boxes[i];
+        if (box.type === 'mfra' || box.type === 'sidx' || box.type === 'styp') continue;
+        const slice = chunkData.subarray(box.start, box.start + box.size);
+        parts.push(slice);
+        outputOffsetRef.value += slice.length;
+        bytesTotalRef.value += slice.length;
+        if (box.type === 'mdat') mdatCount++;
+    }
+    if (mdatCount === 0) {
+        throw new Mp4AssemblyError('no_mdat', `Chunk ${chunkSequence} has no mdat after moof`);
+    }
+}
+
+function emitPatchedMoof(
+    moof: Mp4Box,
+    movie: MovieInfo,
+    sequence: number,
+    newMoofStart: number,
+    trackBaseUnits: Map<number, bigint>,
+    parts: Uint8Array[],
+    outputOffsetRef: { value: number },
+    bytesTotalRef: { value: number }
+): void {
+    const bases = new Map<number, bigint>();
+    for (const traf of moof.children?.filter((c) => c.type === 'traf') ?? []) {
+        const tfhd = findBox(traf, 'tfhd');
+        if (!tfhd) continue;
+        const trackId = readU32(tfhd.data, 4);
+        bases.set(trackId, trackBaseUnits.get(trackId) ?? 0n);
+    }
+    const patched = patchFragment(moof, movie, sequence, newMoofStart, bases);
+    parts.push(patched);
+    outputOffsetRef.value += patched.length;
+    bytesTotalRef.value += patched.length;
+    for (const traf of moof.children?.filter((c) => c.type === 'traf') ?? []) {
+        const tfhd = findBox(traf, 'tfhd');
+        if (!tfhd) continue;
+        const trackId = readU32(tfhd.data, 4);
+        const prev = trackBaseUnits.get(trackId) ?? 0n;
+        trackBaseUnits.set(trackId, prev + BigInt(sumTrunSampleDurationUnits(traf)));
+    }
+}
+
+function trackTimelineEndMs(movie: MovieInfo, trackBaseUnits: Map<number, bigint>): number {
+    let maxMs = 0;
+    for (const track of movie.tracks) {
+        const units = trackBaseUnits.get(track.id) ?? 0n;
+        const ms = Math.round(Number(units) * 1000 / track.timescale);
+        if (ms > maxMs) maxMs = ms;
+    }
+    return maxMs;
 }
 
 /**
@@ -482,9 +584,6 @@ export function assembleFragmentedMp4(chunks: Mp4ChunkInput[]): Mp4Assembly {
         const moov = boxes.find((b) => b.type === 'moov') ?? null;
         const moof = boxes.find((b) => b.type === 'moof') ?? null;
         if (!moof) throw new Mp4AssemblyError('no_moof', `Chunk ${chunk.sequence} has no moof`);
-        if (boxes.filter((b) => b.type === 'moof').length > 1) {
-            throw new Mp4AssemblyError('multiple_fragments', `Chunk ${chunk.sequence} contains multiple fragments`);
-        }
         if (!boxes.some((b) => b.type === 'mdat')) {
             throw new Mp4AssemblyError('no_mdat', `Chunk ${chunk.sequence} has no mdat`);
         }
@@ -514,47 +613,53 @@ export function assembleFragmentedMp4(chunks: Mp4ChunkInput[]): Mp4Assembly {
         throw new Mp4AssemblyError('no_moov', 'No usable init segment');
     }
 
-    const totalMs = order.reduce((sum, c) => Math.max(sum, c.timelineStartMs + c.durationMs), 0);
+    const manifestTotalMs = order.reduce((sum, c) => Math.max(sum, c.timelineStartMs + c.durationMs), 0);
     const parts: Uint8Array[] = [initFtyp, initMoov];
-    let outputOffset = initFtyp.length + initMoov.length;
-    let bytesTotal = outputOffset;
+    const offsetRef = { value: initFtyp.length + initMoov.length };
+    const bytesRef = { value: offsetRef.value };
+    const trackBaseUnits = new Map<number, bigint>();
+    let fragmentCount = 0;
+    let moofSequence = 0;
 
     for (const chunk of order) {
         const boxes = parseTopLevelBoxes(chunk.data);
-        const moofIndex = boxes.findIndex((b) => b.type === 'moof');
-        const moof = boxes[moofIndex];
-        if (!moof) throw new Mp4AssemblyError('no_moof', `Chunk ${chunk.sequence} has no moof`);
-        const newMoofStart = outputOffset;
-        const patched = patchFragment(moof, movie, chunk.sequence, chunk.timelineStartMs, newMoofStart);
-        parts.push(patched);
-        outputOffset += patched.length;
-        bytesTotal += patched.length;
-
-        let mdatCount = 0;
-        for (let i = moofIndex + 1; i < boxes.length && boxes[i].type !== 'moof'; i++) {
-            const box = boxes[i];
-            // mfra/sidx/styp carry absolute indexes or stale segment types.
-            // Every other box between moof and mdat (e.g. free) is preserved
-            // byte-identically because trun data offsets may account for it.
-            if (box.type === 'mfra' || box.type === 'sidx' || box.type === 'styp') continue;
-            const slice = chunk.data.subarray(box.start, box.start + box.size);
-            parts.push(slice);
-            outputOffset += slice.length;
-            bytesTotal += slice.length;
-            if (box.type === 'mdat') mdatCount++;
+        for (let i = 0; i < boxes.length; i++) {
+            if (boxes[i].type !== 'moof') continue;
+            const moof = boxes[i];
+            moofSequence += 1;
+            fragmentCount += 1;
+            emitPatchedMoof(
+                moof,
+                movie,
+                moofSequence,
+                offsetRef.value,
+                trackBaseUnits,
+                parts,
+                offsetRef,
+                bytesRef
+            );
+            appendBoxesUntilNextMoof(boxes, i, chunk.data, parts, offsetRef, bytesRef, chunk.sequence);
         }
-        if (mdatCount === 0) throw new Mp4AssemblyError('no_mdat', `Chunk ${chunk.sequence} has no mdat after moof`);
+    }
+
+    const sampleTotalMs = trackTimelineEndMs(movie, trackBaseUnits);
+    const durationMs = sampleTotalMs > 0 ? sampleTotalMs : manifestTotalMs;
+    if (durationMs !== manifestTotalMs && Math.abs(durationMs - manifestTotalMs) > 50) {
+        const moovBox = parseTopLevelBoxes(parts[1]).find((b) => b.type === 'moov');
+        if (moovBox) {
+            parts[1] = patchInit(moovBox, movie, durationMs);
+        }
     }
 
     return {
         parts,
         mimeType: 'video/mp4',
-        durationMs: totalMs,
+        durationMs,
         trackCount: movie.tracks.length,
         videoTrackCount: movie.videoTracks,
         audioTrackCount: movie.audioTracks,
-        fragmentCount: order.length,
-        byteLength: bytesTotal,
+        fragmentCount,
+        byteLength: bytesRef.value,
     };
 }
 
