@@ -7,6 +7,11 @@ import {
 } from '../../src/client/services/RecordingDownloadService';
 import { FfmpegWorkerClient, FfmpegWorkerError } from '../../src/client/services/FfmpegWorkerClient';
 import type { DownloadChunk, DownloadManifest } from '../../src/lib/services/ChunkDownloadManifest';
+import {
+    Mp4AssemblyError,
+    parseTopLevelBoxes,
+    type Mp4Box,
+} from '../../src/lib/media/Mp4FragmentAssembler';
 import { buildDownloadFmp4Chunk, buildDownloadFmp4Init, type Fmp4TrackSpec } from '../helpers/media-fixtures';
 
 const tracks: Fmp4TrackSpec[] = [
@@ -14,6 +19,55 @@ const tracks: Fmp4TrackSpec[] = [
     { id: 2, handler: 'soun', timescale: 48000, sampleEntry: 'mp4a' },
 ];
 const init = buildDownloadFmp4Init(tracks);
+const VIDEO_TIMESCALE = 30000;
+
+function findChild(box: Mp4Box, type: string): Mp4Box | null {
+    return box.children?.find((child) => child.type === type) ?? null;
+}
+
+/** Video-track tfdt decode times (ms) in moof order — proves assembly timeline, not metadata alone. */
+function videoTfdtTimelineMs(blob: Uint8Array): number[] {
+    const moofs = parseTopLevelBoxes(blob).filter((b) => b.type === 'moof');
+    const out: number[] = [];
+    for (const moof of moofs) {
+        const trafs = moof.children?.filter((c) => c.type === 'traf') ?? [];
+        for (const traf of trafs) {
+            const tfhd = findChild(traf, 'tfhd');
+            const tfdt = findChild(traf, 'tfdt');
+            if (!tfhd || !tfdt) continue;
+            const trackId = ((tfhd.data[4] << 24) | (tfhd.data[5] << 16) | (tfhd.data[6] << 8) | tfhd.data[7]) >>> 0;
+            if (trackId !== 1) continue;
+            const version = tfdt.data[0];
+            let baseUnits: number;
+            if (version === 1) {
+                const hi = ((tfdt.data[4] << 24) | (tfdt.data[5] << 16) | (tfdt.data[6] << 8) | tfdt.data[7]) >>> 0;
+                const lo = ((tfdt.data[8] << 24) | (tfdt.data[9] << 16) | (tfdt.data[10] << 8) | tfdt.data[11]) >>> 0;
+                baseUnits = hi * 0x100000000 + lo;
+            } else {
+                baseUnits = ((tfdt.data[4] << 24) | (tfdt.data[5] << 16) | (tfdt.data[6] << 8) | tfdt.data[7]) >>> 0;
+            }
+            out.push(Math.round((baseUnits * 1000) / VIDEO_TIMESCALE));
+            break;
+        }
+    }
+    return out;
+}
+
+type AssembleFn = (
+    loaded: { chunk: DownloadChunk; data: Uint8Array }[],
+    manifest: DownloadManifest,
+    report: (p: { phase: string }) => void,
+) => { blob: Blob; durationMs: number; integrityVerified: boolean };
+
+function callAssembleMp4(
+    service: RecordingDownloadService,
+    loaded: { chunk: DownloadChunk; data: Uint8Array }[],
+    manifest: DownloadManifest,
+) {
+    const fn = (service as unknown as { assembleMp4: AssembleFn }).assembleMp4;
+    return fn.call(service, loaded, manifest, () => undefined);
+}
+
 const chunkBytes = (sequence: number) => buildDownloadFmp4Chunk(init, tracks, {
     sequence,
     timelineStartMs: (sequence - 1) * 5000,
@@ -351,6 +405,94 @@ describe('R4-CHUNK-DOWNLOAD-1 download pipeline', () => {
         expect(result.durationMs).toBe(15000);
         expect(execArgs).toEqual(expect.arrayContaining(['-c:v', 'libx264', '-c:a', 'aac']));
         expect(execArgs.join(' ')).not.toContain('-c copy');
+    });
+
+    it('UNIT35.1 remuxes complete MP4 when byte duration corrects inflated D1 on an earlier chunk', async () => {
+        const realMs = 5000;
+        const inflatedD1 = 60000;
+        const data1 = buildDownloadFmp4Chunk(init, tracks, {
+            sequence: 1,
+            timelineStartMs: 0,
+            durationMs: realMs,
+            withMfra: true,
+        });
+        const data2 = buildDownloadFmp4Chunk(init, tracks, {
+            sequence: 2,
+            timelineStartMs: realMs,
+            durationMs: realMs,
+            withMfra: true,
+        });
+        const chunks: DownloadChunk[] = [
+            {
+                sequence: 1,
+                url: 'https://media.example.com/chunk_1.mp4',
+                bytes: data1.length,
+                duration_ms: inflatedD1,
+                timeline_start_ms: 0,
+                object_hash: null,
+                hash_algorithm: null,
+                container: 'mp4',
+                codec_video: 'h264',
+                codec_audio: 'aac',
+            },
+            {
+                sequence: 2,
+                url: 'https://media.example.com/chunk_2.mp4',
+                bytes: data2.length,
+                duration_ms: realMs,
+                timeline_start_ms: inflatedD1,
+                object_hash: null,
+                hash_algorithm: null,
+                container: 'mp4',
+                codec_video: 'h264',
+                codec_audio: 'aac',
+            },
+        ];
+        const totalBytes = chunks.reduce((sum, c) => sum + (c.bytes ?? 0), 0);
+        const manifest = makeManifest({
+            chunks,
+            total_bytes: totalBytes,
+            total_duration_ms: inflatedD1 + realMs,
+            complete: true,
+        });
+        const fetchImpl = (async (url: string | URL | Request) => {
+            if (String(url).includes('chunk_1')) return responseFor(data1);
+            if (String(url).includes('chunk_2')) return responseFor(data2);
+            throw new Error(`Unexpected URL ${String(url)}`);
+        }) as typeof fetch;
+        const service = new RecordingDownloadService({ fetchImpl });
+        const result = await service.download(manifest, { verifyPlayback: false });
+        expect(result.durationMs).toBe(realMs * 2);
+        expect(result.partial).toBe(false);
+        const bytes = new Uint8Array(await result.blob.arrayBuffer());
+        expect(videoTfdtTimelineMs(bytes)).toEqual([0, realMs]);
+        const tfdt = videoTfdtTimelineMs(bytes);
+        for (let i = 1; i < tfdt.length; i++) {
+            expect(tfdt[i]).toBeGreaterThanOrEqual(tfdt[i - 1]!);
+        }
+    });
+
+    it('UNIT35.1 rejects a complete manifest whose D1 timeline is internally inconsistent (structural guard)', async () => {
+        const data1 = chunkBytes(1);
+        const data2 = chunkBytes(2);
+        const chunks: DownloadChunk[] = [
+            { ...makeManifest().chunks[0], timeline_start_ms: 0, duration_ms: 5000, bytes: data1.length },
+            { ...makeManifest().chunks[1], timeline_start_ms: 1000, duration_ms: 5000, bytes: data2.length },
+        ];
+        const manifest = makeManifest({ chunks, total_duration_ms: 10000, complete: true });
+        const loaded = [
+            { chunk: chunks[0], data: data1 },
+            { chunk: chunks[1], data: data2 },
+        ];
+        const service = new RecordingDownloadService({ fetchImpl: mediaFetch() });
+        let caught: unknown = null;
+        try {
+            callAssembleMp4(service, loaded, manifest);
+        } catch (error) {
+            caught = error;
+        }
+        expect(caught).toBeInstanceOf(Mp4AssemblyError);
+        expect((caught as Mp4AssemblyError).code).toBe('schedule_non_monotonic');
     });
 });
 

@@ -188,11 +188,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         
         document.getElementById('competitionContainer').innerHTML = \`
           <div class="max-w-6xl mx-auto">
-            <div class="flex items-center gap-4 mb-6">
+            <div class="flex items-center gap-4 mb-6 flex-wrap">
               <a href="/?lang=\${lang}" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
                 <i class="fas fa-arrow-\${isRTL ? 'right' : 'left'} text-xl text-gray-600 dark:text-gray-300"></i>
               </a>
-              <div>
+              <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
                   <span id="competitionStatusBadge" class="\${
                     isLive ? 'badge-live' :
@@ -212,6 +212,12 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 <!-- T3.2: lifecycle countdown host (join/start/live-limit) -->
                 <div id="countdownTimerHost" class="mt-3"></div>
               </div>
+              <button type="button" data-csp-on="click" data-csp-fn="window.openCompetitionShare" data-csp-args='[]'
+                      id="competitionShareBtn"
+                      class="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full border border-gray-200 dark:border-gray-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors"
+                      aria-label="\${(tr.competition_share && tr.competition_share.share_button) || 'Share'}">
+                <i class="fas fa-share-alt text-lg" aria-hidden="true"></i>
+              </button>
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2951,10 +2957,15 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
 
         const localBtn = document.getElementById('localVideoBtn');
         if (localBtn) {
-          localBtn.classList.toggle('is-active', !localVideoVisible);
-          localBtn.innerHTML = localVideoVisible
-            ? '<i class="fas fa-eye" aria-hidden="true"></i>'
-            : '<i class="fas fa-eye-slash" aria-hidden="true"></i>';
+          const pipActive = competitorVideoLayout === 'remote';
+          localBtn.classList.toggle('hidden', !pipActive);
+          localBtn.disabled = !pipActive;
+          if (pipActive) {
+            localBtn.classList.toggle('is-active', !localVideoVisible);
+            localBtn.innerHTML = localVideoVisible
+              ? '<i class="fas fa-eye" aria-hidden="true"></i>'
+              : '<i class="fas fa-eye-slash" aria-hidden="true"></i>';
+          }
         }
 
         // The prep/publish line never claims publishing because the
@@ -3119,7 +3130,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const track = localTrackOf('video');
         const videoOn = !!(track && track.enabled
           && (!track.readyState || track.readyState === 'live'));
-        const showVideo = videoOn && localVideoVisible;
+        const pipActive = competitorVideoLayout === 'remote';
+        const showVideo = videoOn && (!pipActive || localVideoVisible);
         if (video) video.classList.toggle('hidden', !showVideo);
         if (fallback) {
           fallback.classList.toggle('hidden', showVideo);
@@ -4196,6 +4208,20 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       const originalRenderCompetition = renderCompetition;
       renderCompetition = function(comp) {
         originalRenderCompetition(comp);
+        if (window.syncCompetitionShareMeta) {
+          window.syncCompetitionShareMeta({
+            id: comp.id,
+            title: comp.title,
+            status: comp.status,
+            winner_id: comp.winner_id,
+            creator_id: comp.creator_id,
+            opponent_id: comp.opponent_id,
+            creator_name: comp.creator_name,
+            opponent_name: comp.opponent_name,
+            creator_username: comp.creator_username,
+            opponent_username: comp.opponent_username,
+          });
+        }
         setTimeout(checkAndInitStream, 300);
       };
     </script>

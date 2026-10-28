@@ -27,6 +27,7 @@ import {
     Mp4AssemblyError,
     readMp4DurationMs,
 } from '../../lib/media/Mp4FragmentAssembler';
+import { measureMp4DurationMs } from '../../lib/services/MediaDuration';
 import { FfmpegWorkerClient, FfmpegWorkerError } from './FfmpegWorkerClient';
 
 /** Emscripten `getHeapMax()` in @ffmpeg/core 0.12.10 — measured, not policy. */
@@ -765,21 +766,38 @@ export class RecordingDownloadService {
             totalBytes: manifest.total_bytes,
         });
 
+        if (manifest.complete) {
+            const ordered = [...manifest.chunks].sort((a, b) => a.sequence - b.sequence);
+            let d1Cursor = 0;
+            for (const row of ordered) {
+                if (Math.abs(d1Cursor - row.timeline_start_ms) > 2) {
+                    throw new Mp4AssemblyError(
+                        'schedule_non_monotonic',
+                        `Manifest timeline ${row.timeline_start_ms} disagrees with the D1 cursor ${d1Cursor} at sequence ${row.sequence}`
+                    );
+                }
+                d1Cursor += row.duration_ms;
+            }
+        }
+
         let cursor = 0;
         const inputs = loaded.map(({ chunk, data }) => {
-            if (manifest.complete && Math.abs(cursor - chunk.timeline_start_ms) > 2) {
-                throw new Mp4AssemblyError(
-                    'schedule_non_monotonic',
-                    `D1 timeline ${chunk.timeline_start_ms} disagrees with the assembled cursor ${cursor}`
-                );
+            let durationMs = chunk.duration_ms;
+            const measured = measureMp4DurationMs(data);
+            if (measured !== null && measured > 0) {
+                // Fragment bytes are authoritative: D1 can disagree when mvhd
+                // or registration over-reported a growing movie header.
+                if (Math.abs(measured - durationMs) > 25) {
+                    durationMs = measured;
+                }
             }
             const input = {
                 sequence: chunk.sequence,
                 data,
-                durationMs: chunk.duration_ms,
+                durationMs,
                 timelineStartMs: cursor,
             };
-            cursor += chunk.duration_ms;
+            cursor += durationMs;
             return input;
         });
 

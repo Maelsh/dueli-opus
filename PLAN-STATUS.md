@@ -1,3 +1,7 @@
+## 2026-10-28 — UNIT35.1 / PR #148 · فرع feat/unit35-1-r4-media-controls-download-rem1 (BASE 12181265)
+
+- 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** إصلاح تراكم Explore في `view=competitions|users` + تعارض MP4 `manifest.complete` مع المدة المقاسة + مشاركة صفحة المنافسة (قرار مالك). اختبارات: explore-live-search-view-modes، competition-share، recording-download-service (UNIT35.1). معاينات OG للمنصات غير مثبتة (SPA). لا merge/deploy.
+
 ## 2026-10-28 — UNIT35 / R4-UX-I18N-1 · فرع feat/unit35-r4-ux-i18n-1 (من a6c1802 = origin/main)
 
 - 🔧 **LOCAL VERIFIED — REMOTE Protocol 10 pending.** ركائز A–F الأساسية + اختبارات unit35؛ مصفوفة §4 الكاملة (34 بندًا) تتطلب مراجعة REMOTE (PLAN غير متاح محليًا). لا UNIT35.1 ولا merge/deploy.

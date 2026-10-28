@@ -499,6 +499,20 @@ export const en = {
 
     // Competition page
     competitors: 'Competitors',
+    competition_share: {
+        share_button: 'Share competition',
+        dialog_title: 'Share this competition',
+        copy_link: 'Copy link',
+        copy_success: 'Link copied',
+        copy_failed: 'Could not copy the link',
+        close: 'Close',
+        platform_whatsapp: 'WhatsApp',
+        platform_telegram: 'Telegram',
+        platform_facebook: 'Facebook',
+        platform_x: 'X',
+        platform_linkedin: 'LinkedIn',
+        platform_email: 'Email',
+    },
     awaiting_opponent: 'Awaiting Opponent',
     login_to_compete: 'Login to Compete',
     stream_not_available: 'Stream not available',

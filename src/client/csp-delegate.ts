@@ -312,6 +312,8 @@ const ACTION_ALLOWLIST: ReadonlySet<string> = new Set<string>([
     'window.toggleScreen',
     'window.toggleSpeaker',
     'window.toggleVideoFullscreen',
+    'openCompetitionShare',
+    'window.openCompetitionShare',
     // __ALLOWLIST_END__
 ]);
 

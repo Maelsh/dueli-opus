@@ -45,6 +45,8 @@ import { RecommendationCarousel, CompetitorsMiniStatsCard } from './ui/Recommend
 import { CountdownTimer } from './ui/CountdownTimer';
 import { WatchLaterUI } from './ui/WatchLaterUI';
 import { RecordingDownloadPanel } from './ui/RecordingDownloadPanel';
+import { openCompetitionShare, syncCompetitionShareMeta } from './ui/CompetitionSharePanel';
+import type { CompetitionShareInput } from '../lib/competitionShare';
 
 // Shared Components (View layer - single source of truth)
 import { getCompetitionCard, type CompetitionCardProps } from '../shared/components/competition-card';
@@ -253,6 +255,8 @@ declare global {
         // R4-CHUNK-DOWNLOAD-1: independent recording download dialog
         RecordingDownloadPanel: typeof RecordingDownloadPanel;
         openRecordingDownload: (competitionId: number) => RecordingDownloadPanel | null;
+        openCompetitionShare: () => void;
+        syncCompetitionShareMeta: (comp: CompetitionShareInput) => void;
 
         // UNIT32.1: CSP-delegated `WatchLaterUI.toggle` from shared cards.
         WatchLaterUI: typeof WatchLaterUI;
@@ -390,6 +394,8 @@ if (typeof window !== 'undefined') {
     // isDownloadUserAuthenticated + the server manifest route).
     window.RecordingDownloadPanel = RecordingDownloadPanel;
     window.openRecordingDownload = (competitionId: number) => RecordingDownloadPanel.open(Number(competitionId));
+    window.openCompetitionShare = () => { void openCompetitionShare(); };
+    window.syncCompetitionShareMeta = syncCompetitionShareMeta;
 
     // Note: Test Streaming functions are injected as inline scripts in test pages
 }

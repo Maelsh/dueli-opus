@@ -67,7 +67,7 @@ describe('R1.1 explore search rendering — no raw search in innerHTML', () => {
         const src = readSrc(EXPLORE_PAGE);
         // The fix must assign the untrusted value via textContent, never innerHTML.
         expect(src, 'search value must reach the DOM via textContent').toMatch(
-            /searchQueryDisplay[\s\S]{0,2000}\.textContent\s*=\s*search/,
+            /strong\.textContent\s*=\s*searchQuery/,
         );
     });
 });
@@ -77,7 +77,7 @@ describe('R1.1 explore search rendering — payloads stay inert text', () => {
         const src = readSrc(EXPLORE_PAGE);
         // Guard the contract the simulation below relies on: the file must not
         // route the search value through an HTML sink.
-        expect(src).toMatch(/\.textContent\s*=\s*search/);
+        expect(src).toMatch(/\.textContent\s*=\s*searchQuery|strong\.textContent\s*=\s*searchQuery/);
 
         for (const payload of PAYLOADS) {
             // textContent semantics: the exact string is stored, no parsing.
@@ -123,6 +123,6 @@ describe('R1.1 explore search rendering — design / RTL / i18n preserved', () =
     it('keeps CSP nonce usage and encodeURIComponent for URL usages of search', () => {
         const src = readSrc(EXPLORE_PAGE);
         expect(src).toContain('cspNonce');
-        expect(src).toContain('encodeURIComponent(search)');
+        expect(src).toContain('encodeURIComponent(searchQuery)');
     });
 });
