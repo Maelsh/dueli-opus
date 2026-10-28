@@ -55,14 +55,14 @@ describe('UNIT35.1 eye vs camera independence', () => {
     });
 });
 
-describe('UNIT35.1 VOD chunk handoff hygiene', () => {
-    it('pauses and clears onended before swapping chunk src', () => {
+describe('UNIT35.1 live sequential handoff hygiene', () => {
+    it('LiveSequentialPlayer clears stale handlers on chunk swap', () => {
         const shared = read('modules/pages/live/scripts/client/shared.ts');
         const fn = shared.slice(
-            shared.indexOf('async loadAndPlayChunk(index, globalSeekTime)'),
-            shared.indexOf('async _loadChunk(index)')
+            shared.indexOf('async playChunk(index, offsetSeconds, gen)'),
+            shared.indexOf('this.activePlayerIndex = nextPlayerIndex')
         );
-        expect(fn).toContain('this.videoElement.pause()');
-        expect(fn).toContain('this.videoElement.onended = null');
+        expect(fn).toContain('currentPlayer.oncanplay = null');
+        expect(fn).toContain('currentPlayer.muted = true');
     });
 });

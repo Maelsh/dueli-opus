@@ -1761,10 +1761,6 @@ class SmartVodPlayer {
             : this.seekPending;
         
         testLog('▶️ Playing chunk ' + (index + 1) + '/' + this.chunks.length, 'info');
-
-        try { this.videoElement.pause(); } catch (e) {}
-        this.videoElement.onended = null;
-        this.videoElement.muted = true;
         
         // تحميل إذا لم تكن محملة
         if (this.loadedChunks[index] === undefined) {
