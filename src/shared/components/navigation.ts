@@ -15,19 +15,19 @@ export function getNavigation(lang: Language): string {
 
   return `
     <nav class="sticky top-0 z-50 bg-white dark:bg-[#0f0f0f] backdrop-blur-md border-b border-gray-100 dark:border-gray-800">
-      <div class="container mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="container mx-auto px-3 sm:px-4 h-16 flex items-center justify-between gap-2 min-w-0">
         <!-- Logo -->
-        <a href="/?lang=${lang}" class="flex items-center gap-2 cursor-pointer group" title="${tr.app_title}">
-          <img src="/static/dueli-icon.png" alt="Dueli" class="w-10 h-10 object-contain">
-          <span class="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 sm:inline">
+        <a href="/?lang=${lang}" class="flex items-center gap-2 cursor-pointer group min-w-0 flex-shrink" title="${tr.app_title}">
+          <img src="/static/dueli-icon.png" alt="Dueli" class="w-9 h-9 sm:w-10 sm:h-10 object-contain flex-shrink-0">
+          <span class="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-amber-500 hidden sm:inline truncate">
             ${tr.app_title}
           </span>
         </a>
 
         <!-- Right Side Actions -->
-        <div class="flex items-center gap-1.5">
-          <!-- Help entry (R3-C1: visible to everyone — guests and members) -->
-          <a href="/help?lang=${lang}" id="helpIcon" aria-label="${tr.help || 'Help'}" title="${tr.help || 'Help'}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors">
+        <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 min-w-0">
+          <!-- Help (guests only — members use account menu) -->
+          <a href="/help?lang=${lang}" id="helpIcon" aria-label="${tr.help || 'Help'}" title="${tr.help || 'Help'}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors flex-shrink-0">
             <i class="far fa-question-circle text-2xl" aria-hidden="true"></i>
           </a>
           
@@ -75,7 +75,7 @@ export function getNavigation(lang: Language): string {
           </div>
           
           <!-- User Section (hidden when not logged in) -->
-          <div id="userSection" class="flex items-center gap-2 hidden">
+          <div id="userSection" class="flex items-center gap-1 sm:gap-2 hidden min-w-0">
             <!-- Notifications Button -->
             <div class="relative">
               <button data-csp-on="click" data-csp-fn="toggleNotifications" data-csp-args='[]' class="nav-icon relative text-gray-500 hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-400 transition-colors cursor-pointer" aria-label="${tr.notifications || 'Notifications'}" title="${tr.notifications || 'Notifications'}">
@@ -126,13 +126,13 @@ export function getNavigation(lang: Language): string {
 
             <!-- User Avatar & Menu -->
             <div class="relative">
-              <button data-csp-on="click" data-csp-fn="toggleUserMenu" data-csp-args='[]' class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer" aria-label="${tr.profile || 'Profile'}" aria-haspopup="menu" title="${tr.profile || 'Profile'}">
-                <img id="userAvatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="" class="w-12 h-12 rounded-full border-2 border-purple-400">
+              <button data-csp-on="click" data-csp-fn="toggleUserMenu" data-csp-args='[]' class="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-all cursor-pointer min-w-0" aria-label="${tr.profile || 'Profile'}" aria-haspopup="menu" title="${tr.profile || 'Profile'}">
+                <img id="userAvatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="" class="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-purple-400 object-cover flex-shrink-0">
               </button>
               <div id="userMenu" class="user-menu ${isRTL ? 'left-0' : 'right-0'}">
-                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                  <p id="userName" class="font-bold text-gray-900 dark:text-white">User</p>
-                  <p id="userEmail" class="text-sm text-gray-500">email@example.com</p>
+                <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 min-w-0">
+                  <p id="userName" class="font-bold text-gray-900 dark:text-white truncate max-w-[14rem]">User</p>
+                  <p id="userEmail" class="text-sm text-gray-500 truncate max-w-[14rem]">email@example.com</p>
                 </div>
                 <a href="/profile?lang=${lang}" class="user-menu-item" title="${tr.profile || 'Profile'}">
                   <i class="fas fa-user text-gray-500"></i>

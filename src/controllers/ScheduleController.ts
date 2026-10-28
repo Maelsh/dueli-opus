@@ -40,6 +40,11 @@ export class ScheduleController extends BaseController {
                 return this.validationError(c, this.t('schedule.not_scheduled', c));
             }
 
+            const status = String(competition.status || '');
+            if (status === 'live' || status === 'completed' || status === 'ended' || status === 'cancelled') {
+                return this.validationError(c, this.t('schedule.not_eligible', c));
+            }
+
             const body = await this.getBody<{ remind_before_minutes?: number }>(c);
             const beforeMinutes = body?.remind_before_minutes || 30;
 
@@ -73,6 +78,15 @@ export class ScheduleController extends BaseController {
             const competitionId = this.getParamInt(c, 'id');
             if (!competitionId) {
                 return this.validationError(c, this.t('errors.invalid_id', c));
+            }
+
+            const competitionModel = new CompetitionModel(c.env.DB);
+            const competition = await competitionModel.findById(competitionId);
+            if (competition) {
+                const status = String(competition.status || '');
+                if (status === 'live' || status === 'completed' || status === 'ended' || status === 'cancelled') {
+                    return this.validationError(c, this.t('schedule.not_eligible', c));
+                }
             }
 
             const scheduleModel = new ScheduleModel(c.env.DB);

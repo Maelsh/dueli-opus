@@ -328,8 +328,8 @@ export class AuthService {
             // Show upcoming tab for logged-in users
             if (upcomingTab) upcomingTab.classList.remove('hidden');
 
-            // R3-C1: the Help entry is visible to everyone (guests and members).
-            if (helpIcon) helpIcon.classList.remove('auth-hidden');
+            // R3-C1: Help in header for guests only (members use account menu).
+            if (helpIcon) helpIcon.classList.add('auth-hidden');
 
             // R2-A: admin entry — visible only for admins (server + API
             // guards remain authoritative; this is navigation only).

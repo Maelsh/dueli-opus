@@ -131,13 +131,14 @@ describe('R3-C1 help page + routes', () => {
 });
 
 describe('R3-C1 entry points', () => {
-    it('6. nav help icon goes to /help and is visible to everyone', () => {
+    it('6. nav help: header for guests only; account menu + footer for everyone', () => {
         expect(NAV).toContain('href="/help?lang=${lang}"');
         expect(NAV).toContain('id="helpIcon"');
-        expect(NAV).not.toMatch(/id="helpIcon"[^>]*auth-hidden/);
+        expect(NAV).toContain('guests only');
         expect(NAV).toContain('aria-label="${tr.help');
         expect(NAV).toContain('href="/help?lang=${lang}" class="user-menu-item"');
-        expect(AUTH_SVC).not.toContain("helpIcon) helpIcon.classList.add('auth-hidden')");
+        expect(AUTH_SVC).toContain("helpIcon.classList.add('auth-hidden')");
+        expect(AUTH_SVC).toContain("helpIcon.classList.remove('auth-hidden')");
     });
 
     it('7. footer + 404 link to help', () => {

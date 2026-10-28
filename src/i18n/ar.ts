@@ -637,6 +637,7 @@ export const ar = {
         reminder_set: 'تم تعيين التذكير!',
         reminder_removed: 'تم إزالة التذكير',
         not_scheduled: 'المنافسة غير مجدولة',
+        not_eligible: 'التذكير غير متاح لهذه حالة المنافسة',
         already_set: 'التذكير موجود مسبقاً',
         not_found: 'التذكير غير موجود',
     },
@@ -1337,6 +1338,10 @@ export const ar = {
         not_eligible: 'شاهد 300 ثانية من البث لتتمكن من التقييم',
         update_rating: 'تحديث التقييم',
         withdraw_rating: 'سحب التقييم',
+        unique_raters: 'مقيّمون فريدون',
+        score_scale_hint: 'النتيجة من 5',
+        draw_label: 'تعادل',
+        zero_score: 'لا نتيجة بعد',
     },
 
     // ── T1.3: البث ──────────────
@@ -1391,6 +1396,7 @@ export const ar = {
         already_has_opponent: 'المنافسة لديها خصم بالفعل',
         competition_not_open: 'المنافسة غير مفتوحة للدعوات',
         compatibility: 'التوافق',
+        compatibility_unavailable: 'غير متاح',
         wins_label: 'الانتصارات',
         competitions_label: 'المنافسات',
         rating_label: 'التقييم',

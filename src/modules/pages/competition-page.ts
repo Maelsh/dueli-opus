@@ -402,22 +402,22 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                            Range is the WHOLE available recording (index total),
                            never the current chunk duration. Hidden for VOD. -->
                       \${isLive ? '<div id="embeddedLiveControls" class="hidden bg-gray-900 p-3">' +
-                        '<div class="flex items-center gap-3">' +
-                          '<span id="embeddedLiveTimeDisplay" class="text-xs font-mono text-gray-300 w-20 flex-shrink-0">0:00 / 0:00</span>' +
-                          '<input type="range" id="embeddedLiveSeekbar" min="0" max="100" value="100" class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-red-500" aria-label="' + (tr.live_timeline || 'Live timeline') + '" />' +
+                        '<div class="embedded-live-controls-inner">' +
+                          '<span id="embeddedLiveTimeDisplay" class="embedded-time-display text-xs font-mono text-gray-300">0:00 / 0:00</span>' +
+                          '<input type="range" id="embeddedLiveSeekbar" min="0" max="100" value="100" class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-red-500 min-w-0" aria-label="' + (tr.live_timeline || 'Live timeline') + '" />' +
                         '</div>' +
                       '</div>' : ''}
                       
                       <!-- VOD Controls (hidden by default, shown for recorded) -->
                       <div id="embeddedVodControls" class="hidden bg-gray-900 p-3">
-                        <div class="flex items-center gap-3">
+                        <div class="embedded-vod-controls-inner">
                           <button id="embeddedPlayPauseBtn" data-csp-on="click" data-csp-fn="embeddedTogglePlayPause" data-csp-args='[]' 
                                   class="w-9 h-9 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700 flex-shrink-0">
                             <i id="embeddedPlayPauseIcon" class="fas fa-play text-sm"></i>
                           </button>
-                          <span id="embeddedTimeDisplay" class="text-xs font-mono text-gray-300 w-20 flex-shrink-0">0:00 / 0:00</span>
+                          <span id="embeddedTimeDisplay" class="embedded-time-display text-xs font-mono text-gray-300">0:00 / 0:00</span>
                           <input type="range" id="embeddedSeekbar" min="0" max="100" value="0"
-                                 class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500"
+                                 class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500 min-w-0"
                                  title="Seek" />
                         </div>
                       </div>
@@ -637,10 +637,10 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                       <i class="fas fa-thumbs-down"></i>
                       <span id="dislikeCount">\${comp.dislikes_count || 0}</span>
                     </button>
-                    <button data-csp-on="click" data-csp-fn="toggleReminder" data-csp-args='[]' id="reminderBtn" 
-                      class="flex-1 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 \${comp.user_reminded ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-amber-50 hover:text-amber-500'}">
-                      <i class="fas fa-bell"></i>
-                      \${comp.user_reminded ? tr.reminder_set || 'Reminder On' : tr.remind_me || 'Remind Me'}
+                    <button data-csp-on="click" data-csp-fn="toggleReminder" data-csp-args='[]' id="reminderBtn" type="button"
+                      aria-label="\${tr.schedule?.add_reminder || tr.remind_me || 'Remind Me'}" title="\${tr.schedule?.add_reminder || tr.remind_me || 'Remind Me'}" aria-pressed="false"
+                      class="flex-shrink-0 w-11 sm:w-12 py-3 rounded-xl font-semibold transition-all flex items-center justify-center \${comp.user_reminded ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-amber-50 hover:text-amber-500'}">
+                      <i class="fas fa-bell" aria-hidden="true"></i>
                     </button>
                     <button data-csp-on="click" data-csp-fn="WatchLaterUI.toggle" data-csp-args='[\${comp.id}]'
                       id="competitionWatchLaterBtn" data-watch-later-toggle="\${comp.id}" aria-pressed="false"
@@ -676,7 +676,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                   </div>
                   <div class="p-4 border-t border-gray-200 dark:border-gray-700">
                     \${window.currentUser ? \`
-                      <form data-csp-on="submit" data-csp-fn="sendComment" data-csp-args='["@event"]' class="flex gap-2">
+                      <form data-csp-on="submit" data-csp-fn="sendComment" data-csp-args='["@event"]' class="flex gap-2 min-w-0" dir="\${lang === 'ar' ? 'rtl' : 'ltr'}">
                         <input type="text" id="commentInput" placeholder="\${tr.add_comment}..." aria-label="\${tr.add_comment || 'Add comment'}" class="flex-1 border dark:border-gray-600 dark:bg-gray-700 rounded-full px-4 py-2 text-sm">
                         <button type="submit" aria-label="\${tr.send || 'Send'}" class="p-2 ${DUELI_PRIMARY_GRADIENT} ${DUELI_PRIMARY_GRADIENT_HOVER} text-white rounded-full transition-colors">
                           <i class="fas fa-paper-plane" aria-hidden="true"></i>
@@ -845,11 +845,31 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/ratings/summary?lang=' + (window.lang || 'ar'));
           const data = await res.json().catch(function(){ return null; });
           if (!data || !data.success) return;
+          const names = {};
+          if (competitionData.creator_id) names[competitionData.creator_id] = competitionData.creator_name;
+          if (competitionData.opponent_id) names[competitionData.opponent_id] = competitionData.opponent_name;
           const rows = (data.data.competitors || []).map(function(e) {
-            const avg = e.average === null || e.average === undefined ? '—' : String(e.average);
-            return '<div>' + avg + ' × ' + e.count + '</div>';
+            const name = names[e.competitor_id] || ('#' + e.competitor_id);
+            const avg = e.average;
+            const avgNum = avg === null || avg === undefined ? null : Number(avg);
+            const pct = avgNum === null || !Number.isFinite(avgNum) ? 0 : Math.min(100, Math.round((avgNum / 5) * 100));
+            const barTone = avgNum === null ? 'bg-gray-400' : (avgNum >= 4 ? 'bg-green-500' : avgNum >= 3 ? 'bg-yellow-500' : 'bg-red-400');
+            const avgLabel = avgNum === null ? ((tr.ratings && tr.ratings.zero_score) || '—') : String(avgNum);
+            return '<div class="mb-3">' +
+              '<div class="flex justify-between gap-2 text-xs mb-1"><span class="font-semibold truncate">' + name + '</span><span class="flex-shrink-0">' + avgLabel + '</span></div>' +
+              '<div class="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="presentation">' +
+              '<div class="h-full ' + barTone + ' transition-all" style="width:' + pct + '%"></div></div>' +
+              '<div class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">' + e.count + ' · ' + ((tr.ratings && tr.ratings.score_scale_hint) || '') + '</div></div>';
           }).join('');
-          box.innerHTML = rows || (((tr.ratings && tr.ratings.no_ratings) || 'No ratings yet'));
+          const meta = [];
+          if (typeof data.data.unique_rater_count === 'number') {
+            meta.push(((tr.ratings && tr.ratings.unique_raters) || 'Unique raters') + ': ' + data.data.unique_rater_count);
+          }
+          if (data.data.result && data.data.result.status === 'draw') {
+            meta.push((tr.ratings && tr.ratings.draw_label) || 'Draw');
+          }
+          const metaHtml = meta.length ? '<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">' + meta.join(' · ') + '</p>' : '';
+          box.innerHTML = metaHtml + (rows || (((tr.ratings && tr.ratings.no_ratings) || 'No ratings yet')));
           // Eligibility hint: live + logged viewer without 300s.
           const hint = document.getElementById('rateEligibleHint');
           if (hint) {
@@ -1690,30 +1710,52 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         return window.setReaction('like');
       }
       
+      function syncReminderButton() {
+        const btn = document.getElementById('reminderBtn');
+        if (!btn || !competitionData) return;
+        const status = competitionData.status;
+        const eligible = !!competitionData.scheduled_at
+          && status !== 'live' && status !== 'completed' && status !== 'ended' && status !== 'cancelled';
+        btn.classList.toggle('hidden', !eligible);
+        if (!eligible) return;
+        const on = !!competitionData.user_reminded;
+        const addLbl = (tr.schedule && tr.schedule.add_reminder) || tr.remind_me || 'Remind Me';
+        const remLbl = (tr.schedule && tr.schedule.remove_reminder) || tr.reminder_set || 'Remove Reminder';
+        btn.setAttribute('aria-label', on ? remLbl : addLbl);
+        btn.setAttribute('title', on ? remLbl : addLbl);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        if (on) {
+          btn.classList.add('bg-amber-100', 'dark:bg-amber-900/30', 'text-amber-600');
+          btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-400');
+        } else {
+          btn.classList.remove('bg-amber-100', 'dark:bg-amber-900/30', 'text-amber-600');
+          btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600', 'dark:text-gray-400');
+        }
+        btn.innerHTML = '<i class="fas fa-bell" aria-hidden="true"></i>';
+      }
+
       async function toggleReminder() {
         if (!window.currentUser) { showLoginModal(); return; }
         const btn = document.getElementById('reminderBtn');
-        const isReminded = btn.classList.contains('bg-amber-100');
+        if (!btn || btn.classList.contains('hidden')) return;
+        const isReminded = !!(competitionData && competitionData.user_reminded);
         
         try {
           const res = await fetch('/api/competitions/' + competitionId + '/remind', {
             method: isReminded ? 'DELETE' : 'POST',
             headers: {
               'Content-Type': 'application/json'
-            }
+            },
+            body: isReminded ? undefined : JSON.stringify({ remind_before_minutes: 30 })
           });
           
           if (res.ok) {
-            if (isReminded) {
-              btn.classList.remove('bg-amber-100', 'dark:bg-amber-900/30', 'text-amber-600');
-              btn.classList.add('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
-              btn.innerHTML = '<i class="fas fa-bell"></i> ' + (tr.remind_me || 'Remind Me');
-            } else {
-              btn.classList.add('bg-amber-100', 'dark:bg-amber-900/30', 'text-amber-600');
-              btn.classList.remove('bg-gray-100', 'dark:bg-gray-800', 'text-gray-600');
-              btn.innerHTML = '<i class="fas fa-bell"></i> ' + (tr.reminder_set || 'Reminder On');
-              showToast(tr.reminder_added || 'Reminder added!', 'success');
-            }
+            if (competitionData) competitionData.user_reminded = !isReminded;
+            syncReminderButton();
+            showToast(isReminded ? (tr.schedule?.reminder_removed || tr.reminder_removed || 'Removed') : (tr.reminder_added || 'Reminder added!'), 'success');
+          } else {
+            const err = await res.json().catch(function(){ return null; });
+            showToast((err && err.error) || tr.error_occurred || 'Error', 'error');
           }
         } catch (err) { console.error(err); }
       }
@@ -2928,6 +2970,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } else if (published.published) setPublishState(tr.publish_state_on);
         else if (prepReady && !localMediaAvailable) setPublishState(tr.media_none);
         else if (prepReady) setPublishState(tr.publish_state_off);
+        syncReminderButton();
       }
 
       // §15.8 V: actual remote-video presence, backed by frame progress or
