@@ -478,7 +478,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         async function loadSearchResults() {
           applyViewMode();
           bindSubcategoryReset();
-          bindExploreLiveSearch();
+          if (!exploreLiveBound) {
+            exploreLiveBound = true;
+            bindExploreLiveSearch();
+          }
           if (!clientFiltersValid()) {
             showInvalidFilter('competitionsContainer');
             await loadUsersPreview();
@@ -1135,16 +1138,23 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
           }
         }
         
-        // Initialize
+        var exploreLiveBound = false;
+        var exploreInitStarted = false;
+
+        function startExploreInit() {
+          if (exploreInitStarted) return;
+          exploreInitStarted = true;
+          waitForBundle(loadSearchResults);
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
           if (typeof checkAuth === 'function') checkAuth();
-          waitForBundle(loadSearchResults);
+          startExploreInit();
         });
-        
-        // Also try immediately in case DOMContentLoaded already fired
+
         if (document.readyState !== 'loading') {
           if (typeof checkAuth === 'function') checkAuth();
-          waitForBundle(loadSearchResults);
+          startExploreInit();
         }
       })();
     </script>
