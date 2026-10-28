@@ -24,6 +24,7 @@ describe('UNIT35.1 explore live search', () => {
     it('debounces input and prevents full form submit-only reload', () => {
         const explore = read('modules/pages/explore-page.ts');
         expect(explore).toContain('runExploreLiveSearch');
+        expect(explore).toContain('exploreSearchForm');
         expect(explore).toContain('ev.preventDefault()');
         expect(explore).toContain('exploreSearchDebounce');
         expect(explore).toContain('exploreFetchGen');

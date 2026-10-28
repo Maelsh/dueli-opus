@@ -181,7 +181,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
       </div>
 
       <!-- Search + filters live on the results page (GET: context stays in the URL) -->
-      <form method="GET" action="/explore" role="search" aria-label="${escapeAttr(tr.search_placeholder || 'Search')}"
+      <form id="exploreSearchForm" method="GET" action="/explore" role="search" aria-label="${escapeAttr(tr.search_placeholder || 'Search')}"
             class="bg-white dark:bg-[#1a1a1a] rounded-2xl p-4 shadow-lg border border-gray-100 dark:border-gray-800 mb-6">
         <div class="flex flex-col md:flex-row gap-3">
           <div class="relative flex-1">
@@ -407,7 +407,7 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
         }
 
         function bindExploreLiveSearch() {
-          var form = document.querySelector('form[role="search"]');
+          var form = document.getElementById('exploreSearchForm');
           if (form && !form.getAttribute('data-live-bound')) {
             form.setAttribute('data-live-bound', '1');
             form.addEventListener('submit', function(ev) {
