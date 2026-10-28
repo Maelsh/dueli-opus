@@ -9,6 +9,7 @@
 import type { Context } from 'hono';
 import type { Bindings, Variables, ApiResponse, Language } from '../../config/types';
 import { t, DEFAULT_LANGUAGE } from '../../i18n';
+import { logStructuredServerError } from '../../lib/services/structured-server-log';
 
 /** Hono context type with our bindings */
 export type AppContext = Context<{ Bindings: Bindings; Variables: Variables }>;
@@ -79,7 +80,18 @@ export abstract class BaseController {
      * Send server error
      */
     protected serverError(c: AppContext, error: Error) {
-        console.error(`[${this.constructor.name}] Error:`, error);
+        const requestId = c.get('requestId') ?? 'unknown';
+        const started = c.get('requestStartMs') ?? Date.now();
+        logStructuredServerError({
+            requestId,
+            method: c.req.method,
+            path: c.req.path,
+            status: 500,
+            durationMs: Date.now() - started,
+            errorCode: 'CONTROLLER_ERROR',
+            detail: error.message,
+        });
+        c.header('X-Request-Id', requestId);
         return this.error(c, this.t('server_error', c), 500);
     }
 

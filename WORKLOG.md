@@ -1,3 +1,11 @@
+## 2026-10-28 — UNIT34 / R4-DB-MEASURE-1 · branch feat/unit34-r4-db-measure-1 (from 20c16dc = origin/main)
+
+- **A:** `requestContextMiddleware` + `structured-server-log` (`X-Request-Id`, JSON 5xx logs, redaction).
+- **B:** `tests/api/unit34-d1-measurement.test.ts` + `tests/helpers/d1-measurement.ts`; report `docs/unit34-d1-measurement-report.md` (stmt counts local; rowsRead N/A).
+- **C:** `PublicSurfaceCache` on guest public home rails (15s TTL, policy_version keys); `HomePage.openRail` bounded retry (2×); tests cache + retry.
+- **TESTS (focused):** unit34 request 3, measure 5, cache 1, home retry 1 (+ unit33 rails 6 regression).
+- **STATUS:** LOCAL VERIFIED — PR pending; no merge/deploy.
+
 ## 2026-10-28 — UNIT33.1 P3 / PR #145 · branch feat/unit33-r4-home-ux-deps-sec-1 (from 065d7d0)
 
 - **P3-1:** `DUELI_AUDIT_CMD` + `shim-nonzero-one-high.mjs` tests non-zero exit with valid JSON → blocking without exception.

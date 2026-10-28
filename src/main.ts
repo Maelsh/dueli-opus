@@ -13,6 +13,8 @@ import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
 import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
 import { rateLimit, csrfProtection, securityHeaders } from './middleware/security';
+import { requestContextMiddleware } from './middleware/request-context';
+import { logStructuredServerError } from './lib/services/structured-server-log';
 import { getCookie } from 'hono/cookie';
 import { CSRF_COOKIE_NAME, ensureCsrfCookie } from './lib/services/SessionCookieService';
 import { DEFAULT_PLATFORM_URL, WWW_PLATFORM_URL } from './config/defaults';
@@ -77,6 +79,8 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // Middleware - البرمجيات الوسيطة
 // ============================================
 
+app.use('*', requestContextMiddleware());
+
 // CORS Middleware
 // SEC-05 (docs/12-SECURITY-REMEDIATION.md): cors() with no options sends
 // Access-Control-Allow-Origin: * for every /api/* request, which also
@@ -100,7 +104,7 @@ app.use('/api/*', (c, next) => {
         origin: (origin) => (origin && allowList.includes(origin) ? origin : ''),
         credentials: true,
         allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Session-Token', 'X-Guest-Token'],
+        allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Session-Token', 'X-Guest-Token', 'X-Request-Id'],
     })(c, next);
 });
 
@@ -442,7 +446,18 @@ type PagesCompatibleHono = typeof app & { notFoundHandler?: typeof onNotFound };
 (app as PagesCompatibleHono).notFoundHandler = onNotFound;
 
 app.onError((err, c) => {
-  console.error(err);
+  const requestId = c.get('requestId') ?? 'unknown';
+  const started = c.get('requestStartMs') ?? Date.now();
+  logStructuredServerError({
+    requestId,
+    method: c.req.method,
+    path: c.req.path,
+    status: 500,
+    durationMs: Date.now() - started,
+    errorCode: 'UNHANDLED_EXCEPTION',
+    detail: err instanceof Error ? err.message : String(err),
+  });
+  c.header('X-Request-Id', requestId);
   const lang = c.get('lang') || DEFAULT_LANGUAGE;
   const tr = translations[getUILanguage(lang)];
   return c.text(tr.error_occurred || 'Internal Server Error', 500);

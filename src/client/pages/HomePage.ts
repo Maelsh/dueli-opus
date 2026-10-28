@@ -311,7 +311,21 @@ export class HomePage {
      * null — the rail paints an explicit translated retry, never a silent
      * partial list presented as complete.
      */
+    /** UNIT34-C: bounded retries on transient 5xx/D1 failures (no infinite loop). */
+    static readonly RAIL_OPEN_MAX_ATTEMPTS = 2;
+
     static async openRail(def: RailDef): Promise<RailOpen | null> {
+        for (let attempt = 0; attempt < this.RAIL_OPEN_MAX_ATTEMPTS; attempt += 1) {
+            if (attempt > 0) {
+                await new Promise((r) => setTimeout(r, 350 * attempt));
+            }
+            const opened = await this.openRailOnce(def);
+            if (opened !== null) return opened;
+        }
+        return null;
+    }
+
+    private static async openRailOnce(def: RailDef): Promise<RailOpen | null> {
         try {
             const body: Record<string, string> = { kind: def.kind, status: def.status };
             if (def.category !== '') body['category'] = def.category;

@@ -74,6 +74,8 @@ export type Variables = {
   lang: Language;
   user: User | null;
   cspNonce?: string; // C5: per-request CSP nonce set by securityHeaders()
+  requestId?: string; // UNIT34-A: correlation id for logs + X-Request-Id
+  requestStartMs?: number;
 }
 
 // ============================================

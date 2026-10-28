@@ -48,6 +48,11 @@ import { H7SignalsModel } from './H7SignalsModel';
 import { h7ApplyDiscoveryDiversityByTier, h7OrderScored, h7ScoreCard } from '../lib/services/H7RankingService';
 import { H7_DISCOVERY_ORDERING_VERSION, H7_POLICY_VERSION, h7RecencyOf } from '../lib/services/H7RankingPolicy';
 import type { H7StatusBucket } from '../lib/services/H7RankingPolicy';
+import {
+    buildPublicCacheKey,
+    getPublicCache,
+    setPublicCache,
+} from '../lib/services/PublicSurfaceCache';
 
 /**
  * Policy + ordering version pinned into every rail context. h7-v1 weights
@@ -264,7 +269,19 @@ export class SuggestedGuestRailProvider implements ResultSessionProvider {
     }
 
     async buildOrderedIds(db: D1Database, lang: string): Promise<number[]> {
-        return new RecommendationModel(db).findGuestSuggestedIdsForStatus(lang, this.status);
+        const cacheKey = buildPublicCacheKey({
+            surface: SUGGESTED_GUEST_SURFACE,
+            category: '',
+            subcategory: '',
+            status: this.status,
+            lang: this.lang,
+            policy_version: RAIL_POLICY_VERSION,
+        });
+        const cached = getPublicCache<number[]>(cacheKey);
+        if (cached) return [...cached];
+        const ids = await new RecommendationModel(db).findGuestSuggestedIdsForStatus(lang, this.status);
+        setPublicCache(cacheKey, ids);
+        return ids;
     }
 
     isEligible(row: CompetitionWithDetails): boolean {
@@ -368,6 +385,25 @@ export class CategoryRailProvider implements ResultSessionProvider {
     }
 
     async buildOrderedIds(db: D1Database): Promise<number[]> {
+        if (this.identityKind === 'guest' && this.excludedCreatorIds.length === 0) {
+            const cacheKey = buildPublicCacheKey({
+                surface: this.surface,
+                category: this.category,
+                subcategory: this.subcategory,
+                status: this.status,
+                lang: this.lang,
+                policy_version: RAIL_POLICY_VERSION,
+            });
+            const cached = getPublicCache<number[]>(cacheKey);
+            if (cached) return [...cached];
+            const ids = await this.buildOrderedIdsUncached(db);
+            setPublicCache(cacheKey, ids);
+            return ids;
+        }
+        return this.buildOrderedIdsUncached(db);
+    }
+
+    private async buildOrderedIdsUncached(db: D1Database): Promise<number[]> {
         const eligible = await new CompetitionModel(db).findHomeRailIds({
             status: this.status,
             category: this.category,

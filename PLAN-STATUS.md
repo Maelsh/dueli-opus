@@ -1,3 +1,8 @@
+## 2026-10-28 — UNIT34 / R4-DB-MEASURE-1 · فرع feat/unit34-r4-db-measure-1 (من 20c16dc = origin/main)
+
+- 🔧 **LOCAL VERIFIED — REMOTE/merge pending.** ركائز A–D: requestId/logging، قياس D1 محلي، كاش عام محدود للضيف، تقرير `docs/unit34-d1-measurement-report.md`. لا MySQL ولا استنزاف حصة إنتاج.
+- **BASE:** `20c16dc7bbda3af1aa3b0597f0f147a59c44b1c4` · **PLAN:** `dc5bc1efd7d94dfa1c19604b7277b8104cdb93ad`.
+
 ## 2026-10-28 — UNIT33.1 P3 / PR #145 · ملاحظات مراجعة غير حاجبة · فرع feat/unit33-r4-home-ux-deps-sec-1 (من 8e10cdc)
 
 - 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** P3-1 shim exit≠0؛ P3-2 رفض error+vulnerabilities؛ P3-3 severity مفقود. **اختبارات audit:** 22.
