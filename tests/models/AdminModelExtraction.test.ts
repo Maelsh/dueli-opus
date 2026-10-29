@@ -84,7 +84,7 @@ describe('F-5D AdminController SQL extraction', () => {
         const prepare = vi.fn().mockReturnValue({ first });
         const stats = new AdminStatsModel({ prepare } as unknown as D1Database);
         expect(await stats.totalRevenue()).toEqual({ total: 5 });
-        expect(prepare.mock.calls[0][0]).toBe('SELECT SUM(amount) as total FROM user_earnings');
+        expect(prepare.mock.calls[0][0]).toBe('SELECT COALESCE(SUM(total), 0) as total FROM user_earnings');
     });
 
     // =====================================
