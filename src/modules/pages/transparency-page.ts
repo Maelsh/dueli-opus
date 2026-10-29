@@ -548,7 +548,12 @@ export const transparencyPage = async (
         </script>
     `;
 
-    return c.html(generateHTML(content, lang, t.page_title ?? 'Transparency Ledger', (c.get('cspNonce') as string) ?? ''));
+    return c.html(
+        generateHTML(content, lang, t.page_title ?? 'Transparency Ledger', (c.get('cspNonce') as string) ?? '', {
+            path: '/transparency',
+            description: tr.seo?.pages?.transparency,
+        })
+    );
 };
 
 /** Helper: generates skeleton KPI card placeholders */

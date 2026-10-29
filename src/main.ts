@@ -340,16 +340,35 @@ app.get('/', (c) => {
     </script>
   `;
 
-  return c.html(generateHTML(content, lang, tr.home, (c.get('cspNonce') as string) ?? ''));
+  return c.html(
+    generateHTML(content, lang, tr.home, (c.get('cspNonce') as string) ?? '', {
+      path: '/',
+      description: tr.seo?.pages?.home,
+    })
+  );
 });
 
 // Import remaining page routes
 import { aboutPage, helpPage, docsIndexPage, docReaderPage, verifyPage, competitionPage, createPage, explorePage, profilePage, messagesPage, notificationsPage, settingsPage, myCompetitionsPage, myRequestsPage, earningsPage, reportsPage, donatePage, transparencyPage, advertiserPortalPage, adminDashboardPage, complaintTrackingPage, liveFinanceDashboardPage } from './modules/pages';
+import { guideHubPage, guideSectionPage } from './modules/pages/guide-page';
+import { welcomePage } from './modules/pages/welcome-page';
+import seoRoutes from './modules/api/seo/routes';
 
 // Mount page routes
+// UNIT38 / R4-GUIDE-1: the /guide center. Each section is its own
+// address (/guide/:section) so a deep link and a refresh work without an
+// SPA and without loading every section at once.
+app.get('/guide', guideHubPage);
+app.get('/guide/:section', guideSectionPage);
+// /about, /help and /faq stay reachable as safe aliases of the matching
+// guide section (same language, same legacy anchors, canonical on the guide).
 app.get('/about', aboutPage);
 app.get('/help', helpPage);
 app.get('/faq', helpPage);
+// The splash portal for the companion domain. It has its own path and
+// never intercepts the main domain or an existing route.
+app.get('/welcome', welcomePage);
+app.route('/', seoRoutes);
 app.get('/docs', docsIndexPage);
 app.get('/docs/:slug', docReaderPage);
 app.get('/verify', verifyPage);
@@ -427,14 +446,17 @@ const onNotFound = (c: Context<{ Bindings: Bindings; Variables: Variables }>) =>
           ${tr.back_to_home}
         </a>
         <p class="mt-4 text-sm">
-          <a href="/help?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">${tr.help || 'Help'}</a>
+          <a href="/guide?lang=${lang}" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">${tr.help || 'Help'}</a>
         </p>
       </div>
     </div>
     ${getFooter(lang)}
   `;
 
-  return c.html(generateHTML(content, lang, '404', (c.get('cspNonce') as string) ?? ''), 404);
+  return c.html(
+    generateHTML(content, lang, '404', (c.get('cspNonce') as string) ?? '', { noindex: true }),
+    404
+  );
 };
 
 app.notFound(onNotFound);

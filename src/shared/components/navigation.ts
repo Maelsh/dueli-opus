@@ -28,8 +28,11 @@ export function getNavigation(lang: Language): string {
 
         <!-- Right Side Actions -->
         <div class="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 min-w-0">
-          <!-- Help (guests only — members use account menu) -->
-          <a href="/help?lang=${lang}" id="helpIcon" aria-label="${tr.help || 'Help'}" title="${tr.help || 'Help'}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors flex-shrink-0">
+          <!-- Help (guests only — members use account menu).
+               UNIT38 / R4-GUIDE-1: the help entry now opens the guide
+               center, which carries the help section and the rest of the
+               guide sections. -->
+          <a href="/guide?lang=${lang}" id="helpIcon" aria-label="${tr.help || 'Help'}" title="${tr.help || 'Help'}" class="nav-icon text-gray-400 hover:text-amber-500 dark:text-gray-400 dark:hover:text-amber-500 transition-colors flex-shrink-0">
             <i class="far fa-question-circle text-2xl" aria-hidden="true"></i>
           </a>
           
@@ -179,7 +182,9 @@ export function getNavigation(lang: Language): string {
                   <i class="fas fa-shield-alt text-gray-500"></i>
                   <span>${tr.admin?.admin_panel || 'Admin Panel'}</span>
                 </a>
-                <a href="/help?lang=${lang}" class="user-menu-item" title="${tr.help || 'Help'}">
+                <!-- UNIT38 / R4-GUIDE-1: the account-menu help entry opens
+                     the guide center too. -->
+                <a href="/guide?lang=${lang}" class="user-menu-item" title="${tr.help || 'Help'}">
                   <i class="fas fa-question-circle text-gray-500"></i>
                   <span>${tr.help || 'Help'}</span>
                 </a>

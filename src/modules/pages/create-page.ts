@@ -99,7 +99,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
         document.getElementById('createFormContainer').innerHTML = \`
           <form id="createForm" class="card p-8 space-y-6" aria-describedby="createHelpHint">
             <p id="createHelpHint" class="text-sm text-gray-500 dark:text-gray-400">
-              <a href="/help?lang=\${lang}#topic-create" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a>
+              <a href="/guide/help?lang=\${lang}#topic-create" class="text-purple-600 dark:text-purple-400 hover:underline font-semibold">\${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a>
             </p>
             <div>
               <label for="createTitle" class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">\${tr.competition_title} *</label>

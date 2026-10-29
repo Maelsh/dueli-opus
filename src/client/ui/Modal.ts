@@ -358,7 +358,7 @@ export class Modal {
      */
     static showHelp(): void {
         const lang = State.lang || 'ar';
-        window.location.href = `/help?lang=${lang}`;
+        window.location.href = `/guide/help?lang=${lang}`;
     }
 }
 

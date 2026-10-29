@@ -143,7 +143,7 @@ export const liveRoomPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                 <div class="text-center text-white">
                                     <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
                                     <p class="text-lg">${tr.waiting_opponent || 'Waiting for opponent...'}</p>
-                                    <p class="mt-2 text-sm"><a href="/help?lang=${lang}#topic-live" class="text-purple-300 hover:underline font-semibold">${tr.help_guide?.learn_more || 'Learn more'}</a></p>
+                                    <p class="mt-2 text-sm"><a href="/guide/help?lang=${lang}#topic-live" class="text-purple-300 hover:underline font-semibold">${tr.help_guide?.learn_more || 'Learn more'}</a></p>
                                 </div>
                             </div>
                             

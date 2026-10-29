@@ -408,7 +408,7 @@ describe('R4-LIVE-ENTRY-RECOVERY-REM1 broadcast surface', () => {
                 expect(html).toContain('id="competitorView"');
                 expect(html).toContain('id="publishState"');
                 expect(html).toContain('id="competitorControls"');
-                const bodies = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)]
+                const bodies = [...html.matchAll(/<script(?![^>]*type="application\/ld\+json")[^>]*>([\s\S]*?)<\/script>/g)]
                     .map((m) => m[1] || '').filter((b) => b.trim().length > 0);
                 expect(bodies.length).toBeGreaterThan(0);
                 for (const body of bodies) {

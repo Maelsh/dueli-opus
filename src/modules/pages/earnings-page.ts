@@ -63,7 +63,7 @@ export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: V
                                            placeholder="50.00" required
                                            class="w-full ${rtl ? 'pr-8 pl-4' : 'pl-8 pr-4'} py-3 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500 outline-none transition" />
                                 </div>
-                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal} <a href="/help?lang=${lang}#topic-payout" class="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a></p>
+                                <p class="text-xs text-gray-400 mt-1">${tr.min_withdrawal} <a href="/guide/help?lang=${lang}#topic-payout" class="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold">${(tr.help_guide && tr.help_guide.learn_more) || 'Learn more'}</a></p>
                             </div>
 
                             <!-- Payment Method: saved methods first, manual fallback -->

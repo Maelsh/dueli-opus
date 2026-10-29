@@ -24,7 +24,10 @@ function env(db: SqliteD1) {
 }
 
 function inlineScripts(html: string): string[] {
-    return [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    // The JSON-LD block (type="application/ld+json") is DATA, not JavaScript:
+    // it is parsed by the crawler, never executed, so it is excluded from
+    // the compile gate (UNIT38 / R4-GUIDE-1 added it to every page head).
+    return [...html.matchAll(/<script(?![^>]*type="application\/ld\+json")(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 }
 
 describe('R2-F page pins', () => {

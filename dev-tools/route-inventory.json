@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-29T11:25:41.694Z",
-  "total": 260,
+  "generatedAt": "2026-10-29T18:24:46.488Z",
+  "total": 262,
   "routes": [
     {
       "method": "GET",
@@ -1821,6 +1821,167 @@
       "classification": "AUTHENTICATED",
       "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/withdrawals/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/robots.txt",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/seo/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/sitemap.xml",
+      "classification": "UNGUARDED ⚠",
+      "guards": "group:rateLimit, group:csrf",
+      "file": "src/modules/api/seo/routes.ts"
+    }
+  ],
+  "pageRoutes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/about",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/admin",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/advertiser",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/competition/:id",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/complaints",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/create",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/docs",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/docs/:slug",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/donate",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/earnings",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/explore",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/faq",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/guide",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/guide/:section",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/help",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/live/:id",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/live/:id/finance",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/messages",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/my-competitions",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/my-requests",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/notifications",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/profile",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/profile/:username",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/reports",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/settings",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/transparency",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/verify",
+      "source": "main.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/welcome",
+      "source": "main.ts"
     }
   ]
 }

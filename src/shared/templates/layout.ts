@@ -6,6 +6,7 @@
 import type { Language } from '../../config/types';
 import { translations, getUILanguage, getDir, isRTL } from '../../i18n';
 import { Sanitize } from '../../lib/services/Sanitize';
+import { buildSeoHead, type SeoInput } from './seo';
 
 // Font mapping per language
 const fontMap: Record<string, string> = {
@@ -14,12 +15,29 @@ const fontMap: Record<string, string> = {
 };
 
 /**
+ * UNIT38 / R4-GUIDE-1 — per-page SEO overrides.
+ *
+ * Every surface keeps the default (site-wide description + no canonical
+ * unless the page knows its own path), while a page that owns a public
+ * path (like /guide) passes its own description/canonical so the head
+ * stays unique and truthful.
+ */
+export type SeoOptions = Partial<Omit<SeoInput, 'lang' | 'title'>>;
+
+/**
  * Generate base HTML wrapper - توليد غلاف HTML الأساسي
  */
-export function generateHTML(content: string, lang: Language, title: string = 'Dueli', nonce: string = ''): string {
+export function generateHTML(
+  content: string,
+  lang: Language,
+  title: string = 'Dueli',
+  nonce: string = '',
+  seo?: SeoOptions
+): string {
   const dir = getDir(lang);
   const tr = translations[getUILanguage(lang)];
   const fontFamily = fontMap[lang] || "'Inter'";
+  const seoHead = buildSeoHead({ lang, title, ...(seo ?? {}) }, nonce);
 
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
@@ -31,6 +49,7 @@ export function generateHTML(content: string, lang: Language, title: string = 'D
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Dueli">
     <title>${Sanitize.escapeHtml(title)} - ${Sanitize.escapeHtml(tr.app_title)}</title>
+    ${seoHead}
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
