@@ -1350,7 +1350,7 @@ class LiveSequentialPlayer {
         // media timeline: 0 would clamp to 517.743 instead of the chunk start.
 
         nextPlayer.play().then(function() {
-            setTimeout(function() { try { nextPlayer.muted = false; } catch (e) {} }, 100);
+            try { nextPlayer.muted = false; } catch (e) {}
         }).catch(function() {
             // Audible blocked but muted flows — keep video, note it.
             testLog('Muted playback continues (autoplay policy)', 'warn');
@@ -1876,21 +1876,22 @@ class SmartVodPlayer {
             );
         }
         
-        // حل مشكلة autoplay policy - البدء muted ثم محاولة unmute
+        // حل مشكلة autoplay policy - البدء muted ثم unmute فقط بعد play ناجح
         this.videoElement.muted = true;
         try {
             await this.videoElement.play();
-            // محاولة unmute بعد بدء التشغيل
-            setTimeout(function() {
-                this.videoElement.muted = false;
-            }.bind(this), 100);
+            if (gen !== this.opGen) return;
+            try {
+                if (!this.videoElement.paused) this.videoElement.muted = false;
+            } catch (unmuteErr) { /* browser policy — stay muted until user gesture */ }
         } catch (e) {
-            testLog('⚠️ Autoplay blocked, waiting for user interaction', 'warn');
-            // إضافة listener لأول تفاعل
+            testLog('Autoplay blocked, waiting for user interaction', 'warn');
             const playOnInteraction = function() {
                 self.videoElement.play().then(function() {
-                    self.videoElement.muted = false;
-                });
+                    try {
+                        if (!self.videoElement.paused) self.videoElement.muted = false;
+                    } catch (unmuteErr) { /* ignore */ }
+                }).catch(function() { /* ignore */ });
                 document.removeEventListener('click', playOnInteraction);
                 document.removeEventListener('touchstart', playOnInteraction);
             };

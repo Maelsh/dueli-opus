@@ -46,6 +46,7 @@ import { CountdownTimer } from './ui/CountdownTimer';
 import { WatchLaterUI } from './ui/WatchLaterUI';
 import { RecordingDownloadPanel } from './ui/RecordingDownloadPanel';
 import { openCompetitionShare, syncCompetitionShareMeta } from './ui/CompetitionSharePanel';
+import { refreshI18nLayout } from './ui/I18nLayoutGuard';
 import type { CompetitionShareInput } from '../lib/competitionShare';
 
 // Shared Components (View layer - single source of truth)
@@ -165,6 +166,9 @@ export class App {
         // page) from the authenticated server status endpoint.
         WatchLaterUI.init();
 
+        refreshI18nLayout(document, State.lang);
+        window.refreshI18nLayout = (root?: ParentNode) => refreshI18nLayout(root ?? document, State.lang);
+
         console.log('🔥 Dueli Client loaded successfully!');
     }
 
@@ -257,6 +261,7 @@ declare global {
         openRecordingDownload: (competitionId: number) => RecordingDownloadPanel | null;
         openCompetitionShare: () => void;
         syncCompetitionShareMeta: (comp: CompetitionShareInput) => void;
+        refreshI18nLayout: (root?: ParentNode) => void;
 
         // UNIT32.1: CSP-delegated `WatchLaterUI.toggle` from shared cards.
         WatchLaterUI: typeof WatchLaterUI;
@@ -396,6 +401,7 @@ if (typeof window !== 'undefined') {
     window.openRecordingDownload = (competitionId: number) => RecordingDownloadPanel.open(Number(competitionId));
     window.openCompetitionShare = () => { void openCompetitionShare(); };
     window.syncCompetitionShareMeta = syncCompetitionShareMeta;
+    window.refreshI18nLayout = (root?: ParentNode) => refreshI18nLayout(root ?? document, State.lang);
 
     // Note: Test Streaming functions are injected as inline scripts in test pages
 }

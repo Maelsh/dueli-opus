@@ -1,3 +1,11 @@
+## 2026-10-29 — PR #149 STOP-THE-LINE (2266) · feat/unit35-2-explore-observer-i18n-fit-1
+
+- 🔧 **LOCAL VERIFIED — resubmit after stop-the-line fixes (defects 1–6).** Prior 35.2 explore/i18n work retained; competition page + MP4 assembler + styles + player guards updated. Vitest focused suites GREEN; `tsc`, `build`, `build:css` OK. لا merge حتى مراجعة مالك المشروع.
+
+## 2026-10-29 — UNIT35.2 / R4-EXPLORE-OBSERVER-I18N-FIT-1 · فرع feat/unit35-2-explore-observer-i18n-fit-1 (BASE c401b5d5)
+
+- 🔧 **LOCAL VERIFIED — REMOTE review pending (PR #149).** Explore IO rebind + i18nAutoFit + truncation/tooltip. Vitest: 2205 passed locally (6 jq tests skip on Windows without `jq`); `tsc`, `build`, `build:css` OK. Plan PR on `dueli-plan` branch `feat/plan-units-35-2-36-1-42-1`. لا merge/deploy.
+
 ## 2026-10-28 — UNIT35.1 / PR #148 · فرع feat/unit35-1-r4-media-controls-download-rem1 (BASE 12181265)
 
 - 🔧 **LOCAL VERIFIED — REMOTE re-review pending.** إصلاح تراكم Explore في `view=competitions|users` + تعارض MP4 `manifest.complete` مع المدة المقاسة + مشاركة صفحة المنافسة (قرار مالك). اختبارات: explore-live-search-view-modes، competition-share، recording-download-service (UNIT35.1). معاينات OG للمنصات غير مثبتة (SPA). لا merge/deploy.

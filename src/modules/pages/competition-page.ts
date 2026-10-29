@@ -90,6 +90,19 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
         });
       }
+      function escapeAttrClient(value) {
+        return escapeHtmlClient(value);
+      }
+      function competitorHandleMarkup(username) {
+        var u = String(username || '');
+        var full = '@' + u;
+        return '<p dir="ltr" class="text-sm text-gray-500 block max-w-full truncate min-w-0 overflow-hidden whitespace-nowrap px-1" data-dueli-truncate="1" title="' + escapeAttrClient(full) + '" data-full-text="' + escapeAttrClient(full) + '">' + escapeHtmlClient(full) + '</p>';
+      }
+      function competitionSseAllowed() {
+        if (!competitionData) return false;
+        var s = competitionData.status;
+        return s === 'live' || s === 'accepted' || s === 'pending';
+      }
       
       document.addEventListener('DOMContentLoaded', async () => {
         await checkAuth();
@@ -409,7 +422,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                            never the current chunk duration. Hidden for VOD. -->
                       \${isLive ? '<div id="embeddedLiveControls" class="hidden bg-gray-900 p-3">' +
                         '<div class="embedded-live-controls-inner">' +
-                          '<span id="embeddedLiveTimeDisplay" class="embedded-time-display text-xs font-mono text-gray-300">0:00 / 0:00</span>' +
+                          '<span id="embeddedLiveTimeDisplay" class="embedded-time-display text-xs font-mono text-gray-300" dir="ltr">0:00 / 0:00</span>' +
                           '<input type="range" id="embeddedLiveSeekbar" min="0" max="100" value="100" class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-red-500 min-w-0" aria-label="' + (tr.live_timeline || 'Live timeline') + '" />' +
                         '</div>' +
                       '</div>' : ''}
@@ -421,7 +434,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                                   class="w-9 h-9 flex items-center justify-center bg-purple-600 text-white rounded-full hover:bg-purple-700 flex-shrink-0">
                             <i id="embeddedPlayPauseIcon" class="fas fa-play text-sm"></i>
                           </button>
-                          <span id="embeddedTimeDisplay" class="embedded-time-display text-xs font-mono text-gray-300">0:00 / 0:00</span>
+                          <span id="embeddedTimeDisplay" class="embedded-time-display text-xs font-mono text-gray-300" dir="ltr">0:00 / 0:00</span>
                           <input type="range" id="embeddedSeekbar" min="0" max="100" value="0"
                                  class="flex-1 h-1.5 bg-gray-600 rounded-full appearance-none cursor-pointer accent-purple-500 min-w-0"
                                  title="Seek" />
@@ -443,7 +456,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 <div class="card p-6">
                   <h3 class="font-bold text-lg mb-4 text-gray-900 dark:text-white">\${tr.competitors}</h3>
                   <div class="grid grid-cols-2 gap-6">
-                    <div class="text-center">
+                    <div class="text-center min-w-0 overflow-hidden px-2 flex flex-col items-center">
                       \${window.renderUserAvatar({
                         username: comp.creator_username,
                         displayName: comp.creator_name,
@@ -452,11 +465,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         imgClassName: 'w-20 h-20 rounded-full mx-auto mb-3 border-4 border-purple-200 dark:border-purple-800',
                         className: 'block'
                       })}
-                      <h4 class="font-bold text-gray-900 dark:text-white">\${comp.creator_name}</h4>
-                      <p class="text-sm text-gray-500">@\${comp.creator_username}</p>
+                      <h4 class="font-bold text-gray-900 dark:text-white truncate max-w-full">\${comp.creator_name}</h4>
+                      \${competitorHandleMarkup(comp.creator_username)}
                     </div>
                     
-                    <div class="text-center">
+                    <div class="text-center min-w-0 overflow-hidden px-2 flex flex-col items-center">
                       \${comp.opponent_id ? \`
                         \${window.renderUserAvatar({
                           username: comp.opponent_username,
@@ -466,8 +479,8 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                           imgClassName: 'w-20 h-20 rounded-full mx-auto mb-3 border-4 border-amber-200 dark:border-amber-800',
                           className: 'block'
                         })}
-                        <h4 class="font-bold text-gray-900 dark:text-white">\${comp.opponent_name}</h4>
-                        <p class="text-sm text-gray-500">@\${comp.opponent_username}</p>
+                        <h4 class="font-bold text-gray-900 dark:text-white truncate max-w-full">\${comp.opponent_name}</h4>
+                        \${competitorHandleMarkup(comp.opponent_username)}
                       \` : \`
                         <div class="w-20 h-20 rounded-full mx-auto mb-3 bg-gray-100 dark:bg-gray-700 flex items-center justify-center border-4 border-dashed border-gray-300 dark:border-gray-600">
                           <i class="fas fa-question text-3xl text-gray-400"></i>
@@ -852,18 +865,38 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           const res = await fetch('/api/competitions/' + competitionId + '/ratings/summary?lang=' + (window.lang || 'ar'));
           const data = await res.json().catch(function(){ return null; });
           if (!data || !data.success) return;
+          const uniqueRaters = typeof data.data.unique_rater_count === 'number' ? data.data.unique_rater_count : 0;
+          const earlyEnd = competitionData.status === 'completed'
+            && (competitionData.result_source === 'SYSTEM_EARLY_END' || !!competitionData.ended_early)
+            && uniqueRaters === 0;
+          if (earlyEnd) {
+            const note = (tr.ratings && tr.ratings.early_withdrawal_closed)
+              || tr.early_end_result_note
+              || '';
+            box.innerHTML = '<p class="text-sm text-gray-600 dark:text-gray-300">' + note + '</p>';
+            return;
+          }
           const names = {};
           if (competitionData.creator_id) names[competitionData.creator_id] = competitionData.creator_name;
           if (competitionData.opponent_id) names[competitionData.opponent_id] = competitionData.opponent_name;
+          const liveAwaiting = (tr.ratings && tr.ratings.live_awaiting) || ((tr.ratings && tr.ratings.no_ratings) || '—');
+          const zeroCompleted = (tr.ratings && tr.ratings.zero_completed) || '—';
           const rows = (data.data.competitors || []).map(function(e) {
             const name = names[e.competitor_id] || ('#' + e.competitor_id);
             const avg = e.average;
             const avgNum = avg === null || avg === undefined ? null : Number(avg);
             const pct = avgNum === null || !Number.isFinite(avgNum) ? 0 : Math.min(100, Math.round((avgNum / 5) * 100));
             const barTone = avgNum === null ? 'bg-gray-400' : (avgNum >= 4 ? 'bg-green-500' : avgNum >= 3 ? 'bg-yellow-500' : 'bg-red-400');
-            const avgLabel = avgNum === null ? ((tr.ratings && tr.ratings.zero_score) || '—') : String(avgNum);
+            let avgLabel;
+            if (avgNum !== null && Number.isFinite(avgNum)) {
+              avgLabel = String(avgNum);
+            } else if (competitionData.status === 'live') {
+              avgLabel = liveAwaiting;
+            } else {
+              avgLabel = zeroCompleted;
+            }
             return '<div class="mb-3">' +
-              '<div class="flex justify-between gap-2 text-xs mb-1"><span class="font-semibold truncate">' + name + '</span><span class="flex-shrink-0">' + avgLabel + '</span></div>' +
+              '<div class="flex justify-between gap-2 text-xs mb-1"><span class="font-semibold truncate min-w-0">' + name + '</span><span class="flex-shrink-0">' + avgLabel + '</span></div>' +
               '<div class="h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden" role="presentation">' +
               '<div class="h-full ' + barTone + ' transition-all" data-csp-style="width:' + pct + '%"></div></div>' +
               '<div class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">' + e.count + ' · ' + ((tr.ratings && tr.ratings.score_scale_hint) || '') + '</div></div>';
@@ -877,7 +910,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
           }
           const metaHtml = meta.length ? '<p class="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">' + meta.join(' · ') + '</p>' : '';
           box.innerHTML = metaHtml + (rows || (((tr.ratings && tr.ratings.no_ratings) || 'No ratings yet')));
-          // Eligibility hint: live + logged viewer without 300s.
           const hint = document.getElementById('rateEligibleHint');
           if (hint) {
             const w = competitionData.viewer_watch;
@@ -887,12 +919,18 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         } catch (e) {}
       }
 
+      function closeCompetitionLiveStreams() {
+        if (ratingsLiveES) { try { ratingsLiveES.close(); } catch (e) {} ratingsLiveES = null; }
+        if (competitionStatusES) { try { competitionStatusES.close(); } catch (e) {} competitionStatusES = null; }
+        if (commentsLiveES) { try { commentsLiveES.close(); } catch (e) {} commentsLiveES = null; }
+      }
+
       // R2-V: tally updates arrive on the EXISTING competition channel.
       let ratingsLiveES = null;
       function subscribeRatingsLive() {
         try {
           if (ratingsLiveES) { try { ratingsLiveES.close(); } catch (e) {} ratingsLiveES = null; }
-          if (!competitionData || (competitionData.status !== 'live' && competitionData.status !== 'completed')) return;
+          if (!competitionSseAllowed()) return;
           const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
           ratingsLiveES = es;
           es.addEventListener('rating_updated', function() { loadRatingSummary(); });
@@ -1097,6 +1135,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         // tail keep draining in the background.
         if (becameCompleted) {
           try {
+            closeCompetitionLiveStreams();
+          } catch (err) {
+            log('SSE cleanup failed: ' + (err && err.message ? err.message : err), 'warn');
+          }
+          try {
             closeRatingUi();
           } catch (err) {
             log('Rating cleanup failed: ' + (err && err.message ? err.message : err), 'error');
@@ -1183,6 +1226,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             competitionStatusES = null;
           }
           if (typeof EventSource === 'undefined') return;
+          if (!competitionSseAllowed()) return;
           const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
           competitionStatusES = es;
           es.addEventListener('competition_status', function(ev) {
@@ -1290,6 +1334,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             try { commentsLiveES.close(); } catch (e) {}
             commentsLiveES = null;
           }
+          if (!competitionSseAllowed()) return;
           const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
           commentsLiveES = es;
           es.addEventListener('comment_new', function(ev) {
@@ -2690,6 +2735,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       function paintEmbeddedFullscreenChrome() {
         const shell = document.getElementById('embeddedViewerSection');
         const btn = document.getElementById('embeddedFsBtn');
+        const exitBtn = document.getElementById('embeddedExitFullscreenBtn');
         if (!shell || !btn) return;
         const full = fullscreenElement() === shell || shell.classList.contains('is-player-fullscreen');
         const label = full ? (tr.exit_fullscreen || tr.fullscreen) : tr.fullscreen;
@@ -2699,6 +2745,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         btn.setAttribute('title', label);
         btn.setAttribute('aria-pressed', full ? 'true' : 'false');
         btn.classList.toggle('is-active', full);
+        btn.classList.toggle('hidden', full);
+        if (exitBtn) {
+          exitBtn.classList.toggle('hidden', !full);
+          exitBtn.classList.toggle('flex', full);
+        }
         embeddedFullscreen = full;
       }
       function syncEmbeddedFullscreenFromBrowser() {

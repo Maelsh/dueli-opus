@@ -1356,6 +1356,9 @@ export const ar = {
         score_scale_hint: 'النتيجة من 5',
         draw_label: 'تعادل',
         zero_score: 'لا نتيجة بعد',
+        live_awaiting: 'بانتظار تقييمات الجمهور',
+        zero_completed: '—',
+        early_withdrawal_closed: 'حُسمت المنافسة بالانسحاب المبكر قبل اكتمال تقييم الجمهور — النتيجة النظامية أعلاه.',
     },
 
     // ── T1.3: البث ──────────────

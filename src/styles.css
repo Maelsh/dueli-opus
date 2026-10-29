@@ -304,22 +304,6 @@ body.light {
     padding-left: env(safe-area-inset-left);
 }
 
-#embeddedViewerSection:fullscreen #embeddedVideoContainer,
-#embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer,
-#embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer {
-    flex: 1 1 auto;
-    min-height: 0;
-    width: 100%;
-    height: auto;
-    aspect-ratio: auto;
-}
-
-#embeddedViewerSection:fullscreen #embeddedVideoContainer video,
-#embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer video,
-#embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer video {
-    object-fit: contain;
-}
-
 #embeddedViewerSection:fullscreen #embeddedLiveControls,
 #embeddedViewerSection:-webkit-full-screen #embeddedLiveControls,
 #embeddedViewerSection.is-player-fullscreen #embeddedLiveControls,
@@ -1002,6 +986,53 @@ body.dark .user-menu-item:hover {
     align-items: center;
     gap: 0.75rem;
     min-width: 0;
+    direction: ltr;
+}
+
+#embeddedViewerSection:fullscreen #embeddedVideoContainer,
+#embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer,
+#embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100% !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    aspect-ratio: unset !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+#embeddedViewerSection:fullscreen #embeddedVideoContainer video,
+#embeddedViewerSection:-webkit-full-screen #embeddedVideoContainer video,
+#embeddedViewerSection.is-player-fullscreen #embeddedVideoContainer video {
+    object-fit: contain !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100% !important;
+}
+
+#embeddedViewerSection:fullscreen #embeddedFsBtn,
+#embeddedViewerSection:-webkit-full-screen #embeddedFsBtn,
+#embeddedViewerSection.is-player-fullscreen #embeddedFsBtn {
+    display: none !important;
+}
+
+#embeddedViewerSection:fullscreen #embeddedModeBadge,
+#embeddedViewerSection:-webkit-full-screen #embeddedModeBadge,
+#embeddedViewerSection.is-player-fullscreen #embeddedModeBadge {
+    top: 3.5rem;
+}
+
+#embeddedViewerSection:fullscreen .fs-exit-btn,
+#embeddedViewerSection:-webkit-full-screen .fs-exit-btn,
+#embeddedViewerSection.is-player-fullscreen .fs-exit-btn {
+    top: auto !important;
+    bottom: 5.5rem;
+    right: 1rem;
+    left: auto;
+    z-index: 95;
 }
 
 .embedded-vod-controls-inner .embedded-time-display,
@@ -1016,6 +1047,38 @@ body.dark .user-menu-item:hover {
 .embedded-live-controls-inner input[type="range"] {
     flex: 1 1 auto;
     min-width: 0;
+}
+
+@media (max-width: 640px) {
+    #notificationsDropdown,
+    #messagesDropdown {
+        position: fixed !important;
+        top: 60px !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: calc(100vw - 16px) !important;
+        z-index: 9999;
+    }
+
+    #notificationsDropdown .flex.items-start,
+    #messagesDropdown .flex.items-start {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    #notificationsDropdown .flex-1,
+    #messagesDropdown .flex-1 {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    #notificationsDropdown .flex-1 p,
+    #messagesDropdown .flex-1 p {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 
 @media (max-width: 390px) {
@@ -1204,4 +1267,34 @@ body.dark .user-menu-item:hover {
                 background: rgba(107, 114, 128, 0.15);
                 border-color: rgba(107, 114, 128, 0.3);
             }
-        
+
+/* UNIT 35.2 — English-baseline i18n auto-fit + truncation tooltips */
+.i18n-auto-fit {
+    font-size: calc(1em * var(--i18n-font-scale, 1));
+}
+
+[data-dueli-truncate] {
+    min-width: 0;
+}
+
+.dueli-truncate-tooltip {
+    position: fixed;
+    z-index: 10050;
+    max-width: min(90vw, 24rem);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: normal;
+    word-break: break-word;
+    background: rgb(17 24 39);
+    color: rgb(243 244 246);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+}
+
+.dark .dueli-truncate-tooltip {
+    background: rgb(243 244 246);
+    color: rgb(17 24 39);
+}
+
