@@ -1,3 +1,11 @@
+## 2026-10-29 — UNIT36 / R4-ADMIN-ACCEPT-1 · branch feat/unit36-r4-admin-accept-1 (BASE 4692e1b)
+
+- **SCOPE:** AdminStatsModel.totalRevenue uses SUM(total) not amount. AuthController.login accepts email or username (trim/lowercase, email first). R2-A suite re-run; no role/finance redesign.
+- **TESTS:** r2-a-admin including stats 200/403 and login admin / admin@dueli.local.
+- **STATUS:** LOCAL VERIFIED / REMOTE PENDING. No merge, no deploy.
+- **PENDING (UNIT40/42, not now):** change or delete the H8 trial admin (admin / admin@dueli.local / admin) and the other two trial accounts before launch.
+- **PHASE B:** production D1 bootstrap of that admin is NOT executed. Waiting for written leader confirmation after this PR is merged and Quality Gate + Deploy succeed on the actual merge SHA.
+
 ## 2026-10-29 — PR #149 STOP-THE-LINE (competition 2266 live defects 1–6) · feat/unit35-2-explore-observer-i18n-fit-1
 
 - **Scope:** Six production defects on `/competition/2266` — mobile nav dropdowns (CSS fixed), competitor `@handle` RTL (`dir=ltr` + truncate), rating card early-withdrawal copy, embedded fullscreen/player LTR controls + single exit, `Mp4FragmentAssembler` multi-`moof` continuous `tfdt`, no SSE on terminal competitions + unmute only after successful `play()`.
