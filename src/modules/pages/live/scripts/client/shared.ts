@@ -1349,8 +1349,16 @@ class LiveSequentialPlayer {
         // metadata arrives. Never write the bare local offset on an absolute
         // media timeline: 0 would clamp to 517.743 instead of the chunk start.
 
-        nextPlayer.play().then(function() {
-            try { nextPlayer.muted = false; } catch (e) {}
+        this._unmuteGen = (this._unmuteGen || 0) + 1;
+        var unmuteGen = this._unmuteGen;
+        var playedEl = nextPlayer;
+        var selfPlayer = this;
+        playedEl.play().then(function() {
+            setTimeout(function() {
+                if (unmuteGen !== selfPlayer._unmuteGen) return;
+                if (playedEl.paused) return;
+                try { playedEl.muted = false; } catch (e) {}
+            }, 100);
         }).catch(function() {
             // Audible blocked but muted flows — keep video, note it.
             testLog('Muted playback continues (autoplay policy)', 'warn');

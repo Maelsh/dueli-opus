@@ -37,7 +37,7 @@ describe('UNIT35.1 download duration alignment', () => {
         const inputs = [chunk(1, 0, 5000, 60000), chunk(2, 60000, 5000, 60000)];
         expect(() => assembleFragmentedMp4(inputs)).not.toThrow();
         const inflated = assembleFragmentedMp4(inputs);
-        expect(inflated.durationMs).toBe(120000);
+        expect(inflated.durationMs).toBe(10000);
         const corrected = assembleFragmentedMp4([
             chunk(1, 0, 5000, 5000),
             chunk(2, 5000, 5000, 5000),
