@@ -103,19 +103,35 @@ describe('R2-A admin identity, settings, roles, H9 documents', () => {
         expect(me.data.data.user.is_admin).toBe(1);
         const bad = await login(db, 'admin@dueli.local', 'wrongpass');
         expect(bad.status).toBe(401);
+        const byName = await login(db, 'admin', 'admin');
+        expect(byName.status).toBe(200);
+        expect(byName.token).toBeTruthy();
+        const badName = await login(db, 'admin', 'wrongpass');
+        expect(badName.status).toBe(401);
+        expect(badName.data.error).toBe(bad.data.error);
+    });
+
+    it('1b. GET /api/admin/stats sums user_earnings.total and stays 403 for non-admins', async () => {
+        await db.prepare(
+            `INSERT INTO user_earnings (user_id, available, pending, on_hold, total, withdrawn) VALUES
+             (2, 1, 0, 0, 12.5, 0),
+             (4, 0, 0, 0, 7.5, 0)`,
+        ).run();
+        const stats = await api(db, 'GET', '/api/admin/stats', adminTok);
+        expect(stats.status).toBe(200);
+        expect(stats.data.data.totalRevenue).toBe(20);
+        expect((await api(db, 'GET', '/api/admin/stats', plainTok)).status).toBe(403);
+        expect((await api(db, 'GET', '/api/admin/stats')).status).toBe(403);
     });
 
     it('2. admin API: admin 200, plain user 403, anon 403; /admin page gated', async () => {
-        // NOTE: /api/admin/stats is used as the gate probe instead of
-        // /api/admin/stats: getStats hits a PRE-EXISTING broken revenue
-        // query (no such column: amount — untouched, out of scope, fails on
-        // BASE too). The isAdmin gate itself is identical on every route.
+        // UNIT36: /api/admin/stats is a real gate probe (total column, not amount).
         expect((await api(db, 'GET', '/api/admin/roles', adminTok)).status).toBe(200);
         expect((await api(db, 'GET', '/api/admin/roles', plainTok)).status).toBe(403);
         expect((await api(db, 'GET', '/api/admin/roles')).status).toBe(403);
-        // The dashboard shell loads from /enhanced-stats (independent code
-        // path — it never touches the broken totalRevenue()/amount query
-        // behind /stats), so the new R2-A UI stays usable.
+        expect((await api(db, 'GET', '/api/admin/stats', plainTok)).status).toBe(403);
+        expect((await api(db, 'GET', '/api/admin/stats')).status).toBe(403);
+        // The dashboard shell also loads from /enhanced-stats.
         expect((await api(db, 'GET', '/api/admin/enhanced-stats', adminTok)).status).toBe(200);
 
         const adminPage = await app.request('/admin?lang=en', {

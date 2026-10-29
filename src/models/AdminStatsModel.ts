@@ -81,7 +81,7 @@ export class AdminStatsModel extends BaseModel<any> {
     }
 
     totalRevenue(): Promise<{ total: number | null } | null> {
-        return this.db.prepare('SELECT SUM(amount) as total FROM user_earnings')
+        return this.db.prepare('SELECT COALESCE(SUM(total), 0) as total FROM user_earnings')
             .first<{ total: number | null }>();
     }
 

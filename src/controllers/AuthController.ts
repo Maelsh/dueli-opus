@@ -265,7 +265,9 @@ export class AuthController extends BaseController {
             }
 
             const userModel = new UserModel(DB);
-            const user = await userModel.findByEmail(body.email);
+            const identifier = String(body.email).trim().toLowerCase();
+            const user = await userModel.findByEmail(identifier)
+                ?? await userModel.findByUsername(identifier);
 
             if (!user) {
                 return this.error(c, this.t('auth_invalid_credentials', c), 401);

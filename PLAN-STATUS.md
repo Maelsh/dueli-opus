@@ -1,3 +1,9 @@
+## 2026-10-29 — UNIT36 / R4-ADMIN-ACCEPT-1 · feat/unit36-r4-admin-accept-1 (BASE 4692e1b)
+
+- 🔧 **LOCAL VERIFIED / REMOTE PENDING.** stats500 (`SUM(total)`), login by email or username, R2-A admin journey rechecked. No merge/deploy.
+- **PENDING UNIT40/42:** rotate/delete trial admin `admin` / `admin@dueli.local` and the other two trial accounts before launch. Do not do that in this unit.
+- **PHASE B:** production write on dueli-db not done. Execute only after the leader confirms this PR merged and Quality Gate + Deploy succeeded on the merge SHA.
+
 ## 2026-10-29 — PR #149 STOP-THE-LINE (2266) · feat/unit35-2-explore-observer-i18n-fit-1
 
 - 🔧 **LOCAL VERIFIED — resubmit after stop-the-line fixes (defects 1–6).** Prior 35.2 explore/i18n work retained; competition page + MP4 assembler + styles + player guards updated. Vitest focused suites GREEN; `tsc`, `build`, `build:css` OK. لا merge حتى مراجعة مالك المشروع.
