@@ -112,7 +112,7 @@ describe('R3-C1 help page + routes', () => {
             for (const m of src.matchAll(/href="(\/[a-z?=-]+)(?:\?lang=)?"/g)) hrefs.add(m[1]);
         }
         const allowed = [
-            '/', '/about', '/help', '/faq', '/verify', '/competition', '/create',
+            '/', '/about', '/help', '/faq', '/guide', '/verify', '/competition', '/create',
             '/explore', '/profile', '/messages', '/notifications', '/settings',
             '/my-competitions', '/my-requests', '/live', '/earnings', '/reports',
             '/donate', '/transparency', '/advertiser', '/admin', '/complaints',
@@ -132,24 +132,26 @@ describe('R3-C1 help page + routes', () => {
 
 describe('R3-C1 entry points', () => {
     it('6. nav help: header for guests only; account menu + footer for everyone', () => {
-        expect(NAV).toContain('href="/help?lang=${lang}"');
+        // UNIT38 / R4-GUIDE-1: the help entry now opens the guide center
+        // (the help section lives inside it), so the entry point is /guide.
+        expect(NAV).toContain('href="/guide?lang=${lang}"');
         expect(NAV).toContain('id="helpIcon"');
         expect(NAV).toContain('guests only');
         expect(NAV).toContain('aria-label="${tr.help');
-        expect(NAV).toContain('href="/help?lang=${lang}" class="user-menu-item"');
+        expect(NAV).toContain('href="/guide?lang=${lang}" class="user-menu-item"');
         expect(AUTH_SVC).toContain("helpIcon.classList.add('auth-hidden')");
         expect(AUTH_SVC).toContain("helpIcon.classList.remove('auth-hidden')");
     });
 
-    it('7. footer + 404 link to help', () => {
-        expect(FOOTER).toContain('/help?lang=${lang}');
+    it('7. footer + 404 link to the guide center', () => {
+        expect(FOOTER).toContain('/guide?lang=${lang}');
         expect(FOOTER).toContain('/messages?tab=admin');
         expect(FOOTER).toContain('<nav aria-label=');
-        expect(MAIN).toContain('/help?lang=${lang}');
+        expect(MAIN).toContain('/guide?lang=${lang}');
     });
 
-    it('8. Modal.showHelp routes to /help instead of alerting a missing key', () => {
-        expect(MODAL).toContain('/help?lang=');
+    it('8. Modal.showHelp routes to the guide center instead of alerting a missing key', () => {
+        expect(MODAL).toContain('/guide/help?lang=');
         expect(MODAL).not.toContain('alert(');
         expect(MODAL).not.toContain('client.help.content');
     });

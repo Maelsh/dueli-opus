@@ -1,15 +1,15 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-29T11:25:41.694Z
+> تاريخ التوليد: 2026-10-29T18:24:46.488Z
 
-## الإجمالي: 260 مسار
+## الإجمالي: 262 مسار
 
 | التصنيف | العدد |
 |---|---|
 | PUBLIC(auth-optional, in-handler check required) | 129 |
 | AUTHENTICATED | 86 |
-| UNGUARDED ⚠ | 40 |
+| UNGUARDED ⚠ | 42 |
 | SERVICE(origin-only ⚠) | 5 |
 
 ## الحماية على مستوى المجموعات (main.ts)
@@ -285,8 +285,47 @@
 | POST | `/api/withdrawals` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |
 | DELETE | `/api/withdrawals/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |
 | GET | `/api/withdrawals/:id` | AUTHENTICATED | router:auth, group:rateLimit, group:csrf | `src/modules/api/withdrawals/routes.ts` |
+| GET | `/robots.txt` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/seo/routes.ts` |
+| GET | `/sitemap.xml` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/seo/routes.ts` |
 
 > **تنبيه:** التصنيف يعتمد فحص `authMiddleware` داخل ملف الراوتر المباشر فقط
 > (لا يتتبّع طبقات وسيطة إضافية). راوتر بلا `authMiddleware` يُصنَّف `UNGUARDED ⚠`
 > حتى لو كان عاماً عن قصد — راجع `docs/12-SECURITY-REMEDIATION.md` (SEC-13)
 > قبل اعتبار أي علامة ⚠ ثغرة فعلية.
+
+## مسارات الصفحات (HTML) — يسجَّلها main.ts عبر app.get
+
+> هذه ليست مسارات API، لذلك بلا تصنيف حماية. مصدر الحقيقة لاختبار
+> خريطة الموقع (sitemap.xml) الذي يفحص أن كل رابط فيه صفحة موجودة فعلاً.
+
+| Method | Path |
+|---|---|
+| GET | `/` |
+| GET | `/about` |
+| GET | `/admin` |
+| GET | `/advertiser` |
+| GET | `/competition/:id` |
+| GET | `/complaints` |
+| GET | `/create` |
+| GET | `/docs` |
+| GET | `/docs/:slug` |
+| GET | `/donate` |
+| GET | `/earnings` |
+| GET | `/explore` |
+| GET | `/faq` |
+| GET | `/guide` |
+| GET | `/guide/:section` |
+| GET | `/help` |
+| GET | `/live/:id` |
+| GET | `/live/:id/finance` |
+| GET | `/messages` |
+| GET | `/my-competitions` |
+| GET | `/my-requests` |
+| GET | `/notifications` |
+| GET | `/profile` |
+| GET | `/profile/:username` |
+| GET | `/reports` |
+| GET | `/settings` |
+| GET | `/transparency` |
+| GET | `/verify` |
+| GET | `/welcome` |

@@ -43,6 +43,26 @@ while ((m = importRe.exec(mainSrc))) {
     importMap.set(m[1], m[2]);
 }
 
+// ---- 2b. Parse the PAGE routes registered directly in main.ts ----
+// UNIT38 / R4-GUIDE-1: the SEO sitemap must only list URLs that really
+// exist. The API routers above are mounted via app.route(); the HTML
+// surfaces (the /guide center, the legacy aliases, the splash) are
+// registered with app.get() straight in main.ts, so they need their own
+// pass. They are listed WITHOUT an auth classification (page routes are
+// not API routes) but their exact path is the machine-readable truth the
+// sitemap regression test compares against.
+const pageRouteRe = /\bapp\.get\(\s*(['"`])([^'"`]+)\1/g;
+const pageRoutes = [];
+let pm;
+while ((pm = pageRouteRe.exec(mainSrc))) {
+    const raw = pm[2];
+    if (raw.startsWith('/api')) continue;
+    // Skip the redirect shim (an inline handler, not a surface).
+    pageRoutes.push({ method: 'GET', path: raw, source: 'main.ts' });
+}
+const uniquePageRoutes = [...new Map(pageRoutes.map((r) => [r.method + ' ' + r.path, r])).values()]
+    .sort((a, b) => a.path.localeCompare(b.path));
+
 // ---- 3. Parse app.route('/prefix', localIdentifier) mounts ----
 const mountRe = /app\.route\((['"`])([^'"`]+)\1,\s*(\w+)\)/g;
 const mounts = [];
@@ -147,10 +167,15 @@ const counts = finalRoutes.reduce((acc, r) => {
 }, {});
 
 // ---- 5. Write JSON (consumed by tests/integration/authz/route-matrix.test.ts) ----
+// `pageRoutes` carries the HTML surfaces registered with app.get() in
+// main.ts. The SEO sitemap regression test compares its URL list against
+// this array, so a sitemap entry can never point at a page that does not
+// exist.
 const jsonOut = {
     generatedAt: new Date().toISOString(),
     total: finalRoutes.length,
     routes: finalRoutes,
+    pageRoutes: uniquePageRoutes,
 };
 writeFileSync(path.join(__dirname, 'route-inventory.json'), JSON.stringify(jsonOut, null, 2));
 
@@ -177,6 +202,13 @@ md += `\n> **تنبيه:** التصنيف يعتمد فحص \`authMiddleware\` �
 md += `> (لا يتتبّع طبقات وسيطة إضافية). راوتر بلا \`authMiddleware\` يُصنَّف \`UNGUARDED ⚠\`\n`;
 md += `> حتى لو كان عاماً عن قصد — راجع \`docs/12-SECURITY-REMEDIATION.md\` (SEC-13)\n`;
 md += `> قبل اعتبار أي علامة ⚠ ثغرة فعلية.\n`;
+md += `\n## مسارات الصفحات (HTML) — يسجَّلها main.ts عبر app.get\n\n`;
+md += `> هذه ليست مسارات API، لذلك بلا تصنيف حماية. مصدر الحقيقة لاختبار\n`;
+md += `> خريطة الموقع (sitemap.xml) الذي يفحص أن كل رابط فيه صفحة موجودة فعلاً.\n\n`;
+md += `| Method | Path |\n|---|---|\n`;
+for (const r of uniquePageRoutes) {
+    md += `| ${r.method} | \`${r.path}\` |\n`;
+}
 
 writeFileSync(path.join(ROOT, 'docs', '14-ROUTE-INVENTORY.md'), md, 'utf8');
 

@@ -1237,5 +1237,10 @@ export function explorePage(c: Context<{ Bindings: Bindings; Variables: Variable
     </script>
   `;
 
-  return c.html(generateHTML(content, lang, tr.explore || 'Explore', (c.get('cspNonce') as string) ?? ''));
+  return c.html(
+    generateHTML(content, lang, tr.explore || 'Explore', (c.get('cspNonce') as string) ?? '', {
+      path: '/explore',
+      description: tr.seo?.pages?.explore,
+    })
+  );
 }

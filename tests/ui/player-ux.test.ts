@@ -138,7 +138,7 @@ describe('R4-CHUNK-PLAYER-UX-1 live-edge UI contract', () => {
             expect(html).toContain('id="embeddedLiveBtn"');
             expect(html).toContain('id="embeddedRewindBtn"');
             expect(html).toContain('Back to live');
-            const bodies = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)]
+            const bodies = [...html.matchAll(/<script(?![^>]*type="application\/ld\+json")[^>]*>([\s\S]*?)<\/script>/g)]
                 .map((m) => m[1] || '').filter((b) => b.trim().length > 0);
             expect(bodies.length).toBeGreaterThan(0);
             for (const body of bodies) {

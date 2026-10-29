@@ -61,7 +61,12 @@ export async function docsIndexPage(c: Context<{ Bindings: Bindings; Variables: 
     </div>
   `;
 
-    return c.html(generateHTML(content, lang, docTitle(tr), (c.get('cspNonce') as string) ?? ''));
+    return c.html(
+        generateHTML(content, lang, docTitle(tr), (c.get('cspNonce') as string) ?? '', {
+            path: '/docs',
+            description: tr.seo?.pages?.docs,
+        })
+    );
 }
 
 export async function docReaderPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
@@ -98,5 +103,10 @@ export async function docReaderPage(c: Context<{ Bindings: Bindings; Variables: 
     </div>
   `;
 
-    return c.html(generateHTML(content, lang, title, (c.get('cspNonce') as string) ?? ''));
+    return c.html(
+        generateHTML(content, lang, title, (c.get('cspNonce') as string) ?? '', {
+            path: `/docs/${slug}`,
+            description: tr.seo?.pages?.docs,
+        })
+    );
 }

@@ -1439,6 +1439,118 @@ export const en = {
         early_withdrawal_closed: 'This competition ended by early withdrawal before audience ratings finished — see the system result above.',
     },
 
+    // ── UNIT38 / R4-GUIDE-1 — global SEO defaults ──────────────
+    seo: {
+        default_description:
+            'Dueli is a global platform for live competitions, constructive dialogue and talent discovery — with role guides, policies, contact and support in one place.',
+        pages: {
+            home: 'Watch live competitions, join a dialogue as a creator or an opponent, and follow the people you rate — on Dueli.',
+            explore: 'Explore live and recorded competitions on Dueli by category, subcategory and status, and open the one that fits you.',
+            docs: 'Published Dueli documents — the platform notes and policies its team releases for everyone to read.',
+            transparency: 'The open Dueli ledger: money in, money out, the platform share and the cost of running the service.',
+            donate: 'Support Dueli with a one-time donation and help the platform keep running.',
+        },
+    },
+
+    // ── UNIT38 / R4-GUIDE-1 — the /guide center (about + help) ──────────────
+    guide: {
+        title: 'About Dueli and Help',
+        subtitle:
+            'One place for what Dueli is, how it works, and where to get help — every section is a page of its own.',
+        hub_intro:
+            'Pick the section you need. Each section opens on its own address, so you can bookmark it, share it, or come back to it after a refresh.',
+        nav_label: 'Guide sections',
+        back_to_center: 'Back to the guide center',
+        section_label: 'Section',
+        docs_note: 'Published notes and documents live in the Documents section.',
+        managed_note:
+            'This section shows only what the owner publishes as a managed document. Nothing is listed here before it is published.',
+        links: {
+            docs: 'Published documents',
+            privacy: 'Privacy policy',
+            deletion: 'Data deletion instructions',
+            reports: 'Report content',
+            complaints: 'Track a complaint',
+            transparency: 'Financial transparency',
+            donate: 'Support the platform',
+            messages: 'Admin messages',
+        },
+        sections: {
+            overview: {
+                title: 'Overview',
+                desc: 'What Dueli is and how a competition runs on the platform.',
+            },
+            message: {
+                title: 'The human message',
+                desc: 'Why Maelsh Pro builds Dueli, in the founder’s own words.',
+            },
+            technology: {
+                title: 'Technology',
+                desc: 'Where the technical and engineering notes are published.',
+            },
+            ai: {
+                title: 'AI companies and models',
+                desc: 'The published record of the AI tools and models used in the project.',
+            },
+            help: {
+                title: 'Help and FAQ',
+                desc: 'Role guides, step-by-step topics, answers, and accessibility notes.',
+            },
+            terms: {
+                title: 'Terms and policies',
+                desc: 'The legal documents and reporting routes that already apply.',
+            },
+            contact: {
+                title: 'Contact Maelsh Pro',
+                desc: 'The official routes that reach the Dueli administration.',
+            },
+            support: {
+                title: 'Platform support and continuity',
+                desc: 'How the platform is supported and where the open numbers are published.',
+            },
+        },
+        // OBS Virtual Camera guide (hosts / presenters).
+        obs: {
+            title: 'Guide: OBS Virtual Camera for presenters',
+            intro:
+                'OBS can expose a virtual camera that Dueli can pick up like any other webcam. This guide shows the shortest path from OBS to a live camera inside the competition room.',
+            step_1_t: 'Prepare your scene in OBS',
+            step_1_d:
+                'Add the sources you want to broadcast (a screen, a window, a camera) and arrange them in one scene before you continue.',
+            step_2_t: 'Start the virtual camera in OBS',
+            step_2_d:
+                'In the OBS Controls panel press “Start Virtual Camera”. OBS then registers a camera named “OBS Virtual Camera” with your operating system.',
+            step_3_t: 'Let the browser use that camera',
+            step_3_d:
+                'When Dueli asks for the camera, the browser shows the camera it will use. Pick “OBS Virtual Camera” there — the room itself has no device picker.',
+            step_4_t: 'Turn the camera on in the room',
+            step_4_d:
+                'In the competition room press the camera button to switch the camera on, and check the local preview shows your OBS scene.',
+            step_5_t: 'Publish to go live',
+            step_5_d:
+                'The preview stays on your device. Press the publish button to send your camera to the other side and the audience.',
+            alt_t: 'Sharing the OBS window instead',
+            alt_d:
+                'You can also share the OBS window with the screen-share button. That path needs no virtual camera and no browser camera selection.',
+            note_t: 'About the camera buttons',
+            note_d:
+                'The camera button switches the camera on and off, and the switch-camera button swaps the front and back camera on a phone — it does not choose between devices. Device choice is made in the browser or in the operating system.',
+        },
+    },
+
+    // ── UNIT38 / R4-GUIDE-1 — the /welcome splash portal ──────────────
+    splash: {
+        title: 'Dueli',
+        word_1: 'Rise',
+        word_2: 'Learn',
+        word_3: 'Enjoy',
+        word_4: 'Win',
+        by_maelsh_pro: 'By Maelsh Pro',
+        skip: 'Skip and enter Dueli now',
+        redirecting: 'Taking you to Dueli…',
+        redirect_failed: 'Redirect failed. Open the link above.',
+    },
+
     // ── T1.3: Streaming ──────────────
     recording_processing: 'Preparing the recording...',
     // ── R4-CHUNK-PLAY-1: audience live/VOD states ──────────────
