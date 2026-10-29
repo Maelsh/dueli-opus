@@ -89,6 +89,100 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
                 </div>
             </div>
 
+            <!-- UNIT36.1: admin-only ad pricing knobs. Empty = campaign cost. -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-8">
+                <h2 class="text-xl font-bold mb-1">${tt('ad_pricing_title')}</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${tt('ad_pricing_hint')}</p>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="font-bold mb-2">${tt('country_base_cents')}</h3>
+                        <div id="adPricingCountries" class="space-y-2"></div>
+                        <button id="adPricingAddCountry" type="button" class="mt-2 px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm font-bold">
+                            <i class="fas fa-plus mr-1" aria-hidden="true"></i>${tt('add_row')}
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-sm font-semibold mb-1" for="adPricingH7">${tt('h7_multiplier')}</label>
+                                <input id="adPricingH7" type="number" step="any" min="0.0001" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold mb-1" for="adPricingTargeting">${tt('targeting_multiplier')}</label>
+                                <input id="adPricingTargeting" type="number" step="any" min="0.0001" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold mb-2">${tt('media_multipliers')}</h3>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold mb-1" for="adPricingMediaImage">${tt('media_image')}</label>
+                                    <input id="adPricingMediaImage" type="number" step="any" min="0.0001" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold mb-1" for="adPricingMediaGif">${tt('media_gif')}</label>
+                                    <input id="adPricingMediaGif" type="number" step="any" min="0.0001" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold mb-1" for="adPricingMediaVideo">${tt('media_video')}</label>
+                                    <input id="adPricingMediaVideo" type="number" step="any" min="0.0001" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="font-bold mb-2">${tt('duration_multipliers')}</h3>
+                            <div id="adPricingDurations" class="space-y-2"></div>
+                            <button id="adPricingAddDuration" type="button" class="mt-2 px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-700 text-sm font-bold">
+                                <i class="fas fa-plus mr-1" aria-hidden="true"></i>${tt('add_row')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <p id="adPricingStatus" class="mt-3 text-xs text-gray-500 dark:text-gray-400" role="status" aria-live="polite"></p>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <button id="adPricingSave" type="button" class="px-5 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">${tt('save_pricing')}</button>
+                    <button id="adPricingClear" type="button" class="px-5 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-bold">${tt('clear_pricing')}</button>
+                </div>
+            </div>
+
+            <!-- UNIT36.1: Dueli house ads are unblockable fallback inventory. -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-8">
+                <h2 class="text-xl font-bold mb-1">${tt('house_title')}</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400">${tt('house_hint')}</p>
+                <form id="houseAdForm" class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1" for="houseAdTitle">${tt('house_ad_title')}</label>
+                        <input id="houseAdTitle" type="text" required maxlength="200" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1" for="houseAdMediaKind">${tt('media_kind')}</label>
+                        <select id="houseAdMediaKind" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent">
+                            <option value="image">${tt('media_image')}</option>
+                            <option value="gif">${tt('media_gif')}</option>
+                            <option value="video">${tt('media_video')}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1" for="houseAdMediaUrl">${tt('media_url')}</label>
+                        <input id="houseAdMediaUrl" type="url" required class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1" for="houseAdLinkUrl">${tt('link_url')}</label>
+                        <input id="houseAdLinkUrl" type="url" required class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1" for="houseAdDuration">${tt('duration_sec')}</label>
+                        <input id="houseAdDuration" type="number" min="1" max="86400" step="1" class="w-full px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent" />
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="px-5 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">
+                            <i class="fas fa-bullhorn mr-1" aria-hidden="true"></i>${tt('house_create')}
+                        </button>
+                    </div>
+                </form>
+                <p id="houseAdStatus" class="mt-3 text-xs text-gray-500 dark:text-gray-400" role="status" aria-live="polite"></p>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                     <h2 class="text-xl font-bold mb-4">${tt('financial_summary')}</h2>
@@ -282,6 +376,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
     ${getFooter(lang)}
     <script nonce="${nonce}">
         const adminHeaders = (extra) => Object.assign({}, extra || {});
+        const adText = ${JSON.stringify(tr.ads || {})};
 
         // R2-A: client boot gate (covers cookie-less sessions; the server
         // gate + admin API remain authoritative). Guests and non-admins see
@@ -685,10 +780,270 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
             else showAdminToast('Error: ' + (data.error || 'Unknown'), 'error');
         }
 
+        // ============================
+        // UNIT36.1: ad pricing + house ads
+        // ============================
+        function setAdPricingStatus(message, isError) {
+            const el = document.getElementById('adPricingStatus');
+            if (!el) return;
+            el.textContent = message || '';
+            el.classList.toggle('text-red-600', !!isError);
+            el.classList.toggle('dark:text-red-400', !!isError);
+        }
+        function setHouseAdStatus(message, isError) {
+            const el = document.getElementById('houseAdStatus');
+            if (!el) return;
+            el.textContent = message || '';
+            el.classList.toggle('text-red-600', !!isError);
+            el.classList.toggle('dark:text-red-400', !!isError);
+        }
+        function pricingRemoveButton(label, row) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'px-2 py-2 text-red-600 dark:text-red-400 font-bold';
+            button.setAttribute('aria-label', label);
+            button.textContent = '\\u00d7';
+            button.addEventListener('click', function() { row.remove(); });
+            return button;
+        }
+        function addPricingCountryRow(code, cents) {
+            const box = document.getElementById('adPricingCountries');
+            if (!box) return;
+            const row = document.createElement('div');
+            row.className = 'flex gap-2 items-center';
+            row.setAttribute('data-ad-price-country', '1');
+            const codeInput = document.createElement('input');
+            codeInput.type = 'text';
+            codeInput.maxLength = 2;
+            codeInput.placeholder = 'EG';
+            codeInput.className = 'w-20 px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent ad-price-country-code';
+            codeInput.setAttribute('aria-label', ${JSON.stringify(tt('country_code'))});
+            codeInput.value = code || '';
+            const centsInput = document.createElement('input');
+            centsInput.type = 'number';
+            centsInput.min = '1';
+            centsInput.step = '1';
+            centsInput.placeholder = ${JSON.stringify(tt('base_cents'))};
+            centsInput.className = 'flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent ad-price-country-cents';
+            centsInput.setAttribute('aria-label', ${JSON.stringify(tt('base_cents'))});
+            centsInput.value = cents === undefined ? '' : String(cents);
+            row.appendChild(codeInput);
+            row.appendChild(centsInput);
+            row.appendChild(pricingRemoveButton(${JSON.stringify(tt('remove_row'))}, row));
+            box.appendChild(row);
+        }
+        function addPricingDurationRow(seconds, multiplier) {
+            const box = document.getElementById('adPricingDurations');
+            if (!box) return;
+            const row = document.createElement('div');
+            row.className = 'flex gap-2 items-center';
+            row.setAttribute('data-ad-price-duration', '1');
+            const secondsInput = document.createElement('input');
+            secondsInput.type = 'number';
+            secondsInput.min = '1';
+            secondsInput.max = '86400';
+            secondsInput.step = '1';
+            secondsInput.placeholder = ${JSON.stringify(tt('duration_seconds'))};
+            secondsInput.className = 'flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent ad-price-duration-sec';
+            secondsInput.setAttribute('aria-label', ${JSON.stringify(tt('duration_seconds'))});
+            secondsInput.value = seconds === undefined ? '' : String(seconds);
+            const multInput = document.createElement('input');
+            multInput.type = 'number';
+            multInput.min = '0.0001';
+            multInput.step = 'any';
+            multInput.placeholder = ${JSON.stringify(tt('multiplier'))};
+            multInput.className = 'flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent ad-price-duration-mult';
+            multInput.setAttribute('aria-label', ${JSON.stringify(tt('multiplier'))});
+            multInput.value = multiplier === undefined ? '' : String(multiplier);
+            row.appendChild(secondsInput);
+            row.appendChild(multInput);
+            row.appendChild(pricingRemoveButton(${JSON.stringify(tt('remove_row'))}, row));
+            box.appendChild(row);
+        }
+        function readOptionalPositive(id) {
+            const el = document.getElementById(id);
+            if (!el || String(el.value).trim() === '') return undefined;
+            const value = Number(el.value);
+            if (!Number.isFinite(value) || value <= 0) return NaN;
+            return value;
+        }
+        async function loadAdPricing() {
+            try {
+                const res = await fetch('/api/admin/ad-pricing', { headers: adminHeaders() });
+                if (res.status === 401 || res.status === 403) { denyAdminAccess(); return; }
+                const data = await res.json().catch(function() { return {}; });
+                if (!data.success) return;
+                const config = data.data?.config || {};
+                const countries = config.country_base_cents || {};
+                const multipliers = config.multipliers || {};
+                const media = multipliers.media || {};
+                const durations = multipliers.duration || {};
+                const countryBox = document.getElementById('adPricingCountries');
+                const durationBox = document.getElementById('adPricingDurations');
+                if (countryBox) countryBox.innerHTML = '';
+                if (durationBox) durationBox.innerHTML = '';
+                Object.keys(countries).forEach(function(code) {
+                    addPricingCountryRow(code, countries[code]);
+                });
+                if (Object.keys(countries).length === 0) addPricingCountryRow();
+                Object.keys(durations).forEach(function(seconds) {
+                    addPricingDurationRow(seconds, durations[seconds]);
+                });
+                if (Object.keys(durations).length === 0) addPricingDurationRow();
+                const setValue = function(id, value) {
+                    const el = document.getElementById(id);
+                    if (el) el.value = value === undefined || value === null ? '' : String(value);
+                };
+                setValue('adPricingH7', multipliers.h7);
+                setValue('adPricingTargeting', multipliers.targeting);
+                setValue('adPricingMediaImage', media.image);
+                setValue('adPricingMediaGif', media.gif);
+                setValue('adPricingMediaVideo', media.video);
+                setAdPricingStatus('');
+            } catch (err) {
+                setAdPricingStatus(adText.policy_invalid || '', true);
+            }
+        }
+        async function saveAdPricing() {
+            const payload = {};
+            const countries = {};
+            let invalid = false;
+            let countryCount = 0;
+            document.querySelectorAll('[data-ad-price-country]').forEach(function(row) {
+                const code = row.querySelector('.ad-price-country-code').value.trim();
+                const centsRaw = row.querySelector('.ad-price-country-cents').value.trim();
+                if (!code && !centsRaw) return;
+                countryCount++;
+                const cents = Number(centsRaw);
+                if (!/^[A-Za-z]{2}$/.test(code) || !Number.isInteger(cents) || cents < 1) {
+                    invalid = true;
+                    return;
+                }
+                countries[code.toUpperCase()] = cents;
+            });
+            if (countryCount > 0) payload.country_base_cents = countries;
+
+            const multipliers = {};
+            const scalarFields = [
+                ['h7', 'adPricingH7'],
+                ['targeting', 'adPricingTargeting']
+            ];
+            scalarFields.forEach(function(pair) {
+                const value = readOptionalPositive(pair[1]);
+                if (Number.isNaN(value)) invalid = true;
+                else if (value !== undefined) multipliers[pair[0]] = value;
+            });
+            const media = {};
+            const mediaFields = [
+                ['image', 'adPricingMediaImage'],
+                ['gif', 'adPricingMediaGif'],
+                ['video', 'adPricingMediaVideo']
+            ];
+            mediaFields.forEach(function(pair) {
+                const value = readOptionalPositive(pair[1]);
+                if (Number.isNaN(value)) invalid = true;
+                else if (value !== undefined) media[pair[0]] = value;
+            });
+            if (Object.keys(media).length > 0) multipliers.media = media;
+
+            const durations = {};
+            let durationCount = 0;
+            document.querySelectorAll('[data-ad-price-duration]').forEach(function(row) {
+                const secondsRaw = row.querySelector('.ad-price-duration-sec').value.trim();
+                const multRaw = row.querySelector('.ad-price-duration-mult').value.trim();
+                if (!secondsRaw && !multRaw) return;
+                durationCount++;
+                const seconds = Number(secondsRaw);
+                const multiplier = Number(multRaw);
+                if (!Number.isInteger(seconds) || seconds < 1 || seconds > 86400 || !Number.isFinite(multiplier) || multiplier <= 0) {
+                    invalid = true;
+                    return;
+                }
+                if (Object.prototype.hasOwnProperty.call(durations, String(seconds))) {
+                    invalid = true;
+                    return;
+                }
+                durations[String(seconds)] = multiplier;
+            });
+            if (durationCount > 0) multipliers.duration = durations;
+            if (Object.keys(multipliers).length > 0) payload.multipliers = multipliers;
+
+            if (invalid) {
+                setAdPricingStatus(adText.policy_invalid || '', true);
+                return;
+            }
+            const res = await fetch('/api/admin/ad-pricing', {
+                method: 'PUT',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(function() { return {}; });
+            if (data.success) {
+                setAdPricingStatus(${JSON.stringify(tt('pricing_saved'))});
+                showAdminToast('\\u2705 ' + ${JSON.stringify(tt('pricing_saved'))}, 'success');
+                loadAdPricing();
+            } else {
+                setAdPricingStatus(data.error || adText.policy_invalid || '', true);
+            }
+        }
+        async function clearAdPricing() {
+            if (!confirm(${JSON.stringify(tt('pricing_clear_confirm'))})) return;
+            const res = await fetch('/api/admin/ad-pricing', {
+                method: 'PUT',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({})
+            });
+            const data = await res.json().catch(function() { return {}; });
+            if (data.success) {
+                setAdPricingStatus(${JSON.stringify(tt('pricing_saved'))});
+                loadAdPricing();
+            } else {
+                setAdPricingStatus(data.error || adText.policy_invalid || '', true);
+            }
+        }
+        async function createHouseAd(event) {
+            event.preventDefault();
+            const mediaKind = document.getElementById('houseAdMediaKind').value;
+            const durationRaw = document.getElementById('houseAdDuration').value.trim();
+            const body = {
+                title: document.getElementById('houseAdTitle').value.trim(),
+                media_kind: mediaKind,
+                media_url: document.getElementById('houseAdMediaUrl').value.trim(),
+                link_url: document.getElementById('houseAdLinkUrl').value.trim()
+            };
+            if (durationRaw) {
+                const duration = Number(durationRaw);
+                if (!Number.isInteger(duration) || duration <= 0) {
+                    setHouseAdStatus(adText.invalid_duration || '', true);
+                    return;
+                }
+                body.duration_sec = duration;
+            }
+            const res = await fetch('/api/admin/ads/house', {
+                method: 'POST',
+                headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(body)
+            });
+            const data = await res.json().catch(function() { return {}; });
+            if (data.success) {
+                setHouseAdStatus(${JSON.stringify(tt('house_created'))});
+                showAdminToast('\\u2705 ' + ${JSON.stringify(tt('house_created'))}, 'success');
+                document.getElementById('houseAdForm').reset();
+            } else {
+                setHouseAdStatus(data.error || adText.policy_invalid || '', true);
+            }
+        }
+        document.getElementById('adPricingAddCountry')?.addEventListener('click', function() { addPricingCountryRow(); });
+        document.getElementById('adPricingAddDuration')?.addEventListener('click', function() { addPricingDurationRow(); });
+        document.getElementById('adPricingSave')?.addEventListener('click', saveAdPricing);
+        document.getElementById('adPricingClear')?.addEventListener('click', clearAdPricing);
+        document.getElementById('houseAdForm')?.addEventListener('submit', createHouseAd);
+
         loadAdminDashboard();
         loadWithdrawals();
         loadAdminDocs();
         loadInboxThreads();
+        loadAdPricing();
         // Paint the signed-in admin identity (refresh-safe: same session).
         fetch('/api/auth/session', { headers: adminHeaders() }).then(r => r.json()).then(d => {
             if (d && d.success && d.data && d.data.user) {

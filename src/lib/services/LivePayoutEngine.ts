@@ -100,6 +100,8 @@ export function splitPayoutCents(
 export interface LivePayoutSnapshot {
     competition_id: number;
     total_ad_revenue: number;
+    /** Integer-cents source for every money decision (80/20 payout). */
+    total_ad_revenue_cents: number;
     platform_percentage: number;
     platform_share: number;
     competitor_pool: number;
@@ -200,6 +202,7 @@ export class LivePayoutEngine {
         return {
             competition_id: competitionId,
             total_ad_revenue: currentRevenue + revenuePerView,
+            total_ad_revenue_cents: Math.round((currentRevenue + revenuePerView) * 100),
             platform_percentage: platformPercentage,
             platform_share: (currentRevenue + revenuePerView) * (platformPercentage / 100),
             competitor_pool: (currentRevenue + revenuePerView) * (1 - platformPercentage / 100),
@@ -218,7 +221,8 @@ export class LivePayoutEngine {
         const competition = await this.competitionModel.findWithDetails(competitionId);
         if (!competition) throw new Error('Competition not found');
 
-        const totalRevenue = await this.adModel.getCompetitionRevenue(competitionId);
+        const totalCents = await this.adModel.getCompetitionRevenueCents(competitionId);
+        const totalRevenue = totalCents / 100;
         const platformPercentage = await this.settingsModel.getPlatformSharePercentage();
         const platformShare = totalRevenue * (platformPercentage / 100);
         const competitorPool = totalRevenue - platformShare;
@@ -261,6 +265,7 @@ export class LivePayoutEngine {
         return {
             competition_id: competitionId,
             total_ad_revenue: totalRevenue,
+            total_ad_revenue_cents: totalCents,
             platform_percentage: platformPercentage,
             platform_share: platformShare,
             competitor_pool: competitorPool,
@@ -281,8 +286,9 @@ export class LivePayoutEngine {
 
         const snapshot = await this.recalculatePayouts(competitionId);
 
-        // إجمالي السنتات = تقريب الإيراد الدولاري (float للقراءة فقط) إلى سنتات.
-        const totalCents = Math.round(snapshot.total_ad_revenue * 100);
+        // إجمالي السنتات = مجموع charged_cents الفعلي لكل انطباع (أو fallback
+        // القديم). لا تحويل float في مسار القرار المالي.
+        const totalCents = snapshot.total_ad_revenue_cents;
         const split = splitPayoutCents(
             totalCents,
             snapshot.platform_percentage,
@@ -377,6 +383,7 @@ export class LivePayoutEngine {
         return {
             competition_id: competitionId,
             total_ad_revenue: revenueLog.total_ad_revenue,
+            total_ad_revenue_cents: Math.round(revenueLog.total_ad_revenue * 100),
             platform_percentage: revenueLog.platform_percentage,
             platform_share: revenueLog.platform_share,
             competitor_pool: competitorPool,

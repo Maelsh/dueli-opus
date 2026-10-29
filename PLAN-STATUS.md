@@ -1,3 +1,13 @@
+## 2026-10-29 — UNIT36.1 / R4-ADS-PRICING-CONTROL-HOUSE-1 · فرع feat/unit36-1-ads-pricing-control-house-1 (BASE 79d8484)
+
+- 🔧 **LOCAL VERIFIED / REMOTE PENDING.** تسعير إعلانات قابل للضبط من لوحة الإدارة (خدمة حساب واحدة موثّقة، سنتات صحيحة، حد أدنى سنت واحد، ولا إعداد = تكلفة الحملة الحالية كما هي)، خانة إعلانات واحدة تقبل صورة/GIF/فيديو، تحكّم المنافس بأربعة أوضاع (`auto`/`allow`/`manual`/`block`) على حسابه فقط، وإعلانات ديولي الرسمية (حد أقصى 3 نشطة) لا تُحظر أبداً وتعمل كبديل. الخصم والدفتر وتوزيع 80/20 كلها تستخدم السعر الفعلي. **لا دمج ولا نشر ولا كتابة على الإنتاج.**
+- **PHASE A (خريطة التدقيق):** التسعير → `src/lib/services/AdPricing.ts` + `AdminController` + `modules/api/admin/routes.ts`؛ الخصم → `AdCampaignManager`؛ التوزيع → `LivePayoutEngine` + `AdvertisementModel.getCompetitionRevenueCents()`؛ مصفوفة العرض → `AdvertisementModel.getTargetedAds()` + `AdServingService`؛ السياسة/المنح → `UserAdPolicyModel` + `modules/api/advertisements/routes.ts`؛ الواجهة → `competition-page` / `advertiser-portal-page` / `profile-page` / `admin-dashboard-page`؛ i18n → `ar.ts` + `en.ts`؛ المخطط → `migrations/0044_ad_pricing_control_house.sql` + `SyntheticRetirementService` (تغطية FK).
+- **الاختبارات:** `tests/lib/unit36-1-ad-control.test.ts` 34/34؛ `tests/integration/schema-contract.test.ts` 27/27 (45 هجرة من قاعدة فارغة عبر Wrangler CLI)؛ `tests/dev-tools/release-readiness.test.ts` 36/36؛ `tsc --noEmit` نظيف؛ `npm run build` أخضر. الفشل الوحيد في الحزمة الكاملة هو `quality-gate-poll` (لا يوجد `jq` محلياً — بيئة، غير متعلق).
+- **بلا بذور:** لا أسعار بلدات ولا مضاعفات افتراضية ولا محتوى إعلانات رسمية — الإعداد الفارغ يعيد تكلفة الحملة، ولا إعلان رسمي قبل أن ينشئه المدير.
+- **PHASE B (استعادة القيادة — PLAN §19.4):** بعد الدمج ونجاح Quality Gate + Deploy على SHA الدمج الفعلي، المالك وحده ينفّذ `npx wrangler d1 migrations apply dueli-db --remote` (0044 إضافي) ثم يعيد فحص الجاهزية (docs/19 §2) ويسجّل target/SHA/manifest والنتيجة. حتى ذلك الحين: لا apply على الإنتاج ولا نشر تلقائي للهجرة.
+- **OWNER DECISION REQUIRED (اختياري):** (1) تمييز `allow` عن `manual` — اعتُمد أن `allow` = إذن شامل بثلاث-party مع بقاء الحظر لكل إعلان، و`manual` = موافقة لكل إعلان؛ (2) مفتاح مضاعف المدة = الثواني exact للـ video. إن رُفض أيٌّ منهما فالتغيير محلي وقابل للتراجع قبل الدمج.
+- **مطلوب قرار المالك (إلزامي قبل التشغيل):** أسعار البلدات والمضاعفات الفعلية + محتوى الإعلانات الرسمية — لا يمكن استنتاجها، ولم تُخترع في هذه الوحدة.
+
 ## 2026-10-29 — UNIT36 / R4-ADMIN-ACCEPT-1 · feat/unit36-r4-admin-accept-1 (BASE 4692e1b)
 
 - 🔧 **LOCAL VERIFIED / REMOTE PENDING.** stats500 (`SUM(total)`), login by email or username, R2-A admin journey rechecked. No merge/deploy.

@@ -16,6 +16,12 @@ import { ArbitrationService, ArbitrationStatus } from '../lib/services/Arbitrati
 import { LivePayoutEngine } from '../lib/services/LivePayoutEngine';
 import { EventPusher } from '../lib/services/EventPusher';
 import { AdCampaignManager } from '../lib/services/AdCampaignManager';
+import {
+    AD_PRICING_SETTING_KEY,
+    MAX_DURATION_SECONDS,
+    parseAdPricingConfig,
+    validateAdPricingConfig,
+} from '../lib/services/AdPricing';
 import { WithdrawalController } from './WithdrawalController';
 
 export class AdminController extends BaseController {
@@ -912,6 +918,162 @@ export class AdminController extends BaseController {
     async adminRejectWithdrawal(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
         const delegate = new WithdrawalController();
         return delegate.adminRejectWithdrawal(c);
+    }
+
+    private isHttpUrl(value: unknown): value is string {
+        if (typeof value !== 'string') return false;
+        const url = value.trim();
+        if (url.length === 0 || url.length > 2048) return false;
+        try {
+            const parsed = new URL(url);
+            return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+
+    private async logAdminAudit(
+        c: Context<{ Bindings: Bindings; Variables: Variables }>,
+        action: string,
+        entity: string,
+        targetId: number | null,
+        details: string
+    ): Promise<void> {
+        const admin = this.getCurrentUser(c);
+        try {
+            await new AdminAuditLogModel(c.env.DB).log(admin?.id ?? 0, action, entity, targetId, details);
+        } catch (auditError) {
+            // Audit is append-only evidence; a log failure must not roll back
+            // an already-committed pricing/house write.
+            console.error('Admin ad audit write failed:', auditError);
+        }
+    }
+
+    /** GET /api/admin/ad-pricing — current validated pricing knobs. */
+    async getAdPricing(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!await this.isAdmin(c)) return this.forbidden(c);
+            const raw = await new PlatformSettingsModel(c.env.DB).getByKey(AD_PRICING_SETTING_KEY);
+            const config = parseAdPricingConfig(raw) ?? {};
+            return this.success(c, { config, stored: raw !== null });
+        } catch (error) {
+            console.error('Admin get ad pricing error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * PUT /api/admin/ad-pricing
+     * Strict config validation; an empty object clears every knob and restores
+     * the campaign's own cost_per_impression_cents exactly.
+     */
+    async setAdPricing(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!await this.isAdmin(c)) return this.forbidden(c);
+            const body = await this.getBody<unknown>(c);
+            const validation = validateAdPricingConfig(body);
+            if (!validation.ok) {
+                return this.validationError(c, this.t('ads.policy_invalid', c));
+            }
+            const user = this.getCurrentUser(c);
+            await new PlatformSettingsModel(c.env.DB).setByKey(
+                AD_PRICING_SETTING_KEY,
+                JSON.stringify(validation.config),
+                user?.id
+            );
+            await this.logAdminAudit(
+                c,
+                'update_ad_pricing',
+                'platform_setting',
+                null,
+                `Ad pricing updated: ${JSON.stringify(validation.config)}`
+            );
+            return this.success(c, { config: validation.config, saved: true });
+        } catch (error) {
+            console.error('Admin set ad pricing error:', error);
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * POST /api/admin/ads/house
+     * Admin-only house creative. The 3-active limit is atomic in
+     * AdvertisementModel.insertHouse; no seed content is created here.
+     */
+    async createHouseAd(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+        try {
+            if (!await this.isAdmin(c)) return this.forbidden(c);
+
+            const body = await this.getBody<{
+                title?: string;
+                media_url?: string;
+                image_url?: string;
+                link_url?: string;
+                media_kind?: string;
+                duration_sec?: number;
+            }>(c);
+            if (!body || !body.title || !body.title.trim()) {
+                return this.validationError(c, this.t('ads.policy_invalid', c));
+            }
+            if (body.title.trim().length > 200) {
+                return this.validationError(c, this.t('ads.policy_invalid', c));
+            }
+
+            const kind = body.media_kind;
+            if (kind !== 'image' && kind !== 'gif' && kind !== 'video') {
+                return this.validationError(c, this.t('ads.policy_invalid', c));
+            }
+
+            const mediaUrl = body.media_url ?? body.image_url;
+            if (!this.isHttpUrl(mediaUrl)) {
+                return this.validationError(c, this.t('ads.invalid_media', c));
+            }
+            if (!this.isHttpUrl(body.link_url)) {
+                return this.validationError(c, this.t('ads.policy_invalid', c));
+            }
+
+            let durationSec: number | null = null;
+            if (body.duration_sec !== undefined && body.duration_sec !== null) {
+                if (
+                    kind !== 'video'
+                    || !Number.isInteger(body.duration_sec)
+                    || body.duration_sec <= 0
+                    || body.duration_sec > MAX_DURATION_SECONDS
+                ) {
+                    return this.validationError(c, this.t('ads.invalid_duration', c));
+                }
+                durationSec = body.duration_sec;
+            }
+
+            const user = this.getCurrentUser(c);
+            const model = new AdvertisementModel(c.env.DB);
+            const ad = await model.insertHouse({
+                title: body.title.trim(),
+                mediaUrl: mediaUrl.trim(),
+                linkUrl: body.link_url.trim(),
+                mediaKind: kind,
+                durationSec,
+                createdBy: user?.id || 0,
+            });
+            if (!ad) {
+                if (await model.countActiveHouse() >= 3) {
+                    return this.error(c, this.t('ads.house_limit', c), 422);
+                }
+                return this.serverError(c, new Error('house insert failed'));
+            }
+
+            await this.logAdminAudit(
+                c,
+                'create_house_ad',
+                'advertisement',
+                ad.id,
+                `Created house ad #${ad.id} (${kind})`
+            );
+            return this.success(c, { advertisement: ad }, 201);
+        } catch (error) {
+            console.error('Admin create house ad error:', error);
+            return this.serverError(c, error as Error);
+        }
     }
 }
 

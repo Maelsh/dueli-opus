@@ -9,6 +9,7 @@ import type { Bindings, Variables } from '../../../config/types';
 import { AdvertisementModel } from '../../../models/AdvertisementModel';
 import { AdCampaignManager } from '../../../lib/services/AdCampaignManager';
 import { AdServingService, AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY } from '../../../lib/services/AdServingService';
+import { UserAdPolicyModel, AD_POLICY_MODES } from '../../../models/UserAdPolicyModel';
 import { AdClickService } from '../../../lib/services/AdClickService';
 import { authMiddleware } from '../../../middleware/auth';
 import { t, DEFAULT_LANGUAGE } from '../../../i18n';
@@ -17,6 +18,12 @@ const advertisementsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables
 
 // Apply optional auth middleware
 advertisementsRoutes.use('*', authMiddleware({ required: false }));
+// UNIT36.1: a user's own ad-control settings and grants. Path-level required
+// auth (the session user is the only identity) — no user_id parameter exists.
+advertisementsRoutes.use('/policy', authMiddleware({ required: true }));
+advertisementsRoutes.use('/policy/*', authMiddleware({ required: true }));
+advertisementsRoutes.use('/grants', authMiddleware({ required: true }));
+advertisementsRoutes.use('/grants/*', authMiddleware({ required: true }));
 
 /**
  * Targeted ad serving (Phase 9.B).
@@ -60,6 +67,72 @@ advertisementsRoutes.get('/', async (c) => {
         console.error('Error fetching advertisements:', error);
         return c.json({ error: 'Failed to fetch advertisements' }, 500);
     }
+});
+
+advertisementsRoutes.get('/policy', async (c) => {
+    const user = c.get('user') as { id: number } | null;
+    if (!user) return c.json({ success: false, error: 'Unauthorized' }, 401);
+    const model = new UserAdPolicyModel(c.env.DB);
+    const [mode, grants] = await Promise.all([
+        model.getMode(user.id),
+        model.listGrantIds(user.id),
+    ]);
+    return c.json({ success: true, data: { mode, grants } });
+});
+
+advertisementsRoutes.get('/policy/candidates', async (c) => {
+    const user = c.get('user') as { id: number } | null;
+    if (!user) return c.json({ success: false, error: 'Unauthorized' }, 401);
+    const candidates = await new UserAdPolicyModel(c.env.DB).listCandidates(user.id);
+    return c.json({ success: true, data: { candidates } });
+});
+
+advertisementsRoutes.put('/policy', async (c) => {
+    const lang = c.get('lang') || DEFAULT_LANGUAGE;
+    const user = c.get('user') as { id: number } | null;
+    if (!user) return c.json({ success: false, error: t('unauthorized', lang) }, 401);
+    const body = await c.req.json<{ mode?: string }>().catch(() => null);
+    const mode = body?.mode;
+    if (!mode || !(AD_POLICY_MODES as readonly string[]).includes(mode)) {
+        return c.json({ success: false, error: t('ads.policy_invalid', lang) }, 422);
+    }
+    // The session user is the only identity; a smuggled user_id in the body
+    // is ignored so one competitor can never change another's settings.
+    await new UserAdPolicyModel(c.env.DB).setMode(user.id, mode as typeof AD_POLICY_MODES[number]);
+    return c.json({ success: true, data: { mode } });
+});
+
+advertisementsRoutes.post('/grants', async (c) => {
+    const lang = c.get('lang') || DEFAULT_LANGUAGE;
+    const user = c.get('user') as { id: number } | null;
+    if (!user) return c.json({ success: false, error: t('unauthorized', lang) }, 401);
+    const body = await c.req.json<{ ad_id?: number }>().catch(() => null);
+    const adId = Number(body?.ad_id);
+    if (!Number.isInteger(adId) || adId <= 0) {
+        return c.json({ success: false, error: t('ads.policy_invalid', lang) }, 422);
+    }
+    const ad = await new AdvertisementModel(c.env.DB).findById(adId);
+    if (!ad) return c.json({ success: false, error: t('not_found', lang) }, 404);
+    if (Number(ad.is_house) === 1) {
+        // House ads are never blockable, so a grant for them is meaningless.
+        return c.json({ success: false, error: t('ads.policy_invalid', lang) }, 422);
+    }
+    await new UserAdPolicyModel(c.env.DB).grant(user.id, adId);
+    return c.json({ success: true, data: { ad_id: adId } });
+});
+
+advertisementsRoutes.delete('/grants/:adId', async (c) => {
+    const lang = c.get('lang') || DEFAULT_LANGUAGE;
+    const user = c.get('user') as { id: number } | null;
+    if (!user) return c.json({ success: false, error: t('unauthorized', lang) }, 401);
+    const adId = parseInt(c.req.param('adId'), 10);
+    if (!Number.isInteger(adId) || adId <= 0) {
+        return c.json({ success: false, error: t('ads.policy_invalid', lang) }, 422);
+    }
+    const ad = await new AdvertisementModel(c.env.DB).findById(adId);
+    if (!ad) return c.json({ success: false, error: t('not_found', lang) }, 404);
+    await new UserAdPolicyModel(c.env.DB).revoke(user.id, adId);
+    return c.json({ success: true, data: { ad_id: adId } });
 });
 
 /**

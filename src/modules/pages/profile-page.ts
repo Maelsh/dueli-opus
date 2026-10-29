@@ -320,6 +320,23 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     </div>
 
                     ${isOwnerView ? `
+                    <section id="profileAdPolicy" class="mt-8 bg-white dark:bg-[#1a1a1a] rounded-xl shadow-xl p-6" aria-labelledby="profileAdPolicyTitle">
+                        <h2 id="profileAdPolicyTitle" class="text-xl font-bold text-gray-900 dark:text-white">${tr.ads.policy_title}</h2>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">${tr.ads.policy_hint}</p>
+                        <div id="profileAdModeGroup" class="mt-4 flex flex-wrap gap-2" role="group" aria-label="${tr.ads.policy_title}">
+                            <button type="button" data-ad-mode="auto" aria-pressed="false" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">${tr.ads.policy_auto}</button>
+                            <button type="button" data-ad-mode="allow" aria-pressed="false" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">${tr.ads.policy_allow}</button>
+                            <button type="button" data-ad-mode="manual" aria-pressed="false" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">${tr.ads.policy_manual}</button>
+                            <button type="button" data-ad-mode="block" aria-pressed="false" class="px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm">${tr.ads.policy_block}</button>
+                        </div>
+                        <p id="profileAdPolicyStatus" class="mt-2 text-xs text-gray-500 dark:text-gray-400" role="status" aria-live="polite"></p>
+                        <div id="profileAdGrants" class="hidden mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <h3 class="font-bold text-gray-900 dark:text-white">${tr.ads.policy_grants_title}</h3>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${tr.ads.policy_grants_hint}</p>
+                            <p id="profileAdGrantsState" class="mt-2 text-xs text-gray-500 dark:text-gray-400" role="status" aria-live="polite"></p>
+                            <ul id="profileAdGrantsList" class="mt-3 space-y-2"></ul>
+                        </div>
+                    </section>
                     <!-- UNIT32.1: owner-only collections. Server-rendered only
                          after the session user is proven to be this profile's
                          owner; the API re-checks ownership on every call. -->
@@ -425,6 +442,15 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 // empty list because renderCompetitionCard was not defined yet.
                 if (document.getElementById('profileCollections')) {
                     loadCollection('later', true);
+                }
+                if (document.getElementById('profileAdPolicy')) {
+                    document.querySelectorAll('[data-ad-mode]').forEach(function(btn) {
+                        btn.addEventListener('click', function() {
+                            const mode = btn.getAttribute('data-ad-mode');
+                            if (mode) saveAdPolicyMode(mode);
+                        });
+                    });
+                    await loadAdPolicy();
                 }
             });
             window.addEventListener('dueli:auth-success', updateProfileActions);
@@ -545,6 +571,148 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                         btn.disabled = false;
                         btn.removeAttribute('aria-busy');
                     }
+                }
+            }
+
+            // UNIT36.1: the competitor ad policy is scoped to the signed-in
+            // owner. The server never accepts a user id from the client, so
+            // this UI can only ever change this account's own mode/grants.
+            let profileAdPolicyMode = 'auto';
+            let profileAdPolicyBusy = false;
+
+            function setProfileAdPolicyStatus(message) {
+                const el = document.getElementById('profileAdPolicyStatus');
+                if (el) el.textContent = message || '';
+            }
+
+            function paintAdPolicyMode(mode) {
+                profileAdPolicyMode = mode || 'auto';
+                document.querySelectorAll('[data-ad-mode]').forEach(function(btn) {
+                    const active = btn.getAttribute('data-ad-mode') === profileAdPolicyMode;
+                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    btn.classList.toggle('bg-purple-600', active);
+                    btn.classList.toggle('text-white', active);
+                    btn.classList.toggle('bg-gray-100', !active);
+                    btn.classList.toggle('dark:bg-gray-800', !active);
+                });
+                const grants = document.getElementById('profileAdGrants');
+                if (grants) grants.classList.toggle('hidden', profileAdPolicyMode !== 'manual');
+            }
+
+            function profileAdPolicyHeaders(withJson) {
+                const headers = Object.assign({}, window.DueliSession?.headers?.() || {});
+                if (withJson) headers['Content-Type'] = 'application/json';
+                return headers;
+            }
+
+            async function loadAdPolicy() {
+                if (!document.getElementById('profileAdPolicy')) return;
+                setProfileAdPolicyStatus(tr.ads?.policy_loading || '');
+                try {
+                    const res = await fetch('/api/advertisements/policy', {
+                        headers: profileAdPolicyHeaders(false)
+                    });
+                    const data = await res.json().catch(function() { return null; });
+                    if (!res.ok || !data || !data.success || !data.data) throw new Error('policy load failed');
+                    paintAdPolicyMode(data.data.mode || 'auto');
+                    setProfileAdPolicyStatus('');
+                    if (profileAdPolicyMode === 'manual') {
+                        await loadAdGrantCandidates();
+                    } else {
+                        const list = document.getElementById('profileAdGrantsList');
+                        if (list) list.innerHTML = '';
+                    }
+                } catch (err) {
+                    setProfileAdPolicyStatus(tr.ads?.policy_invalid || '');
+                }
+            }
+
+            async function loadAdGrantCandidates() {
+                const list = document.getElementById('profileAdGrantsList');
+                const state = document.getElementById('profileAdGrantsState');
+                if (!list || !state) return;
+                state.textContent = tr.ads?.policy_loading || '';
+                try {
+                    const res = await fetch('/api/advertisements/policy/candidates', {
+                        headers: profileAdPolicyHeaders(false)
+                    });
+                    const data = await res.json().catch(function() { return null; });
+                    if (!res.ok || !data || !data.success || !data.data) throw new Error('candidates load failed');
+                    const candidates = Array.isArray(data.data.candidates) ? data.data.candidates : [];
+                    list.innerHTML = '';
+                    state.textContent = candidates.length === 0 ? (tr.ads?.policy_grants_empty || '') : '';
+                    candidates.forEach(function(candidate) {
+                        const li = document.createElement('li');
+                        li.className = 'flex items-center justify-between gap-3 p-2 rounded-lg bg-gray-50 dark:bg-gray-800';
+                        const label = document.createElement('span');
+                        label.className = 'text-sm text-gray-800 dark:text-gray-100 min-w-0 break-words';
+                        label.textContent = (candidate.title || ('#' + candidate.id))
+                            + ' · ' + (candidate.media_kind || 'image')
+                            + (candidate.duration_sec ? (' · ' + candidate.duration_sec + 's') : '');
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold '
+                            + (candidate.granted ? 'bg-gray-200 dark:bg-gray-700' : 'bg-purple-600 text-white');
+                        button.textContent = candidate.granted
+                            ? (tr.ads?.policy_revoke || '')
+                            : (tr.ads?.policy_grant || '');
+                        button.addEventListener('click', function() {
+                            setAdGrant(candidate.id, !candidate.granted);
+                        });
+                        li.appendChild(label);
+                        li.appendChild(button);
+                        list.appendChild(li);
+                    });
+                } catch (err) {
+                    state.textContent = tr.ads?.policy_invalid || '';
+                }
+            }
+
+            async function saveAdPolicyMode(mode) {
+                if (!isOwnerProfileView || profileAdPolicyBusy) return;
+                profileAdPolicyBusy = true;
+                try {
+                    const res = await fetch('/api/advertisements/policy', {
+                        method: 'PUT',
+                        headers: profileAdPolicyHeaders(true),
+                        body: JSON.stringify({ mode: mode })
+                    });
+                    const data = await res.json().catch(function() { return null; });
+                    if (!res.ok || !data || !data.success) throw new Error('policy save failed');
+                    paintAdPolicyMode(mode);
+                    setProfileAdPolicyStatus(tr.ads?.policy_saved || '');
+                    if (mode === 'manual') {
+                        await loadAdGrantCandidates();
+                    } else {
+                        const list = document.getElementById('profileAdGrantsList');
+                        if (list) list.innerHTML = '';
+                        const state = document.getElementById('profileAdGrantsState');
+                        if (state) state.textContent = '';
+                    }
+                } catch (err) {
+                    setProfileAdPolicyStatus(tr.ads?.policy_invalid || '');
+                } finally {
+                    profileAdPolicyBusy = false;
+                }
+            }
+
+            async function setAdGrant(adId, grant) {
+                if (!isOwnerProfileView) return;
+                try {
+                    const res = await fetch(
+                        grant ? '/api/advertisements/grants' : ('/api/advertisements/grants/' + encodeURIComponent(String(adId))),
+                        {
+                            method: grant ? 'POST' : 'DELETE',
+                            headers: profileAdPolicyHeaders(grant),
+                            body: grant ? JSON.stringify({ ad_id: Number(adId) }) : undefined
+                        }
+                    );
+                    const data = await res.json().catch(function() { return null; });
+                    if (!res.ok || !data || !data.success) throw new Error('grant write failed');
+                    setProfileAdPolicyStatus(tr.ads?.policy_saved || '');
+                    await loadAdGrantCandidates();
+                } catch (err) {
+                    setProfileAdPolicyStatus(tr.ads?.policy_invalid || '');
                 }
             }
 

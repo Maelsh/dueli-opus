@@ -40,6 +40,9 @@ export interface Advertisement {
     target_category_id: number | null;
     campaign_lifecycle_status: 'draft' | 'pending_review' | 'active' | 'paused' | 'ended';
     campaign_status: string;
+    is_house?: number;
+    media_kind?: string;
+    duration_sec?: number | null;
 }
 
 /**
@@ -215,6 +218,24 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
         blockedForUserId?: number | null;
         frequencyCap?: number | null;
         cappedForUserId?: number | null;
+        creatorId?: number | null;
+        opponentId?: number | null;
+        /**
+         * UNIT36.1: when an admin pricing configuration exists, the ad's
+         * CHARGEABLE price is the effective price, not
+         * `cost_per_impression_cents`. The caller then applies the budget
+         * gate itself (AdServingService) against the effective price, so this
+         * SQL gate is skipped to avoid excluding ads the effective price can
+         * still afford (and to avoid admitting ads it cannot).
+         */
+        skipBudgetGate?: boolean;
+        /**
+         * UNIT36.1: restrict the result to Dueli house ads (`is_house = 1`).
+         * House rows are the unblockable fallback: the caller fetches them
+         * separately so a large pool of unaffordable paid ads can never push
+         * the fallback out of the result set.
+         */
+        houseOnly?: boolean;
         limit?: number;
     }): Promise<Advertisement[]> {
         const limit = Math.max(1, Math.min(opts.limit ?? 5, 50));
@@ -224,12 +245,22 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
             WHERE is_active = 1
               AND (CASE WHEN campaign_lifecycle_status IN ('draft', 'pending_review', 'active', 'paused', 'ended')
                     THEN campaign_lifecycle_status ELSE campaign_status END) = 'active'
-              AND (
-                SELECT COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE -amount_cents END), 0)
-                FROM ledger_entries
-                WHERE account = 'reserve:campaign_' || ${this.tableName}.id
-              ) >= cost_per_impression_cents
         `;
+        if (opts.houseOnly) {
+            sql += ` AND COALESCE(is_house, 0) = 1`;
+        }
+        if (!opts.skipBudgetGate) {
+            sql += `
+              AND (
+                COALESCE(is_house, 0) = 1
+                OR (
+                  SELECT COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE -amount_cents END), 0)
+                  FROM ledger_entries
+                  WHERE account = 'reserve:campaign_' || ${this.tableName}.id
+                ) >= cost_per_impression_cents
+              )
+            `;
+        }
 
         if (opts.language !== undefined && opts.language !== null) {
             sql += ` AND (target_language IS NULL OR target_language = ?)`;
@@ -244,23 +275,47 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
             params.push(opts.categoryId);
         }
         if (opts.blockedForUserId !== undefined && opts.blockedForUserId !== null) {
-            sql += ` AND id NOT IN (SELECT ad_id FROM ad_blocks WHERE user_id = ?)`;
+            sql += ` AND (COALESCE(is_house, 0) = 1 OR id NOT IN (SELECT ad_id FROM ad_blocks WHERE user_id = ?))`;
             params.push(opts.blockedForUserId);
+        }
+        const parties = [opts.creatorId, opts.opponentId].filter((id): id is number => typeof id === 'number');
+        if (parties.length > 0) {
+            const marks = parties.map(() => '?').join(',');
+            sql += ` AND (
+                COALESCE(is_house, 0) = 1
+                OR (
+                    NOT EXISTS (SELECT 1 FROM user_ad_policy p WHERE p.user_id IN (${marks}) AND p.mode = 'block')
+                    AND NOT EXISTS (SELECT 1 FROM ad_blocks b WHERE b.ad_id = ${this.tableName}.id AND b.user_id IN (${marks}))
+                    AND NOT EXISTS (
+                        SELECT 1 FROM user_ad_policy p
+                        WHERE p.user_id IN (${marks})
+                          AND p.mode = 'manual'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM user_ad_grants g
+                            WHERE g.user_id = p.user_id AND g.ad_id = ${this.tableName}.id
+                          )
+                    )
+                )
+            )`;
+            params.push(...parties, ...parties, ...parties);
         }
         if (
             opts.frequencyCap !== undefined && opts.frequencyCap !== null &&
             opts.cappedForUserId !== undefined && opts.cappedForUserId !== null
         ) {
             sql += ` AND (
-                SELECT COUNT(*) FROM ad_impressions
-                WHERE ad_impressions.ad_id = ${this.tableName}.id
-                  AND ad_impressions.user_id = ?
-                  AND ad_impressions.created_at >= datetime('now', '-1 day')
-            ) < ?`;
+                COALESCE(is_house, 0) = 1
+                OR (
+                    SELECT COUNT(*) FROM ad_impressions
+                    WHERE ad_impressions.ad_id = ${this.tableName}.id
+                      AND ad_impressions.user_id = ?
+                      AND ad_impressions.created_at >= datetime('now', '-1 day')
+                ) < ?
+            )`;
             params.push(opts.cappedForUserId, opts.frequencyCap);
         }
 
-        sql += ` ORDER BY RANDOM() LIMIT ?`;
+        sql += ` ORDER BY COALESCE(is_house, 0) ASC, RANDOM() LIMIT ?`;
         params.push(limit);
 
         const result = await this.db.prepare(sql).bind(...params).all<Advertisement>();
@@ -282,8 +337,87 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
     }
 
     /**
+     * Remaining campaign budget (integer cents) for several campaigns in ONE
+     * query. The reserve account is the money SSOT: a credit leg on
+     * `reserve:campaign_<id>` is budget available, a debit leg is spend.
+     * UNIT36.1 uses this to gate serving on the EFFECTIVE price (the price
+     * the charge will actually deduct), not on the campaign's base cost.
+     */
+    async budgetBalancesCents(adIds: number[]): Promise<Map<number, number>> {
+        const balances = new Map<number, number>();
+        const unique = Array.from(new Set(adIds.filter((id) => Number.isInteger(id) && id > 0)));
+        // D1 binds at most 100 parameters per statement — chunk conservatively.
+        for (let i = 0; i < unique.length; i += 50) {
+            const chunk = unique.slice(i, i + 50);
+            if (chunk.length === 0) continue;
+            const accounts = chunk.map((id) => `reserve:campaign_${id}`);
+            const marks = accounts.map(() => '?').join(',');
+            const rows = await this.db.prepare(`
+                SELECT account, COALESCE(SUM(CASE WHEN direction = 'debit' THEN amount_cents ELSE -amount_cents END), 0) AS balance
+                FROM ledger_entries
+                WHERE account IN (${marks})
+                GROUP BY account
+            `).bind(...accounts).all<{ account: string; balance: number }>();
+            for (const row of rows.results || []) {
+                const id = Number(String(row.account).replace('reserve:campaign_', ''));
+                if (Number.isInteger(id)) balances.set(id, Number(row.balance) || 0);
+            }
+        }
+        for (const id of unique) {
+            if (!balances.has(id)) balances.set(id, 0);
+        }
+        return balances;
+    }
+
+    /**
      * Record ad impression
      */
+    async countActiveHouse(): Promise<number> {
+        const row = await this.db.prepare(
+            'SELECT COUNT(*) as count FROM advertisements WHERE is_house = 1 AND is_active = 1'
+        ).first<{ count: number }>();
+        return row?.count ?? 0;
+    }
+
+    /**
+     * Create a Dueli house ad. The three-active limit is enforced in the SAME
+     * INSERT statement, so two concurrent admin requests cannot both observe
+     * "2 active" and create a fourth row. Returns null when the limit won.
+     */
+    async insertHouse(data: {
+        title: string;
+        mediaUrl: string;
+        linkUrl: string;
+        mediaKind: 'image' | 'gif' | 'video';
+        durationSec?: number | null;
+        createdBy: number;
+    }): Promise<Advertisement | null> {
+        const result = await this.db.prepare(`
+            INSERT INTO advertisements (
+                title, image_url, link_url, is_active, revenue_per_view, created_by,
+                cost_per_impression_cents, budget_cents, campaign_lifecycle_status, campaign_status,
+                is_house, media_kind, duration_sec, created_at
+            )
+            SELECT ?, ?, ?, 1, 0, ?, 0, 0, 'active', 'active', 1, ?, ?, datetime('now')
+            WHERE (
+                SELECT COUNT(*) FROM advertisements
+                WHERE is_house = 1 AND is_active = 1
+            ) < 3
+        `).bind(
+            data.title,
+            data.mediaUrl,
+            data.linkUrl,
+            data.createdBy,
+            data.mediaKind,
+            data.durationSec ?? null
+        ).run();
+        const changes = (result.meta as { changes?: number } | undefined)?.changes ?? 0;
+        if (changes !== 1) return null;
+        const id = result.meta?.last_row_id;
+        if (!id) return null;
+        return this.findById(Number(id));
+    }
+
     async recordImpression(adId: number, competitionId: number, userId: number | null): Promise<void> {
         const now = new Date().toISOString();
         await this.db.prepare(`
@@ -484,16 +618,48 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
     }
 
     /**
-     * Get total revenue for a competition
+     * Total paid ad revenue for a competition in integer cents.
+     *
+     * `ad_impressions.charged_cents` is the authoritative per-impression
+     * price (the effective price actually deducted from the campaign ledger).
+     * Rows written before UNIT36.1 — or direct-insert legacy fixtures — carry
+     * 0 and fall back to `advertisements.revenue_per_view`, summed in dollars
+     * and rounded once at the end to preserve the pre-UNIT36.1 result exactly.
+     * House impressions are never paid revenue.
      */
-    async getCompetitionRevenue(competitionId: number): Promise<number> {
+    async getCompetitionRevenueCents(competitionId: number): Promise<number> {
         const result = await this.db.prepare(`
-            SELECT SUM(a.revenue_per_view) as total
+            SELECT
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(a.is_house, 0) = 1 THEN 0
+                        WHEN COALESCE(i.charged_cents, 0) > 0 THEN i.charged_cents
+                        ELSE 0
+                    END
+                ), 0) as charged_cents,
+                COALESCE(SUM(
+                    CASE
+                        WHEN COALESCE(a.is_house, 0) = 1 THEN 0
+                        WHEN COALESCE(i.charged_cents, 0) > 0 THEN 0
+                        ELSE COALESCE(a.revenue_per_view, 0)
+                    END
+                ), 0) as legacy_dollars
             FROM ad_impressions i
             JOIN ${this.tableName} a ON i.ad_id = a.id
             WHERE i.competition_id = ?
-        `).bind(competitionId).first<{ total: number | null }>();
-        return result?.total || 0;
+        `).bind(competitionId).first<{ charged_cents: number | null; legacy_dollars: number | null }>();
+        const charged = Number(result?.charged_cents ?? 0);
+        const legacyDollars = Number(result?.legacy_dollars ?? 0);
+        const legacyCents = Number.isFinite(legacyDollars) ? Math.round(legacyDollars * 100) : 0;
+        return (Number.isFinite(charged) ? Math.round(charged) : 0) + legacyCents;
+    }
+
+    /**
+     * Display-compat wrapper: competition revenue in dollars.
+     * Money decisions (80/20 payout) use getCompetitionRevenueCents.
+     */
+    async getCompetitionRevenue(competitionId: number): Promise<number> {
+        return (await this.getCompetitionRevenueCents(competitionId)) / 100;
     }
 }
 

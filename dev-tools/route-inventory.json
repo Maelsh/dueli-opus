@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-27T14:42:15.984Z",
-  "total": 252,
+  "generatedAt": "2026-10-29T11:25:41.694Z",
+  "total": 260,
   "routes": [
     {
       "method": "GET",
@@ -95,6 +95,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/admin/ad-pricing",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/ad-pricing",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "GET",
       "path": "/api/admin/ads",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
@@ -126,6 +140,13 @@
       "path": "/api/admin/ads/campaigns/:id/review",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/admin/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/ads/house",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/admin/routes.ts"
     },
     {
@@ -392,6 +413,41 @@
       "path": "/api/advertisements/competition/:id/revenue",
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/advertisements/grants",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/advertisements/grants/:adId",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/advertisements/policy",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/advertisements/policy",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
+      "file": "src/modules/api/advertisements/routes.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/advertisements/policy/candidates",
+      "classification": "AUTHENTICATED",
+      "guards": "router:auth, group:rateLimit, group:csrf",
       "file": "src/modules/api/advertisements/routes.ts"
     },
     {

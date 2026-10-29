@@ -381,17 +381,21 @@ describe('R4-CHUNK-INDEX-1 playlist compatibility (routes)', () => {
         expect(playlist.index_metadata.finalized_at).toBe(marker?.finalized_at);
     });
 
-    it('19. manifest carries 0043 as known history (baseline-0043)', async () => {
+    it('19. manifest carries 0043/0044 as known history (baseline-0044)', async () => {
         // R4-RELEASE-RECOVERY-C / UNIT30.4: the manifest baseline is raised to
         // 0043 so the readiness gate can enforce the ROW28 window (0040 leases,
         // 0041 index, 0042 key binding) plus the early-end columns/ledger.
-        expect(manifest.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        // UNIT36.1 raises it once more to 0044 for the ad
+        // pricing/control/house migration.
+        expect(manifest.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         expect(manifest.known_history).toContain('0043_competition_early_end.sql');
+        expect(manifest.known_history).toContain('0044_ad_pricing_control_house.sql');
         expect(manifest.required_migrations.map((m: any) => m.file)).toEqual(expect.arrayContaining([
             '0040_recording_leases.sql',
             '0041_chunk_index.sql',
             '0042_chunk_key_binding.sql',
             '0043_competition_early_end.sql',
+            '0044_ad_pricing_control_house.sql',
         ]));
     });
 });
