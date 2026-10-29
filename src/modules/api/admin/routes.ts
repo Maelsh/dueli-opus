@@ -8,6 +8,10 @@ const adminRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // T3.4 FIX: isAdmin() reads c.get('user') which only authMiddleware sets —
 // without this the entire admin API returned 403 for everyone.
 adminRoutes.use('*', authMiddleware({ required: false }));
+// UNIT36.1: pricing and house-ad controls are never public. The handler still
+// enforces is_admin (403); this path-level guard rejects guests with 401 first.
+adminRoutes.use('/ad-pricing', authMiddleware({ required: true }));
+adminRoutes.use('/ads/house', authMiddleware({ required: true }));
 const controller = new AdminController();
 const documentController = new DocumentController();
 const supportController = new SupportController();
@@ -115,5 +119,9 @@ adminRoutes.get('/support/threads/:id', async (c) => supportController.adminGet(
 adminRoutes.post('/support/threads/:id/reply', async (c) => supportController.adminReply(c));
 adminRoutes.put('/support/threads/:id/status', async (c) => supportController.adminSetStatus(c));
 adminRoutes.get('/support/unread', async (c) => supportController.adminUnread(c));
+
+adminRoutes.put('/ad-pricing', async (c) => controller.setAdPricing(c));
+adminRoutes.get('/ad-pricing', async (c) => controller.getAdPricing(c));
+adminRoutes.post('/ads/house', async (c) => controller.createHouseAd(c));
 
 export default adminRoutes;

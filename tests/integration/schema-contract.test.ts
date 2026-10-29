@@ -77,6 +77,7 @@ const EXPECTED_MIGRATIONS = [
     '0041_chunk_index.sql',
     '0042_chunk_key_binding.sql',
     '0043_competition_early_end.sql',
+    '0044_ad_pricing_control_house.sql',
 ];
 
 const EXPECTED_TABLES = [
@@ -109,12 +110,15 @@ const EXPECTED_TABLES = [
     'managed_documents',
     'support_threads',
     'support_messages',
+    'user_ad_policy',
+    'user_ad_grants',
 ];
 
 let migrationOutput = '';
 let tables: string[] = [];
 let messagesColumns: string[] = [];
 let advertisementsColumns: string[] = [];
+let adImpressionsColumns: string[] = [];
 let userEarningsColumns: string[] = [];
 let chunkKeysColumns: string[] = [];
 let withdrawalColumns: string[] = [];
@@ -172,6 +176,7 @@ beforeAll(() => {
     tables = tableNames(masterRows);
     messagesColumns = columnNames(queryD1('PRAGMA table_info(messages)').filter(isTableInfoRow));
     advertisementsColumns = columnNames(queryD1('PRAGMA table_info(advertisements)').filter(isTableInfoRow));
+    adImpressionsColumns = columnNames(queryD1('PRAGMA table_info(ad_impressions)').filter(isTableInfoRow));
     userEarningsColumns = columnNames(
         queryD1('PRAGMA table_info(user_earnings)').filter(isTableInfoRow),
     );
@@ -199,8 +204,8 @@ describe('migrations — applied via Wrangler CLI only', () => {
         expect(migrationOutput).toBeTruthy();
     });
 
-    it('has exactly 44 migration files in migrations/', () => {
-        expect(listMigrationFileNames()).toHaveLength(44);
+    it('has exactly 45 migration files in migrations/', () => {
+        expect(listMigrationFileNames()).toHaveLength(45);
     });
 
     it('matches the full expected migration file name list', () => {
@@ -326,6 +331,15 @@ describe('schema — real D1 queried through Wrangler CLI', () => {
     it('advertisements has the 0026 category-targeting column: target_category_id', () => {
         expect(tables).toContain('advertisements');
         expect(advertisementsColumns).toContain('target_category_id');
+    });
+
+    it('UNIT36.1 ad pricing/control/house columns and tables exist (0044)', () => {
+        for (const col of ['is_house', 'media_kind', 'duration_sec']) {
+            expect(advertisementsColumns, `missing advertisements.${col}`).toContain(col);
+        }
+        expect(adImpressionsColumns).toContain('charged_cents');
+        expect(tables).toContain('user_ad_policy');
+        expect(tables).toContain('user_ad_grants');
     });
 
     it('R3-B7 session store exists: explore_result_sessions + explore_result_chunks (0033)', () => {

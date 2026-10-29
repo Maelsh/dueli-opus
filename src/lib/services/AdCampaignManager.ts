@@ -1,7 +1,14 @@
 import { AdvertisementModel, Advertisement } from '../../models/AdvertisementModel';
+import { CompetitionModel } from '../../models/CompetitionModel';
 import { PlatformFinancialLogModel } from '../../models/PlatformFinancialLogModel';
 import { PlatformSettingsModel } from '../../models/PlatformSettingsModel';
 import { LedgerService } from './LedgerService';
+import {
+    AD_PRICING_SETTING_KEY,
+    MAX_DURATION_SECONDS,
+    effectiveImpressionCents,
+    parseAdPricingConfig,
+} from './AdPricing';
 
 /**
  * Phase 9.A — guarded campaign lifecycle:
@@ -98,6 +105,8 @@ export class AdCampaignManager {
         target_language?: string;
         target_country?: string;
         target_category_id?: number;
+        media_kind?: 'image' | 'gif' | 'video';
+        duration_sec?: number;
         advertiser_id: number;
     }): Promise<Advertisement> {
         if (!Number.isInteger(data.budget_cents) || data.budget_cents <= 0) {
@@ -106,6 +115,20 @@ export class AdCampaignManager {
         const cost = data.cost_per_impression_cents ?? 1;
         if (!Number.isInteger(cost) || cost <= 0) {
             throw new Error('cost_per_impression_cents must be a positive integer');
+        }
+        const mediaKind = data.media_kind ?? 'image';
+        if (mediaKind !== 'image' && mediaKind !== 'gif' && mediaKind !== 'video') {
+            throw new Error('media_kind must be image, gif, or video');
+        }
+        if (data.duration_sec !== undefined) {
+            if (
+                mediaKind !== 'video'
+                || !Number.isInteger(data.duration_sec)
+                || data.duration_sec <= 0
+                || data.duration_sec > MAX_DURATION_SECONDS
+            ) {
+                throw new Error('duration_sec must be a positive integer on a video campaign');
+            }
         }
 
         const ad = await this.adModel.create({
@@ -125,6 +148,8 @@ export class AdCampaignManager {
                 target_language = ?,
                 target_country = ?,
                 target_category_id = ?,
+                media_kind = ?,
+                duration_sec = ?,
                                 campaign_lifecycle_status = 'draft'
             WHERE id = ?
         `).bind(
@@ -134,6 +159,8 @@ export class AdCampaignManager {
             data.target_language || null,
             data.target_country || null,
             data.target_category_id ?? null,
+            mediaKind,
+            mediaKind === 'video' ? (data.duration_sec ?? null) : null,
             ad.id
         ).run();
 
@@ -311,7 +338,27 @@ export class AdCampaignManager {
         const ad = await this.adModel.findById(adId);
         if (!ad) return { served: false, budgetExhausted: false, spentCents: 0, frequencyCapped: false };
 
-        const cost = ad.cost_per_impression_cents;
+        if (Number(ad.is_house) === 1) {
+            await this.adModel.recordImpression(adId, competitionId, userId);
+            return { served: true, budgetExhausted: false, spentCents: 0, frequencyCapped: false };
+        }
+
+        let cost = Math.max(1, Math.round(ad.cost_per_impression_cents || 0));
+        const pricingRaw = await this.settingsModel.getByKey(AD_PRICING_SETTING_KEY);
+        const pricing = parseAdPricingConfig(pricingRaw);
+        if (pricing) {
+            const competition = await new CompetitionModel(this.database).findById(competitionId);
+            cost = effectiveImpressionCents(ad.cost_per_impression_cents, pricing, {
+                country: competition?.country ?? null,
+                mediaKind: ad.media_kind || 'image',
+                durationSec: ad.duration_sec ?? null,
+                hasTargeting: !!(
+                    ad.target_language ||
+                    ad.target_country ||
+                    ad.target_category_id !== null && ad.target_category_id !== undefined
+                ),
+            });
+        }
         const account = campaignAccount(adId);
         const txId = `ad_imp_${adId}_${competitionId}_${crypto.randomUUID()}`;
         const now = new Date().toISOString();
@@ -353,10 +400,10 @@ export class AdCampaignManager {
             `).bind(txId, AD_REVENUE_ACCOUNT, cost, adId, txId),
             // 3. impression row — fires exactly when the charge above landed.
             this.db().prepare(`
-                INSERT INTO ad_impressions (ad_id, competition_id, user_id, created_at)
-                SELECT ?, ?, ?, ?
+                INSERT INTO ad_impressions (ad_id, competition_id, user_id, charged_cents, created_at)
+                SELECT ?, ?, ?, ?, ?
                 WHERE EXISTS (SELECT 1 FROM ledger_entries WHERE tx_id = ?)
-            `).bind(adId, competitionId, userId, now, txId),
+            `).bind(adId, competitionId, userId, cost, now, txId),
             // 4. views counter for the same guarded charge.
             this.db().prepare(`
                 UPDATE advertisements SET views_count = views_count + 1

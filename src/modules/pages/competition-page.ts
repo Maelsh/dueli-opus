@@ -1723,7 +1723,34 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         const text = ad.description || ad.body || '';
         body.innerHTML = '';
         const wrap = document.createElement('div');
-        wrap.className = 'w-full text-center';
+        wrap.className = 'w-full min-w-0';
+        const mediaUrl = ad.image_url || ad.media_url || '';
+        const kind = ad.media_kind || 'image';
+        // UNIT36.1: ONE fixed ad slot renders every media kind the platform
+        // accepts — image and GIF render as an <img> (GIF animates natively),
+        // video renders as a <video> element. The kind comes from the server
+        // (advertisements.media_kind); an unknown/absent kind falls back to
+        // image, so the slot never breaks.
+        if (mediaUrl) {
+          const frame = document.createElement('div');
+          frame.className = 'w-full aspect-video bg-black rounded-lg overflow-hidden mb-2';
+          if (kind === 'video') {
+            const video = document.createElement('video');
+            video.src = mediaUrl;
+            video.muted = true;
+            video.playsInline = true;
+            video.controls = true;
+            video.className = 'w-full h-full object-contain';
+            frame.appendChild(video);
+          } else {
+            const img = document.createElement('img');
+            img.src = mediaUrl;
+            img.alt = title || '';
+            img.className = 'w-full h-full object-contain';
+            frame.appendChild(img);
+          }
+          wrap.appendChild(frame);
+        }
         const t = document.createElement('p');
         t.className = 'font-bold text-gray-800 dark:text-gray-100';
         t.textContent = title;

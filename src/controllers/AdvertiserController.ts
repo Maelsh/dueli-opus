@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { Bindings, Variables } from '../config/types';
 import { BaseController } from './base/BaseController';
 import { AdCampaignManager } from '../lib/services/AdCampaignManager';
+import { MAX_DURATION_SECONDS } from '../lib/services/AdPricing';
 import { AdvertisementModel } from '../models/AdvertisementModel';
 import { CategoryModel } from '../models/CategoryModel';
 import { ArbitrationService } from '../lib/services/ArbitrationService';
@@ -62,6 +63,8 @@ export class AdvertiserController extends BaseController {
                 target_language?: string;
                 target_country?: string;
                 target_category_id?: number;
+                media_kind?: string;
+                duration_sec?: number;
             }>(c);
 
             if (!body?.title || !body?.budget_cents) {
@@ -69,6 +72,20 @@ export class AdvertiserController extends BaseController {
             }
             if (!Number.isInteger(body.budget_cents) || body.budget_cents <= 0) {
                 return this.validationError(c, this.t('ads.invalid_budget', c));
+            }
+            const mediaKind = body.media_kind ?? 'image';
+            if (mediaKind !== 'image' && mediaKind !== 'gif' && mediaKind !== 'video') {
+                return this.validationError(c, this.t('ads.invalid_media', c));
+            }
+            if (body.duration_sec !== undefined && body.duration_sec !== null) {
+                if (
+                    mediaKind !== 'video'
+                    || !Number.isInteger(body.duration_sec)
+                    || body.duration_sec <= 0
+                    || body.duration_sec > MAX_DURATION_SECONDS
+                ) {
+                    return this.validationError(c, this.t('ads.invalid_duration', c));
+                }
             }
             if (body.target_category_id !== undefined && body.target_category_id !== null) {
                 if (!Number.isInteger(body.target_category_id) || body.target_category_id <= 0) {
@@ -90,6 +107,8 @@ export class AdvertiserController extends BaseController {
                 target_language: body.target_language,
                 target_country: body.target_country,
                 target_category_id: body.target_category_id ?? undefined,
+                media_kind: mediaKind,
+                duration_sec: mediaKind === 'video' ? body.duration_sec : undefined,
                 advertiser_id: user.id
             });
 

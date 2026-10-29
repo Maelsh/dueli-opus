@@ -56,6 +56,17 @@ function goodInput(m = manifest()) {
                     'id', 'competition_id', 'user_id', 'content', 'parent_id', 'is_live',
                     'likes_count', 'created_at', 'user_anonymized', 'deleted_at', 'video_offset',
                 ],
+                // Baseline-0044 surface (UNIT36.1): ad pricing/control/house.
+                advertisements: [
+                    'id', 'title', 'image_url', 'link_url', 'is_active', 'created_by',
+                    'cost_per_impression_cents', 'revenue_per_view', 'campaign_lifecycle_status',
+                    'campaign_status', 'is_house', 'media_kind', 'duration_sec',
+                ],
+                ad_impressions: [
+                    'id', 'ad_id', 'competition_id', 'user_id', 'charged_cents', 'created_at',
+                ],
+                user_ad_policy: ['user_id', 'mode', 'updated_at'],
+                user_ad_grants: ['user_id', 'ad_id', 'created_at'],
                 // Baseline-0036 surface: managed_documents (0036, R2-A only).
                 managed_documents: [
                     'id', 'slug', 'title_ar', 'title_en', 'body_ar', 'body_en',
@@ -93,7 +104,7 @@ function goodInput(m = manifest()) {
                     'user_id', 'expires_at', 'lease_generation', 'object_path', 'max_bytes',
                 ],
             },
-            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread', 'idx_withdrawal_requests_payout_method', 'idx_ratings_competitor', 'idx_competitions_creator', 'idx_competitions_opponent', 'idx_users_active', 'idx_user_blocks_blocked', 'idx_sse_channel_id', 'idx_recording_leases_holder', 'idx_recording_chunks_order', 'idx_recording_chunks_state', 'idx_chunk_keys_lookup', 'idx_chunk_keys_owner', 'idx_chunk_keys_bound', 'idx_competitions_result_source', 'idx_result_credits_competitor'],
+            indexes: ['idx_explore_sessions_identity', 'idx_explore_sessions_expiry', 'idx_competition_views_day', 'idx_managed_documents_slug', 'idx_managed_documents_status', 'idx_support_threads_user', 'idx_support_threads_status', 'idx_support_messages_thread', 'idx_support_messages_unread', 'idx_withdrawal_requests_payout_method', 'idx_ratings_competitor', 'idx_competitions_creator', 'idx_competitions_opponent', 'idx_users_active', 'idx_user_blocks_blocked', 'idx_sse_channel_id', 'idx_recording_leases_holder', 'idx_recording_chunks_order', 'idx_recording_chunks_state', 'idx_chunk_keys_lookup', 'idx_chunk_keys_owner', 'idx_chunk_keys_bound', 'idx_competitions_result_source', 'idx_result_credits_competitor', 'idx_advertisements_house', 'idx_ad_impressions_competition_charged', 'idx_user_ad_grants_ad'],
         },
     };
 }
@@ -117,9 +128,9 @@ describe('release readiness gate', () => {
         expect(m.known_history).toContain(req.file);
     });
 
-    it('manifest baseline-0043 requires 0034 with a hash matching the repo file', () => {
+    it('manifest baseline-0044 requires 0034 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -131,9 +142,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_competition_views_day');
     });
 
-    it('manifest baseline-0043 requires 0035 with a hash matching the repo file', () => {
+    it('manifest baseline-0044 requires 0035 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         const req = m.required_migrations.find((x) => x.file === '0035_comments_video_offset.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -142,9 +153,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.tables.comments).toEqual(expect.arrayContaining(['video_offset']));
     });
 
-    it('manifest baseline-0043 requires 0036 with a hash matching the repo file', () => {
+    it('manifest baseline-0044 requires 0036 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         const req = m.required_migrations.find((x) => x.file === '0036_managed_documents.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -157,9 +168,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_managed_documents_status');
     });
 
-    it('manifest baseline-0043 requires 0037 with a hash matching the repo file', () => {
+    it('manifest baseline-0044 requires 0037 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         const req = m.required_migrations.find((x) => x.file === '0037_support_messaging.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -175,9 +186,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_support_messages_thread');
     });
 
-    it('manifest baseline-0043 requires 0038 with a hash matching the repo file', () => {
+    it('manifest baseline-0044 requires 0038 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         const req = m.required_migrations.find((x) => x.file === '0038_withdrawal_payout_snapshot.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -189,9 +200,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_withdrawal_requests_payout_method');
     });
 
-    it('manifest baseline-0043 requires 0039 with a hash matching the repo file', () => {
+    it('manifest baseline-0044 requires 0039 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         const req = m.required_migrations.find((x) => x.file === '0039_r4_db_opt1_indexes.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -210,9 +221,9 @@ describe('release readiness gate', () => {
         }
     });
 
-    it('manifest baseline-0043 requires 0040/0041/0042 with hashes matching the repo files', () => {
+    it('manifest baseline-0044 requires 0040/0041/0042 with hashes matching the repo files', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         for (const file of ['0040_recording_leases.sql', '0041_chunk_index.sql', '0042_chunk_key_binding.sql']) {
             const req = m.required_migrations.find((x) => x.file === file);
             expect(req).toBeTruthy();
@@ -237,9 +248,9 @@ describe('release readiness gate', () => {
         }
     });
 
-    it('manifest baseline-0043 requires 0043 with hash and schema; applied state passes', () => {
+    it('manifest baseline-0044 requires 0043 with hash and schema; applied state passes', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
         const req = m.required_migrations.find((x) => x.file === '0043_competition_early_end.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -258,6 +269,39 @@ describe('release readiness gate', () => {
         );
         expect(m.required_schema.indexes).toEqual(
             expect.arrayContaining(['idx_competitions_result_source', 'idx_result_credits_competitor'])
+        );
+
+        const r = evaluateReadiness(goodInput(m));
+        expect(r.ok).toBe(true);
+        expect(r.unexpected.applied).toEqual([]);
+        expect(r.unexpected.pending).toEqual([]);
+    });
+
+    it('manifest baseline-0044 requires 0044 (UNIT36.1 ad pricing/control/house) with hash and schema', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        const req = m.required_migrations.find((x) => x.file === '0044_ad_pricing_control_house.sql');
+        expect(req).toBeTruthy();
+        expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        expect(m.required_schema.tables.advertisements).toEqual(
+            expect.arrayContaining(['is_house', 'media_kind', 'duration_sec'])
+        );
+        expect(m.required_schema.tables.ad_impressions).toEqual(
+            expect.arrayContaining(['charged_cents'])
+        );
+        expect(m.required_schema.tables.user_ad_policy).toEqual(
+            expect.arrayContaining(['user_id', 'mode'])
+        );
+        expect(m.required_schema.tables.user_ad_grants).toEqual(
+            expect.arrayContaining(['user_id', 'ad_id'])
+        );
+        expect(m.required_schema.indexes).toEqual(
+            expect.arrayContaining([
+                'idx_advertisements_house',
+                'idx_ad_impressions_competition_charged',
+                'idx_user_ad_grants_ad',
+            ])
         );
 
         const r = evaluateReadiness(goodInput(m));
@@ -325,7 +369,7 @@ describe('release readiness gate', () => {
         const r = evaluateReadiness(goodInput());
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
-        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0043');
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0044');
     });
 
     it('production-shape 0037 + manifest 0042 => required-pending FAIL (0038 not yet applied)', () => {

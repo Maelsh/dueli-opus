@@ -71,7 +71,21 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium mb-1">${tt('image_url')}</label>
+                            <label class="block text-sm font-medium mb-1">${tt('media_kind')}</label>
+                            <select id="campaignMediaKind" class="w-full px-4 py-2 rounded-xl border dark:border-gray-600 bg-transparent">
+                                <option value="image">${tt('media_image')}</option>
+                                <option value="gif">${tt('media_gif')}</option>
+                                <option value="video">${tt('media_video')}</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${tt('duration_sec')}</label>
+                            <input type="number" id="campaignDuration" step="1" min="1" max="86400" class="w-full px-4 py-2 rounded-xl border dark:border-gray-600 bg-transparent" placeholder="${tt('duration_hint')}" />
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${tt('media_url')}</label>
                             <input type="url" id="campaignImage" class="w-full px-4 py-2 rounded-xl border dark:border-gray-600 bg-transparent" />
                         </div>
                         <div>
@@ -123,7 +137,9 @@ export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables:
         function showCreateCampaignForm() { document.getElementById('createCampaignForm').classList.toggle('hidden'); }
         async function createCampaign(e) {
             e.preventDefault();
-            const body = { title: document.getElementById('campaignTitle').value, budget_cents: parseInt(document.getElementById('campaignBudget').value, 10), cost_per_impression_cents: parseInt(document.getElementById('revenuePerView').value, 10), image_url: document.getElementById('campaignImage').value || undefined, link_url: document.getElementById('campaignLink').value || undefined, target_language: document.getElementById('targetLanguage').value || undefined, target_country: document.getElementById('targetCountry').value || undefined };
+            const mediaKind = document.getElementById('campaignMediaKind').value;
+            const durationRaw = document.getElementById('campaignDuration').value;
+            const body = { title: document.getElementById('campaignTitle').value, budget_cents: parseInt(document.getElementById('campaignBudget').value, 10), cost_per_impression_cents: parseInt(document.getElementById('revenuePerView').value, 10), image_url: document.getElementById('campaignImage').value || undefined, link_url: document.getElementById('campaignLink').value || undefined, target_language: document.getElementById('targetLanguage').value || undefined, target_country: document.getElementById('targetCountry').value || undefined, media_kind: mediaKind, duration_sec: mediaKind === 'video' && durationRaw ? parseInt(durationRaw, 10) : undefined };
             const res = await fetch('/api/advertiser/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             if (res.ok) { loadAdvertiserDashboard(); document.getElementById('createCampaignForm').classList.add('hidden'); }
         }

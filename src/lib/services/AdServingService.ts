@@ -1,5 +1,11 @@
 import { AdvertisementModel, Advertisement } from '../../models/AdvertisementModel';
 import { CompetitionModel } from '../../models/CompetitionModel';
+import { PlatformSettingsModel } from '../../models/PlatformSettingsModel';
+import {
+    AD_PRICING_SETTING_KEY,
+    effectiveImpressionCents,
+    parseAdPricingConfig,
+} from './AdPricing';
 
 /**
  * Phase 9.B — ad serving and targeting.
@@ -40,10 +46,12 @@ export interface ServeAdsOptions {
 export class AdServingService {
     private adModel: AdvertisementModel;
     private competitionModel: CompetitionModel;
+    private settingsModel: PlatformSettingsModel;
 
     constructor(db: D1Database) {
         this.adModel = new AdvertisementModel(db);
         this.competitionModel = new CompetitionModel(db);
+        this.settingsModel = new PlatformSettingsModel(db);
     }
 
     /** Sensitive contexts never receive ads — enforced before any selection. */
@@ -65,24 +73,99 @@ export class AdServingService {
         let country = opts.country ?? null;
         let categoryId: number | null = null;
 
+        let creatorId: number | null = null;
+        let opponentId: number | null = null;
+        // Pricing country is the COMPETITION country only — the same source the
+        // charge path (AdCampaignManager.chargeImpression) uses. A caller hint
+        // must never change the price that will be deducted.
+        let pricingCountry: string | null = null;
         if (opts.competitionId) {
             const competition = await this.competitionModel.findById(opts.competitionId);
             if (competition) {
                 language = competition.language ?? language;
                 country = competition.country ?? country;
                 categoryId = competition.category_id ?? null;
+                creatorId = competition.creator_id ?? null;
+                opponentId = competition.opponent_id ?? null;
+                pricingCountry = competition.country ?? null;
             }
         }
 
-        return this.adModel.getTargetedAds({
+        const limit = Math.max(1, Math.min(opts.limit ?? 5, 50));
+
+        // UNIT36.1: the ad's chargeable price is the EFFECTIVE price. When an
+        // admin pricing configuration exists, serving must gate the campaign
+        // budget on that price (not on `cost_per_impression_cents`), otherwise
+        // an ad could be shown while its charge is refused (a free impression)
+        // or an affordable ad could be hidden.
+        const pricing = parseAdPricingConfig(
+            await this.settingsModel.getByKey(AD_PRICING_SETTING_KEY)
+        );
+
+        const candidates = await this.adModel.getTargetedAds({
             language,
             country,
             categoryId,
             blockedForUserId: opts.viewerUserId ?? null,
             frequencyCap: AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY,
             cappedForUserId: opts.viewerUserId ?? null,
-            limit: opts.limit ?? 5,
+            creatorId,
+            opponentId,
+            skipBudgetGate: pricing !== null,
+            limit: pricing !== null ? 50 : limit,
         });
+
+        if (!pricing) return candidates.slice(0, limit);
+
+        const paidIds = candidates
+            .filter((ad) => Number(ad.is_house) !== 1)
+            .map((ad) => ad.id);
+        const balances = await this.adModel.budgetBalancesCents(paidIds);
+
+        const affordable = candidates.filter((ad) => {
+            // House ads never consume a budget and are never blocked.
+            if (Number(ad.is_house) === 1) return true;
+            const price = effectiveImpressionCents(
+                ad.cost_per_impression_cents,
+                pricing,
+                {
+                    country: pricingCountry,
+                    mediaKind: ad.media_kind || 'image',
+                    durationSec: ad.duration_sec ?? null,
+                    hasTargeting: !!(
+                        ad.target_language ||
+                        ad.target_country ||
+                        (ad.target_category_id !== null && ad.target_category_id !== undefined)
+                    ),
+                }
+            );
+            return (balances.get(ad.id) ?? 0) >= price;
+        });
+
+        // The house fallback must survive a large pool of unaffordable paid
+        // ads, so it is fetched on its own and appended after the paid ads.
+        const houses = await this.adModel.getTargetedAds({
+            language,
+            country,
+            categoryId,
+            blockedForUserId: opts.viewerUserId ?? null,
+            frequencyCap: AD_FREQUENCY_CAP_PER_USER_PER_AD_PER_DAY,
+            cappedForUserId: opts.viewerUserId ?? null,
+            creatorId,
+            opponentId,
+            skipBudgetGate: true,
+            houseOnly: true,
+            limit: 3,
+        });
+        const merged = [...affordable];
+        const seen = new Set(merged.map((ad) => ad.id));
+        for (const house of houses) {
+            if (seen.has(house.id)) continue;
+            seen.add(house.id);
+            merged.push(house);
+        }
+
+        return merged.slice(0, limit);
     }
 }
 

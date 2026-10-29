@@ -85,6 +85,11 @@ export const USER_DEPENDENTS: Dependent[] = [
     // never auto-destroyed and deletes can never fail on these FKs.
     { table: 'support_threads', column: 'user_id' },
     { table: 'support_messages', column: 'sender_id' },
+    // UNIT36.1: competitor ad-control policy + manual-approval grants
+    // reference users (0044). A user with ad-control rows is never a
+    // retirement candidate, so those rows are never auto-destroyed.
+    { table: 'user_ad_policy', column: 'user_id' },
+    { table: 'user_ad_grants', column: 'user_id' },
 ];
 
 /** Every (table, column) with an FK to competitions(id) in the final schema. */
