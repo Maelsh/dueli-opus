@@ -16,7 +16,16 @@ import { generateHTML } from '../../shared/templates/layout';
 
 /**
  * The reusable "overview" body of the about page: the introduction, the
- * feature grid, the platform preview and the Maelsh block.
+ * feature grid, the platform preview AND the Maelsh block.
+ *
+ * This is the SINGLE render source of the /about content. The guide's
+ * Overview section (/guide/overview) is the canonical target of the /about
+ * alias, so it MUST carry exactly the same content — including the Maelsh
+ * block. The Maelsh block therefore lives INSIDE this function (it calls
+ * renderAboutMaelsh() below, the one place its markup is defined) instead
+ * of being appended by each caller. Otherwise /guide/overview would be a
+ * strict subset of /about while claiming to be the canonical page of it —
+ * a canonical that points at missing content.
  *
  * The page title (the <h1>) is owned by the caller, so the same body can
  * live under the About page title and under the guide's Overview section
@@ -90,12 +99,18 @@ export function renderAboutOverview(lang: Language): string {
                     <img src="/static/about/image-5.jpg" alt="${tr.about_platform_preview}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                 </div>
             </div>
-        </div>`;
+        </div>
+
+        ${renderAboutMaelsh(lang)}`;
 }
 
 /**
  * The reusable "Maelsh" block of the about page (the human message). It
  * carries the founder's own published wording — nothing here is invented.
+ *
+ * This is the ONLY place the block's markup is defined. It is rendered by
+ * renderAboutOverview() (so /about and the canonical /guide/overview carry
+ * it) and by the guide's "message" section (which is dedicated to it).
  */
 export function renderAboutMaelsh(lang: Language): string {
     const tr = translations[getUILanguage(lang)];
@@ -126,6 +141,11 @@ export function renderAboutMaelsh(lang: Language): string {
  * GET /about — the legacy address of the guide's overview section. It
  * renders the same body (with every legacy anchor) and points its
  * canonical at /guide/overview, so the two are one page for a crawler.
+ *
+ * The body is renderAboutOverview() ONLY: that function already includes
+ * the Maelsh block, so /about and its canonical target /guide/overview
+ * carry IDENTICAL content (the Maelsh block is never rendered twice on
+ * this page, and never drifts between the two addresses).
  */
 export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
     const lang = (c.get('lang') ?? 'en') as Language;
@@ -143,8 +163,6 @@ export function aboutPage(c: Context<{ Bindings: Bindings; Variables: Variables 
             </div>
 
             ${renderAboutOverview(lang)}
-
-            ${renderAboutMaelsh(lang)}
         </main>`;
 
     const html = renderGuideShell(lang, { active: 'overview', body });

@@ -104,6 +104,10 @@ function sectionBody(lang: Language, tr: Record<string, any>, section: GuideSect
         case 'help':
             return renderHelpSections(lang);
         case 'message':
+            // The Maelsh block comes from the SAME function the overview
+            // section uses (renderAboutOverview calls renderAboutMaelsh),
+            // so the two sections can never show different wording. It is
+            // defined once, in about-page.ts.
             return `
                 ${renderAboutMaelsh(lang)}
                 <p class="mt-8 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${g.docs_note}</p>

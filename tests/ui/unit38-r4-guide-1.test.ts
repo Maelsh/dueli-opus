@@ -156,6 +156,72 @@ describe('UNIT38 / R4-GUIDE-1 — the guide center is a set of independent pages
             expect(help.html, `guide help #${anchor}`).toContain(`id="${anchor}"`);
         }
     });
+
+    it('6b. /guide/overview carries the FULL /about content (canonical equivalence)', async () => {
+        // REMOTE note (UNIT38 remediation): /about canonicalises to
+        // /guide/overview, so the canonical target MUST carry the same
+        // content — including the Maelsh block. A canonical that points at
+        // a page missing part of the content loses that part for a crawler.
+        //
+        // The core content of /about is compared BETWEEN THE TWO RENDERED
+        // PAGES (not against a source string): every substantive marker of
+        // /about must be present in /guide/overview.
+        const about = await get('/about?lang=en');
+        const overview = await get('/guide/overview?lang=en');
+        expect(about.status).toBe(200);
+        expect(overview.status).toBe(200);
+
+        // The markers of the about core body: the intro, the three feature
+        // cards, the platform preview and the Maelsh block.
+        const markers = [
+            en.about_description,
+            en.about_live_streaming,
+            en.about_fair_judging,
+            en.about_global_community,
+            en.about_platform_preview,
+            en.about_developed_by,
+            en.about_maelsh_desc,
+            'img src="/static/about/image-1.png"',
+            'img src="/static/about/image-5.jpg"',
+        ];
+        for (const marker of markers) {
+            expect(about.html, `marker in /about: ${marker}`).toContain(marker);
+            expect(overview.html, `marker in /guide/overview: ${marker}`).toContain(marker);
+        }
+
+        // The Maelsh block is rendered EXACTLY ONCE on each page (it moved
+        // into the single shared render source — it is not duplicated).
+        const maelshAnchor = 'bg-gradient-to-br from-gray-900 to-black';
+        expect(about.html.split(maelshAnchor).length - 1, 'Maelsh block count in /about').toBe(1);
+        expect(overview.html.split(maelshAnchor).length - 1, 'Maelsh block count in /guide/overview').toBe(1);
+
+        // And the canonical is still the guide section.
+        expect(link(about.html, 'canonical')).toBe('https://dueli.maelshpro.com/guide/overview');
+        expect(link(overview.html, 'canonical')).toBe('https://dueli.maelshpro.com/guide/overview');
+
+        // The Arabic variant carries the same content (the equivalence is
+        // not an English-only accident).
+        const aboutAr = await get('/about?lang=ar');
+        const overviewAr = await get('/guide/overview?lang=ar');
+        for (const marker of [ar.about_description, ar.about_developed_by, ar.about_maelsh_desc]) {
+            expect(aboutAr.html, `ar marker in /about`).toContain(marker);
+            expect(overviewAr.html, `ar marker in /guide/overview`).toContain(marker);
+        }
+    });
+
+    it('6c. the Maelsh block has ONE source of truth (no forked copy)', () => {
+        // The block's markup is defined exactly once and included by
+        // renderAboutOverview(); /about and /guide/overview both call that
+        // one function, so they cannot drift apart.
+        const aboutSrc = SRC('modules/pages/about-page.ts');
+        const maelshDefs = aboutSrc.match(/export function renderAboutMaelsh/g) ?? [];
+        expect(maelshDefs).toHaveLength(1);
+        expect(aboutSrc).toContain('${renderAboutMaelsh(lang)}`;');
+        // /about no longer appends the block a second time on its own.
+        const aboutHandler = aboutSrc.slice(aboutSrc.indexOf('export function aboutPage'));
+        const maelshCalls = aboutHandler.match(/renderAboutMaelsh\(/g) ?? [];
+        expect(maelshCalls, 'the /about handler must not render the block separately').toHaveLength(0);
+    });
 });
 
 describe('UNIT38 / R4-GUIDE-1 — the legacy aliases stay safe', () => {
