@@ -99,9 +99,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         return '<p dir="ltr" class="text-sm text-gray-500 block max-w-full truncate min-w-0 overflow-hidden whitespace-nowrap px-1" data-dueli-truncate="1" title="' + escapeAttrClient(full) + '" data-full-text="' + escapeAttrClient(full) + '">' + escapeHtmlClient(full) + '</p>';
       }
       function competitionSseAllowed() {
-        if (!competitionData) return false;
+        if (!competitionData || !competitionData.status) return true;
         var s = competitionData.status;
-        return s === 'live' || s === 'accepted' || s === 'pending';
+        return s !== 'completed' && s !== 'cancelled' && s !== 'archived';
       }
       
       document.addEventListener('DOMContentLoaded', async () => {
@@ -1334,7 +1334,6 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             try { commentsLiveES.close(); } catch (e) {}
             commentsLiveES = null;
           }
-          if (!competitionSseAllowed()) return;
           const es = new EventSource('/api/sse?channel=' + encodeURIComponent('competition:' + competitionId));
           commentsLiveES = es;
           es.addEventListener('comment_new', function(ev) {
@@ -1520,7 +1519,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       let watchIntentRecorded = false;
       async function initCompetitionDynamics() {
         loadCommentsInitial();
-        subscribeCommentsLive();
+        if (competitionSseAllowed()) subscribeCommentsLive();
+        else if (commentsLiveES) {
+          try { commentsLiveES.close(); } catch (e) {}
+          commentsLiveES = null;
+        }
         loadRatingSummary();
         subscribeRatingsLive();
         subscribeCompetitionStatus();

@@ -6,6 +6,7 @@ describe('competition SSE policy (PR149 stop-the-line)', () => {
         expect(isCompetitionLiveSseAllowed('live')).toBe(true);
         expect(isCompetitionLiveSseAllowed('accepted')).toBe(true);
         expect(isCompetitionLiveSseAllowed('pending')).toBe(true);
+        expect(isCompetitionLiveSseAllowed(undefined)).toBe(true);
     });
 
     it('blocks SSE for terminal competitions', () => {
