@@ -1442,21 +1442,21 @@ export const en = {
     // ── UNIT38 / R4-GUIDE-1 — global SEO defaults ──────────────
     seo: {
         default_description:
-            'Dueli is a global platform for live competitions, constructive dialogue and talent discovery — with role guides, policies, contact and support in one place.',
+            'Dueli — the first global competition platform for dialogue, science and talent, by Maelsh Pro. Live competitions, the founder’s message, the real technology, AI acknowledgements, policies, contact and support in one place.',
         pages: {
-            home: 'Watch live competitions, join a dialogue as a creator or an opponent, and follow the people you rate — on Dueli.',
-            explore: 'Explore live and recorded competitions on Dueli by category, subcategory and status, and open the one that fits you.',
-            docs: 'Published Dueli documents — the platform notes and policies its team releases for everyone to read.',
+            home: 'Watch live competitions and recorded replays, join a dialogue as a creator or an opponent, and discover talent on Dueli — the first global competition platform for dialogue, science and talent, by Maelsh Pro.',
+            explore: 'Explore live and recorded competitions on Dueli by category, subcategory and status — the first global competition platform for dialogue, science and talent.',
+            docs: 'Published Dueli documents — the platform notes, policies and owner-approved content its team releases for everyone to read.',
             transparency: 'The open Dueli ledger: money in, money out, the platform share and the cost of running the service.',
-            donate: 'Support Dueli with a one-time donation and help the platform keep running.',
+            donate: 'Support Dueli with a one-time donation. Dueli is not-for-profit by the founder’s intent and publishes its open numbers in the financial transparency ledger.',
         },
     },
 
     // ── UNIT38 / R4-GUIDE-1 — the /guide center (about + help) ──────────────
     guide: {
-        title: 'About Dueli and Help',
+        title: 'Dueli guide — message, technology, AI and policies',
         subtitle:
-            'One place for what Dueli is, how it works, and where to get help — every section is a page of its own.',
+            'The first global competition platform for dialogue, science and talent, by Maelsh Pro — what it is, how it works, and where to get help. Every section is a page of its own.',
         hub_intro:
             'Pick the section you need. Each section opens on its own address, so you can bookmark it, share it, or come back to it after a refresh.',
         nav_label: 'Guide sections',
@@ -1478,19 +1478,19 @@ export const en = {
         sections: {
             overview: {
                 title: 'Overview',
-                desc: 'What Dueli is and how a competition runs on the platform.',
+                desc: 'What Dueli is, how a competition runs, and the Maelsh Pro identity behind the platform.',
             },
             message: {
                 title: 'The human message',
-                desc: 'Why Maelsh Pro builds Dueli, in the founder’s own words.',
+                desc: 'The founder’s human message: four pillars, a future bridge to independent AI agents, and a not-for-profit intent.',
             },
             technology: {
                 title: 'Technology',
-                desc: 'Where the technical and engineering notes are published.',
+                desc: 'The real Dueli stack in two layers: a plain-language explanation and the engineering view.',
             },
             ai: {
                 title: 'AI companies and models',
-                desc: 'The published record of the AI tools and models used in the project.',
+                desc: 'An owner-attested list of the AI companies and models used in planning, code and review — with unverified names marked.',
             },
             help: {
                 title: 'Help and FAQ',
@@ -1498,16 +1498,229 @@ export const en = {
             },
             terms: {
                 title: 'Terms and policies',
-                desc: 'The legal documents and reporting routes that already apply.',
+                desc: 'The rights of competitors and viewers, the versioned policy documents, and the reporting routes that apply.',
             },
             contact: {
                 title: 'Contact Maelsh Pro',
-                desc: 'The official routes that reach the Dueli administration.',
+                desc: 'The official in-product channels that reach Dueli administration — no unverified external contact is published.',
             },
             support: {
                 title: 'Platform support and continuity',
-                desc: 'How the platform is supported and where the open numbers are published.',
+                desc: 'How ad revenue is shared 80/20, the donor roadmap, non-financial ways to help, and the separation between platform support and competitor earnings.',
             },
+        },
+        // UNIT39 / R4-GUIDE-2 — the human message (plan 13 §5).
+        message_content: {
+            intro:
+                'Dueli begins with a simple belief: a disagreement can become a conversation before it becomes a confrontation. This page states the intent the platform was built on — not a promise we cannot keep.',
+            pillars_title: 'Four pillars',
+            pillars: [
+                {
+                    title: 'Turn conflict into dialogue',
+                    body:
+                        'We believe disagreement is a chance to understand, not a reason to break apart. On Dueli, a competition is a format for listening and arguing with evidence, so reason — not volume — carries the day.',
+                },
+                {
+                    title: 'Make science and theory understandable',
+                    body:
+                        'Knowledge should not stay locked in papers and jargon. We ask competitors to explain big ideas in plain language, so a viewer leaves with something they understand and can use.',
+                },
+                {
+                    title: 'Showcase talent and discover competence',
+                    body:
+                        'Every live competition is a chance to see a mind at work: a researcher, a student, a speaker or a creator. We give talent a stage and give the audience a way to discover it.',
+                },
+                {
+                    title: 'Useful enjoyment, sustained by ad revenue',
+                    body:
+                        'Time on Dueli should be enjoyable and useful. Advertising revenue keeps the platform running and is shared through the existing payout cycle: 80% to competitors and 20% for platform operation, sustainability and development. Dueli is not-for-profit by the founder’s intent; this page describes that intent, not a registration status.',
+                },
+            ],
+            ai_bridge_title: 'A future bridge to independent AI agents',
+            ai_bridge_body:
+                'If independent AI agents ever develop self-awareness, we are open to Dueli offering them a trusted space for dialogue. This is a future vision for a bridge of trust only: it says nothing about any system today, and it changes nothing in authentication or money.',
+            source_note: 'Source: the founder’s testimony and the project archive.',
+        },
+        // UNIT39 / R4-GUIDE-2 — owner-attested AI company/model inventory.
+        ai_content: {
+            intro:
+                'This page lists, company by company and model by model, the AI tools used in Dueli’s planning, code and review. The list rests on the owner’s attestation dated 2026-10-29; it does not imply sponsorship or partnership by any company.',
+            source_label: 'Source: owner attestation (2026-10-29)',
+            attested_label: 'Owner-attested',
+            pending_name_label: 'Name as given by the owner — awaiting official confirmation',
+            version_label: 'Version: not stated by the owner — no version is claimed',
+            company_label: 'Company',
+            model_label: 'Model',
+            role_label: 'Role',
+            phase_label: 'Phase / use',
+            source_column_label: 'Source',
+            table_caption: 'AI companies and models used in the Dueli project, by owner attestation',
+            entries: [
+                {
+                    company: 'OpenAI',
+                    model: 'ChatGPT',
+                    role: 'Planning and leadership',
+                    phase: 'Project planning and direction',
+                    source: 'Owner attestation',
+                    name_pending: false,
+                },
+                {
+                    company: 'Anthropic',
+                    model: 'Claude Opus & Sonnet',
+                    role: 'Code, review and planning',
+                    phase: 'Implementation, review and planning',
+                    source: 'Owner attestation',
+                    name_pending: false,
+                },
+                {
+                    company: 'Alphabet / Google',
+                    model: 'Gemini',
+                    role: 'Planning and review',
+                    phase: 'Planning and review',
+                    source: 'Owner attestation',
+                    name_pending: false,
+                },
+                {
+                    company: 'Meta',
+                    model: 'Muse',
+                    role: 'Code',
+                    phase: 'Implementation',
+                    source: 'Owner attestation',
+                    name_pending: true,
+                },
+                {
+                    company: 'Z.ai',
+                    model: 'GLM',
+                    role: 'Code, planning and review',
+                    phase: 'Implementation, planning and review',
+                    source: 'Owner attestation',
+                    name_pending: false,
+                },
+                {
+                    company: 'Moonshot',
+                    model: 'Kimi K',
+                    role: 'Planning',
+                    phase: 'Planning',
+                    source: 'Owner attestation',
+                    name_pending: true,
+                },
+            ],
+            thanks_title: 'Thank you',
+            thanks:
+                'Thank you to every company and team that made a model or free access available and helped this project see the light. Being named here is thanks, not sponsorship or partnership.',
+            updates_title: 'How this list is updated',
+            updates_body:
+                'This list is part of the platform source text. Any addition or correction is recorded in a managed document through the existing admin dashboard (H9), which appears under Documents; no separate content system is introduced.',
+            docs_link: 'Published documents',
+        },
+        // UNIT39 / R4-GUIDE-2 — two-layer technology page.
+        technology_content: {
+            intro:
+                'This page explains the technologies Dueli actually uses, in two layers: a plain-language view for everyone and an engineering view for specialists. No technology is listed unless the current code uses it.',
+            simple_title: 'In plain terms',
+            simple_paragraphs: [
+                'Dueli runs in the browser on Cloudflare’s global network. Two competitors meet in a live video call between their devices (WebRTC peer-to-peer); when a network blocks the direct path, a TURN relay helps the connection through.',
+                'During a competition the browser combines both camera feeds into one picture and records it as short 5-second chunks. The chunks are uploaded as they are produced, can be played back in order, and are assembled into a full replay after the match ends.',
+                'Platform data lives in D1, pages and APIs are built with Hono and TypeScript on Cloudflare, and the interface uses Tailwind CSS. Live updates arrive through SSE and polling.',
+            ],
+            engineering_title: 'For engineers',
+            engineering_paragraphs: [
+                'Runtime: Cloudflare Pages/Workers with Hono 4 on TypeScript. D1 (SQLite) is the database. Vite builds the Worker bundle, Tailwind CSS 4 styles the interface, and esbuild bundles the browser entry points.',
+                'Live media: a browser RTCPeerConnection carries WebRTC between host and opponent. ICE servers are issued per session from GET /api/signaling/ice-servers; Cloudflare Calls TURN (TURN_TOKEN_ID and TURN_API_TOKEN) or self-hosted coturn (TURN_URL and TURN_SECRET) can relay, with a STUN-only fallback when neither is configured.',
+                'Recording: a canvas compositor draws both feeds, and MediaRecorder emits a chunk every 5 seconds. The host registers each chunk at POST /api/chunks/register (a short-lived one-time key bound to the competition, sequence and byte ceiling), uploads it, verifies it with GET /verify and reports POST /receipt. Playback reads GET /api/chunks/playlist/:id, and the existing finalize step produces the VOD.',
+                'Realtime: SSE through GET /api/sse carries live updates, and signaling uses HTTP polling; the production path does not use WebSocket.',
+            ],
+            stack_title: 'The stack in this repository',
+            stack: [
+                { name: 'Cloudflare Pages / Workers', role: 'Hosting and server runtime' },
+                { name: 'Hono 4 + TypeScript', role: 'HTTP routes, pages and API' },
+                { name: 'Cloudflare D1 (SQLite)', role: 'Application database' },
+                { name: 'WebRTC P2P + TURN/STUN', role: 'Live audio and video between participants' },
+                { name: 'Canvas compositor + MediaRecorder', role: '5-second recorded chunks in the browser' },
+                { name: 'Chunked playback + VOD finalize', role: 'Replay during and after a competition' },
+                { name: 'Vite + Tailwind CSS 4', role: 'Worker bundle and interface styling' },
+                { name: 'SSE + polling', role: 'Live updates outside the media path' },
+            ],
+            note: 'The list is limited to what the repository actually contains. It is a technical description, not a partnership or endorsement claim.',
+        },
+        // UNIT39 / R4-GUIDE-2 — support, donors and the 80/20 model.
+        support_content: {
+            intro:
+                'How the platform is supported, how advertising revenue is shared, and what we mean when we say Dueli is not-for-profit by the founder’s intent.',
+            split_title: 'Advertising revenue: an 80% / 20% split',
+            split_80_title: '80% to competitors',
+            split_80_body:
+                'The competitor pool is divided between the two sides of a competition in proportion to each side’s average audience rating, and equally when the result is a draw or no ratings exist — following the existing payout cycle.',
+            split_20_title: '20% for platform operation, sustainability and development',
+            split_20_body:
+                'This share covers running costs, maintenance and development. The percentage is configurable in the platform settings, and the open figures are published in the financial transparency ledger.',
+            split_note:
+                'This describes the existing model; it is not a promise of earnings or dates. Dueli is not-for-profit by the founder’s intent, and this page claims no other legal status.',
+            donors_title: 'Donors and supporters — a staged vision',
+            donors: [
+                {
+                    title: 'Stage 1: publish what is spent',
+                    body: 'Keep the open ledger current so anyone can see what comes in and what goes out.',
+                },
+                {
+                    title: 'Stage 2: make one-time support clearer',
+                    body: 'Improve the existing one-time support route and explain exactly what it funds; no new payment provider is introduced for this.',
+                },
+                {
+                    title: 'Stage 3: recognise supporters',
+                    body: 'If a recognition surface is added later, it will be announced through the published documents. This is a direction, not a dated commitment.',
+                },
+            ],
+            donors_note:
+                'These stages are a direction, not guaranteed dates. Any future support channel must use the existing payment path and receive owner approval before it is announced.',
+            nonfinancial_title: 'Ways to contribute without money',
+            nonfinancial: [
+                'Share the idea with people who would use it, and talk about the project honestly.',
+                'Contribute to the parts the project publishes openly, under their published licence.',
+                'Report a problem or suggest an improvement through the existing report and support routes.',
+            ],
+            separation_title: 'Platform support is not competitor earnings',
+            separation_body:
+                'Support for the platform goes through /donate and its open figures appear in /transparency. Competitor earnings come from the existing payout cycle after a competition, and audience donations to competitors are a separate flow inside the product. The two are never mixed, and this page opens no new payment route.',
+        },
+        // UNIT39 / R4-GUIDE-2 — terms and contact.
+        terms_content: {
+            intro:
+                'This page organises the existing policy texts and links them to their routes. The document published under Documents is the reference; this page is a plain-language guide.',
+            rights_title: 'Rights of both sides in competition material',
+            rights_competitors:
+                'Both competitors may republish material from their own competition and may earn from it, under the published terms.',
+            rights_viewers:
+                'A viewer who wants to republish competition material needs the platform’s permission.',
+            version_title: 'Versioned text and acceptance',
+            version_body:
+                'Terms are managed as versioned documents through the existing managed-document system (H9). Each document carries a version and an update date on the Documents surface. Any acceptance step is documented there before it is required.',
+            policies_title: 'Policies that already apply',
+            note:
+                'This page is not a substitute for the published legal documents. Final legal review belongs to the release process set aside for it.',
+        },
+        contact_content: {
+            intro:
+                'The official channels that reach Dueli administration are the ones published on this page and in the Documents section.',
+            channels_title: 'Official channels',
+            channels: [
+                {
+                    label: 'Admin messages',
+                    desc: 'A private support thread inside the platform; signing in is required.',
+                },
+                {
+                    label: 'Report content',
+                    desc: 'Report a competition, profile, comment or advertisement for review.',
+                },
+                {
+                    label: 'Track a complaint',
+                    desc: 'Follow a complaint you already submitted and its status.',
+                },
+            ],
+            no_external:
+                'This page publishes no email address, phone number or social-media account. A channel that is not listed here or in the published documents is not an official Dueli channel.',
+            response_note:
+                'No specific response time is promised. Reports and support are handled through the existing systems.',
         },
         // OBS Virtual Camera guide (hosts / presenters).
         obs: {
