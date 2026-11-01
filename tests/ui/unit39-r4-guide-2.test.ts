@@ -1,34 +1,35 @@
 /**
- * UNIT39 / R4-GUIDE-2 — content for the guide sections:
- * the human message, the AI company/model inventory, the two-layer
- * technology page, the 80/20 support model, terms and contact.
+ * UNIT39 / R4-GUIDE-2 — content for the guide sections after the owner's
+ * 2026-11-01 approval-with-modifications:
+ * the human message and slogan, AI acknowledgements, the two-layer
+ * technology page, the 80/20 support model, the seven terms clauses and the
+ * official contact channels, plus the i18n-driven meta tags.
  *
- * Contract (plan 13 §5 "R4-GUIDE-2" + plan 14 row 39 + owner decisions
- * 2026-10-29 + plan 15 §7):
+ * Contract:
  *
- * 1. /guide/message carries the founder's four pillars and the future
- *    bridge to independent AI agents — in Arabic and English — and never
- *    makes a forbidden promise (no war prevention, no absolute justice,
- *    no registered non-profit entity, no present-day AI consciousness).
- * 2. /guide/ai lists the six owner-attested company/model entries with
- *    role, phase/use and the owner-attestation source. Unverified names
- *    (Meta/Muse, Moonshot/Kimi K) and every version stay explicitly
- *    "pending official confirmation"; no invented version is printed.
- * 3. /guide/technology has a plain-language layer and an engineering
- *    layer, names only technologies that exist in the repository, and
- *    never mentions the retired Jitsi stack.
+ * 1. /guide/message opens with the official slogan and identity statement,
+ *    carries the four revised pillars (including the employer/talent bridge)
+ *    and the future AI bridge — in Arabic and English — and never makes a
+ *    forbidden promise (no war prevention, no absolute justice, no registered
+ *    non-profit entity, no present-day AI consciousness).
+ * 2. /guide/ai is a technical-appreciation page: the owner's company/model
+ *    list, the eight access platforms, GitHub/Cloudflare, the closing appeal
+ *    and the approved disclaimer. No internal-control phrase ("pending
+ *    confirmation", "no version claimed") is shown to visitors.
+ * 3. /guide/technology has a plain-language layer and an engineering layer,
+ *    and lists only technologies that exist in package.json / the repository.
  * 4. /guide/support states the 80/20 revenue split, separates platform
  *    support (/donate + /transparency) from competitor earnings, offers
- *    non-financial ways to help, and adds no payment route or provider.
- * 5. /guide/terms keeps the existing policy links and states the rights
- *    of both sides (competitors may republish and earn; viewers need
- *    permission), with versioned text handled by the H9 document store.
- *    /guide/contact keeps only the verified in-product channels and adds
- *    no unverified email/phone/social channel.
- * 6. Every guide section has an AR/EN description; canonical/hreflang
- *    remain UNIT38's contract; JSON-LD gains no unverified entity claim.
- * 7. All new copy lives in i18n (ar/en parity), the pages stay RTL/LTR,
- *    dark-mode and aria-labelled, and the rendered output is escaped.
+ *    non-financial ways to help, and opens future development plans to donor
+ *    sponsorship without adding a payment route or provider.
+ * 5. /guide/terms carries the seven owner-approved clauses and the existing
+ *    policy links; /guide/contact publishes the official domains, emails,
+ *    YouTube channel and in-product routes plus the security notice.
+ * 6. Meta title and description are read from i18n for every language, the
+ *    owner's exact AR/EN meta strings are used, and canonical/hreflang remain
+ *    UNIT38's contract; JSON-LD gains no unverified entity claim.
+ * 7. All copy lives in i18n (ar/en parity), the pages stay RTL/LTR, dark-mode
+ *    and aria-labelled, and the rendered output is escaped.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -37,10 +38,12 @@ import app from '../../src/main';
 import { FakeD1 } from '../helpers/fake-d1';
 import { ar } from '../../src/i18n/ar';
 import { en } from '../../src/i18n/en';
+import { Sanitize } from '../../src/lib/services/Sanitize';
 
 const SRC = (p: string) => readFileSync(resolve(__dirname, '../../src', p), 'utf-8');
 const GUIDE_PAGE = SRC('modules/pages/guide-page.ts');
 const SEO = SRC('shared/templates/seo.ts');
+const LAYOUT = SRC('shared/templates/layout.ts');
 const INVENTORY = JSON.parse(
     readFileSync(resolve(__dirname, '../../dev-tools/route-inventory.json'), 'utf-8'),
 ) as { routes: Array<{ method: string; path: string }>; pageRoutes: Array<{ method: string; path: string }> };
@@ -71,6 +74,11 @@ const link = (html: string, rel: string): string | undefined => {
     return re.exec(html)?.[1];
 };
 
+/** Extracts the text of the document <title>. */
+const title = (html: string): string | undefined => /<title>([\s\S]*?)<\/title>/.exec(html)?.[1];
+
+const esc = (value: string) => Sanitize.escapeHtml(value);
+
 /** Recurses through objects AND arrays so ar/en shapes must match exactly. */
 function shape(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(shape);
@@ -88,15 +96,19 @@ function shape(value: unknown): unknown {
 const guideContent = (pack: typeof ar | typeof en) => (pack as Record<string, any>).guide;
 
 describe('UNIT39 / R4-GUIDE-2 — the human message', () => {
-    it('1. AR and EN carry the four pillars and the future AI bridge', async () => {
+    it('1. AR and EN open with the slogan and identity, then the four pillars and the AI bridge', async () => {
         for (const [lang, pack] of PACKS) {
             const message = guideContent(pack).message_content;
             expect(message, `${lang}.guide.message_content`).toBeTruthy();
+            expect(message.slogan, `${lang} slogan`).toBeTruthy();
+            expect(message.identity, `${lang} identity`).toBeTruthy();
             expect(message.pillars, `${lang} pillars`).toHaveLength(4);
 
             const { status, html } = await get(`/guide/message?lang=${lang}`);
             expect(status, `/guide/message ${lang}`).toBe(200);
 
+            expect(html, `${lang} slogan`).toContain(message.slogan);
+            expect(html, `${lang} identity`).toContain(message.identity);
             for (const pillar of message.pillars) {
                 expect(html, `${lang} pillar title`).toContain(pillar.title);
                 expect(html, `${lang} pillar body`).toContain(pillar.body);
@@ -104,9 +116,13 @@ describe('UNIT39 / R4-GUIDE-2 — the human message', () => {
             expect(html, `${lang} AI bridge title`).toContain(message.ai_bridge_title);
             expect(html, `${lang} AI bridge body`).toContain(message.ai_bridge_body);
         }
+
+        // The exact owner-approved slogan.
+        expect(guideContent(ar).message_content.slogan).toBe('ارتقِ.. وتثقف.. واستمتع.. واربح');
+        expect(guideContent(en).message_content.slogan).toBe('Elevate, Learn, Enjoy, and Earn');
     });
 
-    it('2. the forbidden claims are absent from the packs and the rendered message', async () => {
+    it('2. the forbidden claims are absent and the non-profit humanitarian wording is present', async () => {
         const forbidden = [
             // No promise to stop wars.
             'prevent wars',
@@ -130,6 +146,15 @@ describe('UNIT39 / R4-GUIDE-2 — the human message', () => {
             'AI has consciousness',
             'الذكاء الاصطناعي واعٍ',
             'وعي حالي',
+            // No internal-control phrasing in the public UI.
+            'awaiting official confirmation',
+            'no version is claimed',
+            'name as given by the owner',
+            'intent, not a registration status',
+            'بانتظار اعتماد رسمي',
+            'لا يُدّعى أي إصدار',
+            'الاسم كما سمّاه المالك',
+            'تصف هذه الصفحة القصد لا حالة تسجيل',
         ];
 
         for (const [lang, pack] of PACKS) {
@@ -144,12 +169,9 @@ describe('UNIT39 / R4-GUIDE-2 — the human message', () => {
             }
         }
 
-        // The allowed sustainability wording is present and explicit about
-        // the founder's intent (not a registration status).
-        expect(guideContent(ar).message_content.pillars[3].body).toContain('غير هادفة للربح بحسب قصد المؤسس');
-        expect(guideContent(en).message_content.pillars[3].body).toContain(
-            'not-for-profit by the founder’s intent',
-        );
+        expect(guideContent(ar).message_content.identity).toContain('غير هادفة للربح');
+        expect(guideContent(ar).message_content.identity).toContain('مبادرة إنسانية');
+        expect(guideContent(en).message_content.identity).toContain('non-profit humanitarian initiative');
     });
 
     it('3. the Maelsh Pro block keeps its single source and is not duplicated', async () => {
@@ -162,61 +184,108 @@ describe('UNIT39 / R4-GUIDE-2 — the human message', () => {
     });
 });
 
-describe('UNIT39 / R4-GUIDE-2 — AI companies and models', () => {
-    it('4. the six owner-attested entries render with role, phase and source', async () => {
+describe('UNIT39 / R4-GUIDE-2 — AI acknowledgements', () => {
+    it('4. the owner list renders with company, models and contribution', async () => {
         for (const [lang, pack] of PACKS) {
             const ai = guideContent(pack).ai_content;
-            expect(ai.entries, `${lang} entries`).toHaveLength(6);
+            expect(ai.entries, `${lang} entries`).toHaveLength(5);
+            expect(ai.additional, `${lang} additional models`).toHaveLength(4);
+            expect(ai.platforms, `${lang} platforms`).toHaveLength(8);
 
             const { status, html } = await get(`/guide/ai?lang=${lang}`);
             expect(status, `/guide/ai ${lang}`).toBe(200);
-            expect(html).toContain(ai.source_label);
-            expect(html).toContain(ai.thanks);
+            expect(html).toContain(ai.intro);
+            expect(html).toContain(ai.appeal);
+            expect(html).toContain(ai.disclaimer);
 
             for (const entry of ai.entries) {
-                for (const field of ['company', 'model', 'role', 'phase', 'source']) {
+                for (const field of ['company', 'model', 'role']) {
                     expect(entry[field], `${lang} ${entry.company} ${field}`).toBeTruthy();
                     expect(html, `${lang} rendered ${entry.company} ${field}`).toContain(entry[field]);
                 }
             }
+            for (const entry of ai.additional) {
+                expect(html, `${lang} additional ${entry.company}`).toContain(entry.model);
+            }
+            for (const platform of ai.platforms) {
+                expect(html, `${lang} platform ${platform}`).toContain(platform);
+            }
 
-            // The six companies from the owner attestation.
-            for (const company of ['OpenAI', 'Anthropic', 'Alphabet', 'Meta', 'Z.ai', 'Moonshot']) {
+            // The five main companies from the owner list.
+            for (const company of ['OpenAI', 'Anthropic', 'Google / Alphabet', 'Z.ai', 'Moonshot AI']) {
                 expect(html, `${lang} company ${company}`).toContain(company);
             }
         }
     });
 
-    it('5. unverified names and every version are explicitly marked as pending', async () => {
+    it('5. no pending/version caveat is shown and the eight platforms are named', async () => {
+        const internalPhrases = [
+            'pending',
+            'not stated by the owner',
+            'no version',
+            'awaiting',
+            'بانتظار',
+            'لم يحدده المالك',
+            'لا يُدّعى',
+        ];
         for (const [lang, pack] of PACKS) {
             const ai = guideContent(pack).ai_content;
-            const pending = ai.entries.filter((e: { name_pending?: boolean }) => e.name_pending);
-            expect(pending.map((e: { model: string }) => e.model).sort()).toEqual(['Kimi K', 'Muse']);
-
+            const serialized = JSON.stringify(ai).toLowerCase();
+            for (const phrase of internalPhrases) {
+                expect(serialized, `${lang} AI copy must not contain "${phrase}"`).not.toContain(phrase.toLowerCase());
+            }
             const { html } = await get(`/guide/ai?lang=${lang}`);
-            // Each row carries the version caveat; the two owner names carry
-            // the official-confirmation caveat as well.
-            expect(html.split(ai.version_label).length - 1, `${lang} version caveat per row`).toBe(6);
-            expect(html.split(ai.pending_name_label).length - 1, `${lang} pending name tag`).toBe(2);
+            for (const phrase of internalPhrases) {
+                expect(html.toLowerCase(), `${lang} rendered AI copy must not contain "${phrase}"`).not.toContain(
+                    phrase.toLowerCase(),
+                );
+            }
             expect(html).toContain(ai.updates_body);
         }
     });
 
-    it('6. no invented model version or sponsorship claim is printed', async () => {
+    it('6. named models are the owner’s names and no invented numeric version is printed', async () => {
+        const names = [
+            'ChatGPT',
+            'Claude Opus',
+            'Claude Sonnet',
+            'Claude Haiku',
+            'Gemini Argon',
+            'Gemini Flash',
+            'GLM Flash',
+            'Kimi K',
+            'DeepSeek Flash',
+            'MiniMax Flash',
+            'Muse Spark',
+            'Muse Wonder',
+        ];
         const versionTokens = [
-            'GPT-4', 'GPT-5', 'GPT 4', 'GPT 5',
-            'Claude 3', 'Claude 4', 'Claude 3.5',
-            'Gemini 1', 'Gemini 2', 'GLM-4', 'Kimi K2',
-            'Muse 1', 'Llama',
+            'GPT-4',
+            'GPT-5',
+            'GPT 4',
+            'GPT 5',
+            'Claude 3',
+            'Claude 4',
+            'Claude 3.5',
+            'Gemini 1',
+            'Gemini 2',
+            'GLM-4',
+            'Kimi K2',
+            'Muse 1',
+            'Llama',
         ];
         for (const [lang, pack] of PACKS) {
-            const serialized = JSON.stringify(guideContent(pack).ai_content);
+            const ai = guideContent(pack).ai_content;
+            const serialized = JSON.stringify(ai);
+            for (const name of names) {
+                expect(serialized, `${lang} missing owner name ${name}`).toContain(name);
+            }
             for (const token of versionTokens) {
                 expect(serialized, `${lang} invents ${token}`).not.toContain(token);
             }
             const { html } = await get(`/guide/ai?lang=${lang}`);
             expect(html).not.toContain('sponsored by');
-            expect(html).not.toContain('رعاية رسمية');
+            expect(html).toContain(ai.disclaimer);
         }
     });
 
@@ -234,8 +303,8 @@ describe('UNIT39 / R4-GUIDE-2 — technology, only what the code uses', () => {
     it('8. both layers are present and rendered in AR and EN', async () => {
         for (const [lang, pack] of PACKS) {
             const tech = guideContent(pack).technology_content;
-            expect(tech.simple_paragraphs.length, `${lang} simple layer`).toBeGreaterThanOrEqual(2);
-            expect(tech.engineering_paragraphs.length, `${lang} engineering layer`).toBeGreaterThanOrEqual(3);
+            expect(tech.simple_paragraphs.length, `${lang} simple layer`).toBeGreaterThanOrEqual(3);
+            expect(tech.engineering_paragraphs.length, `${lang} engineering layer`).toBeGreaterThanOrEqual(4);
 
             const { status, html } = await get(`/guide/technology?lang=${lang}`);
             expect(status).toBe(200);
@@ -249,7 +318,23 @@ describe('UNIT39 / R4-GUIDE-2 — technology, only what the code uses', () => {
 
     it('9. the real stack is named and the retired stack is never mentioned', async () => {
         const { html } = await get('/guide/technology?lang=en');
-        for (const name of ['Cloudflare', 'Hono', 'D1', 'WebRTC', 'TURN', 'STUN', 'MediaRecorder', '5-second', 'VOD']) {
+        for (const name of [
+            'Cloudflare',
+            'Hono',
+            'TypeScript',
+            'Tailwind CSS',
+            'D1',
+            'WebRTC',
+            'TURN',
+            'STUN',
+            'MediaRecorder',
+            '5-second',
+            'VOD',
+            'FFmpeg.wasm',
+            'Vitest',
+            'Playwright',
+            'Wrangler',
+        ]) {
             expect(html, `technology ${name}`).toContain(name);
         }
         expect(html).not.toContain('Jitsi');
@@ -261,13 +346,15 @@ describe('UNIT39 / R4-GUIDE-2 — technology, only what the code uses', () => {
         expect(SRC('shared/templates/seo.ts')).toContain('SITE_ORIGIN');
         expect(readFileSync(resolve(__dirname, '../../wrangler.jsonc'), 'utf-8')).toContain('d1_databases');
         expect(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')).toContain('"hono"');
+        expect(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')).toContain('@ffmpeg/core');
+        expect(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')).toContain('playwright');
         // The chunk path named in the copy exists in the code.
         expect(SRC('modules/api/chunks/routes.ts')).toContain("'/register'");
     });
 });
 
 describe('UNIT39 / R4-GUIDE-2 — support, donors and the 80/20 split', () => {
-    it('11. the 80/20 model and the separation of money are rendered', async () => {
+    it('11. the 80/20 model, the future plan and the separation of money are rendered', async () => {
         for (const [lang, pack] of PACKS) {
             const support = guideContent(pack).support_content;
             const { status, html } = await get(`/guide/support?lang=${lang}`);
@@ -279,6 +366,8 @@ describe('UNIT39 / R4-GUIDE-2 — support, donors and the 80/20 split', () => {
             expect(html).toContain(support.separation_title);
             expect(html).toContain(support.separation_body);
             expect(html).toContain(support.nonfinancial_title);
+            expect(html).toContain(support.future_title);
+            expect(html).toContain(support.future_body);
             for (const item of support.nonfinancial) {
                 expect(html, `${lang} non-financial option`).toContain(item);
             }
@@ -305,14 +394,20 @@ describe('UNIT39 / R4-GUIDE-2 — support, donors and the 80/20 split', () => {
 });
 
 describe('UNIT39 / R4-GUIDE-2 — terms and contact', () => {
-    it('13. terms keep the policy links and state the rights of both sides', async () => {
+    it('13. terms carry the seven owner clauses and the policy links', async () => {
         for (const [lang, pack] of PACKS) {
             const terms = guideContent(pack).terms_content;
+            expect(terms.clauses, `${lang} clauses`).toHaveLength(7);
+
             const { status, html } = await get(`/guide/terms?lang=${lang}`);
             expect(status).toBe(200);
-            expect(html).toContain(terms.rights_competitors);
-            expect(html).toContain(terms.rights_viewers);
-            expect(html).toContain(terms.version_body);
+            for (const clause of terms.clauses) {
+                expect(html, `${lang} clause title`).toContain(clause.title);
+                expect(html, `${lang} clause body`).toContain(clause.body);
+                for (const item of clause.items ?? []) {
+                    expect(html, `${lang} clause item`).toContain(item);
+                }
+            }
 
             for (const href of [
                 '/privacy-policy',
@@ -325,45 +420,82 @@ describe('UNIT39 / R4-GUIDE-2 — terms and contact', () => {
                 expect(html, `${lang} terms link ${href}`).toContain(`href="${href}"`);
             }
         }
+
+        // The owner's core protections are visible in both languages.
+        expect(guideContent(en).terms_content.clauses[0].body).toContain('perpetual, worldwide, non-exclusive');
+        expect(guideContent(en).terms_content.clauses[1].title).toContain('continuity');
+        expect(guideContent(en).terms_content.clauses[4].body).toContain('300 seconds');
+        expect(guideContent(ar).terms_content.clauses[1].items[2]).toContain('20%');
+        expect(guideContent(ar).terms_content.clauses[4].body).toContain('300 ثانية');
     });
 
-    it('14. contact lists only the verified in-product channels, with no external channel', async () => {
+    it('14. contact lists the official domains, emails, YouTube and in-product routes', async () => {
         for (const [lang, pack] of PACKS) {
             const contact = guideContent(pack).contact_content;
             const { status, html } = await get(`/guide/contact?lang=${lang}`);
             expect(status).toBe(200);
             for (const href of [
+                'https://dueli.win',
+                'https://dueli.maelshpro.com',
+                'mailto:dueli@maelshpro.com',
+                'mailto:info@maelshpro.com',
+                'https://www.youtube.com/@Maelsh-Dueli',
                 `/messages?tab=admin&lang=${lang}`,
                 `/reports?lang=${lang}`,
                 `/complaints?lang=${lang}`,
             ]) {
                 expect(html, `${lang} contact link ${href}`).toContain(`href="${href}"`);
             }
-            expect(html).toContain(contact.no_external);
-            for (const external of ['mailto:', 'tel:', 'twitter.com', 'x.com/', 'facebook.com', 'instagram.com', 'linkedin.com', 'wa.me', 't.me/']) {
-                expect(html.toLowerCase(), `${lang} external channel ${external}`).not.toContain(external);
+            expect(html).toContain(contact.security_notice);
+            expect(html).toContain(contact.domains[0].desc);
+            expect(html).toContain(contact.external[0].desc);
+            for (const external of ['tel:', 'twitter.com', 'x.com/', 'facebook.com', 'instagram.com', 'linkedin.com', 'wa.me', 't.me/']) {
+                expect(html.toLowerCase(), `${lang} unapproved channel ${external}`).not.toContain(external);
             }
         }
     });
 });
 
 describe('UNIT39 / R4-GUIDE-2 — meta, SEO contract and i18n parity', () => {
-    it('15. every guide section has an AR/EN description and a rendered meta description', async () => {
+    it('15. meta title and description come from i18n in both languages', async () => {
+        const home = await get('/?lang=en');
+        expect(title(home.html), 'home <title>').toBe(esc((en as Record<string, any>).seo.meta_title));
+        expect(meta(home.html, 'description'), 'home meta description').toBe(
+            esc((en as Record<string, any>).seo.default_description),
+        );
+        expect(meta(home.html, 'og:title'), 'home og:title').toBe(esc((en as Record<string, any>).seo.meta_title));
+        expect(meta(home.html, 'twitter:title'), 'home twitter:title').toBe(
+            esc((en as Record<string, any>).seo.meta_title),
+        );
+
+        const homeAr = await get('/?lang=ar');
+        expect(title(homeAr.html), 'home AR <title>').toBe(esc((ar as Record<string, any>).seo.meta_title));
+        expect(meta(homeAr.html, 'description'), 'home AR meta description').toBe(
+            esc((ar as Record<string, any>).seo.default_description),
+        );
+
+        const guide = await get('/guide?lang=en');
+        expect(title(guide.html), 'guide <title>').toBe(esc(guideContent(en).title));
+        expect(meta(guide.html, 'description'), 'guide description').toBe(esc(guideContent(en).subtitle));
+
+        const guideAr = await get('/guide?lang=ar');
+        expect(title(guideAr.html), 'guide AR <title>').toBe(esc(guideContent(ar).title));
+        expect(meta(guideAr.html, 'description'), 'guide AR description').toBe(esc(guideContent(ar).subtitle));
+
+        // Every guide section has an AR/EN description rendered in its head.
         for (const [lang, pack] of PACKS) {
             for (const section of SECTIONS) {
                 const desc = guideContent(pack).sections[section]?.desc;
                 expect(desc, `${lang}.${section}.desc`).toBeTruthy();
                 const { html } = await get(`/guide/${section}?lang=${lang}`);
-                expect(meta(html, 'description'), `${lang} rendered ${section} description`).toBeTruthy();
-                expect(html, `${lang} rendered ${section} description text`).toContain(desc);
+                expect(meta(html, 'description'), `${lang} rendered ${section} description`).toBe(esc(desc));
             }
         }
 
-        // The owner-approved identity wording is the default description.
-        expect((ar as Record<string, any>).seo.default_description).toContain('أول منصة منافسات عالمية');
-        expect((en as Record<string, any>).seo.default_description).toContain(
-            'first global competition platform',
-        );
+        // The builder consumes a localized complete title instead of a
+        // hardcoded string, and the layout renders it verbatim.
+        expect(SEO).toContain('input.metaTitle');
+        expect(LAYOUT).toContain('seo?.metaTitle');
     });
 
     it('16. canonical, hreflang and JSON-LD keep UNIT38’s contract', async () => {

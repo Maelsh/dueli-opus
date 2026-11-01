@@ -38,6 +38,12 @@ export function generateHTML(
   const tr = translations[getUILanguage(lang)];
   const fontFamily = fontMap[lang] || "'Inter'";
   const seoHead = buildSeoHead({ lang, title, ...(seo ?? {}) }, nonce);
+  // UNIT39 owner revision: a page may supply the complete localized meta
+  // title (from i18n). It is used verbatim; otherwise the page title keeps
+  // the existing localized site suffix.
+  const documentTitle = seo?.metaTitle
+    ? Sanitize.escapeHtml(seo.metaTitle)
+    : `${Sanitize.escapeHtml(title)} - ${Sanitize.escapeHtml(tr.app_title)}`;
 
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
@@ -48,7 +54,7 @@ export function generateHTML(
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Dueli">
-    <title>${Sanitize.escapeHtml(title)} - ${Sanitize.escapeHtml(tr.app_title)}</title>
+    <title>${documentTitle}</title>
     ${seoHead}
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">

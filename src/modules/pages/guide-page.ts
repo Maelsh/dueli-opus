@@ -75,9 +75,10 @@ function linkPills(lang: Language, links: Array<{ href: string; label: string }>
 }
 
 /**
- * /guide/message — the founder's human message. The Maelsh Pro block comes
- * from renderAboutMaelsh() (the same single source used by the overview
- * section); the four pillars and the future AI bridge are UNIT39 content.
+ * /guide/message — the founder's human message. The page opens with the
+ * official slogan and identity statement, then the four owner-approved
+ * pillars, the future AI bridge, and the Maelsh Pro block (the same single
+ * source used by the overview section).
  */
 function messageBody(lang: Language, tr: Record<string, any>): string {
     const g = tr.guide;
@@ -94,9 +95,11 @@ function messageBody(lang: Language, tr: Record<string, any>): string {
         .join('');
 
     return `
-        ${renderAboutMaelsh(lang)}
-
-        <p class="mt-10 text-lg text-gray-600 dark:text-gray-300 leading-relaxed">${m.intro}</p>
+        <section aria-labelledby="message-identity" class="p-6 md:p-10 rounded-3xl bg-gradient-to-br from-purple-50 to-amber-50 dark:from-purple-900/20 dark:to-amber-900/10 border border-purple-100 dark:border-purple-900/40">
+            <p class="text-sm font-bold text-purple-700 dark:text-purple-400 mb-2">${m.identity_title}</p>
+            <h2 id="message-identity" class="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-4 leading-tight">${m.slogan}</h2>
+            <p class="text-lg text-gray-700 dark:text-gray-200 leading-relaxed">${m.identity}</p>
+        </section>
 
         <h2 class="mt-10 mb-4 text-2xl font-bold text-gray-900 dark:text-white">${m.pillars_title}</h2>
         <ul class="grid grid-cols-1 md:grid-cols-2 gap-4">${pillars}</ul>
@@ -106,15 +109,16 @@ function messageBody(lang: Language, tr: Record<string, any>): string {
             <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${m.ai_bridge_body}</p>
         </section>
 
-        <p class="mt-8 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${m.source_note}</p>
-        <p class="mt-6 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${g.docs_note}</p>
+        <div class="mt-10">${renderAboutMaelsh(lang)}</div>
+
+        <p class="mt-8 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${g.docs_note}</p>
         <a href="/docs?lang=${lang}" class="mt-4 inline-block px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full text-sm font-bold hover:opacity-90 transition-opacity">${g.links.docs}</a>`;
 }
 
 /**
- * /guide/ai — the owner-attested company/model inventory. Unverified names
- * and every version stay visibly marked; additions/corrections are published
- * through the existing H9 managed-document surface (/docs), never a new CMS.
+ * /guide/ai — the owner-approved technical appreciation page: the companies
+ * and models that helped build Dueli, the access platforms, the hosting and
+ * infrastructure, and the approved closing appeal and disclaimer.
  */
 function aiBody(lang: Language, tr: Record<string, any>): string {
     const g = tr.guide;
@@ -122,54 +126,75 @@ function aiBody(lang: Language, tr: Record<string, any>): string {
 
     const rows = a.entries
         .map(
-            (entry: {
-                company: string;
-                model: string;
-                role: string;
-                phase: string;
-                source: string;
-                name_pending?: boolean;
-            }) => `
+            (entry: { company: string; model: string; role: string }) => `
             <tr class="border-b border-gray-100 dark:border-gray-800 align-top">
                 <th scope="row" class="py-4 pe-4 text-start font-bold text-gray-900 dark:text-white">${entry.company}</th>
-                <td class="py-4 pe-4 text-gray-700 dark:text-gray-200">
-                    <span class="block font-semibold">${entry.model}</span>
-                    <span class="mt-1 inline-block text-xs font-bold ${entry.name_pending ? 'text-amber-700 dark:text-amber-400' : 'text-purple-700 dark:text-purple-400'}">
-                        ${entry.name_pending ? a.pending_name_label : a.attested_label}
-                    </span>
-                    <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">${a.version_label}</span>
-                </td>
-                <td class="py-4 pe-4 text-gray-600 dark:text-gray-300">${entry.role}</td>
-                <td class="py-4 pe-4 text-gray-600 dark:text-gray-300">${entry.phase}</td>
-                <td class="py-4 text-gray-500 dark:text-gray-400">${entry.source}</td>
+                <td class="py-4 pe-4 font-semibold text-gray-700 dark:text-gray-200">${entry.model}</td>
+                <td class="py-4 text-gray-600 dark:text-gray-300">${entry.role}</td>
             </tr>`
         )
         .join('');
 
+    const additional = a.additional
+        .map(
+            (entry: { company: string; model: string }) => `
+            <li class="p-4 rounded-xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800">
+                <span class="block font-bold text-gray-900 dark:text-white">${entry.company}</span>
+                <span class="mt-1 block text-sm text-gray-600 dark:text-gray-300">${entry.model}</span>
+            </li>`
+        )
+        .join('');
+
+    const platforms = a.platforms
+        .map(
+            (platform: string) => `
+            <li class="px-4 py-2.5 rounded-full bg-purple-50 dark:bg-purple-900/20 text-sm font-bold text-purple-800 dark:text-purple-200">${platform}</li>`
+        )
+        .join('');
+
     return `
-        <p class="text-lg text-gray-600 dark:text-gray-300 leading-relaxed mb-4">${a.intro}</p>
-        <p class="text-sm font-bold text-purple-700 dark:text-purple-400 mb-6">${a.source_label}</p>
+        <p class="text-lg text-gray-600 dark:text-gray-300 leading-relaxed mb-8">${a.intro}</p>
 
-        <div class="overflow-x-auto rounded-2xl border border-gray-100 dark:border-gray-800" tabindex="0" role="region" aria-label="${a.table_caption}">
-            <table class="w-full text-sm">
-                <caption class="sr-only">${a.table_caption}</caption>
-                <thead class="bg-gray-50 dark:bg-[#1a1a1a]">
-                    <tr>
-                        <th scope="col" class="py-3 pe-4 text-start font-bold text-gray-700 dark:text-gray-200">${a.company_label}</th>
-                        <th scope="col" class="py-3 pe-4 text-start font-bold text-gray-700 dark:text-gray-200">${a.model_label}</th>
-                        <th scope="col" class="py-3 pe-4 text-start font-bold text-gray-700 dark:text-gray-200">${a.role_label}</th>
-                        <th scope="col" class="py-3 pe-4 text-start font-bold text-gray-700 dark:text-gray-200">${a.phase_label}</th>
-                        <th scope="col" class="py-3 text-start font-bold text-gray-700 dark:text-gray-200">${a.source_column_label}</th>
-                    </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-            </table>
-        </div>
-
-        <section class="mt-10 p-6 rounded-2xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800">
-            <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${a.thanks_title}</h2>
-            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${a.thanks}</p>
+        <section aria-labelledby="ai-companies" class="mb-10">
+            <h2 id="ai-companies" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${a.table_caption}</h2>
+            <div class="overflow-x-auto rounded-2xl border border-gray-100 dark:border-gray-800" tabindex="0" role="region" aria-label="${a.table_caption}">
+                <table class="w-full text-sm">
+                    <caption class="sr-only">${a.table_caption}</caption>
+                    <thead class="bg-gray-50 dark:bg-[#1a1a1a]">
+                        <tr>
+                            <th scope="col" class="py-3 pe-4 text-start font-bold text-gray-700 dark:text-gray-200">${a.company_label}</th>
+                            <th scope="col" class="py-3 pe-4 text-start font-bold text-gray-700 dark:text-gray-200">${a.model_label}</th>
+                            <th scope="col" class="py-3 text-start font-bold text-gray-700 dark:text-gray-200">${a.role_label}</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
         </section>
+
+        <section aria-labelledby="ai-additional" class="mb-10">
+            <h2 id="ai-additional" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${a.additional_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">${a.additional_intro}</p>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-3">${additional}</ul>
+        </section>
+
+        <section aria-labelledby="ai-platforms" class="mb-10">
+            <h2 id="ai-platforms" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${a.platforms_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">${a.platforms_intro}</p>
+            <ul class="flex flex-wrap gap-3">${platforms}</ul>
+        </section>
+
+        <section aria-labelledby="ai-infrastructure" class="mb-10 p-6 rounded-2xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800">
+            <h2 id="ai-infrastructure" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${a.infrastructure_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${a.infrastructure_body}</p>
+        </section>
+
+        <section aria-labelledby="ai-appeal" class="mb-10 p-6 md:p-8 rounded-3xl bg-gradient-to-br from-purple-50 to-amber-50 dark:from-purple-900/20 dark:to-amber-900/10 border border-purple-100 dark:border-purple-900/40">
+            <h2 id="ai-appeal" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${a.appeal_title}</h2>
+            <p class="text-gray-700 dark:text-gray-200 leading-relaxed">${a.appeal}</p>
+        </section>
+
+        <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-8">${a.disclaimer}</p>
 
         <section class="mt-8">
             <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${a.updates_title}</h2>
@@ -264,6 +289,11 @@ function supportBody(lang: Language, tr: Record<string, any>): string {
             <p class="mt-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${s.donors_note}</p>
         </section>
 
+        <section aria-labelledby="support-future" class="mb-10 p-6 rounded-2xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
+            <h2 id="support-future" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${s.future_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${s.future_body}</p>
+        </section>
+
         <section aria-labelledby="support-nonfinancial" class="mb-10">
             <h2 id="support-nonfinancial" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${s.nonfinancial_title}</h2>
             <ul class="space-y-3">${nonfinancial}</ul>
@@ -280,23 +310,39 @@ function supportBody(lang: Language, tr: Record<string, any>): string {
         </section>`;
 }
 
-/** /guide/terms — the rights of both sides and the versioned documents. */
+/** /guide/terms — the seven owner-approved clauses and the policy links. */
 function termsBody(lang: Language, tr: Record<string, any>): string {
     const g = tr.guide;
     const t = g.terms_content;
 
+    const clauses = t.clauses
+        .map(
+            (clause: { title: string; body: string; items?: string[] }) => {
+                const items = (clause.items ?? [])
+                    .map(
+                        (item: string) => `
+                        <li class="flex gap-3 text-gray-600 dark:text-gray-300">
+                            <span aria-hidden="true" class="text-purple-600 dark:text-purple-400">•</span>
+                            <span>${item}</span>
+                        </li>`
+                    )
+                    .join('');
+                return `
+                <section class="mb-8">
+                    <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-3">${clause.title}</h3>
+                    <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${clause.body}</p>
+                    ${items ? `<ul class="mt-3 space-y-3">${items}</ul>` : ''}
+                </section>`;
+            }
+        )
+        .join('');
+
     return `
         <p class="text-lg text-gray-600 dark:text-gray-300 leading-relaxed mb-8">${t.intro}</p>
 
-        <section aria-labelledby="terms-rights" class="mb-10">
-            <h2 id="terms-rights" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${t.rights_title}</h2>
-            <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-3">${t.rights_competitors}</p>
-            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${t.rights_viewers}</p>
-        </section>
-
-        <section aria-labelledby="terms-version" class="mb-10">
-            <h2 id="terms-version" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${t.version_title}</h2>
-            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${t.version_body}</p>
+        <section aria-labelledby="terms-clauses" class="mb-10">
+            <h2 id="terms-clauses" class="text-2xl font-bold text-gray-900 dark:text-white mb-6">${t.clauses_title}</h2>
+            ${clauses}
         </section>
 
         <section aria-labelledby="terms-policies">
@@ -314,15 +360,26 @@ function termsBody(lang: Language, tr: Record<string, any>): string {
         <p class="mt-8 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${t.note}</p>`;
 }
 
-/** /guide/contact — only the verified in-product channels. */
+/** /guide/contact — the official domains, in-product routes and external channels. */
 function contactBody(lang: Language, tr: Record<string, any>): string {
     const c = tr.guide.contact_content;
+
+    const domains = c.domains
+        .map(
+            (domain: { label: string; href: string; desc: string }) => `
+            <li class="p-5 rounded-2xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800">
+                <a href="${domain.href}" rel="noopener" class="font-bold text-purple-700 dark:text-purple-400 hover:underline">${domain.label}</a>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${domain.desc}</p>
+            </li>`
+        )
+        .join('');
+
     const channels = [
         { href: `/messages?tab=admin&lang=${lang}`, label: c.channels[0].label, desc: c.channels[0].desc },
         { href: `/reports?lang=${lang}`, label: c.channels[1].label, desc: c.channels[1].desc },
         { href: `/complaints?lang=${lang}`, label: c.channels[2].label, desc: c.channels[2].desc },
     ];
-    const items = channels
+    const channelItems = channels
         .map(
             (channel) => `
             <li class="p-5 rounded-2xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800">
@@ -332,15 +389,38 @@ function contactBody(lang: Language, tr: Record<string, any>): string {
         )
         .join('');
 
+    const external = c.external
+        .map(
+            (channel: { label: string; href: string; desc: string }) => `
+            <li class="p-5 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40">
+                <a href="${channel.href}" rel="noopener" class="font-bold text-amber-800 dark:text-amber-300 hover:underline break-all">${channel.label}</a>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${channel.desc}</p>
+            </li>`
+        )
+        .join('');
+
     return `
         <p class="text-lg text-gray-600 dark:text-gray-300 leading-relaxed mb-8">${c.intro}</p>
 
-        <section aria-labelledby="contact-channels" class="mb-10">
-            <h2 id="contact-channels" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${c.channels_title}</h2>
-            <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">${items}</ul>
+        <section aria-labelledby="contact-domains" class="mb-10">
+            <h2 id="contact-domains" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${c.domains_title}</h2>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-4">${domains}</ul>
         </section>
 
-        <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-3">${c.no_external}</p>
+        <section aria-labelledby="contact-channels" class="mb-10">
+            <h2 id="contact-channels" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${c.channels_title}</h2>
+            <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">${channelItems}</ul>
+        </section>
+
+        <section aria-labelledby="contact-external" class="mb-10">
+            <h2 id="contact-external" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${c.external_title}</h2>
+            <ul class="grid grid-cols-1 md:grid-cols-3 gap-4">${external}</ul>
+        </section>
+
+        <section aria-labelledby="contact-security" class="p-6 rounded-2xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40 mb-4">
+            <h2 id="contact-security" class="text-xl font-bold text-gray-900 dark:text-white mb-3">${c.security_title}</h2>
+            <p class="text-sm text-gray-700 dark:text-gray-200 leading-relaxed">${c.security_notice}</p>
+        </section>
         <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${c.response_note}</p>`;
 }
 
@@ -421,7 +501,8 @@ export function guideHubPage(c: Context<{ Bindings: Bindings; Variables: Variabl
     return c.html(
         generateHTML(html, lang, g.title, (c.get('cspNonce') as string) ?? '', {
             path: '/guide',
-            description: tr.seo?.default_description,
+            metaTitle: g.title,
+            description: g.subtitle,
         })
     );
 }

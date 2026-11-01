@@ -70,7 +70,7 @@ const getPrivacyPolicyHTML = (nonce: string): string => `<!DOCTYPE html>
         <h2>4. Your Rights</h2>
         <p>You have the right to access, correct, or delete your personal data.</p>
         <h2>5. Contact Us</h2>
-        <p>Email: <a href="mailto:support@maelsh.com">support@maelsh.com</a></p>
+        <p>Email: <a href="mailto:dueli@maelshpro.com">dueli@maelshpro.com</a></p>
         <div class="footer"><p>&copy; 2025 Maelsh Pro. All rights reserved.</p></div>
     </div>
 </body>
@@ -108,7 +108,7 @@ const getDataDeletionHTML = (nonce: string): string => `<!DOCTYPE html>
         </div>
         <div class="step">
             <strong>Option 2: Email Request</strong>
-            1. Send an email to <a href="mailto:support@maelsh.com">support@maelsh.com</a>.<br>
+            1. Send an email to <a href="mailto:dueli@maelshpro.com">dueli@maelshpro.com</a>.<br>
             2. Subject: "Data Deletion Request".<br>
             3. Include your registered email address.<br>
             4. We will process within 7 business days.
@@ -145,7 +145,7 @@ const getDeletionStatusHTML = (code: string, nonce: string): string => `<!DOCTYP
         <p>Your data deletion request has been received and is being processed.</p>
         <div class="code"><strong>Confirmation Code:</strong><br>${code}</div>
         <p>Your data will be deleted within 30 days.</p>
-        <p>If you have questions, contact: <a href="mailto:support@maelsh.com">support@maelsh.com</a></p>
+        <p>If you have questions, contact: <a href="mailto:dueli@maelshpro.com">dueli@maelshpro.com</a></p>
     </div>
 </body>
 </html>`;

@@ -2454,6 +2454,9 @@
   .break-words {
     overflow-wrap: break-word;
   }
+  .break-all {
+    word-break: break-all;
+  }
   .whitespace-nowrap {
     white-space: nowrap;
   }
@@ -2618,6 +2621,9 @@
   }
   .text-purple-700 {
     color: var(--color-purple-700);
+  }
+  .text-purple-800 {
+    color: var(--color-purple-800);
   }
   .text-red-300 {
     color: var(--color-red-300);
@@ -3489,6 +3495,9 @@
     .md\:p-8 {
       padding: calc(var(--spacing) * 8);
     }
+    .md\:p-10 {
+      padding: calc(var(--spacing) * 10);
+    }
     .md\:p-12 {
       padding: calc(var(--spacing) * 12);
     }
@@ -3961,6 +3970,9 @@
   }
   .dark\:text-pink-300:where(.dark, .dark *) {
     color: var(--color-pink-300);
+  }
+  .dark\:text-purple-200:where(.dark, .dark *) {
+    color: var(--color-purple-200);
   }
   .dark\:text-purple-300:where(.dark, .dark *) {
     color: var(--color-purple-300);

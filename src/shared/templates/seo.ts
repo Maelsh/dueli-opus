@@ -36,6 +36,12 @@ export interface SeoInput {
     lang: Language;
     /** Page title (without the site suffix). */
     title: string;
+    /**
+     * Complete localized document title. When provided it is used verbatim
+     * for <title>, og:title and twitter:title, so the owner-approved meta
+     * title can come from i18n instead of a hardcoded string.
+     */
+    metaTitle?: string;
     /** Meta description. Falls back to the site default for the language. */
     description?: string;
     /** Path of the current page (e.g. '/guide/help'). Used for canonical + hreflang. */
@@ -138,7 +144,7 @@ export function buildSeoHead(input: SeoInput, nonce = ''): string {
     const tr = translations[getUILanguage(input.lang)];
     const seo = (tr as Record<string, any>).seo ?? {};
     const description: string = input.description || seo.default_description || 'Dueli';
-    const title = input.title;
+    const title = input.metaTitle || input.title;
     const image = input.ogImage || DEFAULT_OG_IMAGE;
     const ogType = input.ogType || 'website';
     const path = input.path || input.canonicalPath;
