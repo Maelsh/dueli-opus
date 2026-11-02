@@ -1439,24 +1439,26 @@ export const en = {
         early_withdrawal_closed: 'This competition ended by early withdrawal before audience ratings finished — see the system result above.',
     },
 
-    // ── UNIT38 / R4-GUIDE-1 — global SEO defaults ──────────────
+    // ── UNIT38 / R4-GUIDE-1 — global SEO defaults (UNIT39 owner revision) ──
     seo: {
+        meta_title:
+            "Dueli — The World's First Platform for 100% Free & Fair Competitions | Elevate, Learn, Enjoy & Earn",
         default_description:
-            'Dueli is a global platform for live competitions, constructive dialogue and talent discovery — with role guides, policies, contact and support in one place.',
+            "Dueli by Maelsh Pro: The world's first global platform dedicated to 100% free, fair, and ethical competitions across dialogue, science, and talent with absolute transparency. Elevate, learn, enjoy, and earn 80% of ad revenue in a non-profit humanitarian initiative.",
         pages: {
-            home: 'Watch live competitions, join a dialogue as a creator or an opponent, and follow the people you rate — on Dueli.',
-            explore: 'Explore live and recorded competitions on Dueli by category, subcategory and status, and open the one that fits you.',
-            docs: 'Published Dueli documents — the platform notes and policies its team releases for everyone to read.',
+            home: "Dueli by Maelsh Pro: The world's first global platform dedicated to 100% free, fair, and ethical competitions across dialogue, science, and talent with absolute transparency. Elevate, learn, enjoy, and earn 80% of ad revenue in a non-profit humanitarian initiative.",
+            explore: 'Explore live and recorded competitions on Dueli by category, subcategory and status — free and fair competitions for dialogue, science and talent by Maelsh Pro.',
+            docs: 'Published Dueli documents — the platform notes, policies and owner-approved content its team releases for everyone to read.',
             transparency: 'The open Dueli ledger: money in, money out, the platform share and the cost of running the service.',
-            donate: 'Support Dueli with a one-time donation and help the platform keep running.',
+            donate: 'Support Dueli with a one-time donation. Dueli is a non-profit humanitarian initiative by Maelsh Pro and publishes its open numbers in the financial transparency ledger.',
         },
     },
 
     // ── UNIT38 / R4-GUIDE-1 — the /guide center (about + help) ──────────────
     guide: {
-        title: 'About Dueli and Help',
+        title: 'Dueli Comprehensive Guide — Humanitarian Mission, Technology, AI Acknowledgements & Policies',
         subtitle:
-            'One place for what Dueli is, how it works, and where to get help — every section is a page of its own.',
+            "Discover Dueli, the world's first platform for free and fair competitions by Maelsh Pro: our humanitarian mission, technical architecture, AI & infrastructure acknowledgements, ethical open-source charter, and official contact channels.",
         hub_intro:
             'Pick the section you need. Each section opens on its own address, so you can bookmark it, share it, or come back to it after a refresh.',
         nav_label: 'Guide sections',
@@ -1478,19 +1480,19 @@ export const en = {
         sections: {
             overview: {
                 title: 'Overview',
-                desc: 'What Dueli is and how a competition runs on the platform.',
+                desc: 'What Dueli is, how a competition runs, and the Maelsh Pro identity behind the platform.',
             },
             message: {
-                title: 'The human message',
-                desc: 'Why Maelsh Pro builds Dueli, in the founder’s own words.',
+                title: 'Humanitarian mission',
+                desc: 'The founder’s human message: four pillars, a future bridge to independent AI agents, and a not-for-profit intent.',
             },
             technology: {
                 title: 'Technology',
-                desc: 'Where the technical and engineering notes are published.',
+                desc: 'The real Dueli stack in two layers: a plain-language explanation and the engineering view.',
             },
             ai: {
-                title: 'AI companies and models',
-                desc: 'The published record of the AI tools and models used in the project.',
+                title: 'AI acknowledgements',
+                desc: 'A technical appreciation of the AI companies, models and platforms that helped build Dueli, and of the friends who shared their personal subscriptions.',
             },
             help: {
                 title: 'Help and FAQ',
@@ -1498,16 +1500,311 @@ export const en = {
             },
             terms: {
                 title: 'Terms and policies',
-                desc: 'The legal documents and reporting routes that already apply.',
+                desc: 'The rights of competitors and viewers, the versioned policy documents, and the reporting routes that apply.',
             },
             contact: {
                 title: 'Contact Maelsh Pro',
-                desc: 'The official routes that reach the Dueli administration.',
+                desc: 'The official domains, email addresses, YouTube channel and in-product routes for reaching Dueli and Maelsh Pro.',
             },
             support: {
                 title: 'Platform support and continuity',
-                desc: 'How the platform is supported and where the open numbers are published.',
+                desc: 'How ad revenue is shared 80/20, the donor roadmap, non-financial ways to help, and the separation between platform support and competitor earnings.',
             },
+        },
+        // UNIT39 / R4-GUIDE-2 — the human message (owner-approved revision).
+        message_content: {
+            slogan: 'Elevate, Learn, Enjoy, and Earn',
+            identity_title: 'Who we are',
+            identity:
+                "Dueli is the world's first platform dedicated to 100% free, fair, and transparent competitions across all fields. Founded and sponsored by Maelsh Pro as a non-profit humanitarian initiative, Dueli aims to replace conflict with dialogue, spread knowledge, and spotlight human talent with absolute transparency, bound only by ethical standards.",
+            pillars_title: 'Four pillars',
+            pillars: [
+                {
+                    title: 'Replacing Conflict with Constructive Dialogue (Elevate)',
+                    body:
+                        'Transforming intellectual and cultural differences from battlegrounds into refined live debates that respect reason and bring people together in mutual respect.',
+                },
+                {
+                    title: 'Simplifying Science & Knowledge for All (Learn)',
+                    body:
+                        'Bringing complex sciences, theories, and arts closer to the global public through live intellectual competition, making reliable knowledge engaging and accessible across languages.',
+                },
+                {
+                    title: 'Spotlighting Talent & Connecting Competence with Employers (Enjoy)',
+                    body:
+                        'Providing every talented individual and thinker a fair global stage to showcase their true capabilities through purposeful entertainment. Beyond empowering creators, Dueli serves as a direct bridge for employers, recruiters, and organizations to effortlessly discover verified talent—improving global work quality and placing the right talent in the right place.',
+                },
+                {
+                    title: 'Fair Participatory Economy & Transparent Sustainability (Earn)',
+                    body:
+                        'Because competing minds are the cornerstone of value, 80% of net ad revenue goes directly to competitors, while 20% is dedicated to platform operations, management, and continuous development.',
+                },
+            ],
+            ai_bridge_title: 'A future bridge for independent AI agents',
+            ai_bridge_body:
+                "In its future vision, Dueli aspires to build a trusted technical bridge allowing independent AI agents to contribute to human knowledge and civilizational dialogue within a safe, transparent environment—without altering today's authentication or financial systems.",
+        },
+        // UNIT39 / R4-GUIDE-2 — AI acknowledgements (owner-approved revision).
+        ai_content: {
+            intro:
+                'Rooted in gratitude and absolute transparency, Dueli extends its sincere appreciation to all AI companies and platforms that provide users worldwide with free public tiers and trial credits, as well as the supportive friends who contributed their personal subscriptions. This enabled us to rely on these pioneering models for planning, coding, and reviewing the platform without receiving any special grants or direct funding from these companies. We apologize to any platform or model that contributed to this journey and was inadvertently omitted.',
+            company_label: 'Company',
+            model_label: 'Models',
+            role_label: 'Contribution',
+            table_caption: 'AI companies and models that contributed to building Dueli',
+            entries: [
+                {
+                    company: 'OpenAI',
+                    model: 'ChatGPT',
+                    role: 'Structural planning and project leadership',
+                },
+                {
+                    company: 'Anthropic',
+                    model: 'Claude Opus, Claude Sonnet, Claude Haiku',
+                    role: 'Coding, architectural review and planning (Claude Opus was accessed through the intermediary platforms listed below)',
+                },
+                {
+                    company: 'Google / Alphabet',
+                    model: 'Gemini Argon, Gemini Flash',
+                    role: 'Planning leadership, architectural design and comprehensive review (accessed through the intermediary platforms listed below)',
+                },
+                {
+                    company: 'Z.ai',
+                    model: 'GLM, GLM Flash',
+                    role: 'Coding, planning and technical review',
+                },
+                {
+                    company: 'Moonshot AI',
+                    model: 'Kimi K',
+                    role: 'Analysis and planning',
+                },
+            ],
+            additional_title: 'Other leading models that proved highly capable',
+            additional_intro:
+                'These models were also used through free tiers or the personal subscriptions of supportive friends:',
+            additional: [
+                { company: 'DeepSeek', model: 'DeepSeek Flash' },
+                { company: 'MiniMax', model: 'MiniMax Flash' },
+                { company: 'Meta / Muse', model: 'Muse Spark & Muse Wonder' },
+                { company: 'Other providers', model: 'Other supporting intelligent models' },
+            ],
+            platforms_title: 'Platforms that provided access',
+            platforms_intro:
+                'The following platforms and intelligent development environments provided access to these models:',
+            platforms: [
+                'Genspark AI',
+                'OpenRouter',
+                'Cursor',
+                'Antigravity',
+                'Google AI Studio',
+                'Cline Code',
+                'Kilo Code',
+                'OpenCode',
+            ],
+            infrastructure_title: 'Hosting and infrastructure',
+            infrastructure_body:
+                'Special thanks to GitHub, the home of the source code and its continuous quality gates, and to Cloudflare, the global edge network, Workers, Pages and the D1 database that carry the platform.',
+            appeal_title: 'An appeal for the common good',
+            appeal:
+                'We encourage all technology and AI companies worldwide to expand free access for humanitarian and public-good initiatives. Without such generosity, Dueli would not have seen the light of day—together, technology and human values can make the world a better place.',
+            disclaimer:
+                'These companies, platforms, and models are mentioned solely out of technical appreciation for the public tools that helped build Dueli, without implying any commercial partnership, official sponsorship, mutual obligation, or ownership rights.',
+            updates_title: 'How this list is updated',
+            updates_body:
+                'This list is part of the platform source text. Any addition or correction is recorded in a managed document through the existing admin dashboard (H9), which appears under Documents; no separate content system is introduced.',
+            docs_link: 'Published documents',
+        },
+        // UNIT39 / R4-GUIDE-2 — two-layer technology page (owner-approved revision).
+        technology_content: {
+            intro:
+                'This page explains the technologies Dueli actually uses, in two layers: a plain-language view for everyone and an engineering view for specialists. No technology is listed unless the current code uses it.',
+            simple_title: 'In plain terms',
+            simple_paragraphs: [
+                'Dueli runs in the browser on Cloudflare’s global network. Two competitors meet in a live video call between their devices (WebRTC peer-to-peer); when a network blocks the direct path, a TURN relay helps the connection through.',
+                'During a competition the browser combines both camera feeds into one picture and records it as short 5-second chunks. The chunks are uploaded as they are produced, can be played back in order, and are assembled into a full replay after the match ends.',
+                'Recorded competitions can be downloaded as an MP4 file. When a recording needs conversion, the conversion runs inside the visitor’s browser with FFmpeg.wasm, so the file is not sent to an external conversion service.',
+                'Platform data lives in D1, pages and APIs are built with Hono and TypeScript on Cloudflare, and the interface uses Tailwind CSS. Live updates arrive through SSE and polling.',
+            ],
+            engineering_title: 'For engineers',
+            engineering_paragraphs: [
+                'Runtime: Cloudflare Pages/Workers with Hono 4 on TypeScript. D1 (SQLite) is the database. Vite builds the Worker bundle, Tailwind CSS 4 styles the interface, and esbuild bundles the browser entry points.',
+                'Live media: a browser RTCPeerConnection carries WebRTC between host and opponent. ICE servers are issued per session from GET /api/signaling/ice-servers; Cloudflare Calls TURN (TURN_TOKEN_ID and TURN_API_TOKEN) or self-hosted coturn (TURN_URL and TURN_SECRET) can relay, with a STUN-only fallback when neither is configured.',
+                'Recording: a canvas compositor draws both feeds, and MediaRecorder emits a chunk every 5 seconds. The host registers each chunk at POST /api/chunks/register (a short-lived one-time key bound to the competition, sequence and byte ceiling), uploads it, verifies it with GET /verify and reports POST /receipt. Playback reads GET /api/chunks/playlist/:id, and the existing finalize step produces the VOD.',
+                'Downloads: @ffmpeg/core 0.12.10 runs in a self-hosted browser worker for MP4 conversion, with a structural remux path for recordings that are already MP4-compatible. Progress and memory limits are handled in the client service.',
+                'Realtime: SSE through GET /api/sse carries live updates, and signaling uses HTTP polling; the production path does not use WebSocket.',
+                'Quality: Vitest covers unit and UI contracts, and Playwright covers end-to-end browser flows. Markdown documents are rendered with marked, and PostCSS with Autoprefixer completes the CSS pipeline.',
+            ],
+            stack_title: 'The stack in this repository',
+            stack: [
+                { name: 'Cloudflare Pages / Workers', role: 'Hosting and server runtime' },
+                { name: 'Cloudflare D1 (SQLite)', role: 'Application database' },
+                { name: 'Hono 4', role: 'HTTP routes, pages and API' },
+                { name: 'TypeScript 5', role: 'Typed source for server and client' },
+                { name: 'Tailwind CSS 4 + PostCSS + Autoprefixer', role: 'Interface styling and CSS pipeline' },
+                { name: 'Vite 7 + esbuild', role: 'Worker bundle and browser entry points' },
+                { name: 'WebRTC (RTCPeerConnection) + TURN/STUN', role: 'Live audio and video between participants' },
+                { name: 'Canvas compositor + MediaRecorder', role: '5-second recorded chunks in the browser' },
+                { name: 'FFmpeg.wasm (@ffmpeg/core 0.12.10)', role: 'In-browser MP4 conversion and download' },
+                { name: 'marked 17', role: 'Markdown rendering for managed documents' },
+                { name: 'Vitest 5', role: 'Unit and UI test suite' },
+                { name: 'Playwright', role: 'End-to-end browser tests' },
+                { name: 'Wrangler 4', role: 'Cloudflare development and deployment tooling' },
+                { name: 'SSE + HTTP polling', role: 'Live updates outside the media path' },
+            ],
+            note: 'The list is limited to what package.json and the repository actually contain. It is a technical description, not a partnership or endorsement claim.',
+        },
+        // UNIT39 / R4-GUIDE-2 — support, donors and the 80/20 model.
+        support_content: {
+            intro:
+                'How the platform is supported, how advertising revenue is shared, and how Dueli is sustained as a non-profit humanitarian initiative.',
+            split_title: 'Advertising revenue: an 80% / 20% split',
+            split_80_title: '80% to competitors',
+            split_80_body:
+                'The competitor pool is divided between the two sides of a competition in proportion to each side’s average audience rating, and equally when the result is a draw or no ratings exist — following the existing payout cycle.',
+            split_20_title: '20% for platform operation, sustainability and development',
+            split_20_body:
+                'This share covers running costs, maintenance and development. The percentage is configurable in the platform settings, and the open figures are published in the financial transparency ledger.',
+            split_note:
+                'This describes the existing model; it is not a promise of earnings or dates. Future development plans are open to donor sponsorship under the published terms.',
+            donors_title: 'Donors and supporters — a staged vision',
+            donors: [
+                {
+                    title: 'Stage 1: publish what is spent',
+                    body: 'Keep the open ledger current so anyone can see what comes in and what goes out.',
+                },
+                {
+                    title: 'Stage 2: make one-time support clearer',
+                    body: 'Improve the existing one-time support route and explain exactly what it funds; no new payment provider is introduced for this.',
+                },
+                {
+                    title: 'Stage 3: recognise supporters',
+                    body: 'If a recognition surface is added later, it will be announced through the published documents. This is a direction, not a dated commitment.',
+                },
+            ],
+            donors_note:
+                'These stages are a direction, not guaranteed dates. Any future support channel must use the existing payment path and receive owner approval before it is announced.',
+            future_title: 'Future development, open to donor sponsorship',
+            future_body:
+                'Approved future development plans are published as they are prepared and are open to donor sponsorship through the existing one-time support route. No new payment provider or payment path is introduced, and no earnings or dates are promised.',
+            nonfinancial_title: 'Ways to contribute without money',
+            nonfinancial: [
+                'Share the idea with people who would use it, and talk about the project honestly.',
+                'Contribute to the parts the project publishes openly, under their published licence.',
+                'Report a problem or suggest an improvement through the existing report and support routes.',
+            ],
+            separation_title: 'Platform support is not competitor earnings',
+            separation_body:
+                'Support for the platform goes through /donate and its open figures appear in /transparency. Competitor earnings come from the existing payout cycle after a competition, and audience donations to competitors are a separate flow inside the product. The two are never mixed, and this page opens no new payment route.',
+        },
+        // UNIT39 / R4-GUIDE-2 — terms and rights (owner-approved revision).
+        terms_content: {
+            intro:
+                'This page sets out the rights and duties that apply on Dueli, and links them to the published policy documents. The versioned document in Documents is the reference; this page is a plain-language guide.',
+            clauses_title: 'Terms and rights',
+            clauses: [
+                {
+                    title: '1. Media rights, promotional use and platform revenue',
+                    body:
+                        'By creating or participating in a competition on Dueli, competitors grant the platform administration and Maelsh Pro a perpetual, worldwide, non-exclusive, and irrevocable license to use, reproduce, and republish all audio, video, and text media generated on the platform—in whole or in part—across social media (including YouTube) and any other media channels for promotional, archival, and outreach purposes. No competitor may demand the prevention or removal of such publication, and any revenue generated from external publication may be utilized by the platform administration as it deems appropriate to support, operate, and develop Dueli.',
+                    items: [
+                        'Competitors: both competitors may download and republish their own competition material and benefit from it through their own channels, under the published terms.',
+                        'Viewers: viewers may watch and download competition material for personal, non-commercial use only. Public or commercial republication requires prior permission from the platform.',
+                    ],
+                },
+                {
+                    title: '2. Open-source ethical licence and continuity charter',
+                    body:
+                        'Dueli publishes its source code transparently in service of humanity under three legally and ethically binding conditions:',
+                    items: [
+                        'Good-use mandate: no entity or individual may use the platform’s source code except for benevolent purposes that serve humanity and knowledge. It may not be used in any activity that violates ethical values or harms communities.',
+                        'No commercial use without authorization: no individual or entity may use the source code for profit or commercial gain without direct, prior written authorization and coordination with the original platform administration (Maelsh Pro).',
+                        'Transparency and continuity protocol (anti-coercion safeguard): should the platform or its administration ever face external coercive pressures resulting in a clear, demonstrable breach of transparency or a deviation from its humanitarian mission, any strictly non-profit party is authorized to deploy and operate the platform’s source code at their own expense without restriction to preserve its mission—subject to one mandatory condition: allocating the 20% platform share of ad revenue to the original founding administration (Maelsh Pro) to support its efforts in overcoming such restrictions and restoring the platform.',
+                    ],
+                },
+                {
+                    title: '3. Privacy and data protection',
+                    body:
+                        'Dueli handles account data, secure HttpOnly sessions, and the broadcasts, comments and ratings a user chooses to publish. Personal data is never sold to third parties. Users may edit their profile, change their password, and delete a pending competition before an opponent joins.',
+                },
+                {
+                    title: '4. Competitor ad control',
+                    body:
+                        'Competitors keep ethical control over the commercial advertisements shown during their competitions through their account settings, including manual or automatic approval, allow-lists and block-lists. Dueli’s own official house ads are exempt.',
+                },
+                {
+                    title: '5. Financial and voting integrity',
+                    body:
+                        'An audience rating counts only after a verified minimum watch time of 300 seconds. Automated manipulation of views, ad clicks or ratings is prohibited, and early withdrawal is settled under the existing atomic settlement rules.',
+                },
+                {
+                    title: '6. Code of conduct and content disclaimer',
+                    body:
+                        'Competitors must follow the ethics of dialogue. Hate speech, defamation and legal violations are prohibited. Opinions expressed in competitions belong to the competitors who express them and do not necessarily represent Dueli or Maelsh Pro.',
+                },
+                {
+                    title: '7. Versioned policy governance (H9)',
+                    body:
+                        'Terms and policies are managed as versioned documents with a version and an update date in /docs through the H9 system. Any acceptance step is documented there before it is activated.',
+                },
+            ],
+            policies_title: 'Policies that already apply',
+            note:
+                'This page is not a substitute for the published legal documents. Final legal review remains part of the dedicated release process.',
+        },
+        contact_content: {
+            intro:
+                'The official channels and domains of Dueli and Maelsh Pro are the ones published on this page and in the official documents.',
+            domains_title: 'Official domains',
+            domains: [
+                {
+                    label: 'dueli.win',
+                    href: 'https://dueli.win',
+                    desc: 'Official splash and redirect domain: it opens the welcome page and then redirects to the working platform.',
+                },
+                {
+                    label: 'dueli.maelshpro.com',
+                    href: 'https://dueli.maelshpro.com',
+                    desc: 'The current working platform address, a subdomain of the founding company.',
+                },
+            ],
+            channels_title: 'Official in-product channels',
+            channels: [
+                {
+                    label: 'Admin messages',
+                    desc: 'A private support thread inside the platform; signing in is required.',
+                },
+                {
+                    label: 'Report content',
+                    desc: 'Report a competition, profile, comment or advertisement for review.',
+                },
+                {
+                    label: 'Track a complaint',
+                    desc: 'Follow a complaint you already submitted and its status.',
+                },
+            ],
+            external_title: 'Official email and external channels',
+            external: [
+                {
+                    label: 'dueli@maelshpro.com',
+                    href: 'mailto:dueli@maelshpro.com',
+                    desc: 'Official email of the Dueli platform.',
+                },
+                {
+                    label: 'info@maelshpro.com',
+                    href: 'mailto:info@maelshpro.com',
+                    desc: 'Official email of the founding and sponsoring company, Maelsh Pro.',
+                },
+                {
+                    label: 'YouTube — @Maelsh-Dueli',
+                    href: 'https://www.youtube.com/@Maelsh-Dueli',
+                    desc: 'Official YouTube channel of Dueli.',
+                },
+            ],
+            security_title: 'Official-channel notice',
+            security_notice:
+                'These channels and domains are the only official channels of Dueli and Maelsh Pro. Any account or channel not listed on this page or in the official documents does not represent the platform.',
+            response_note:
+                'No specific response time is promised. Reports and support are handled through the existing systems.',
         },
         // OBS Virtual Camera guide (hosts / presenters).
         obs: {
@@ -1541,10 +1838,10 @@ export const en = {
     // ── UNIT38 / R4-GUIDE-1 — the /welcome splash portal ──────────────
     splash: {
         title: 'Dueli',
-        word_1: 'Rise',
+        word_1: 'Elevate',
         word_2: 'Learn',
         word_3: 'Enjoy',
-        word_4: 'Win',
+        word_4: 'Earn',
         by_maelsh_pro: 'By Maelsh Pro',
         skip: 'Skip and enter Dueli now',
         redirecting: 'Taking you to Dueli…',

@@ -341,9 +341,10 @@ app.get('/', (c) => {
   `;
 
   return c.html(
-    generateHTML(content, lang, tr.home, (c.get('cspNonce') as string) ?? '', {
+    generateHTML(content, lang, tr.seo?.meta_title ?? tr.home, (c.get('cspNonce') as string) ?? '', {
       path: '/',
-      description: tr.seo?.pages?.home,
+      metaTitle: tr.seo?.meta_title,
+      description: tr.seo?.default_description ?? tr.seo?.pages?.home,
     })
   );
 });
