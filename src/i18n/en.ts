@@ -1838,7 +1838,7 @@ export const en = {
     // ── UNIT38 / R4-GUIDE-1 — the /welcome splash portal ──────────────
     splash: {
         title: 'Dueli',
-        word_1: 'Rise',
+        word_1: 'Elevate',
         word_2: 'Learn',
         word_3: 'Enjoy',
         word_4: 'Win',
