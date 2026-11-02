@@ -426,7 +426,7 @@ describe('UNIT38 / R4-GUIDE-1 — the /welcome splash portal', () => {
         expect(html).toContain('By Maelsh Pro');
         // The brand phrase, word by word (the English pack carries the
         // published translation of the Arabic phrase).
-        for (const word of ['Elevate', 'Learn', 'Enjoy', 'Win']) {
+        for (const word of ['Elevate', 'Learn', 'Enjoy', 'Earn']) {
             expect(html, `phrase word ${word}`).toContain(word);
         }
     });

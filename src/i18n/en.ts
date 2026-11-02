@@ -1841,7 +1841,7 @@ export const en = {
         word_1: 'Elevate',
         word_2: 'Learn',
         word_3: 'Enjoy',
-        word_4: 'Win',
+        word_4: 'Earn',
         by_maelsh_pro: 'By Maelsh Pro',
         skip: 'Skip and enter Dueli now',
         redirecting: 'Taking you to Dueli…',
