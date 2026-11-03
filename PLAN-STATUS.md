@@ -1,3 +1,31 @@
+## 2026-11-03 — UNIT40 / R0-LAUNCH-READINESS — مطابقة SEC-02 ودليل المالك/المدير · فرع feat/unit40-sec02-owner-admin-guide
+
+- 📄 **توثيق فقط / LOCAL VERIFIED / REMOTE PENDING.** BASE `062600e5fce53921483f56d94d55069de4ed6847` (دمج PR #154 / UNIT39). PR واحد إلى `main`؛ لا كود ولا مخطط ولا هجرة ولا اختبار ولا نشر ولا كتابة إنتاج ولا تغيير مالي. ثلاثة ملفات بالضبط: `docs/12-SECURITY-REMEDIATION.md`، `WORKLOG.md`، `PLAN-STATUS.md`.
+- **مطابقة SEC-02 (3 طبقات + 7 معايير = 10 بنود): 3 EVIDENCED · 4 EQUIVALENT-EVIDENCED · 3 GAP.** الخطة الحرفية (`0011_financial_integrity.sql` / `financial_ledger` / `on_hold`) لم تُبنَ قط؛ التنفيذ الفعلي هو `0019_ledger_entries` + `0021_withdrawals_lifecycle` + `0038_withdrawal_payout_snapshot` + حجز/تحرير `LedgerService` عبر `tx_id`، و`db.batch` محروس، ولقطة #94، و`charged_cents` من 36.1. لم يُعَد فتح المسارات المغلقة (8.A / 8.D / #94 / 36.1) ولم يُثبت فيها عيب.
+- **EVIDENCED:** C2 رفض تجاوز الرصيد، C3 فائز واحد تحت التزامن، C6 الرصيد المتاح لا يصير سالباً. **EQUIVALENT-EVIDENCED:** L1 (لا `withdrawn` عند الطلب)، C1 (ثبات الدفتر Σdebit−Σcredit)، C4 (الرفض يعيد رصيد الدفتر + زوج عكسي)، C7 (كل حركة مال = زوج دفتر متوازن؛ الموافقة تغيير حالة فقط). **GAP:** L2→SEC-02-G2 (`on_hold` لا يُكتب أبداً؛ `/api/withdrawals` يعيد 0)، L3→SEC-02-G3 (إدراج الطلب → الحجز → تحديث `hold_tx_id` خطوات منفصلة؛ نوافذ انهيار؛ `releaseHold` يعود مبكراً عند `hold_tx_id` فارغ؛ لا مهمة استرداد)، C5→G2.
+- **عيب منفصل مثبت — SEC-02-G1 (خارج العشرة):** `GET /api/earnings` يعيد 500 (`no such column: status`)؛ و`/history` و`/competition/:id` يستعلمون أعمدة `user_earnings` نفسها المفقودة (`competition_id`، `created_at`، `amount`). لا عميل يستدعيها (`earnings-page.ts` يستخدم `/api/withdrawals`). وُثِّق فقط ولم يُصلَح.
+- **الاختبارات المشغَّلة:** `npx vitest run tests/api/withdrawals-lifecycle.test.ts tests/api/ledger-invariant.test.ts` ⇒ **16/16 ناجح**. دعم الدليل: `tests/models/SyntheticRetirement.test.ts` + `tests/models/IsFakeCreation.test.ts` + `tests/api/r2-a-admin.test.ts` + `tests/api/r2-m-admin.test.ts` ⇒ **32/32 ناجح**. مسبار مؤقت `tests/api/tmp-unit40-gap-probe.test.ts` (**4/4**، حُذف قبل الالتزام) أثبت G1 وG2 وG3a وG3b؛ لا ملف اختبار ضمن هذا الـPR.
+- **دليل المالك (ملحق في docs/12):** `/admin` صفحة واحدة بـ13 قسماً متحققاً (ليست تبويبات عميل)؛ `/messages?tab=admin` متحقق (`messages-page.ts:30-40, 230-231, 849-870`)؛ أقسام `/settings` متحققة؛ حساب الإدارة التجريبي `admin` / `admin@dueli.local` / `admin` (`id=9053`، SuperAdmin) بمصادر؛ الحسابان التجريبيان الآخران **NOT VERIFIED** (غير مسمّيين في أي من المستودعين) ويجب تعدادهما للقراءة فقط من D1 الإنتاج عند UNIT42؛ مستخدمو البذور المحليون (20، `password123`، `is_fake=1`، سكربت `--local` فقط) مفصولون صراحةً عن حسابات الإنتاج التجريبية؛ سلوك `SyntheticRetirementService` وحدوده موثّق؛ وخطوات قطع UNIT42 الدقيقة (جرد → فحص تبعيات → نسخ احتياطي → تدوير → شجرة قرار التحييد/الحذف → إبطال الجلسات → تحقق → تسجيل → تراجع) مضمّنة.
+- **H8:** حرفياً `OPEN OWNER ACTION — DEFERRED TO UNIT42 CUTOVER`؛ لا تدوير ولا حذف ولا تغيير كلمة مرور في هذه الوحدة؛ التنفيذ فقط بعد 41 و41.1 و42.1. و`dueli.win` وقرارات UNIT36.1 والبنك/Stripe/H9 تبقى إجراءات مالك لا تغييرات كود.
+- **التصنيف (التسميات الثلاث المسموحة فقط):**
+
+| البند | التصنيف | الدليل / التالي |
+|---|---|---|
+| مطابقة SEC-02 (الطبقات + المعايير) | **DONE EVIDENCED** | `docs/12` §SEC-02 «مطابقة UNIT40» + 16/16 |
+| دليل المالك/المدير (`/admin`، `/messages?tab=admin`، `/settings`، الحسابات، `is_fake`) | **DONE EVIDENCED** | ملحق `docs/12` + 32/32 + file:line |
+| H8 — تدوير/حذف مدير التجربة والحسابين التجريبيين | **OPEN OWNER ACTION — DEFERRED TO UNIT42 CUTOVER** | `WORKLOG.md` §UNIT36 (PENDING UNIT40/42)، `PLAN-STATUS.md` §UNIT36؛ الحسابان NOT VERIFIED |
+| `dueli.win` / DNS / إعادة التوجيه | **OPEN OWNER ACTION** | غير قابل للتحقق من المستودع |
+| قرارات UNIT36.1 للتسعير / الإعلانات الرسمية / allow مقابل manual | **OPEN OWNER ACTION** | قرارات منتج عند المالك |
+| البنك / Stripe / قرارات إطلاق H9 | **OPEN OWNER ACTION** | خارج هذه الوحدة |
+| SEC-02-G1 `/api/earnings` 500 | **GAP** | `docs/12` §G1 + المسبار |
+| SEC-02-G2 `on_hold`/`withdrawn` قديمان | **GAP** | `docs/12` §G2 + المسبار |
+| SEC-02-G3 نوافذ الانهيار / لا استرداد | **GAP** | `docs/12` §G3 + المسبار |
+
+- **البوابات:** `npx tsc --noEmit` و`npm run build` وQuality Gate وDeploy Preview على الـHEAD نفسه تُتحقق بعد الدفعة الواحدة؛ والالتزام لا يستطيع تضمين SHA نفسه، فالنتائج تُبلَّغ على الـPR وفي التقرير النهائي ولا تُدّعى هنا.
+- **الملفات:** `docs/12-SECURITY-REMEDIATION.md`، `WORKLOG.md`، `PLAN-STATUS.md`. لا ملف جديد. لا تغيير كود/مخطط/اختبار/هجرة.
+- **الـSHA:** الـHEAD هو الالتزام الناتج عن هذه الدفعة؛ ويُبلَّغ عن SHA الدقيق على الـPR وللقائد فور الدفعة الواحدة. رقم الـPR يُسجَّل بعد الإنشاء.
+- **استعادة القيادة (PLAN §19.4):** الدور — LOCAL يؤلف ويتحقق محلياً؛ REMOTE يراجع الـdiff التراكمي؛ المالك وحده يقرر الدمج/النشر. الحالة — التوثيق متحقق محلياً؛ **الإطلاق غير محسوم**؛ **H8 مؤجَّل إلى قطع UNIT42**؛ لا دمج ولا نشر ولا كتابة إنتاج. التالي — دفع وفتح PR واحد إلى `main`، والتحقق من Quality Gate + Deploy Preview على الـHEAD نفسه، ثم طلب مراجعة REMOTE على ذلك الـSHA.
+
 ## 2026-11-02 — UNIT39 / R4-GUIDE-2 — دفعة تجميد LD-154-R2b · فرع feat/unit39-r4-guide-2
 
 - 🔒 **طُبِّقت دفعة التجميد / LOCAL متحقق.** تسجّل LD-154-R2b قرارات المالك الثلاثة — (1) المصادقة على تصحيحات LD-154-R2 بما فيها تحديث عقد unit38 أحادي السطر، (2) الخيار «أ»: مواءمة `splash.word_4` مع الشعار المعتمد (`Earn`)، (3) الأرشيف يبقى تاريخياً ولا يُعاد كتابته. دفعة واحدة أخيرة إلى الفرع القائم، ثم يُجمَّد الفرع — لا دفع إضافي إلا بتوجيه صريح جديد من القائد أو بقرار دمج من المالك. لا دمج ولا نشر ولا كتابة إنتاج.

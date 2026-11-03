@@ -1,3 +1,31 @@
+## 2026-11-03 — UNIT40 / R0-LAUNCH-READINESS — SEC-02 reconciliation + owner/admin guide · branch feat/unit40-sec02-owner-admin-guide
+
+- 📄 **DOCS ONLY / LOCAL VERIFIED / REMOTE PENDING.** BASE `062600e5fce53921483f56d94d55069de4ed6847` (merge of PR #154 / UNIT39). One PR to `main`; no code, schema, migration, test, deploy, production write, or finance change. Exactly three files: `docs/12-SECURITY-REMEDIATION.md`, `WORKLOG.md`, `PLAN-STATUS.md`.
+- **SEC-02 RECONCILIATION (3 layers + 7 criteria = 10 items): 3 EVIDENCED · 4 EQUIVALENT-EVIDENCED · 3 GAP.** The literal plan (`0011_financial_integrity.sql` / `financial_ledger` / `on_hold`) was never built; the active implementation is `0019_ledger_entries` + `0021_withdrawals_lifecycle` + `0038_withdrawal_payout_snapshot` + `LedgerService` hold/release by `tx_id`, guarded `db.batch`, snapshot #94, and `charged_cents` from 36.1. Closed finance paths (8.A / 8.D / #94 / 36.1) were not reopened; no proven defect was found in them.
+- **EVIDENCED:** C2 over-balance rejection, C3 concurrent single-winner, C6 never-negative available. **EQUIVALENT-EVIDENCED:** L1 (no `withdrawn` at request time), C1 (ledger invariant Σdebit−Σcredit), C4 (reject restores ledger balance + reverse pair), C7 (every money movement = balanced ledger pair; approval is state-only). **GAP:** L2→SEC-02-G2 (`on_hold` never written; `/api/withdrawals` returns 0), L3→SEC-02-G3 (request insert → hold → `hold_tx_id` update are separate; crash windows; `releaseHold` early-returns on null `hold_tx_id`; no recovery job), C5→G2.
+- **SEPARATE PROVEN DEFECT — SEC-02-G1 (outside the 10):** `GET /api/earnings` returns 500 (`no such column: status`); `/history` and `/competition/:id` query the same missing `user_earnings` columns (`competition_id`, `created_at`, `amount`). No client calls them (`earnings-page.ts` uses `/api/withdrawals`). Documented only; not fixed.
+- **TESTS RUN:** `npx vitest run tests/api/withdrawals-lifecycle.test.ts tests/api/ledger-invariant.test.ts` ⇒ **16/16 passed**. Guide support: `tests/models/SyntheticRetirement.test.ts` + `tests/models/IsFakeCreation.test.ts` + `tests/api/r2-a-admin.test.ts` + `tests/api/r2-m-admin.test.ts` ⇒ **32/32 passed**. A temporary probe `tests/api/tmp-unit40-gap-probe.test.ts` (**4/4**, deleted before commit) proved G1, G2, G3a and G3b; no test file is part of this PR.
+- **OWNER GUIDE (appendix in docs/12):** `/admin` is one page with 13 verified sections (not client-side tabs); `/messages?tab=admin` verified (`messages-page.ts:30-40, 230-231, 849-870`); `/settings` sections verified; production trial admin `admin` / `admin@dueli.local` / `admin` (`id=9053`, SuperAdmin) with source refs; the other two trial accounts **NOT VERIFIED** (not named anywhere in either repo) and must be enumerated read-only from production D1 at UNIT42; local seed demo users (20, `password123`, `is_fake=1`, local-only `--local` script) are explicitly separated from production trial accounts; `SyntheticRetirementService` behavior and limits documented; exact UNIT42 cutover steps (inventory → dependency check → backup → rotate → neutralize/delete decision tree → revoke sessions → verify → record → rollback) included.
+- **H8:** literal `OPEN OWNER ACTION — DEFERRED TO UNIT42 CUTOVER`; no rotation, deletion, or password change in this unit; execution only after 41, 41.1, 42.1. `dueli.win`, UNIT36.1 decisions and bank/Stripe/H9 remain owner actions, not code changes.
+- **CLASSIFICATION (only the three allowed labels):**
+
+| Item | Classification | Evidence / next |
+|---|---|---|
+| SEC-02 reconciliation (layers + criteria) | **DONE EVIDENCED** | `docs/12` §SEC-02 «مطابقة UNIT40» + 16/16 |
+| Owner/admin guide (`/admin`, `/messages?tab=admin`, `/settings`, accounts, `is_fake`) | **DONE EVIDENCED** | `docs/12` appendix + 32/32 + file:line |
+| H8 — rotate/delete trial admin + two trial accounts | **OPEN OWNER ACTION — DEFERRED TO UNIT42 CUTOVER** | `WORKLOG.md` §UNIT36 (PENDING UNIT40/42), `PLAN-STATUS.md` §UNIT36; two accounts NOT VERIFIED |
+| `dueli.win` / DNS / redirect | **OPEN OWNER ACTION** | not verifiable from repo |
+| UNIT36.1 pricing / house ads / allow-vs-manual | **OPEN OWNER ACTION** | owner product decisions |
+| Bank / Stripe / H9 launch decisions | **OPEN OWNER ACTION** | outside this unit |
+| SEC-02-G1 `/api/earnings` 500 | **GAP** | `docs/12` §G1 + probe |
+| SEC-02-G2 `on_hold`/`withdrawn` stale | **GAP** | `docs/12` §G2 + probe |
+| SEC-02-G3 crash windows / no recovery | **GAP** | `docs/12` §G3 + probe |
+
+- **GATES:** `npx tsc --noEmit`, `npm run build`, Quality Gate and Deploy Preview on the exact HEAD are verified after the single push; a commit cannot embed its own SHA, so results are reported on the PR and in the final report — not asserted here.
+- **FILES:** `docs/12-SECURITY-REMEDIATION.md`, `WORKLOG.md`, `PLAN-STATUS.md`. No new file. No code/schema/test/migration change.
+- **SHA:** HEAD is the commit produced by this batch; the exact SHA is reported on the PR and to the leader immediately after the single push. The PR number is recorded after creation.
+- **LEADERSHIP RECOVERY (PLAN §19.4):** ROLE — LOCAL authors/verifies locally; REMOTE reviews the cumulative diff; the owner alone decides merge/deploy. STATE — docs verified locally; **launch is not decided**; **H8 is deferred to UNIT42 cutover**; no merge, no deploy, no production write. NEXT — push, open one PR to `main`, verify Quality Gate + Deploy Preview on the exact HEAD, then request REMOTE review on that exact SHA.
+
 ## 2026-11-02 — UNIT39 / R4-GUIDE-2 — LD-154-R2b freeze batch · branch feat/unit39-r4-guide-2
 
 - 🔒 **FREEZE BATCH APPLIED / LOCAL VERIFIED.** LD-154-R2b records the owner’s three decisions — (1) approval of the LD-154-R2 corrections including the one-line unit38 contract update, (2) option “A”: align splash `word_4` with the approved slogan (`Earn`), (3) the archive stays historical and is not rewritten. One final push to the existing branch; the branch is frozen afterwards — no further push without an explicit leader directive or the owner’s merge decision. No merge, no deploy, no production write.
