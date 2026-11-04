@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-29T18:24:46.488Z",
-  "total": 262,
+  "generatedAt": "2026-11-04T14:35:25.360Z",
+  "total": 259,
   "routes": [
     {
       "method": "GET",
@@ -1128,27 +1128,6 @@
       "classification": "PUBLIC(auth-optional, in-handler check required)",
       "guards": "router:auth-optional, group:rateLimit, group:csrf",
       "file": "src/modules/api/donations/routes.ts"
-    },
-    {
-      "method": "GET",
-      "path": "/api/earnings",
-      "classification": "PUBLIC(auth-optional, in-handler check required)",
-      "guards": "router:auth-optional, group:rateLimit, group:csrf",
-      "file": "src/modules/api/earnings/routes.ts"
-    },
-    {
-      "method": "GET",
-      "path": "/api/earnings/competition/:id",
-      "classification": "PUBLIC(auth-optional, in-handler check required)",
-      "guards": "router:auth-optional, group:rateLimit, group:csrf",
-      "file": "src/modules/api/earnings/routes.ts"
-    },
-    {
-      "method": "GET",
-      "path": "/api/earnings/history",
-      "classification": "PUBLIC(auth-optional, in-handler check required)",
-      "guards": "router:auth-optional, group:rateLimit, group:csrf",
-      "file": "src/modules/api/earnings/routes.ts"
     },
     {
       "method": "POST",

@@ -11,8 +11,9 @@
  *   creation (type/details frozen); other-user or missing id is 404.
  * - Snapshot frozen: editing/deleting the method afterwards leaves the
  *   old request (snapshot + display pair) byte-identical; deleting the
- *   method NULLs only the link. Legacy free-text withdrawals keep working
- *   (including pre-existing rows through approve→paid).
+ *   method NULLs only the link. Legacy free-text withdrawals keep working.
+ *   Legacy rows pay through approve only when a real ledger hold exists
+ *   (SEC-02-G3); a hold_tx_id string alone is never payable.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import app from '../../src/main';
@@ -181,20 +182,55 @@ describe('R2-P saved payout methods + snapshots', () => {
         expect(after.data.data.request.payout_method_id).toBeNull();
     });
 
-    it('5. legacy rows pay through approve unchanged (pre-existing compat)', async () => {
-        // A legacy row as stored before R2-P (no link, empty snapshot).
+    it('5. legacy rows: a hold_tx_id string without a ledger hold fails closed; a real hold pays unchanged', async () => {
+        // (a) A legacy row as stored before R2-P (no link, empty snapshot) whose
+        // hold_tx_id is only a string: SEC-02-G3 requires a proven ledger hold,
+        // so this row can be closed but never paid.
         await db.prepare(
             `INSERT INTO withdrawal_requests (user_id, amount, amount_cents, fee_cents, status, payment_method, payment_details, hold_tx_id, created_at)
              VALUES (1, 60, 6000, 0, 'requested', 'bank_transfer', 'legacy details', 'test:hold:legacy1', datetime('now'))`,
         ).run();
-        const row = await db.prepare(`SELECT id FROM withdrawal_requests WHERE hold_tx_id = 'test:hold:legacy1'`).first<{ id: number }>();
+        const legacy = await db.prepare(`SELECT id FROM withdrawal_requests WHERE hold_tx_id = 'test:hold:legacy1'`).first<{ id: number }>();
 
-        const approve = await req(db, 'PUT', `/api/admin/withdrawals/${row!.id}/approve`, 'sess-r2p-admin', {
+        const refused = await req(db, 'PUT', `/api/admin/withdrawals/${legacy!.id}/approve`, 'sess-r2p-admin', {
             transaction_id: 'TXN-LEGACY-1', note: 'manual payout',
+        });
+        expect(refused.status).toBe(409);
+        const untouched = await db.prepare(
+            `SELECT status, transaction_id, payout_snapshot FROM withdrawal_requests WHERE id = ?`
+        ).bind(legacy!.id).first<{ status: string; transaction_id: string | null; payout_snapshot: string }>();
+        expect(untouched).toEqual({ status: 'requested', transaction_id: null, payout_snapshot: '{}' });
+
+        const closed = await req(db, 'PUT', `/api/admin/withdrawals/${legacy!.id}/reject`, 'sess-r2p-admin', {
+            reason: 'no ledger hold',
+        });
+        expect(closed.status).toBe(200);
+        expect((await db.prepare(`SELECT status FROM withdrawal_requests WHERE id = ?`)
+            .bind(legacy!.id).first<{ status: string }>())?.status).toBe('rejected');
+
+        // (b) A genuine legacy-style row that does have a real ledger hold
+        // (hold_tx_id deliberately left NULL) still pays with snapshot '{}'.
+        await db.prepare(
+            `INSERT INTO withdrawal_requests (user_id, amount, amount_cents, fee_cents, status, payment_method, payment_details, hold_tx_id, created_at)
+             VALUES (1, 60, 6000, 0, 'requested', 'bank_transfer', 'legacy details', NULL, datetime('now'))`,
+        ).run();
+        const real = await db.prepare(
+            `SELECT id FROM withdrawal_requests WHERE user_id = 1 AND status = 'requested' ORDER BY id DESC LIMIT 1`
+        ).first<{ id: number }>();
+        await new LedgerService(db as unknown as D1Database).withdraw({
+            userId: 1,
+            amountCents: 6000,
+            txId: `withdrawal:hold:${real!.id}`,
+            createdBy: 'user:1',
+            ref: { ref_type: 'withdrawal_request', ref_id: real!.id },
+        });
+
+        const approve = await req(db, 'PUT', `/api/admin/withdrawals/${real!.id}/approve`, 'sess-r2p-admin', {
+            transaction_id: 'TXN-LEGACY-2', note: 'manual payout',
         });
         expect(approve.status).toBe(200);
         expect(approve.data.data.request ?? approve.data.data).toBeTruthy();
-        const paid = await db.prepare(`SELECT status, payout_snapshot FROM withdrawal_requests WHERE id = ?`).bind(row!.id).first<{ status: string; payout_snapshot: string }>();
+        const paid = await db.prepare(`SELECT status, payout_snapshot FROM withdrawal_requests WHERE id = ?`).bind(real!.id).first<{ status: string; payout_snapshot: string }>();
         expect(paid?.status).toBe('paid');
         expect(paid?.payout_snapshot).toBe('{}');
     });

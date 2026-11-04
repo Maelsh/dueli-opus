@@ -88,18 +88,6 @@ export interface AdClick {
 export type ClickRedeemOutcome = 'ok' | 'invalid' | 'expired' | 'reused';
 
 /**
- * User Earnings Interface
- */
-export interface UserEarnings {
-    id: number;
-    user_id: number;
-    competition_id: number;
-    amount: number;
-    status: 'pending' | 'paid';
-    created_at: string;
-}
-
-/**
  * Advertisement Model Class
  * نموذج الإعلانات
  */
@@ -660,105 +648,6 @@ export class AdvertisementModel extends BaseModel<Advertisement> {
      */
     async getCompetitionRevenue(competitionId: number): Promise<number> {
         return (await this.getCompetitionRevenueCents(competitionId)) / 100;
-    }
-}
-
-/**
- * Earnings Model Class
- * نموذج الأرباح
- */
-export class EarningsModel extends BaseModel<UserEarnings> {
-    protected readonly tableName = 'user_earnings';
-
-    constructor(db: D1Database) {
-        super(db);
-    }
-
-    /**
-     * Create - required by BaseModel
-     */
-    async create(data: Partial<UserEarnings>): Promise<UserEarnings> {
-        const now = new Date().toISOString();
-        const result = await this.db.prepare(`
-            INSERT INTO ${this.tableName} (user_id, competition_id, amount, status, created_at)
-            VALUES (?, ?, ?, 'pending', ?)
-        `).bind(data.user_id, data.competition_id, data.amount, now).run();
-
-        if (result.success && result.meta.last_row_id) {
-            return (await this.findById(result.meta.last_row_id))!;
-        }
-        throw new Error('Failed to create earnings');
-    }
-
-    /**
-     * Update - required by BaseModel
-     */
-    async update(id: number, data: Partial<UserEarnings>): Promise<UserEarnings | null> {
-        if (data.status !== undefined) {
-            await this.db.prepare(`
-                UPDATE ${this.tableName} SET status = ? WHERE id = ?
-            `).bind(data.status, id).run();
-        }
-        return this.findById(id);
-    }
-
-    /**
-     * Get user's total earnings
-     */
-    async getUserTotalEarnings(userId: number): Promise<{ pending: number; paid: number; total: number }> {
-        const result = await this.db.prepare(`
-            SELECT 
-                SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as pending,
-                SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) as paid,
-                SUM(amount) as total
-            FROM ${this.tableName}
-            WHERE user_id = ?
-        `).bind(userId).first<{ pending: number; paid: number; total: number }>();
-        return result || { pending: 0, paid: 0, total: 0 };
-    }
-
-    /**
-     * Get user's earnings history
-     */
-    async getUserEarnings(userId: number, limit: number = 20, offset: number = 0): Promise<UserEarnings[]> {
-        const result = await this.db.prepare(`
-            SELECT e.*, c.title as competition_title
-            FROM ${this.tableName} e
-            LEFT JOIN competitions c ON e.competition_id = c.id
-            WHERE e.user_id = ?
-            ORDER BY e.created_at DESC
-            LIMIT ? OFFSET ?
-        `).bind(userId, limit, offset).all<UserEarnings>();
-        return result.results || [];
-    }
-
-    /**
-     * Calculate and distribute earnings for a competition
-     * 80% to competitors (based on rating ratio), 20% to platform
-     */
-    async calculateAndDistribute(
-        competitionId: number,
-        creatorId: number,
-        opponentId: number,
-        creatorRating: number,
-        opponentRating: number,
-        totalRevenue: number
-    ): Promise<void> {
-        const competitorShare = totalRevenue * 0.8; // 80% to competitors
-        const totalRating = creatorRating + opponentRating;
-
-        if (totalRating === 0) {
-            // Equal split if no ratings
-            const half = competitorShare / 2;
-            await this.create({ user_id: creatorId, competition_id: competitionId, amount: half });
-            await this.create({ user_id: opponentId, competition_id: competitionId, amount: half });
-        } else {
-            // Split based on rating ratio
-            const creatorShare = competitorShare * (creatorRating / totalRating);
-            const opponentShare = competitorShare * (opponentRating / totalRating);
-            await this.create({ user_id: creatorId, competition_id: competitionId, amount: creatorShare });
-            await this.create({ user_id: opponentId, competition_id: competitionId, amount: opponentShare });
-        }
     }
 }
 

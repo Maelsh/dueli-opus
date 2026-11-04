@@ -112,6 +112,8 @@
 
 **الإجمالي: 3 EVIDENCED (C2, C3, C6) · 4 EQUIVALENT-EVIDENCED (L1, C1, C4, C7) · 3 GAP (L2→G2، L3→G3، C5→G2).**
 
+> **تحديث UNIT41 (2026-11-04):** الفجوات الثلاث G1/G2/G3 **أُغلقت بالكود والاختبارات** — انظر «مطابقة UNIT41 — إغلاق فجوات SEC-02» أدناه. التصنيف أعلاه تاريخي على أساس UNIT40 ولا يُقرأ كحالة حالية.
+
 > **أخطر بند في المشروع.** لا تُصلح المجموعة ج قبله.
 
 ### مطابقة UNIT40 — تصنيف SEC-02 بالدليل (2026-11-03)
@@ -129,20 +131,20 @@
 
 | البند | التصنيف | الدليل (file:line) | الاختبار / النتيجة |
 |---|---|---|---|
-| L1 — `withdrawn` لحظة الطلب | EQUIVALENT-EVIDENCED | `src/models/WithdrawalRequestModel.ts:200-207`؛ لا كتابة في `user_earnings` (`:12`)؛ النموذج القديم `src/models/EarningsModel.ts` بلا مستورد | كل اختبارات الحزمتين (7 + 9) = **16/16** |
-| L2 — `on_hold` مهجور | **GAP — SEC-02-G2** | `migrations/0001_initial_schema.sql:273-281`؛ القراءة `src/controllers/WithdrawalController.ts:68-83` | مسبار «G2» (ضمن **4/4**) |
-| L3 — لا ذرّية | **GAP — SEC-02-G3** | `WithdrawalRequestModel.ts:187-197` ثم `:200-207` ثم `:222`؛ `:307-308` | مسبار «G3a» و«G3b» (ضمن **4/4**) |
+| L1 — `withdrawn` لحظة الطلب | EQUIVALENT-EVIDENCED | `src/models/WithdrawalRequestModel.ts:200-207`؛ لا كتابة في `user_earnings` (`:12`)؛ النموذج القديم `src/models/EarningsModel.ts` كان بلا مستورد (حُذف في UNIT41) | كل اختبارات الحزمتين (7 + 9) = **16/16** |
+| L2 — `on_hold` مهجور | **GAP — SEC-02-G2** (أُغلقت في UNIT41) | `migrations/0001_initial_schema.sql:273-281`؛ القراءة `src/controllers/WithdrawalController.ts:68-83` | مسبار «G2» (ضمن **4/4**) |
+| L3 — لا ذرّية | **GAP — SEC-02-G3** (أُغلقت في UNIT41) | `WithdrawalRequestModel.ts:187-197` ثم `:200-207` ثم `:222`؛ `:307-308` | مسبار «G3a» و«G3b» (ضمن **4/4**) |
 | C1 — ثابت الرصيد | EQUIVALENT-EVIDENCED | `src/lib/services/LedgerService.ts:261-278` | `ledger-invariant` 1، 2 |
 | C2 — تجاوز الرصيد | EVIDENCED | `LedgerService.ts:210-237` | `withdrawals-lifecycle` 1 + `ledger-invariant` 3 |
 | C3 — تزامن | EVIDENCED | `LedgerService.ts:210-237` | `withdrawals-lifecycle` 2 + `ledger-invariant` 5 |
 | C4 — طلب ← رفض | EQUIVALENT-EVIDENCED | `WithdrawalRequestModel.ts:307-319` | `withdrawals-lifecycle` 5 |
-| C5 — `withdrawn`/`on_hold` بعد الموافقة | **GAP — SEC-02-G2** | `WithdrawalController.ts:68-83`؛ `WithdrawalRequestModel.ts:231-254` | مسبار «G2» |
+| C5 — `withdrawn`/`on_hold` بعد الموافقة | **GAP — SEC-02-G2** (أُغلقت في UNIT41) | `WithdrawalController.ts:68-83`؛ `WithdrawalRequestModel.ts:231-254` | مسبار «G2» |
 | C6 — `available` سالب | EVIDENCED | `LedgerService.ts:210-237` | `ledger-invariant` 3، 5 |
 | C7 — سطر لكل حركة | EQUIVALENT-EVIDENCED | `LedgerService.ts:103-162`؛ `WithdrawalRequestModel.ts:231-254` | `ledger-invariant` 1، 4 + `withdrawals-lifecycle` 6 |
 
 **الإجمالي:** 3 EVIDENCED · 4 EQUIVALENT-EVIDENCED · 3 GAP.
 
-#### الفجوات المفتوحة (لا تُصلح في UNIT40)
+#### الفجوات المفتوحة في UNIT40 (أُغلقت كلها في UNIT41 — محفوظة كسجل تاريخي)
 
 **SEC-02-G1 — خارج البنود العشرة — `/api/earnings` معطّل:**
 - `GET /api/earnings` ⇒ **500** `{"error":"Failed to fetch earnings"}` وسجل `no such column: status` (مسبار «G1»). السبب: `AdvertisementModel.EarningsModel` يستعلم عن `status` و`amount` في `src/models/AdvertisementModel.ts:683-685` و`:708-718`، و`competition_id`/`created_at` في `:723-731` — وكلها غير موجودة في `user_earnings` (`migrations/0001_initial_schema.sql:273-281`). المسار مربوط في `src/main.ts:198`.
@@ -151,7 +153,7 @@
 - **لا إصلاح في UNIT40.** الإصلاح يحتاج قرار مالك: حذف النقاط الميتة أو إعادة كتابتها على `ledger_entries`.
 
 **SEC-02-G2 — `on_hold` و`withdrawn` غير محدَّثين:**
-- `user_earnings` يُقرأ في `WithdrawalController.ts:68-83` لكن لا يُكتب في المسار النشط؛ كل كتاباته في `src/models/EarningsModel.ts` الميت.
+- `user_earnings` يُقرأ في `WithdrawalController.ts:68-83` (السطور التاريخية قبل UNIT41) لكن لا يُكتب في المسار النشط؛ كل كتاباته كانت في `src/models/EarningsModel.ts` الميت (حُذف في UNIT41).
 - الأثر المثبت (مسبار «G2»): بعد حجز 60$، `/api/withdrawals` يعيد `available: 4000` (من الدفتر) مع `on_hold: 0` و`withdrawn: 0` (من الصف القديم). المستخدم يرى «قيد المعالجة = 0» رغم أن المال محجوز، و`withdrawn` يبقى صفراً بعد الصرف.
 - ليس فقدان مال؛ عيب عرض/تقارير. الإصلاح: إما حساب `on_hold`/`withdrawn` من الدفتر، أو كتابة الحقول في نفس الحركة — قرار مالي خارج نطاق هذه الوثيقة.
 
@@ -167,6 +169,59 @@
 - المسبار `tests/api/tmp-unit40-gap-probe.test.ts` كان مؤقتاً: **4/4** ثم حُذف قبل الالتزام؛ لا ملف اختبار جديد في هذا الـPR.
 - الاختبارات الملتزمة أعلاه تعمل على `SqliteD1` (محرك SQL الحقيقي) لكنها ليست إنتاجاً. لا وصول إنتاج ولا كتابة إنتاج في UNIT40.
 - `EVIDENCED` هنا يعني «مثبت على BASE المذكور»، لا «مغلق نهائياً»: أي تراجع لاحق في الملفات نفسها يعيد الفجوة.
+
+---
+
+### مطابقة UNIT41 — إغلاق فجوات SEC-02 (2026-11-04)
+
+> **الأساس:** `7b90838c619462ea40f0750d4bcff78f511b4670` (دمج PR #155 / UNIT40). **الحالة:** LOCAL VERIFIED / REMOTE PENDING.
+> **النطاق:** G3 ثم G2 ثم G1 فقط. لم يُعَد فتح 8.A / 8.D / #94 / 36.1 ولا أي مسار مالي مغلق آخر.
+> **قرار G1 القيادي:** المسارات الثلاثة ميتة (500، صفر مستهلك حي؛ `earnings-page` يقرأ `/api/withdrawals`) ⇒ حذفها وحذف كود `EarningsModel` الميت. تم التحقق من عدم وجود مستهلك قبل الحذف.
+
+**SEC-02-G3 — مغلقة (fail-closed + استرداد حتمي من الدفتر):**
+- `approve()` لم يعد ينتقل إلى `paid` بلا إثبات حجز قائم. الحارس داخل عبارة `UPDATE` نفسها في `src/models/WithdrawalRequestModel.ts:254-293`: صافي قيود المستخدم لهذا المرجع (`ref_type='withdrawal_request'`, `ref_id`) يجب أن يغطي `amount_cents + fee_cents`. بعد أي تحرير يصبح الصافي 0 فيفشل الحارس. طلب بلا حجز ⇒ 0 صفوف متغيرة ⇒ 409، والحالة والرصيد لا يتغيران، ولا يُكتب تدقيق دفع.
+- `releaseHold()` لم يعد يعتمد على `hold_tx_id` ولا يعود مبكراً عندما يكون `NULL`. يشتق الحجز من `ledger_entries` (دائن حساب المستخدم بنفس المرجع) في `WithdrawalRequestModel.ts:355-379`، ويعكس **مبلغ الحجز الفعلي** (بما فيه الرسوم) لا `row.amount_cents`. إعادة التحرير بنفس `tx_id` الحتمي ⇒ no-op (M4).
+- صف `requested` بلا حجز صار قابلاً للرفض/الإلغاء بأمان (تغيير حالة فقط، بلا قيد)، ومستحيل الدفع.
+- الاختبارات الملتزمة: `tests/api/sec-02-g3-crash-windows.test.ts` (7 اختبارات: نافذة أ approve/reject/cancel، نافذة ب مع `hold_tx_id=NULL`، رسم غير صفري، approve على حجز قائم، ومنع الدفع بعد تحرير).
+
+**SEC-02-G2 — مغلقة (اشتقاق من الدفتر حصراً):**
+- `WithdrawalRequestModel.getWalletSummary()` في `src/models/WithdrawalRequestModel.ts:412-445` يشتق: `available` من `LedgerService.balance()`، و`on_hold` = صافي الحجز الموجب للطلبات غير المدفوعة، و`withdrawn` = صافي الحجز للطلبات `paid`، و`pending = 0`، و`total = available + on_hold + withdrawn`. كل القيم بالسنت (نفس وحدة `available` الحالية).
+- `WithdrawalController.getMyWithdrawals()` في `src/controllers/WithdrawalController.ts:56-79` يستدعي النموذج فقط؛ أُزيل استعلام `user_earnings` من المتحكم. لا كتابة مزدوجة على `user_earnings`.
+- الحالة `rejected` التي لم يصلها قيد التحرير بعد (نافذة انهيار) تظهر في `on_hold` ما دام المال محجوزاً فعلاً، ثم تصبح 0 بعد الاستشفاء — لا يختفي مال من العرض.
+- الاختبارات: `tests/api/sec-02-g2-wallet-summary.test.ts` (6 اختبارات: تجاهل `user_earnings` القديمة، requested/approved، rejected، paid مرة واحدة، حالة انهيار، ومسار `/api/withdrawals`).
+
+**SEC-02-G1 — مغلقة (حذف الميت):**
+- حُذف `GET /api/earnings` و`/history` و`/competition/:id` مع ملف `src/modules/api/earnings/routes.ts`، وحُذف `src/models/EarningsModel.ts` و`AdvertisementModel.EarningsModel` و`UserEarnings` ومستورد `AdminController.ts:8` الميت. جرد المسارات أُعيد توليده: **262 → 259** (`docs/14-ROUTE-INVENTORY.md`).
+- لا مستهلك حي: `src/modules/pages/earnings-page.ts:228-229` يقرأ `/api/withdrawals`، والصفحة تعمل.
+- الاختبار: `tests/api/sec-02-g1-dead-earnings-routes.test.ts` (النقاط الثلاث 404 مقصود بلا أثر مالي، و`/api/withdrawals` + صفحة `/earnings` بلا انحدار).
+
+#### حزمة اختبارات SEC-02 (SEC-02 test bundle)
+
+الاسم المرجعي في هذا المستند: **حزمة اختبارات SEC-02**. ملفاتها:
+
+1. `tests/api/ledger-invariant.test.ts`
+2. `tests/api/withdrawals-lifecycle.test.ts`
+3. `tests/api/sec-02-g1-dead-earnings-routes.test.ts`
+4. `tests/api/sec-02-g2-wallet-summary.test.ts`
+5. `tests/api/sec-02-g3-crash-windows.test.ts`
+6. `tests/api/withdrawal-path-smoke.test.ts`
+
+أمر واحد:
+
+```bash
+npx vitest run tests/api/ledger-invariant.test.ts tests/api/withdrawals-lifecycle.test.ts tests/api/sec-02-g1-dead-earnings-routes.test.ts tests/api/sec-02-g2-wallet-summary.test.ts tests/api/sec-02-g3-crash-windows.test.ts tests/api/withdrawal-path-smoke.test.ts
+```
+
+**النتيجة على HEAD النهائي:** 6 ملفات / **32 اختباراً خضراء** (2026-11-04). الـsmoke مسار كامل: طلب ⇒ حجز صحيح ⇒ رفض يعيد الكل ⇒ موافقة ⇒ paid مرة واحدة ⇒ تجاوز رصيد 422 بلا أثر.
+
+#### حدود الإثبات (G1–G3)
+
+- كل الاختبارات على `SqliteD1` بترحيلات الإنتاج الحقيقية — لا إنتاج ولا حسابات حية ولا مال حقيقي.
+- الوحدة سنت في كل حقول المحفظة؛ `withdrawn` يساوي مبلغ الحجز الفعلي (`amount_cents + fee_cents`). سياسة الرسوم الحالية صفر (`WITHDRAWAL_FEE_CENTS = 0`)، لذا يساوي الأصل اليوم.
+- الصفوف السابقة للدفتر (legacy) بلا قيود تساهم 0 في `on_hold`/`withdrawn`، ولا يمكن دفعها (approve fail-closed) لكن يمكن رفضها/إلغاؤها.
+- القيود اليتيمة بلا صف طلب (أو لطلب محذوف) لا تدخل مجاميع المحفظة.
+- `pending = 0` عمداً: لا مصدر قيود «معلّقة» في العقد الحالي.
+- هذا إثبات محلي (LOCAL VERIFIED)؛ المراجعة المالية REMOTE وما بعد الدمج تبقى مطلوبة.
 
 ---
 

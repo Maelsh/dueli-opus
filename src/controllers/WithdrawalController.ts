@@ -20,7 +20,6 @@ import { BaseController } from './base/BaseController';
 import { WithdrawalRequestModel, WithdrawalRequestError } from '../models/WithdrawalRequestModel';
 import { PaymentMethodModel, buildPayoutSnapshot } from '../models/PaymentMethodModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
-import { LedgerService } from '../lib/services/LedgerService';
 import { EventPusher } from '../lib/services/EventPusher';
 
 export class WithdrawalController extends BaseController {
@@ -63,24 +62,14 @@ export class WithdrawalController extends BaseController {
             const offset = this.getQueryInt(c, 'offset', 0);
 
             const model = new WithdrawalRequestModel(c.env.DB);
-            const ledger = new LedgerService(c.env.DB);
 
-            const [requests, earnings, available] = await Promise.all([
+            const [requests, wallet] = await Promise.all([
                 model.getForUser(user.id, limit, offset),
-                c.env.DB.prepare(
-                    `SELECT available, pending, on_hold, withdrawn, total FROM user_earnings WHERE user_id = ?`
-                ).bind(user.id).first<{ available: number; pending: number; on_hold: number; withdrawn: number; total: number }>(),
-                ledger.balance(`user:${user.id}`)
+                model.getWalletSummary(user.id)
             ]);
 
             return this.success(c, {
-                wallet: {
-                    available:  available,
-                    pending:    earnings?.pending    ?? 0,
-                    on_hold:    earnings?.on_hold    ?? 0,
-                    withdrawn:  earnings?.withdrawn  ?? 0,
-                    total:      earnings?.total      ?? 0
-                },
+                wallet,
                 requests,
                 meta: { limit, offset }
             });
