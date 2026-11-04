@@ -63,14 +63,18 @@
 
 ## SEC-02 🔴 تصحيح المحاسبة وفرض الذرّية
 
+> **الحالة الحالية (مطابقة UNIT40 — 2026-11-03):** هذا القسم تاريخي كما كُتب أول مرة ويبقى للسياق. التنفيذ النشط ليس `0011_financial_integrity.sql` ولا جدول `financial_ledger`؛ هو `migrations/0019_ledger_entries.sql` + `0021_withdrawals_lifecycle.sql` + `0038_withdrawal_payout_snapshot.sql` مع `LedgerService`، وحقول `available/pending/on_hold/withdrawn` في `user_earnings` **لم تعد مسار الرصيد**. **نتيجة المطابقة: 3 EVIDENCED · 4 EQUIVALENT-EVIDENCED · 3 GAP — البند يبقى مفتوحاً** (G1/G2/G3 أدناه).
+
 **الملف:** `src/models/WithdrawalRequestModel.ts:110-210`
 **المخطط:** `migrations/0001_initial_schema.sql:273`
 
-**المشكلة — ثلاث طبقات:**
+**المشكلة — ثلاث طبقات (وصف تاريخي):**
 
 1. **خلل محاسبي:** `withdrawn` تُزاد لحظة **الطلب** لا لحظة **الصرف** (سطر 129). فالطلب المعلّق يُحتسب مالاً مسحوباً. و`reject`/`cancel` تعكسان بالطرح — فـ`withdrawn` ليست حقلاً تراكمياً بل عدّاداً متذبذباً، وأي تقرير مالي مبني عليها خاطئ.
 2. **حقل مهدور:** `on_hold` معرَّف في المخطط ولا يُستخدم — وهو **بالضبط** الحقل المطلوب للطلبات المعلّقة.
 3. **لا ذرّية:** خطوتان منفصلتان (خصم، ثم إنشاء) مع rollback يدوي في `catch`. موت الـWorker بينهما ⇒ **خُصم المال ولا يوجد طلب**. مال يتلاشى بلا خطأ ولا سجل.
+
+> لا تُقرأ هذه الطبقات كوصف للكود الحالي؛ ما تحقق من كل طبقة بالدليل في «مطابقة UNIT40» أسفل معايير القبول.
 
 **التوجيه:**
 
@@ -83,7 +87,7 @@
 | رفض | `+ amount` | `− amount` | — |
 | إلغاء المستخدم | `+ amount` | `− amount` | — |
 
-خطوات التنفيذ:
+**خطوات التنفيذ الأصلية (تاريخية — نُفِّذت ببديل مكافئ):**
 
 1. **ترحيل جديد** `migrations/0011_financial_integrity.sql`:
    - قيود `CHECK (available >= 0 AND on_hold >= 0 AND withdrawn >= 0)`
@@ -94,16 +98,75 @@
 4. `approve()` تُنفّذ التحويل المالي (حالياً تغيّر الحالة فقط).
 5. اقرأ الرصيد وحدّثه **داخل** نفس الـbatch بشرط `WHERE available >= ?` — لا فحص ثم تحديث (سباق).
 
-**معيار القبول:**
-- [ ] اختبار الثابت `total == available + pending + on_hold + withdrawn` بعد **كل** حركة
-- [ ] اختبار: سحب يتجاوز الرصيد ⇒ رفض، والرصيد لم يتغيّر
-- [ ] اختبار: طلبان متزامنان بمجموع > الرصيد ⇒ أحدهما فقط ينجح
-- [ ] اختبار: طلب ← رفض ⇒ الرصيد يعود لقيمته الابتدائية بالضبط
-- [ ] اختبار: طلب ← موافقة ⇒ `withdrawn` تزيد **مرة واحدة**، `on_hold` تعود صفراً
-- [ ] اختبار: `available` لا يصبح سلبياً في أي مسار
-- [ ] كل حركة كتبت سطراً في `financial_ledger`
+> **تاريخي:** لم تُنشأ `migrations/0011_financial_integrity.sql` ولا جدول `financial_ledger`. البديل النشط هو دفتر `ledger_entries` (0019) + دورة السحب (0021) + لقطة الصرف (0038)، والحجز/التحرير عبر `LedgerService` بـ`tx_id`.
+
+**معيار القبول (محدَّث بمطابقة UNIT40):**
+
+- [x] **C1 — EQUIVALENT-EVIDENCED:** الثابت الفعلي هو `Σdebit − Σcredit = 0` على `ledger_entries` (لا مجموع حقول `user_earnings`). الدليل: `src/lib/services/LedgerService.ts:261-278`. الاختبار: `tests/api/ledger-invariant.test.ts` ← «1. every movement writes a balanced pair» و«2. verifyInvariant() = 0 after 100 random movements» — نجحا ضمن **16/16**.
+- [x] **C2 — EVIDENCED:** سحب يتجاوز الرصيد ⇒ رفض `insufficient_balance` والرصيد لم يتغيّر. الدليل: `LedgerService.ts:210-237` (INSERT شرطي). الاختبار: `tests/api/withdrawals-lifecycle.test.ts` ← «1. withdraw more than balance…» + `ledger-invariant` ← «3. withdrawal exceeding balance…» — **16/16**.
+- [x] **C3 — EVIDENCED:** طلبان متزامنان ⇒ واحد فقط ينجح. الدليل: نفس حارس SQL الذري `LedgerService.ts:210-237`. الاختبار: `withdrawals-lifecycle` ← «2. two concurrent full-balance withdrawals…» + `ledger-invariant` ← «5. 20 concurrent movements…» — **16/16**.
+- [x] **C4 — EQUIVALENT-EVIDENCED:** طلب ← رفض ⇒ رصيد المستخدم في الدفتر يعود إلى قيمته الابتدائية بالضبط ويُكتب قيد تحرير عكسي (debit للمستخدم + credit للمنصة) بدل تصفير حقل `on_hold`. الدليل: `WithdrawalRequestModel.ts:307-319`. الاختبار: `withdrawals-lifecycle` ← «5. reject ⇒ full balance restored…» — **16/16**.
+- [ ] **C5 — GAP (SEC-02-G2):** لا وجود لعدّاد `on_hold`/`withdrawn` محدَّث: `user_earnings` لا يُكتب في المسار النشط، و`/api/withdrawals` يقرأ `on_hold` و`withdrawn` من الصف القديم فيعيدهما صفراً. الدليل: `migrations/0001_initial_schema.sql:273-281` + `src/controllers/WithdrawalController.ts:68-83`. المسبار: `tests/api/tmp-unit40-gap-probe.test.ts` ← «G2» — **4/4** (حُذف بعد التشغيل).
+- [x] **C6 — EVIDENCED:** `available` لا يصبح سلبياً: الشرط في SQL نفسه (`WHERE (SELECT SUM…) >= ?`) وليس فحص JS. الدليل: `LedgerService.ts:210-237`. الاختبار: `ledger-invariant` ← «3» و«5» — **16/16**.
+- [x] **C7 — EQUIVALENT-EVIDENCED:** كل حركة **مالية** تُنتج قيدين متوازنين في `ledger_entries` (لا `financial_ledger`)، والموافقة/الصرف تغيير حالة بلا قيد مالي جديد (المال حُجز عند الطلب). الدليل: `WithdrawalRequestModel.ts:231-254` (approve بلا ledger) + `LedgerService.ts:103-162`. الاختبار: `ledger-invariant` ← «1» و«4» + `withdrawals-lifecycle` ← «6» — **16/16**.
+
+**الإجمالي: 3 EVIDENCED (C2, C3, C6) · 4 EQUIVALENT-EVIDENCED (L1, C1, C4, C7) · 3 GAP (L2→G2، L3→G3، C5→G2).**
 
 > **أخطر بند في المشروع.** لا تُصلح المجموعة ج قبله.
+
+### مطابقة UNIT40 — تصنيف SEC-02 بالدليل (2026-11-03)
+
+> **نطاق:** توثيق فقط. لا كود ولا مخطط ولا اختبار ملتزم ولا إصلاح مال في هذه الوحدة. لم يُعَد فتح أي مسار مالي مغلق (8.A / 8.D / #94 / 36.1)، ولم يوجد عيب مثبت فيها.
+> **الأساس:** `062600e5fce53921483f56d94d55069de4ed6847` (دمج PR #154 / UNIT39).
+> **الطريقة:** قراءة المسار النشط والترحيلات، ثم تشغيل الاختبارات المسمّاة أدناه على هذا الأساس.
+
+**الاصطلاحات:**
+- `EVIDENCED`: السلوك المطلوب موجود حرفياً ويثبته اختبار نُفِّذ.
+- `EQUIVALENT-EVIDENCED`: السلوك محقَّق بمعمارية مختلفة مثبتة (دفتر أستاذ بدل حقول الرصيد القديمة)، مع فرق موثق.
+- `GAP`: غير محقَّق أو غير قابل للإثبات؛ يبقى مفتوحاً.
+
+#### جدول التصنيف الموحَّد (10 بنود)
+
+| البند | التصنيف | الدليل (file:line) | الاختبار / النتيجة |
+|---|---|---|---|
+| L1 — `withdrawn` لحظة الطلب | EQUIVALENT-EVIDENCED | `src/models/WithdrawalRequestModel.ts:200-207`؛ لا كتابة في `user_earnings` (`:12`)؛ النموذج القديم `src/models/EarningsModel.ts` بلا مستورد | كل اختبارات الحزمتين (7 + 9) = **16/16** |
+| L2 — `on_hold` مهجور | **GAP — SEC-02-G2** | `migrations/0001_initial_schema.sql:273-281`؛ القراءة `src/controllers/WithdrawalController.ts:68-83` | مسبار «G2» (ضمن **4/4**) |
+| L3 — لا ذرّية | **GAP — SEC-02-G3** | `WithdrawalRequestModel.ts:187-197` ثم `:200-207` ثم `:222`؛ `:307-308` | مسبار «G3a» و«G3b» (ضمن **4/4**) |
+| C1 — ثابت الرصيد | EQUIVALENT-EVIDENCED | `src/lib/services/LedgerService.ts:261-278` | `ledger-invariant` 1، 2 |
+| C2 — تجاوز الرصيد | EVIDENCED | `LedgerService.ts:210-237` | `withdrawals-lifecycle` 1 + `ledger-invariant` 3 |
+| C3 — تزامن | EVIDENCED | `LedgerService.ts:210-237` | `withdrawals-lifecycle` 2 + `ledger-invariant` 5 |
+| C4 — طلب ← رفض | EQUIVALENT-EVIDENCED | `WithdrawalRequestModel.ts:307-319` | `withdrawals-lifecycle` 5 |
+| C5 — `withdrawn`/`on_hold` بعد الموافقة | **GAP — SEC-02-G2** | `WithdrawalController.ts:68-83`؛ `WithdrawalRequestModel.ts:231-254` | مسبار «G2» |
+| C6 — `available` سالب | EVIDENCED | `LedgerService.ts:210-237` | `ledger-invariant` 3، 5 |
+| C7 — سطر لكل حركة | EQUIVALENT-EVIDENCED | `LedgerService.ts:103-162`؛ `WithdrawalRequestModel.ts:231-254` | `ledger-invariant` 1، 4 + `withdrawals-lifecycle` 6 |
+
+**الإجمالي:** 3 EVIDENCED · 4 EQUIVALENT-EVIDENCED · 3 GAP.
+
+#### الفجوات المفتوحة (لا تُصلح في UNIT40)
+
+**SEC-02-G1 — خارج البنود العشرة — `/api/earnings` معطّل:**
+- `GET /api/earnings` ⇒ **500** `{"error":"Failed to fetch earnings"}` وسجل `no such column: status` (مسبار «G1»). السبب: `AdvertisementModel.EarningsModel` يستعلم عن `status` و`amount` في `src/models/AdvertisementModel.ts:683-685` و`:708-718`، و`competition_id`/`created_at` في `:723-731` — وكلها غير موجودة في `user_earnings` (`migrations/0001_initial_schema.sql:273-281`). المسار مربوط في `src/main.ts:198`.
+- `/history` و`/competition/:id` تستخدمان نفس الأعمدة المفقودة (`src/modules/api/earnings/routes.ts:55-56`، `:82-85`)؛ لم يُشغَّلا في المسبار، والاستنتاج من الاستعلام نفسه لا من تشغيل.
+- لا عميل يستدعي هذه النقاط: `src/modules/pages/earnings-page.ts:228-229` يقرأ `/api/withdrawals`. الأثر الحالي API ميت، لا واجهة مستخدم.
+- **لا إصلاح في UNIT40.** الإصلاح يحتاج قرار مالك: حذف النقاط الميتة أو إعادة كتابتها على `ledger_entries`.
+
+**SEC-02-G2 — `on_hold` و`withdrawn` غير محدَّثين:**
+- `user_earnings` يُقرأ في `WithdrawalController.ts:68-83` لكن لا يُكتب في المسار النشط؛ كل كتاباته في `src/models/EarningsModel.ts` الميت.
+- الأثر المثبت (مسبار «G2»): بعد حجز 60$، `/api/withdrawals` يعيد `available: 4000` (من الدفتر) مع `on_hold: 0` و`withdrawn: 0` (من الصف القديم). المستخدم يرى «قيد المعالجة = 0» رغم أن المال محجوز، و`withdrawn` يبقى صفراً بعد الصرف.
+- ليس فقدان مال؛ عيب عرض/تقارير. الإصلاح: إما حساب `on_hold`/`withdrawn` من الدفتر، أو كتابة الحقول في نفس الحركة — قرار مالي خارج نطاق هذه الوثيقة.
+
+**SEC-02-G3 — نافذتا انهيار بلا استرداد:**
+- التسلسل: إنشاء صف الطلب `WithdrawalRequestModel.ts:187-197` ← حجز الدفتر `:200-207` ← تحديث `hold_tx_id` `:222`. ثلاث كتابات منفصلة، لا `db.batch` واحداً.
+- نافذة (أ): موت بعد إنشاء الصف وقبل الحجز ⇒ طلب `requested` بلا حجز. `approve()` `:231-254` يغيّر الحالة إلى `paid` بلا أي قيد مالي ⇒ **صرف بلا خصم** (مسبار «G3a»: الصف أصبح `paid` ورصيد المستخدم 10000 بلا قيود).
+- نافذة (ب): موت بعد الحجز وقبل `hold_tx_id` ⇒ `releaseHold` يعود مبكراً `:307-308`، فلا يُكتب قيد التحرير عند الرفض/الإلغاء ⇒ **مال محجوز إلى الأبد** (مسبار «G3b»: بعد الرفض بقي الرصيد 4000 وصفر قيود تحرير).
+- لا مهمة استرداد أو مصالحة: البحث عن `hold_tx_id` لا يجد أي مستهلك خارج النموذج/الترحيل/اختبار واحد.
+- **أخطر فجوة مالية متبقية.** الإصلاح يحتاج معاملة ذرية واحدة أو مهمة تعويض/مصالحة — ليس في UNIT40.
+
+#### حدود الإثبات
+
+- المسبار `tests/api/tmp-unit40-gap-probe.test.ts` كان مؤقتاً: **4/4** ثم حُذف قبل الالتزام؛ لا ملف اختبار جديد في هذا الـPR.
+- الاختبارات الملتزمة أعلاه تعمل على `SqliteD1` (محرك SQL الحقيقي) لكنها ليست إنتاجاً. لا وصول إنتاج ولا كتابة إنتاج في UNIT40.
+- `EVIDENCED` هنا يعني «مثبت على BASE المذكور»، لا «مغلق نهائياً»: أي تراجع لاحق في الملفات نفسها يعيد الفجوة.
 
 ---
 
@@ -392,3 +455,152 @@
 > **الأصل:** كل ثغرة تُصلَح تُقفل بفحص آلي. البند الذي لا فحص له يعود.
 >
 > **درس UNIT30.3:** لا تستخدم `grep` على تعليقات/نصوص لتأكيد غياب نمط أمني — استخدم فحص AST على الكود التنفيذي، وإلا فالفحص إما يعطي إنذاراً كاذباً (SEC-05/10) أو لا يستطيع أن يصبح مانعاً (SEC-07/08/11). الأدلة: `tests/dev-tools/sec-guards-checker.test.ts` + `dev-tools/check-sec-guards.mjs`.
+
+---
+
+# ملحق UNIT40 — دليل المالك: `/admin`، حسابات التجربة، والبيانات التخليقية
+
+> **الغرض:** مرجع واحد للمالك/القائد قبل UNIT42: أين تُدار المنصة، مَن الحسابات التجريبية، وكيف تُفصل عن البيانات التخليقية.
+> **قاعدة الإثبات:** كل بند إما «متحقَّق من المستودع» مع `file:line`، أو **`NOT VERIFIED`** ولا يُخترع بديل. تاريخ التحقق: 2026-11-03، BASE `062600e5fce53921483f56d94d55069de4ed6847`.
+> **تحذير H8:** لا تدوير كلمة مرور ولا حذف حساب ولا تغيير اعتماد في UNIT40. التنفيذ **فقط** في UNIT42 بعد 41 و41.1 و42.1، وبموافقة مالك مكتوبة. التصنيف الحرفي: `OPEN OWNER ACTION — DEFERRED TO UNIT42 CUTOVER`.
+
+## 1. `/admin` — صفحة واحدة بأقسام، لا تبويبات
+
+**المسار:** `GET /admin` (`src/main.ts:408`). **الحارس الخادمي:** جلسة غير مشرف ⇒ 403 فوراً بلا هيكل لوحة (`src/modules/pages/admin-dashboard-page.ts:20-40`). **حارس الـAPI:** `is_admin === 1` (`src/controllers/AdminController.ts:29-32`).
+
+**ليست تبويبات عميل:** الصفحة HTML واحد يعرض كل الأقسام متتابعة؛ لا `role="tablist"` ولا تبديل أقسام. الأقسام الفعلية (بالترتيب):
+
+| # | القسم | الأسطر | ملاحظة |
+|---|---|---|---|
+| 1 | بطاقات الإحصاء (مستخدمون/منافسات/تحكيمات/حملات) | 49-66 | تُملأ من `/api/admin/stats` |
+| 2 | حسابي: اسم المستخدم/البريد/كلمة المرور | 68-90 | تدوير اعتماد المشرف من هنا |
+| 3 | تسعير الإعلانات (بلد/مضاعفات/مدة) | 92-146 | قرارات 36.1 |
+| 4 | إعلانات Dueli التعريفية | 148-184 | ينشئ `is_house=1` عبر `/api/admin/ads/house` (حد 3 نشطة) |
+| 5 | الملخص المالي + الديموغرافيا | 186-195 | |
+| 6 | أدوار الإدارة + سجل التدقيق | 197-207 | منح/سحب SuperAdmin فقط |
+| 7 | المنافسات الأكثر تفاعلاً | 209-212 | |
+| 8 | الوثائق المُدارة (H9) | 214-241 | مسودة/منشور، معاينة AR/EN |
+| 9 | صندوق الدعم (H6) | 243-275 | نفس خيوط `/messages?tab=admin` |
+| 10 | نموذج منح دور (مخفي يظهر بالزر) | 277-284 | SuperAdmin فقط |
+| 11 | قائمة السحب | 286-302 | طلبات/مدفوع/مرفوض |
+| 12 | نافذتا الموافقة والرفض | 304-332 | تتطلب `transaction_id` عند الموافقة |
+| 13 | الفيتو الشفاف (إيقاف/استعادة بث) | 334-372 | لا يحذف المنافسة |
+
+**حدود مؤكدة:** عناوين «Withdrawal Queue» و«Approve/Reject» و«Transparent Admin Veto» مكتوبة إنجليزية ثابتة في الصفحة (الأسطر 291، 307، 323، 338) وليست من `t()`؛ عيب عرض فقط، لم يُصلح في UNIT40.
+
+## 2. `/messages?tab=admin`
+
+- المسار `GET /messages` (`src/main.ts:381`)؛ تبويبان مستقلان: شخصي وإداري (`messages-page.ts:30-40`).
+- `?tab=admin` يفتح تبويب الإدارة مباشرة (`:230-231`)، والتبديل يحدّث الرابط (`:849-870`).
+- عدّاد غير مقروء مستقل لكل تبويب (`:34`، `:39`).
+- الإشراف: أي مشرف (`is_admin=1`) يقرأ؛ الرد الرسمي SuperAdmin أو Moderator فقط؛ Auditor للقراءة فقط (`SupportController.ts:46-58`).
+- نفس صندوق الوارد يظهر داخل `/admin` قسم 9؛ لا نظامين.
+
+## 3. `/settings`
+
+**المسار:** `GET /settings` (`src/main.ts:383`). الأقسام المتحققة من `src/modules/pages/settings-page.ts`:
+
+| القسم | الأسطر | ملاحظة |
+|---|---|---|
+| الملف الشخصي (اسم العرض/النبذة) | 152-172 | |
+| اللغة والبلد | 174-203 | تغيير اللغة يعيد التوجيه |
+| الإشعارات (بريد/دفع) | 205-225 | |
+| كلمة المرور | 251-299 | تختفي لحساب OAuth بلا كلمة مرور ويظهر رابط الاستعادة |
+| حفظ الإعدادات | 229-234 | |
+| منطقة الخطر (حذف الحساب) | 236-247 | حذف ذاتي فقط |
+
+**تدوير كلمة مرور المشرف من `/settings`:** قسم «كلمة المرور» في الجدول أعلاه ← «Current / New (8+) / Confirm» ← «Update password». تغيير كلمة المرور يقتل **كل** جلسات الحساب ويعيد المصادقة (`tests/api/r2-a-admin.test.ts` ← «4. password change kills all sessions (reauth)…»؛ **32/32** مع حزمة الدليل).
+
+## 4. اعتماد المشرف (H8) — بيان صريح
+
+| الحقل | القيمة | المصدر |
+|---|---|---|
+| Username | `admin` | `WORKLOG.md` §UNIT36 (PENDING UNIT40/42)، `PLAN-STATUS.md` §UNIT36 |
+| Email | `admin@dueli.local` | نفسه |
+| Password | `admin` | نفسه (اعتماد تجريبي معروف، ليس سراً) |
+| ID | `9053` | خطة المالك `dueli-plan/dueli-completion-plan/08-OWNER-DECISIONS.md:19-20` (خارج هذا المستودع) |
+| Role | `SuperAdmin` | نفسه |
+
+**هذا اعتماد تجربة H8، لا اعتماد إنتاج دائم.** وجوده في المستودع يعني أنه ليس سراً؛ يجب تدويره في UNIT42. لا يُعاد استخدامه في أي بيئة جديدة.
+
+**فصل محلي مهم:** `docs/07-ONBOARDING.md:44-50` يصف مشرف تطوير محلياً `admin`/`admin` ينشئه `npm run admin:bootstrap` (`dev-tools/bootstrap-admin.mjs:27-30`). السكربت **يرفض** أي مسار remote (`:69-76`، خروج 2). هذا الحساب المحلي ليس صف الإنتاج `id=9053`، ولا يثبت أن الإنتاج أُنشئ بنفس الكلمة.
+
+**تشغيلي:** `admin@dueli.local` نطاق `.local` محجوز غير قابل للتوجيه؛ افترض أن استعادة كلمة المرور بالبريد **لا تعمل**. دوّر من داخل جلسة مسجّلة، لا من «نسيت كلمة المرور».
+
+## 5. حسابات التجربة الثلاثة
+
+| # | الحساب | الحالة | ما نعرفه |
+|---|---|---|---|
+| 1 | `admin` / `admin@dueli.local` / `admin` (`id=9053`, SuperAdmin) | **متحقَّق من سجلات المستودع/الخطة** | المصادر أعلاه |
+| 2 | الحساب التجريبي الثاني | **NOT VERIFIED** | لا اسم/بريد/دور/كلمة مرور في المستودع ولا في خطة المالك |
+| 3 | الحساب التجريبي الثالث | **NOT VERIFIED** | نفسه |
+
+**قاعدة:** لا تُخترع هوية ولا كلمة مرور للحسابين 2 و3. في UNIT42 يُجرَد الإنتاج **قراءة فقط** (انظر §7) ويُصنَّف كل حساب: مشرف/مستخدم، تابع مالي/تدقيقي أم لا. حتى ذلك الحين يبقى البندان `OPEN OWNER ACTION`.
+
+## 6. البيانات التخليقية (`is_fake=1`) — ليست حسابات تجربة
+
+**سياسة المصدر:** `db/seed.sql:2-8` — كل صفوف البذور تُدرَج **بدون** `is_fake` فيسري افتراضي المخطط `1` (تخليقي). كل إنشاء حقيقي يكتب `is_fake=0` صراحةً:
+- `UserModel.create` — `src/models/UserModel.ts:118-136` (القيمة `0` في `:122`).
+- `CompetitionModel.create` — `src/models/CompetitionModel.ts:448-452`.
+- OAuth — `src/modules/api/auth/oauth-routes.ts:142-144`.
+
+**بذور التطوير المحلية:** 20 مستخدماً (`db/seed.sql:119-139`)، كلمة مرورهم جميعاً `password123` (تجزئة SHA-256 `ef92b778…`، تحقّقتُ منها حسابياً). السكربت `npm run db:seed` محلي فقط (`--local`، `package.json`)، ولا يوجد سكربت بذر remote. **يُمنع استيراد `db/seed.sql` إلى الإنتاج.**
+
+**آخر لقطة إنتاج موثقة (تاريخية، 2026-09-23):** 544 مستخدماً (2 حقيقيان `is_fake=0`) و1541 منافسة (12 حقيقية) — `docs/C7-D1-RECONCILIATION-RUNBOOK.md:16`. هذه ليست عدّادات حالية ولا تُستخدم كإثبات؛ مجرد سياق لحجم البيانات التخليقية.
+
+**التمييز البصري:** الصفوف التخليقية تحمل شارة «Demo» في:
+- بطاقة المستخدم `src/shared/components/user-card.ts:58`
+- بطاقة المنافسة `src/shared/components/competition-card.ts:166`
+- البروفايل `src/modules/pages/profile-page.ts:197`
+- صفحة المنافسة `src/modules/pages/competition-page.ts:224`
+
+**`SyntheticRetirementService` — ما يفعله فعلاً** (`src/lib/services/SyntheticRetirementService.ts:156-202`):
+- بعد تسجيل حقيقي أو OAuth: يتقاعد **أقدم** صف `is_fake=1` غير مشرف، وبعد إنشاء منافسة حقيقية: أقدم منافسة `is_fake=1` — **واحد كحد أقصى**.
+- يشترط **صفر** صفوف مرجِعة في كل جدول FK (`USER_DEPENDENTS` في `:21-93` و`COMPETITION_DEPENDENTS` بعده، مثبتة بـ`PRAGMA foreign_key_list`).
+- حذف مباشر `DELETE`؛ أفضل جهد (فشل التقاعد لا يفشل التسجيل)؛ سطر سجل `[SyntheticRetirement]`.
+- **ما لا يفعله:** لا مسح عمري/دفعي، لا حذف جماعي، لا dry-run، لا زر إدارة، لا cron، لا استرجاع. (مؤكد في `docs/20-SYNTHETIC-RETIREMENT-DESIGN.md:21-22`.)
+- **لا يلمس `is_fake=0` أبداً** (`:166`، `:173`، `:189`، `:196`).
+
+## 7. UNIT42 cutover — الخطوات الحرفية (لا تُنفَّذ الآن)
+
+**الشروط المسبقة (كلها لازمة):** 41 و41.1 و42.1 مدموجة ومنشورة؛ Quality Gate + Deploy أخضران على SHA الدمج؛ موافقة مالك مكتوبة؛ نافذة صيانة معلنة؛ نسخة احتياطية خارج المستودع.
+
+1. **جرد قراءة فقط (بلا كتابة).**
+   ```bash
+   npx wrangler d1 execute dueli-db --remote --command "SELECT u.id,u.username,u.email,u.is_admin,u.is_verified,u.is_fake,r.role FROM users u LEFT JOIN admin_roles r ON r.user_id=u.id ORDER BY u.id;"
+   ```
+   ومنه يُستخرج الثلاثة: `id=9053` + الحسابان 2 و3 (يعرّفهما المالك؛ غير معروفين في المستودع). سجّل الناتج خارج المستودع.
+2. **فحص التبعيات لكل حساب قبل أي حذف.** استخدم `USER_DEPENDENTS` (`SyntheticRetirementService.ts:21-93`)؛ استثنِ الجداول العابرة (`sessions`, `realtime_tickets`) لأنها تُبطَل في الخطوة 4. أي صف مرجِع دائم > 0 ⇒ **توقف**: لا حذف، وانتقل إلى التعطيل (4ب).
+3. **نسخة احتياطية موثقة.**
+   ```bash
+   npx wrangler d1 export dueli-db --remote --output <مسار-خارج-المستودع>\dueli-pre-unit42-<UTC>.sql
+   ```
+   تحقق أن الملف غير فارغ ويُحلَّل محلياً. لا تضع النسخة في المستودع (سياسة F-10).
+4. **التنفيذ — الأقل تدميراً أولاً.**
+   - **(أ) تدوير كلمة مرور `admin`:** دخول `/login` بالاعتماد القديم ← `/settings` ← كلمة المرور ← تحديث. هذا يقتل كل جلسات الحساب. لا تُسجّل الكلمة الجديدة في المستودع؛ سلّمها لمدير كلمات مرور المالك.
+   - **(ب) الحسابان 2 و3 — التعطيل الافتراضي:** دوّر كلمة المرور إلى سرّ عشوائي يحفظه المالك، ثم:
+     ```bash
+     npx wrangler d1 execute dueli-db --remote --command "DELETE FROM sessions WHERE user_id IN (<id2>,<id3>);"
+     ```
+     واختيارياً `UPDATE users SET is_verified=0 WHERE id IN (<id2>,<id3>);` لمنع الدخول (الدخول يفحص `is_verified`). أبقِ الصف للسجل.
+   - **(ج) الحذف — فقط إذا:** صفر تبعيات دائمة (خطوة 2)، ليس آخر SuperAdmin، وموافقة مالك صريحة. عندها وبعد النسخة:
+     ```bash
+     npx wrangler d1 execute dueli-db --remote --command "DELETE FROM users WHERE id IN (<id2>,<id3>) AND is_fake=0;"
+     ```
+     أي فشل FK ⇒ توقف فوراً وارجع إلى (ب).
+5. **التحقق بعد التنفيذ (إلزامي).**
+   - كلمة مرور `admin` القديمة ⇒ 401؛ الجديدة ⇒ 200.
+   - الحسابان 2 و3 ⇒ 401 (كلمة مرور خاطئة/محذوف) أو 400 `auth_email_not_verified` إذا عُطِّل التوثيق.
+   - `/admin` للمشرف ⇒ 200؛ لمستخدم عادي ⇒ 403؛ `/api/admin/stats` ⇒ 200 للمشرف و403 لغيره.
+   - `/messages?tab=admin` يفتح صندوق الإدارة للمشرف.
+   - `/api/withdrawals` ⇒ 200.
+   - `SELECT id,username,is_admin,is_fake,is_verified FROM users WHERE id IN (9053,<id2>,<id3>);` يطابق الخطة.
+6. **التسجيل والإغلاق.** أضف سطراً في `WORKLOG.md` و`PLAN-STATUS.md`: التاريخ/الوقت UTC، المنفّذ، المعرّفات، الطريقة (تدوير/تعطيل/حذف)، نتائج التحقق، مسار النسخة الاحتياطية — **بلا أسرار**. أغلق بند H8 في `PLAN-STATUS.md` بدليل التشغيل.
+7. **التراجع.** إذا انكسر دخول المشرف: استعد النسخة الاحتياطية بقرار مالك فقط، ولا تُعد استيراداً جزئياً فوق الإنتاج.
+
+## 8. خارج نطاق UNIT40 (`OPEN OWNER ACTION`)
+
+- **`dueli.win` / DNS / إعادة التوجيه:** غير قابل للتحقق من المستودع؛ إجراء مالك/Cloudflare. لا كود في UNIT40.
+- **قرارات UNIT36.1** (أسعار البلدات/المضاعفات، محتوى الإعلانات التعريفية، allow مقابل manual): لا تزال قرارات مالك، ولا قيم مخترعة هنا.
+- **البنك/Stripe/H9:** لا تغيير ولا قرار في UNIT40؛ تبقى لمالك قبل الإطلاق.
+- **UNIT41 / 41.1:** بنود البيانات التخليقية القادمة (استبعاد `is_fake=1` من matchmaking/invites، تقاعد أوسع، فيديو تعريفي، إلخ) — **لم تبدأ** في هذه الوحدة.
