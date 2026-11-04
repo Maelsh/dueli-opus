@@ -7,7 +7,7 @@
  *   - GET /api/withdrawals -> {success, data:{wallet:{available,pending,
  *     on_hold,withdrawn,total}, requests, meta}} (WithdrawalController).
  *   - POST /api/withdrawals body {amount,payment_method,payment_details};
- *     minimum enforced at $50 (EarningsModel: amount < 50 rejected;
+ *     minimum enforced at $50 (WithdrawalRequestModel MIN_WITHDRAWAL_CENTS;
  *     i18n min_withdrawal = $50). Errors are {success:false, error:string}.
  *   - GET /api/donations/top-supporters -> {success, data:[{donor_name,
  *     total_amount, avatar}]} (donations routes + DonationModel).

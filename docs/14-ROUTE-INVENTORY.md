@@ -1,13 +1,13 @@
 # جرد مسارات API — مولَّد آلياً
 
 > **لا تحرّر هذا الملف يدوياً.** أعد توليده: `node dev-tools/route-inventory.mjs`
-> تاريخ التوليد: 2026-10-29T18:24:46.488Z
+> تاريخ التوليد: 2026-11-04T14:35:25.360Z
 
-## الإجمالي: 262 مسار
+## الإجمالي: 259 مسار
 
 | التصنيف | العدد |
 |---|---|
-| PUBLIC(auth-optional, in-handler check required) | 129 |
+| PUBLIC(auth-optional, in-handler check required) | 126 |
 | AUTHENTICATED | 86 |
 | UNGUARDED ⚠ | 42 |
 | SERVICE(origin-only ⚠) | 5 |
@@ -186,9 +186,6 @@
 | GET | `/api/donations/top-supporters` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |
 | GET | `/api/donations/total` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |
 | POST | `/api/donations/webhook` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/donations/routes.ts` |
-| GET | `/api/earnings` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/earnings/routes.ts` |
-| GET | `/api/earnings/competition/:id` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/earnings/routes.ts` |
-| GET | `/api/earnings/history` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/earnings/routes.ts` |
 | POST | `/api/home-rails/sessions` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/home-rails/routes.ts` |
 | GET | `/api/home-rails/sessions/:id/page` | PUBLIC(auth-optional, in-handler check required) | router:auth-optional, group:rateLimit, group:csrf | `src/modules/api/home-rails/routes.ts` |
 | GET | `/api/jitsi/config` | UNGUARDED ⚠ | group:rateLimit, group:csrf | `src/modules/api/jitsi/routes.ts` |

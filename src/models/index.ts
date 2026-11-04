@@ -24,7 +24,7 @@ export { SearchModel, SearchFilters, SearchResult } from './SearchModel';
 export { LikeModel, Like, LikeWithUser } from './LikeModel';
 export { ReportModel, Report, ReportWithDetails, CreateReportData, ReportTargetType, ReportStatus, ArbitrationStatus, REPORT_REASONS } from './ReportModel';
 export { MessageModel, ConversationModel, Message, Conversation, MessageWithSender, ConversationWithUser } from './MessageModel';
-export { AdvertisementModel, EarningsModel, Advertisement, AdImpression, UserEarnings } from './AdvertisementModel';
+export { AdvertisementModel, Advertisement, AdImpression } from './AdvertisementModel';
 export { UserSettingsModel, UserPostModel, UserSettings, UserPost, UserPostWithAuthor } from './UserSettingsModel';
 export { ScheduleModel, CompetitionReminder, ReminderWithDetails } from './ScheduleModel';
 export { RatingModel, Rating, RatingWithUser } from './RatingModel';

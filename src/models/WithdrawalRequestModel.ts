@@ -22,8 +22,8 @@ import { LedgerService, LedgerError } from '../lib/services/LedgerService';
 
 /**
  * الحد الأدنى للسحب = 50 دولاراً (5000 سنت).
- * المصدر: platform_settings.min_withdrawal_amount (seed في 0003) + فحص
- * EarningsModel (‎< 50 مرفوض) + نص الواجهة min_withdrawal ($50).
+ * المصدر: platform_settings.min_withdrawal_amount (seed في 0003)
+ * + نص الواجهة min_withdrawal ($50) + حارس requestWithdrawal أدناه.
  */
 export const MIN_WITHDRAWAL_CENTS = 5000;
 
@@ -93,6 +93,20 @@ export interface WithdrawalFilters {
     user_id?: number;
     limit?: number;
     offset?: number;
+}
+
+/**
+ * G2 — ملخص المحفظة المشتق من دفتر الأستاذ فقط.
+ * كل القيم بالسنت (نفس وحدة available الحالية — لا تغيير دلالة).
+ * `pending` صفر دائماً: لا يوجد في العقد الحالي مصدر قيود «معلّقة» غير
+ * الحجز، والحجز يظهر في on_hold. لا يُخترع مصدر جديد.
+ */
+export interface WalletSummary {
+    available: number;
+    pending: number;
+    on_hold: number;
+    withdrawn: number;
+    total: number;
 }
 
 // =============================================
@@ -227,6 +241,15 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
      * موافقة الأدمن: requested → approved → paid في دفعة واحدة، كل انتقال
      * محروس بشرطه (changes===1 وإلا تعارض). الموافقة الثانية ⇒ 409 ولا دفع
      * مكرر — المال محجوز سلفاً ولا حركة مالية جديدة هنا.
+     *
+     * G3 (fail-closed): لا يُسمح بالانتقال إلى paid إلا إذا أثبت دفتر الأستاذ
+     * أن حجزاً **قائماً** لهذا الطلب ما زال يغطي amount_cents + fee_cents.
+     * الحارس داخل عبارة UPDATE نفسها (لا فحص JS منفصل)، صافي الحجز =
+     * (دائن المستخدم − مدين المستخدم) لنفس ref_type/ref_id:
+     * - hold يكتب +amount، release العكسي يكتب −amount ⇒ بعد التحرير الصافي 0
+     *   فيفشل الحارس (لا دفع بعد تحرير).
+     * - طلب بلا حجز (نافذة انهيار أ) صافيه 0 ⇒ 0 صفوف متغيرة ⇒ الرفض 409
+     *   والحالة والرصيد لا يتغيران.
      */
     async approve(
         id: number,
@@ -234,13 +257,29 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
         transactionId: string,
         note?: string
     ): Promise<WithdrawalRequest | null> {
+        const row = await this.findById(id);
+        if (!row) return null;
+
         const now = new Date().toISOString();
+        const userAccount = `user:${row.user_id}`;
+        // الحجز يغطي المبلغ + الرسوم (الرسوم صفر حالياً لكن العقد لا يفترض ذلك).
+        const heldCents = row.amount_cents + row.fee_cents;
+
         const results = await this.db.batch([
             this.db.prepare(
                 `UPDATE ${this.tableName}
                  SET status = 'approved', approved_by = ?, admin_note = ?
-                 WHERE id = ? AND status = 'requested'`
-            ).bind(adminId, note ?? null, id),
+                 WHERE id = ? AND status = 'requested'
+                   AND (
+                       SELECT COALESCE(SUM(CASE WHEN le.direction = 'credit'
+                                                THEN le.amount_cents
+                                                ELSE -le.amount_cents END), 0)
+                       FROM ledger_entries le
+                       WHERE le.ref_type = 'withdrawal_request'
+                         AND le.ref_id = ?
+                         AND le.account = ?
+                   ) >= ?`
+            ).bind(adminId, note ?? null, id, id, userAccount, heldCents),
             this.db.prepare(
                 `UPDATE ${this.tableName}
                  SET status = 'paid', processed_at = ?, transaction_id = ?
@@ -301,19 +340,40 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
     }
 
     /**
-     * تحرير الحجز: عكس قيود الحجز تماماً (debit للمستخدم + credit للمنصة)،
+     * تحرير الحجز: عكس الحجز الفعلي تماماً (debit للمستخدم + credit للمنصة)،
      * فيعود الرصيد كاملاً ويبقى verifyInvariant() صفراً. idempotent.
+     *
+     * G3 (window B): لا يعتمد على hold_tx_id إطلاقاً — الانهيار بين قيد الحجز
+     * وكتابة hold_tx_id يترك العمود NULL بينما المال محجوز فعلاً. لذلك يُشتق
+     * الحجز من الدفتر نفسه بمرجع الطلب: قيد دائن لحساب المستخدم بـ
+     * ref_type='withdrawal_request' و ref_id=row.id. قيد التحرير العكسي هو
+     * debit لنفس الحساب/المرجع، فلا يطابق الاستعلام. المبلغ المُعاد هو مبلغ
+     * الحجز المسجل (amount_cents + fee_cents) لا row.amount_cents.
+     * - لا حجز في الدفتر (نافذة أ) ⇒ لا شيء لتحريره، والمكافأة صفر بلا أثر.
+     * - إعادة التحرير ⇒ نفس tx_id الحتمي ⇒ no-op (M4)، لا تحرير مزدوج.
      */
     private async releaseHold(row: WithdrawalRequest): Promise<void> {
-        if (!row.hold_tx_id) return;
+        const hold = await this.db.prepare(
+            `SELECT tx_id, amount_cents
+             FROM ledger_entries
+             WHERE ref_type = 'withdrawal_request'
+               AND ref_id = ?
+               AND account = ?
+               AND direction = 'credit'
+             ORDER BY id DESC
+             LIMIT 1`
+        ).bind(row.id, `user:${row.user_id}`).first<{ tx_id: string; amount_cents: number }>();
+
+        if (!hold) return;
+
         const releaseTxId = `${RELEASE_TX_PREFIX}${row.id}`;
         await this.ledger.post({
             txId:      releaseTxId,
             createdBy: row.approved_by != null ? `admin:${row.approved_by}` : `user:${row.user_id}`,
             ref:       { ref_type: 'withdrawal_request', ref_id: row.id },
             entries: [
-                { account: `user:${row.user_id}`, direction: 'debit', amountCents: row.amount_cents },
-                { account: 'platform:withdrawals', direction: 'credit', amountCents: row.amount_cents }
+                { account: `user:${row.user_id}`, direction: 'debit', amountCents: hold.amount_cents },
+                { account: 'platform:withdrawals', direction: 'credit', amountCents: hold.amount_cents }
             ]
         });
     }
@@ -328,6 +388,60 @@ export class WithdrawalRequestModel extends BaseModel<WithdrawalRequest> {
         `).bind(userId, limit, offset).all<WithdrawalRequest>();
 
         return res.results || [];
+    }
+
+    /**
+     * G2 — ملخص محفظة المستخدم من دفتر الأستاذ حصراً (لا user_earnings).
+     *
+     * الاشتقاق:
+     * - available = LedgerService.balance(user:<id>) — نفس دلالة العرض الحالية
+     *   (سنت، بعد خصم الحجوزات والمدفوع).
+     * - لكل طلب: held = Σ(دائن المستخدم) − Σ(مدين المستخدم) على قيود
+     *   ref_type='withdrawal_request' و ref_id=الطلب. الحجز +amount، والتحرير
+     *   العكسي −amount ⇒ بعد الرفض/الإلغاء يصبح held = 0.
+     * - on_hold = Σ max(held, 0) للطلبات غير المدفوعة. يشمل requested و
+     *   approved، ويشمل rejected التي لم يصلها قيد التحرير بعد (نافذة انهيار:
+     *   المال ما زال محجوزاً فعلاً، فلا يختفي من العرض).
+     * - withdrawn = Σ max(held, 0) للطلبات paid (الحجز بقي بلا تحرير = دُفع).
+     * - pending = 0: لا قيود «معلّقة» في العقد الحالي.
+     * - total = available + on_hold + withdrawn (تطابق تام على الحالات الثلاث).
+     *
+     * حدّ معروف: القيود اليتيمة بلا صف طلب (أو لطلب محذوف) لا تدخل المجاميع؛
+     * والصفوف السابقة للدفتر (legacy) بلا قيود تساهم 0 — لا تُخترع أرصدة.
+     */
+    async getWalletSummary(userId: number): Promise<WalletSummary> {
+        const [available, row] = await Promise.all([
+            this.ledger.balance(`user:${userId}`),
+            this.db.prepare(`
+                SELECT
+                    COALESCE(SUM(CASE WHEN wr.status = 'paid' THEN 0
+                                      ELSE MAX(h.held_cents, 0) END), 0) AS on_hold,
+                    COALESCE(SUM(CASE WHEN wr.status = 'paid' THEN MAX(h.held_cents, 0)
+                                      ELSE 0 END), 0) AS withdrawn
+                FROM (
+                    SELECT le.ref_id AS request_id,
+                           SUM(CASE WHEN le.direction = 'credit'
+                                    THEN le.amount_cents
+                                    ELSE -le.amount_cents END) AS held_cents
+                    FROM ledger_entries le
+                    WHERE le.ref_type = 'withdrawal_request'
+                      AND le.account = ?
+                    GROUP BY le.ref_id
+                ) h
+                JOIN withdrawal_requests wr ON wr.id = h.request_id
+                WHERE wr.user_id = ?
+            `).bind(`user:${userId}`, userId).first<{ on_hold: number | null; withdrawn: number | null }>()
+        ]);
+
+        const onHold = row?.on_hold ?? 0;
+        const withdrawn = row?.withdrawn ?? 0;
+        return {
+            available,
+            pending: 0,
+            on_hold: onHold,
+            withdrawn,
+            total: available + onHold + withdrawn
+        };
     }
 
     /** Get admin queue (requests with user info, filterable by lifecycle status) */

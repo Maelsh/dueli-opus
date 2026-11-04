@@ -5,7 +5,7 @@ import { UserModel } from '../models/UserModel';
 import { CompetitionModel } from '../models/CompetitionModel';
 import { CommentModel } from '../models/CommentModel';
 import { ReportModel } from '../models/ReportModel';
-import { AdvertisementModel, EarningsModel } from '../models/AdvertisementModel';
+import { AdvertisementModel } from '../models/AdvertisementModel';
 import { AdminRoleModel, AdminRoleType } from '../models/AdminRoleModel';
 import { SessionModel } from '../models/SessionModel';
 import { AdminAuditLogModel } from '../models/AdminAuditLogModel';
