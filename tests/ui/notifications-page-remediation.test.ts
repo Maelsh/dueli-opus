@@ -170,7 +170,9 @@ describe('PR #69 blocker 2 — request language cannot escape the nonced script'
         ['%27%3Balert(document.domain)%3B%2F%2F', 'en'],
         ['%27%3Bwindow.__xss%3D1%3B%2F%2F', 'en'],
         ['en-US', 'en'],
-        ['fr', 'en'],
+        // UNIT 42.1: fr is a real translated language now — it resolves as
+        // "fr" (JSON.stringify'd, so the no-breakout guarantee is unchanged).
+        ['fr', 'fr'],
         ['..%2F..', 'en'],
         ['ar', 'ar'],
         ['en', 'en'],

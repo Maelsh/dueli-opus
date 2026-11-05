@@ -498,12 +498,15 @@ describe('UNIT39 / R4-GUIDE-2 — meta, SEO contract and i18n parity', () => {
         expect(LAYOUT).toContain('seo?.metaTitle');
     });
 
-    it('16. canonical, hreflang and JSON-LD keep UNIT38’s contract', async () => {
+    it('16. canonical, hreflang and JSON-LD keep the UNIT42.1 15-language contract', async () => {
         for (const section of SECTIONS) {
             const { html } = await get(`/guide/${section}?lang=en`);
             expect(link(html, 'canonical')).toBe(`https://dueli.maelshpro.com/guide/${section}`);
             const alternates = [...html.matchAll(/<link\s+rel="alternate"\s+hreflang="([^"]+)"\s+href="([^"]*)"/g)];
-            expect(alternates.map((m) => m[1]).sort()).toEqual(['ar', 'en', 'x-default']);
+            // UNIT 42.1: 15 global languages + x-default (was ar/en only).
+            expect(alternates.map((m) => m[1]).sort()).toEqual(
+                ['ar', 'de', 'en', 'es', 'fa', 'fr', 'hi', 'id', 'ja', 'ko', 'pt', 'ru', 'tr', 'ur', 'x-default', 'zh'],
+            );
         }
 
         const { html } = await get('/guide/message?lang=en');

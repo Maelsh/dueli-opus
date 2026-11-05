@@ -6,9 +6,10 @@
  *   - OpenGraph (title/description/type/url/site/locale/image)
  *   - Twitter Cards (summary_large_image)
  *   - canonical (absolute, legal domain https://dueli.maelshpro.com)
- *   - hreflang for the languages that actually have a translation pack
- *     (ar + en) plus x-default. Languages added in UNIT42.1 are NOT
- *     invented here (docs/13 §7 + plan 13 §5).
+ *   - hreflang for every enabled language of the central registry
+ *     (UNIT 42.1: 15 languages: ar en es fr de pt ru zh ja ko tr hi id fa ur)
+ *     plus x-default. The set is DERIVED from LANGUAGES — a language added
+ *     there with a translation pack is automatically part of SEO.
  *   - Schema.org JSON-LD (Organization + WebSite) that identifies Dueli as
  *     a platform for dialogue competitions under Maelsh Pro, WITHOUT any
  *     unverified legal-entity claim (no founding date, no address, no
@@ -19,17 +20,52 @@
  */
 
 import type { Language } from '../../config/types';
-import { translations, getUILanguage } from '../../i18n';
+import { translations, getUILanguage, LANGUAGES } from '../../i18n';
 import { Sanitize } from '../../lib/services/Sanitize';
 
 /** Legal / canonical domain of the platform (plan 08, owner decision 2026-10-29). */
 export const SITE_ORIGIN = 'https://dueli.maelshpro.com';
 
-/** The only languages with a translation pack today (UNIT42.1 adds more). */
-export const SEO_LANGUAGES = ['ar', 'en'] as const;
+/**
+ * Languages that carry a translation pack today (UNIT 42.1: 15).
+ * Derived from the central registry's ENABLED languages — `enabled: true`
+ * means exactly "this language has a shipped dictionary" (bundled ar/en or
+ * a static /static/locales/<lang>.json pack). The set is intentionally
+ * static: hreflang must stay deterministic on every request, including a
+ * request in English whose Isolate has lazily joined none of the packs yet.
+ */
+export const SEO_LANGUAGES: readonly string[] = LANGUAGES
+    .filter((l) => l.enabled)
+    .map((l) => l.code);
 
 /** Default social image — an asset that already exists in the repository. */
 export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/static/dueli-icon.png`;
+
+/**
+ * OpenGraph locale per language (facebook locale format ll_CC).
+ * UNIT 42.1 — one entry per enabled language, en_US as fallback.
+ */
+const OG_LOCALE: Record<string, string> = {
+    ar: 'ar_AR',
+    en: 'en_US',
+    es: 'es_ES',
+    fr: 'fr_FR',
+    de: 'de_DE',
+    pt: 'pt_BR',
+    ru: 'ru_RU',
+    zh: 'zh_CN',
+    ja: 'ja_JP',
+    ko: 'ko_KR',
+    tr: 'tr_TR',
+    hi: 'hi_IN',
+    id: 'id_ID',
+    fa: 'fa_IR',
+    ur: 'ur_PK',
+};
+
+export function ogLocaleFor(lang: Language): string {
+    return OG_LOCALE[getUILanguage(lang)] ?? 'en_US';
+}
 
 export interface SeoInput {
     /** UI language of the rendered page. */
@@ -70,8 +106,9 @@ function basePath(path: string): string {
 
 /**
  * Canonical URL of a page.
- * Language is part of the URL contract of this platform (?lang=ar|en),
- * so the canonical keeps it; English is the default and stays implicit.
+ * Language is part of the URL contract of this platform (?lang=<code> for
+ * every non-default language), so the canonical keeps it; English is the
+ * default and stays implicit.
  */
 export function canonicalUrl(path: string, lang: Language): string {
     const base = basePath(path);
@@ -164,7 +201,7 @@ export function buildSeoHead(input: SeoInput, nonce = ''): string {
     parts.push(`<meta property="og:title" content="${esc(title)}">`);
     parts.push(`<meta property="og:description" content="${esc(description)}">`);
     parts.push(`<meta property="og:image" content="${esc(image)}">`);
-    parts.push(`<meta property="og:locale" content="${getUILanguage(input.lang) === 'ar' ? 'ar_AR' : 'en_US'}">`);
+    parts.push(`<meta property="og:locale" content="${esc(ogLocaleFor(input.lang))}">`);
     if (canonical) {
         parts.push(`<meta property="og:url" content="${esc(canonical)}">`);
     }

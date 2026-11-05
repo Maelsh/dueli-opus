@@ -286,15 +286,20 @@ describe('UNIT38 / R4-GUIDE-1 — global SEO head (real rendered HTML)', () => {
         }
     });
 
-    it('12. the head carries a canonical and the ar/en + x-default hreflang set', async () => {
+    it('12. the head carries a canonical and the UNIT42.1 15-language + x-default hreflang set', async () => {
         const { html } = await get('/guide/help?lang=en');
         expect(link(html, 'canonical')).toBe('https://dueli.maelshpro.com/guide/help');
 
         const alternates = [...html.matchAll(/<link\s+rel="alternate"\s+hreflang="([^"]+)"\s+href="([^"]*)"/g)];
         const byLang = new Map(alternates.map((m) => [m[1], m[2]]));
-        expect([...byLang.keys()].sort()).toEqual(['ar', 'en', 'x-default']);
+        // UNIT 42.1: 15 global languages + x-default (was ar/en only in UNIT38).
+        expect([...byLang.keys()].sort()).toEqual(
+            ['ar', 'de', 'en', 'es', 'fa', 'fr', 'hi', 'id', 'ja', 'ko', 'pt', 'ru', 'tr', 'ur', 'x-default', 'zh'],
+        );
         expect(byLang.get('en')).toBe('https://dueli.maelshpro.com/guide/help');
         expect(byLang.get('ar')).toBe('https://dueli.maelshpro.com/guide/help?lang=ar');
+        expect(byLang.get('fr')).toBe('https://dueli.maelshpro.com/guide/help?lang=fr');
+        expect(byLang.get('ur')).toBe('https://dueli.maelshpro.com/guide/help?lang=ur');
         expect(byLang.get('x-default')).toBe('https://dueli.maelshpro.com/guide/help');
     });
 

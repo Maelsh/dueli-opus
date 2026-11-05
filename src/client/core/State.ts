@@ -5,6 +5,9 @@
  */
 
 import { CookieUtils } from './CookieUtils';
+// UNIT 42.1: registry-aware document-language sync (getUILanguage/isRTL);
+// importing i18n is safe — no module cycle (i18n never imports client code).
+import { getUILanguage, isRTL } from '../../i18n';
 
 // Default fallbacks - used only when all other sources fail
 const DEFAULT_LANGUAGE = 'en';
@@ -141,12 +144,17 @@ export class State {
     /**
      * B2: single place that keeps document.documentElement.dir/lang aligned
      * with State.lang so client rerenders can never contradict the SSR markup.
+     * UNIT 42.1: exact codes come from the central i18n registry — the
+     * document language is `lang` itself when its pack is actually loaded
+     * (ar/en bundled or any lazily loaded locale), otherwise the old
+     * ar/en normalization keeps applying (`xx` junk → English page, as
+     * before this unit ever existed).
      */
     static applyDocumentLanguage(lang: string): void {
         if (typeof document === 'undefined' || !document.documentElement) return;
-        const normalized = (lang || DEFAULT_LANGUAGE).toLowerCase().startsWith('ar') ? 'ar' : 'en';
+        const normalized = lang && getUILanguage(lang) === lang ? lang : DEFAULT_LANGUAGE;
         document.documentElement.lang = normalized;
-        document.documentElement.dir = normalized === 'ar' ? 'rtl' : 'ltr';
+        document.documentElement.dir = isRTL(normalized) ? 'rtl' : 'ltr';
     }
 
     // Country

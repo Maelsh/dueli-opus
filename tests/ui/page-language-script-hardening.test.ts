@@ -51,7 +51,9 @@ const XSS = `';window.__xss=1;//`;
 const LANG_CASES: Array<[string, string]> = [
     ['ar', 'ar'],
     ['en', 'en'],
-    ['fr', 'en'],
+    // UNIT 42.1: fr is a real translated language now — it resolves as "fr"
+    // (JSON.stringify'd, so the no-breakout guarantee is unchanged).
+    ['fr', 'fr'],
     ['en-US', 'en'],
     ['..%2F..', 'en'],
     [encodeURIComponent(ALERT), 'en'],
