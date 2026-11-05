@@ -3,9 +3,20 @@ import type { Bindings, Variables, Language } from '../../config/types';
 import { translations, getUILanguage, isRTL, t } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { generateHTML } from '../../shared/templates/layout';
+import { canAccessMonetizationRequest } from '../../lib/services/MonetizationGate';
+import { renderMonetizationLocked } from '../../shared/components/monetization-locked';
 
-export function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
+export async function advertiserPortalPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
     const lang = c.get('lang');
+    // UNIT41.1: public monetization gate — ordinary visitors get the friendly
+    // translated notice (403); admins/role holders and the open switch pass.
+    if (!(await canAccessMonetizationRequest(c))) {
+        const nonce403 = (c.get('cspNonce') as string) ?? '';
+        return c.html(
+            generateHTML(renderMonetizationLocked(lang), lang, t('monetization_locked', lang), nonce403, { path: '/advertiser', noindex: true }),
+            403
+        );
+    }
     const tr = translations[getUILanguage(lang)];
     const rtl = isRTL(lang);
     const tt = (key: string) => t(`advertiser.${key}`, lang);

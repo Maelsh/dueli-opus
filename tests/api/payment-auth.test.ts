@@ -46,6 +46,8 @@ describe('C1 — payments / ad-blocks authentication', () => {
     let db: SqliteD1;
     beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         await seed(db);
     });
 

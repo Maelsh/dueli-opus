@@ -9,12 +9,24 @@ import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { DUELI_PRIMARY_BTN, DUELI_CARD, DUELI_SECTION_TITLE, DUELI_EARNINGS_AVAILABLE, DUELI_EARNINGS_PENDING, DUELI_EARNINGS_WITHDRAWN } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
+import { t } from '../../i18n';
+import { canAccessMonetizationRequest } from '../../lib/services/MonetizationGate';
+import { renderMonetizationLocked } from '../../shared/components/monetization-locked';
 
 /**
  * Earnings Page Handler
  */
 export const earningsPage = async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
     const lang = c.get('lang') as Language;
+    // UNIT41.1: public monetization gate — ordinary visitors get the friendly
+    // translated notice (403); admins/role holders and the open switch pass.
+    if (!(await canAccessMonetizationRequest(c))) {
+        const nonce403 = (c.get('cspNonce') as string) ?? '';
+        return c.html(
+            generateHTML(renderMonetizationLocked(lang), lang, t('monetization_locked', lang), nonce403, { path: '/earnings', noindex: true }),
+            403
+        );
+    }
     // Cast to any – new i18n keys for Task 6 may not yet be in the typed definition
     const tr   = translations[getUILanguage(lang)] as any;
     const rtl  = checkRTL(lang);

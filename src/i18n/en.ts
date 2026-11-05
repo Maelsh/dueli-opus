@@ -35,6 +35,10 @@ export const en = {
     all: 'All',
     help: 'Help',
     skip_to_content: 'Skip to main content',
+    // UNIT41.1: public money/ads gate notice (owner's exact wording).
+    monetization_locked: 'This section will open soon upon completion of procedures',
+    // UNIT41.1: badge over the unified explainer video.
+    demo_explainer_badge: 'Platform explainer video',
     docs: 'Documents',
     docs_tagline: 'Project, product and engineering notes published by the Dueli team.',
     docs_empty: 'No published documents yet.',
@@ -403,6 +407,8 @@ export const en = {
         opponent_already_set: 'An opponent has already been set',
         invitation_not_found: 'Invitation not found or expired',
         blocked_user: 'You cannot interact with this user',
+        // UNIT41.1: synthetic (demo) accounts can never be invited.
+        cannot_invite_synthetic: 'This user cannot be invited',
         not_authorized: 'You are not authorized for this action',
         // R2-J (H3): mutual/conflicting same-competition paths
         invite_pending_exists: 'You have a pending invitation for this competition — accept or decline it first',
@@ -1305,6 +1311,19 @@ export const en = {
         my_account: 'My Account',
         ad_pricing_title: 'Ad pricing',
         ad_pricing_hint: 'Leave fields empty to keep each campaign current cost. Every unset multiplier is 1.',
+        platform_settings_title: 'Platform settings & gates',
+        platform_settings_hint: 'Controls two public switches: the money & ads gate for the public, and the unified explainer video. Changes take effect immediately, without a deploy.',
+        monetization_gate_title: 'Public money & ads gate',
+        monetization_gate_hint: 'While closed (0), ordinary users are refused server-side on the money/ads pages and APIs (/earnings, /advertiser, /donate and their APIs) with a friendly translated notice; admins and admin-role holders always pass. While open (1), everyone is allowed.',
+        monetization_state_open: 'Open — everyone is allowed',
+        monetization_state_closed: 'Closed — ordinary users are refused',
+        monetization_gate_toggle: 'Toggle the gate',
+        demo_video_title: 'Unified explainer video (competitions without a recording)',
+        demo_video_hint: 'Shown inside the video box of any finished/demo competition that has no actual recording. Never replaces a real recording. Leave the field empty to show no video (current behaviour).',
+        platform_settings_save: 'Save',
+        platform_settings_saved: 'Saved — effective immediately.',
+        platform_settings_failed: 'Save failed — check your session or try again.',
+        platform_settings_invalid_url: 'The link must start with https:// or http://',
         country_base_cents: 'Country base price (cents)',
         country_code: 'Country code',
         base_cents: 'Cents',
@@ -1510,6 +1529,10 @@ export const en = {
                 title: 'Platform support and continuity',
                 desc: 'How ad revenue is shared 80/20, the donor roadmap, non-financial ways to help, and the separation between platform support and competitor earnings.',
             },
+            charter: {
+                title: 'The Founding Global Alliance & Continuity Charter',
+                desc: 'The Maelsh Pro Ethical Source licence, the self-executing continuity clause with escrow (80/20 + Escrow), the Founding Global Alliance and its four tracks, and the independent Continuity Custodian — with the limits of the charter, plainly.',
+            },
         },
         // UNIT39 / R4-GUIDE-2 — the human message (owner-approved revision).
         message_content: {
@@ -1695,6 +1718,70 @@ export const en = {
             separation_title: 'Platform support is not competitor earnings',
             separation_body:
                 'Support for the platform goes through /donate and its open figures appear in /transparency. Competitor earnings come from the existing payout cycle after a competition, and audience donations to competitors are a separate flow inside the product. The two are never mixed, and this page opens no new payment route.',
+        },
+        // UNIT41.1 — «The Founding Global Alliance & Continuity Charter (80/20 + Escrow)» (adopted Doctrine 20, 2026-11-04).
+        charter_content: {
+            intro:
+                'This page documents the charter adopted for Dueli: the Maelsh Pro Ethical Source licence, the self-executing continuity clause with its independent escrow trust, the 80/20 revenue formula, the Founding Global Alliance and its four tracks, and the independent Continuity Custodian. It is published for the public and used as the reference for correspondence with prospective partners.',
+            license_title: 'The Maelsh Pro Ethical Source licence — stability without outside exploitation',
+            license_body:
+                'The Dueli code remains published in full transparency for scientific and technical review, with an absolute prohibition on use for any external commercial or profit-making purpose without the prior express written permission of Maelsh Pro. Open publication is not a waiver of the terms of use; it grants the right to view and copy only in the cases defined by the licence.',
+            continuity_title:
+                'Self-Executing Continuity License & Escrow Trust',
+            continuity_body:
+                'The licence charter carries a self-executing clause that grants — by the force of the charter itself, without any further permission — any non-profit international institution or independent custodian the standing right to clone and operate the platform at its own cost and under the same non-profit terms, if the founding administration is subjected to any coercive constraint (blocking, coercive breach of transparency, or access denial). The single necessary condition for activation:',
+            continuity_items: [
+                '80% of net advertising revenue remains for the competitors, without reduction.',
+                'The 20% share allocated to the founding administration is directed to Maelsh Pro, or held in an Independent Escrow Trust Account in the name of Maelsh Pro or at the legal destination designated by the founding administration — ensuring full compatibility with international banking compliance rules in all circumstances — to support its efforts to lift the constraints and restore normal administration.',
+            ],
+            economy_title: 'The 80/20 financial formula',
+            economy_body:
+                '80% of net advertising revenue is paid directly to the competitors; 20% covers operation, administration and continuous development under Maelsh Pro. No founding partner and no continuity custodian holds any authority to change this formula or interfere with it; it is part of the platform’s identity and may only be amended by public announcement, with prospective effect only.',
+            alliance_title: 'The Founding Global Alliance — four competitive tracks, no ownership, no veto',
+            alliance_body:
+                'Dueli opens a limited competitive window for the largest technology companies and institutions across the three global blocs (American, Chinese/Asian and European) to join as founding partners. The alliance confers no ownership and no veto over the platform’s message, editorial policy or financial formula. Because Dueli was actually built with the contribution of competing ecosystems without belonging to any of them, it invites those same ecosystems to compete for the honour of founding it.',
+            tracks_title: 'The four competitive tracks',
+            tracks: [
+                {
+                    name: 'Track 1 — Founding Infrastructure Partner',
+                    body: 'Infrastructure, edge and cloud companies (Cloudflare, Google Cloud, AWS, Alibaba Cloud, Tencent Cloud): securing the global infrastructure, domain and DNS continuity, and institutional engineering support.',
+                },
+                {
+                    name: 'Track 2 — Founding Open-Technology & Developer Partner',
+                    body: 'Code and developer platforms (GitHub/Microsoft, GitLab, and the intelligent development platforms listed on the AI appreciation page): protecting the repositories, immutable permanent archiving, and access to the developer community.',
+                },
+                {
+                    name: 'Track 3 — Founding AI Ecosystem Partner',
+                    body: 'AI leaders in the East and the West (OpenAI, Anthropic, Google, Z.ai, Moonshot, DeepSeek, MiniMax, Mistral, Meta, xAI, Qwen/Alibaba): early participation in designing and piloting the Independent AI Agent Bridge, and supplying the platform with translation and knowledge-analysis capabilities under model-neutral fairness.',
+                },
+                {
+                    name: 'Track 4 — Founding Global Reach Partner',
+                    body: 'Global communication and distribution platforms (YouTube, X, Meta, TikTok and others): securing official publishing channels, supporting creator multistreaming, and protecting official accounts from abusive reporting.',
+                },
+            ],
+            custodian_title: 'The second wing — the Independent Continuity Custodian',
+            custodian_body:
+                'A non-profit international institution, independent of commercial companies, whose defined legal mandate is: holding a copy of the essential assets and protecting the continuity of the domain and operation under the Continuity Protocol (80/20 + Escrow) should the original team be unable to continue under any coercive circumstance — without interfering in the day-to-day executive management of Maelsh Pro.',
+            benefits_title: 'What a founding partner gains',
+            benefits: [
+                'Founding Partner recognition and standing in its track, on the platform and in Dueli’s house announcements.',
+                'Priority technical participation in designing and testing the Independent AI Agent Bridge and live integrations under model-neutral fairness rules.',
+                'A joint international launch announcement and a documented technical and human success story in the platform’s global languages.',
+                'A non-governing technical advisory seat — no vote on the platform’s message, editorial policy or financial formula (80/20).',
+            ],
+            clarity_title: 'The limits of this charter — plainly',
+            clarity_items: [
+                'This charter is a published framework of commitment; it is not a declaration that a registered legal entity, an active guarantee fund or a funded escrow account exists. Any party activated under the Continuity Protocol is selected and documented at the time of need under the applicable legal formalities.',
+                'This page is not legal, tax or banking advice; the binding terms are the licence text published in the repository.',
+                'The invitation to founding partnership is a limited competitive framework; it does not oblige Dueli or Maelsh Pro to accept any company, and it confers no acquired right merely by being received.',
+                'The Continuity Protocol activates only upon the described coercive constraint; it grants no party any right to day-to-day management, profits or ownership in ordinary circumstances.',
+                'No reply, or a refusal of the invitation, creates no obligation on Dueli or Maelsh Pro toward any party.',
+            ],
+            clarity_note:
+                'This charter is published for transparency and for use in correspondence with prospective partners; it is not a contract document or an investment prospectus.',
+            cta_title: 'Institutional contact',
+            cta_body:
+                'The official channels are documented on the contact page: dueli@maelshpro.com and info@maelshpro.com. For institutional correspondence, mention the track you mean (infrastructure / open technology / AI / global reach / continuity custodian) and it will be attached to the Strategic Partner Opportunity Brief.',
         },
         // UNIT39 / R4-GUIDE-2 — terms and rights (owner-approved revision).
         terms_content: {

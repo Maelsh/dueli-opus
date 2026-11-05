@@ -47,10 +47,10 @@ async function call(
 
 function seedBase(): void {
     db.exec(`
-        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active)
-        VALUES (${CREATOR}, 'u322-c@test.local', 'u322_creator', 'x', 'Creator', 1, 1),
-               (${OTHER}, 'u322-o@test.local', 'u322_other', 'x', 'Other', 1, 1),
-               (${INVITEE}, 'u322-i@test.local', 'u322_invitee', 'x', 'Invitee', 1, 1);
+        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active, is_fake)
+        VALUES (${CREATOR}, 'u322-c@test.local', 'u322_creator', 'x', 'Creator', 1, 1, 0),
+               (${OTHER}, 'u322-o@test.local', 'u322_other', 'x', 'Other', 1, 1, 0),
+               (${INVITEE}, 'u322-i@test.local', 'u322_invitee', 'x', 'Invitee', 1, 1, 0);
         INSERT INTO categories (id, slug, name_ar, name_en) VALUES (32200, 'u322-cat', 'U322', 'U322 Cat');
         INSERT INTO sessions (id, user_id, expires_at) VALUES
             ('${CREATOR_SESSION}', ${CREATOR}, datetime('now', '+1 day')),

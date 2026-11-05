@@ -37,6 +37,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { translations } from '../../src/i18n';
 import { donatePage } from '../../src/modules/pages/donate-page';
+import { createSqliteD1 } from '../helpers/sqlite-d1';
 
 const root = resolve(__dirname, '../..');
 const readSrc = (rel: string) => readFileSync(resolve(root, rel), 'utf-8');
@@ -123,11 +124,17 @@ describe('R1.5 B1 supporter amount reaches the card (behavioral)', () => {
 
     /** Run the page's OWN renderSupporters (extracted from rendered HTML) on view objects. */
     async function renderPageCards(viewObjects: Record<string, unknown>[]): Promise<string> {
+        // UNIT41.1: the page sits behind the public monetization gate; open it
+        // in this DB (as the owner does from /admin) so we test the real page.
+        const db = createSqliteD1();
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         const ctx = {
             get: (k: string) => (k === 'lang' ? 'en' : k === 'cspNonce' ? 'test-nonce' : null),
             html: (s: string) => s,
+            env: { DB: db },
         } as never;
         const html = (await (donatePage as (c: never) => Promise<string>)(ctx)) as string;
+        db.close();
         const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((x) => x[1]);
         const pageScript = scripts.find((s) => s.includes('function renderSupporters'));
         expect(pageScript, 'rendered page must ship its own renderSupporters').toBeTruthy();

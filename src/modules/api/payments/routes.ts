@@ -6,12 +6,15 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
+import { monetizationGate } from '../../../middleware/monetization';
 import { PaymentController } from '../../../controllers/PaymentController';
 
 const paymentRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 // C1 (SEC-13): every payment-method op is per-user — declare router-level auth so
 // c.get('user') is set and requireAuth() inside the controller can succeed.
 paymentRoutes.use('*', authMiddleware({ required: true }));
+// UNIT41.1: public money gate — payout methods belong to the withdrawal flow.
+paymentRoutes.use('*', monetizationGate());
 const controller = new PaymentController();
 
 // ============================================

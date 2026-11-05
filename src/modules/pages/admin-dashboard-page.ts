@@ -183,6 +183,36 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
                 <p id="houseAdStatus" class="mt-3 text-xs text-gray-500 dark:text-gray-400" role="status" aria-live="polite"></p>
             </div>
 
+            <!-- UNIT41.1: public monetization gate + unified explainer video (admin-only) -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-8">
+                <h2 class="text-xl font-bold mb-1">${tt('platform_settings_title')}</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">${tt('platform_settings_hint')}</p>
+
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 py-4 border-t border-gray-100 dark:border-gray-700">
+                    <div class="max-w-2xl">
+                        <h3 class="font-bold">${tt('monetization_gate_title')}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">${tt('monetization_gate_hint')}</p>
+                        <p id="monetizationState" class="mt-2 text-sm font-bold text-gray-700 dark:text-gray-200" role="status" aria-live="polite"></p>
+                    </div>
+                    <button id="monetizationToggleBtn" type="button" role="switch" dir="ltr" aria-checked="false" aria-label="${tt('monetization_gate_toggle')}" data-next-value="1"
+                            class="relative inline-flex h-8 w-14 flex-shrink-0 items-center rounded-full bg-gray-300 dark:bg-gray-600 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                        <span id="monetizationToggleKnob" aria-hidden="true" class="inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform translate-x-1"></span>
+                    </button>
+                </div>
+
+                <form id="demoVideoForm" class="py-4 border-t border-gray-100 dark:border-gray-700">
+                    <label class="block text-sm font-semibold mb-1" for="demoVideoUrl">${tt('demo_video_title')}</label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">${tt('demo_video_hint')}</p>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input id="demoVideoUrl" type="url" inputmode="url" maxlength="500"
+                               placeholder="https://maelshpro.com/ffmpeg/storage/live/match_fake/fake.mp4"
+                               class="flex-1 px-3 py-2 rounded-lg border dark:border-gray-600 bg-transparent text-sm" />
+                        <button type="submit" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold">${tt('platform_settings_save')}</button>
+                    </div>
+                </form>
+                <p id="platformSettingsStatus" class="mt-2 text-xs text-gray-500 dark:text-gray-400" role="status" aria-live="polite"></p>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
                     <h2 class="text-xl font-bold mb-4">${tt('financial_summary')}</h2>
@@ -407,13 +437,13 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
                         document.getElementById('demographics').innerHTML = d.demographics.map(dm => '<div class="flex justify-between text-sm"><span>' + dm.country + '</span><span class="font-bold">' + dm.count + '</span></div>').join('');
                     }
                     if (d.hottestCompetitions) {
-                        document.getElementById('hottestCompetitions').innerHTML = d.hottestCompetitions.map(c => '<div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-xl"><div><span class="font-bold">' + c.title + '</span><span class="text-sm text-gray-500 ml-2">' + c.status + '</span></div><div class="flex items-center gap-2"><span class="text-sm text-gray-500">' + c.total_views + ' ${tr.viewers}</span><button data-csp-on="click" data-csp-fn="openSuspendPanel" data-csp-args='[" + c.id + "]' class="text-xs text-red-500 hover:text-red-700 font-bold"><i class="fas fa-ban"></i></button></div></div>').join('');
+                        document.getElementById('hottestCompetitions').innerHTML = d.hottestCompetitions.map(c => '<div class="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-xl"><div><span class="font-bold">' + c.title + '</span><span class="text-sm text-gray-500 ml-2">' + c.status + '</span></div><div class="flex items-center gap-2"><span class="text-sm text-gray-500">' + c.total_views + ' ${tr.viewers}</span><button data-csp-on="click" data-csp-fn="openSuspendPanel" data-csp-args="' + JSON.stringify([c.id]) + '" class="text-xs text-red-500 hover:text-red-700 font-bold"><i class="fas fa-ban"></i></button></div></div>').join('');
                     }
                 }
                 const rolesRes = await fetch('/api/admin/roles', { headers: adminHeaders() });
                 const rolesData = await rolesRes.json();
                 if (rolesData.success && rolesData.data.roles) {
-                    document.getElementById('adminRoles').innerHTML = rolesData.data.roles.map(r => '<div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"><span>' + r.display_name + ' (' + r.username + ')</span><div class="flex items-center gap-2"><span class="px-2 py-1 rounded-full text-xs font-bold ' + (r.role === 'SuperAdmin' ? 'bg-red-100 text-red-700' : r.role === 'Auditor' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700') + '">' + r.role + '</span><button data-csp-on="click" data-csp-fn="revokeRole" data-csp-args='[" + r.user_id + "]' class="text-red-500 text-xs">${tt('revoke_role')}</button></div></div>').join('');
+                    document.getElementById('adminRoles').innerHTML = rolesData.data.roles.map(r => '<div class="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700 rounded-lg"><span>' + r.display_name + ' (' + r.username + ')</span><div class="flex items-center gap-2"><span class="px-2 py-1 rounded-full text-xs font-bold ' + (r.role === 'SuperAdmin' ? 'bg-red-100 text-red-700' : r.role === 'Auditor' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700') + '">' + r.role + '</span><button data-csp-on="click" data-csp-fn="revokeRole" data-csp-args="' + JSON.stringify([r.user_id]) + '" class="text-red-500 text-xs">${tt('revoke_role')}</button></div></div>').join('');
                 }
                 const logsRes = await fetch('/api/admin/audit-logs?limit=10', { headers: adminHeaders() });
                 const logsData = await logsRes.json();
@@ -446,8 +476,8 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
                         '<div class="flex items-center gap-2">' +
                         '<span class="font-bold text-sm ' + statusColor + ' capitalize">' + r.status + '</span>' +
                         (r.status === 'requested' ?
-                            '<button data-csp-on="click" data-csp-fn="openApproveModal" data-csp-args='[" + r.id + "]' class="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>' +
-                            '<button data-csp-on="click" data-csp-fn="openRejectModal" data-csp-args='[" + r.id + "]' class="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700">Reject</button>'
+                            '<button data-csp-on="click" data-csp-fn="openApproveModal" data-csp-args="' + JSON.stringify([r.id]) + '" class="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700">Approve</button>' +
+                            '<button data-csp-on="click" data-csp-fn="openRejectModal" data-csp-args="' + JSON.stringify([r.id]) + '" class="px-3 py-1 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700">Reject</button>'
                             : '') +
                         '</div></div>';
                 }).join('');
@@ -511,7 +541,7 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
             errDiv.classList.add('hidden');
             if (!compId) { errDiv.textContent = 'Competition ID is required.'; errDiv.classList.remove('hidden'); return; }
             if (!reason) { errDiv.textContent = 'An explicit reason is mandatory for transparency.'; errDiv.classList.remove('hidden'); return; }
-            if (!confirm('You are about to SUSPEND competition #' + compId + '.\n\nThis will:\n• Change status to SUSPENDED (NOT deleted)\n• Remain visible in archive with tombstone\n• Log your name, role, and reason\n• Instantly notify all live viewers\n\nReason: ' + reason + '\n\nProceed?')) return;
+            if (!confirm('You are about to SUSPEND competition #' + compId + '.\\n\\nThis will:\\n• Change status to SUSPENDED (NOT deleted)\\n• Remain visible in archive with tombstone\\n• Log your name, role, and reason\\n• Instantly notify all live viewers\\n\\nReason: ' + reason + '\\n\\nProceed?')) return;
             const res = await fetch('/api/admin/competitions/' + compId + '/suspend', {
                 method: 'POST',
                 headers: adminHeaders({ 'Content-Type': 'application/json' }),
@@ -1038,6 +1068,116 @@ export async function adminDashboardPage(c: Context<{ Bindings: Bindings; Variab
         document.getElementById('adPricingSave')?.addEventListener('click', saveAdPricing);
         document.getElementById('adPricingClear')?.addEventListener('click', clearAdPricing);
         document.getElementById('houseAdForm')?.addEventListener('submit', createHouseAd);
+
+        // ============================
+        // UNIT41.1: platform settings (monetization gate + unified video)
+        // ============================
+        var PS_I18N = ${JSON.stringify({
+            stateOpen: tt('monetization_state_open'),
+            stateClosed: tt('monetization_state_closed'),
+            saved: tt('platform_settings_saved'),
+            failed: tt('platform_settings_failed'),
+            invalidUrl: tt('platform_settings_invalid_url'),
+        })};
+
+        function setPlatformSettingsStatus(message, isError) {
+            var el = document.getElementById('platformSettingsStatus');
+            if (!el) return;
+            el.textContent = message || '';
+            el.classList.toggle('text-red-600', !!isError);
+            el.classList.toggle('dark:text-red-400', !!isError);
+            el.classList.toggle('text-emerald-600', !isError);
+            el.classList.toggle('dark:text-emerald-400', !isError);
+        }
+
+        function setMonetizationState(isOpen) {
+            var stateEl = document.getElementById('monetizationState');
+            var btn = document.getElementById('monetizationToggleBtn');
+            var knob = document.getElementById('monetizationToggleKnob');
+            if (stateEl) {
+                stateEl.textContent = isOpen ? PS_I18N.stateOpen : PS_I18N.stateClosed;
+                stateEl.classList.toggle('text-emerald-600', isOpen);
+                stateEl.classList.toggle('dark:text-emerald-400', isOpen);
+                stateEl.classList.toggle('text-amber-600', !isOpen);
+                stateEl.classList.toggle('dark:text-amber-400', !isOpen);
+            }
+            if (btn) {
+                btn.setAttribute('aria-checked', isOpen ? 'true' : 'false');
+                btn.dataset.nextValue = isOpen ? '0' : '1';
+                btn.classList.toggle('bg-emerald-500', isOpen);
+                btn.classList.toggle('bg-gray-300', !isOpen);
+                btn.classList.toggle('dark:bg-gray-600', !isOpen);
+            }
+            if (knob) {
+                knob.classList.toggle('translate-x-6', isOpen);
+                knob.classList.toggle('translate-x-1', !isOpen);
+            }
+        }
+
+        async function loadPlatformSettings() {
+            try {
+                var res = await fetch('/api/admin/settings', { headers: adminHeaders() });
+                if (res.status === 401 || res.status === 403) return; // boot gate already reported denial
+                var data = await res.json();
+                var rows = (data && data.data && data.data.settings) || [];
+                var map = {};
+                for (var i = 0; i < rows.length; i++) map[rows[i].setting_key] = rows[i].setting_value;
+                setMonetizationState(map['public_monetization_enabled'] === '1');
+                var video = document.getElementById('demoVideoUrl');
+                if (video) video.value = map['demo_explainer_video_url'] || '';
+            } catch (e) { console.error('[platform-settings] load failed', e); }
+        }
+
+        async function toggleMonetizationGate() {
+            var btn = document.getElementById('monetizationToggleBtn');
+            if (!btn) return;
+            var next = btn.dataset.nextValue || '1';
+            try {
+                var res = await fetch('/api/admin/settings', {
+                    method: 'PUT',
+                    headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ key: 'public_monetization_enabled', value: next })
+                });
+                var data = await res.json().catch(function() { return {}; });
+                if (data && data.success) {
+                    setMonetizationState(next === '1');
+                    setPlatformSettingsStatus(PS_I18N.saved, false);
+                } else {
+                    setPlatformSettingsStatus(PS_I18N.failed, true);
+                }
+            } catch (e) {
+                console.error('[platform-settings] toggle failed', e);
+                setPlatformSettingsStatus(PS_I18N.failed, true);
+            }
+        }
+
+        async function saveDemoVideoUrl(event) {
+            event.preventDefault();
+            var input = document.getElementById('demoVideoUrl');
+            if (!input) return;
+            var value = input.value.trim();
+            if (value && !(value.startsWith('https://') || value.startsWith('http://'))) {
+                setPlatformSettingsStatus(PS_I18N.invalidUrl, true);
+                return;
+            }
+            try {
+                var res = await fetch('/api/admin/settings', {
+                    method: 'PUT',
+                    headers: adminHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ key: 'demo_explainer_video_url', value: value })
+                });
+                var data = await res.json().catch(function() { return {}; });
+                if (data && data.success) setPlatformSettingsStatus(PS_I18N.saved, false);
+                else setPlatformSettingsStatus(PS_I18N.failed, true);
+            } catch (e) {
+                console.error('[platform-settings] save failed', e);
+                setPlatformSettingsStatus(PS_I18N.failed, true);
+            }
+        }
+
+        document.getElementById('monetizationToggleBtn')?.addEventListener('click', toggleMonetizationGate);
+        document.getElementById('demoVideoForm')?.addEventListener('submit', saveDemoVideoUrl);
+        loadPlatformSettings();
 
         loadAdminDashboard();
         loadWithdrawals();

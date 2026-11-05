@@ -252,6 +252,18 @@ export class UserSignalsModel {
     }
 
     /**
+     * ALL active, non-synthetic user ids — the eligibility base for invite
+     * panels. UNIT41.1: synthetic rows (is_fake = 1) are never suggested as
+     * opponents. `COALESCE(is_fake, 0) = 0` is the canonical real marker.
+     */
+    async findActiveRealUserIds(): Promise<number[]> {
+        const res = await this.db.prepare(
+            `SELECT id FROM users WHERE is_active = 1 AND COALESCE(is_fake, 0) = 0`
+        ).all<{ id: number }>();
+        return ((res.results ?? []) as Array<{ id: number }>).map((r) => r.id);
+    }
+
+    /**
      * ALL active user ids (eligibility base for search/suggestions).
      * No LIMIT, no cap — callers freeze the full set at T0.
      */

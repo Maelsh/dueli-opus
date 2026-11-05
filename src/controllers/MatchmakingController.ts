@@ -82,7 +82,8 @@ export class MatchmakingController extends BaseController {
             const { UserSignalsModel } = await import('../models/UserSignalsModel');
             const ranking = await import('../lib/services/H7UserRankingService');
             const signals = new UserSignalsModel(db);
-            const allIds = await signals.findAllActiveUserIds();
+            // UNIT41.1: synthetic accounts never appear as invite candidates.
+            const allIds = await signals.findActiveRealUserIds();
             const rows = await signals.loadUsers(allIds);
             const [blocked, invitees, requesters, closedRequests, following, viewerSpecs] = await Promise.all([
                 signals.loadBlockedIds(user.id),
@@ -177,7 +178,10 @@ export class MatchmakingController extends BaseController {
                     ).bind(...batch).all();
                     for (const item of (pageRes.results || [])) byId.set((item as { id: number }).id, item);
                 }
-                users = pageIds.map((id) => byId.get(id)).filter((r): r is unknown => !!r);
+                // UNIT41.1 defense in depth: a stale/synthetic row can never
+                // slip through hydration into the invite panel.
+                users = pageIds.map((id) => byId.get(id))
+                    .filter((r): r is unknown => !!r && Number((r as { is_fake?: number | null }).is_fake ?? 0) === 0);
             }
 
             return this.success(c, {

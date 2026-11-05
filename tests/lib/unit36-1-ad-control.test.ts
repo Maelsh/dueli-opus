@@ -31,6 +31,9 @@ const CREATOR = 's-creator-36';
 const OPPONENT = 's-opponent-36';
 
 async function seed(db: SqliteD1) {
+    // UNIT41.1: the public money/ads gate is closed by default (0045); these
+    // tests exercise the ad/money business logic — open it explicitly.
+    await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     await db.prepare(
         `INSERT INTO users (id, email, username, password_hash, display_name, is_admin, is_verified, is_active, language, country) VALUES
          (2, 'c@t.local', 'creator36', 'x', 'C', 0, 1, 1, 'ar', 'EG'),

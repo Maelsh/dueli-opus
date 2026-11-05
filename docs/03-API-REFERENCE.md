@@ -22,7 +22,7 @@
 | `/api/likes`, `/api/reports`, `/api/messages`, `/api/schedule` | مربوطة على `/api` مباشرة | ✅ |
 | `/api/admin` | modules/api/admin | ✅ (زر الحظر زائف — T1.4) |
 | `/api/settings` | modules/api/settings | ✅ |
-| `/api/earnings`, `/api/withdrawals` | مربوطة | ✅ |
+| `/api/withdrawals` | modules/api/withdrawals | ✅ (`/api/earnings` حُذف في UNIT41 — لا يوجد أي مسار أرباح؛ الأرباح تُشتق من `ledger_entries` حصراً) |
 | `/api/advertisements`, `/api/transparency`, `/api/advertiser`, `/api/complaints` | مربوطة | ✅ |
 | `/api/matchmaking` | modules/api/matchmaking | ✅ (online-users, heartbeat, offline) |
 | `/api/sse` | modules/api/sse | ✅ مربوطة + العميل يتصل الآن عبر SseService (T2.2) — تذكرة `?ticket=` فقط (لا رمز جلسة في الـURL) |

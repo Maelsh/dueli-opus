@@ -2,11 +2,14 @@ import { Hono } from 'hono';
 import { Bindings, Variables } from '../../../config/types';
 import { AdvertiserController } from '../../../controllers/AdvertiserController';
 import { authMiddleware } from '../../../middleware/auth';
+import { monetizationGate } from '../../../middleware/monetization';
 
 const advertiserRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const controller = new AdvertiserController();
 
 advertiserRoutes.use('*', authMiddleware({ required: true }));
+// UNIT41.1: public ads gate — the advertiser portal's API surface.
+advertiserRoutes.use('*', monetizationGate());
 
 advertiserRoutes.get('/dashboard', async (c) => controller.getDashboard(c));
 advertiserRoutes.post('/campaigns', async (c) => controller.createCampaign(c));

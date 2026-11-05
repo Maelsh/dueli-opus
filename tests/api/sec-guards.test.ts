@@ -72,6 +72,8 @@ describe('SEC-05 CORS behavior', () => {
     beforeEach(async () => {
         ipSequence = 0;
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     it('reflects an allow-listed origin with credentials and never a wildcard', async () => {
@@ -132,6 +134,8 @@ describe('SEC-07/SEC-08/SEC-11 canonical session access', () => {
     beforeEach(async () => {
         ipSequence = 0;
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         await seed(db);
     });
 

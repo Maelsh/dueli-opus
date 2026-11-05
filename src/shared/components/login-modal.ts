@@ -74,29 +74,13 @@ export function getLoginModal(lang: Language): string {
             </button>
             
             <button data-csp-on="click" data-csp-fn="loginWith" data-csp-args='["microsoft"]' class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <i class="fab fa-microsoft text-xl text-[#00A4EF]"></i>
-              <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Outlook</span>
+              <svg class="w-5 h-5" viewBox="0 0 23 23" aria-hidden="true"><path fill="#F25022" d="M1 1h10v10H1z"/><path fill="#7FBA00" d="M12 1h10v10H12z"/><path fill="#00A4EF" d="M1 12h10v10H1z"/><path fill="#FFB900" d="M12 12h10v10H12z"/></svg>
+              <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Microsoft</span>
             </button>
 
-            <!-- Hidden social buttons - قد تُفعَّل لاحقاً -->
             <button data-csp-on="click" data-csp-fn="loginWith" data-csp-args='["facebook"]' class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               <i class="fab fa-facebook text-xl text-[#1877F2]"></i>
               <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Facebook</span>
-            </button>
-            
-            <button data-csp-on="click" data-csp-fn="loginWith" data-csp-args='["twitter"]' class="social-btn flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <i class="fab fa-x-twitter text-xl text-gray-800 dark:text-white"></i>
-              <span class="font-medium text-sm text-gray-700 dark:text-gray-200">X</span>
-            </button>
-
-            <button data-csp-on="click" data-csp-fn="loginWith" data-csp-args='["tiktok"]' class="social-btn hidden flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <i class="fab fa-tiktok text-xl text-black dark:text-white"></i>
-              <span class="font-medium text-sm text-gray-700 dark:text-gray-200">TikTok</span>
-            </button>
-
-            <button data-csp-on="click" data-csp-fn="loginWith" data-csp-args='["snapchat"]' class="social-btn hidden flex items-center justify-center gap-2 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              <i class="fab fa-snapchat text-xl text-[#FFFC00] drop-shadow-sm"></i>
-              <span class="font-medium text-sm text-gray-700 dark:text-gray-200">Snapchat</span>
             </button>
           </div>
         </div>

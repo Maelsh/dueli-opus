@@ -33,6 +33,8 @@ function inlineScripts(html: string): string[] {
 describe('R2-F page pins', () => {
     it('1a. /advertiser scripts compile, share one session contract, numeric CSP args', async () => {
         const db = new SqliteD1();
+        // UNIT41.1: /advertiser sits behind the public monetization gate; open it.
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         for (const lang of ['en', 'ar']) {
             const html = await (await app.request(`/advertiser?lang=${lang}`, {}, env(db))).text();
             const scripts = inlineScripts(html);
@@ -91,6 +93,9 @@ describe('R2-F page pins', () => {
 
     it('3. navigation reaches /advertiser and /complaints', async () => {
         const db = new SqliteD1();
+        // UNIT41.1: /donate sits behind the public monetization gate; open it
+        // here so we test the real page (gate itself is covered by its suite).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         const html = await (await app.request('/donate?lang=en', {}, env(db))).text();
         expect(html).toContain('/advertiser?lang=');
         expect(html).toContain('/complaints?lang=');
@@ -98,6 +103,7 @@ describe('R2-F page pins', () => {
 
     it('4a. /donate renders the donor history region on the live contract', async () => {
         const db = new SqliteD1();
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         for (const lang of ['en', 'ar']) {
             const html = await (await app.request(`/donate?lang=${lang}`, {}, env(db))).text();
             expect(html).toContain('myDonationsCard');
@@ -107,7 +113,9 @@ describe('R2-F page pins', () => {
                 expect(() => new Script(s), `donate[${lang}] compiles`).not.toThrow();
             }
         }
-        const ar = await (await app.request('/donate?lang=ar', {}, env(new SqliteD1()))).text();
+        const arDb = new SqliteD1();
+        await arDb.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
+        const ar = await (await app.request('/donate?lang=ar', {}, env(arDb))).text();
         expect(ar).toContain('تبرعاتي');
     });
 
@@ -128,6 +136,7 @@ describe('R2-F page pins', () => {
 
     it('5. touched pages keep RTL/LTR + dark variants in ar and en', async () => {
         const db = new SqliteD1();
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         const ar = await (await app.request('/advertiser?lang=ar', {}, env(db))).text();
         expect(ar).toContain('dir="rtl"');
         expect(ar).toContain('dark:');

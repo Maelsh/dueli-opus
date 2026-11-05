@@ -26,7 +26,7 @@ import { EventPusher } from '../lib/services/EventPusher';
 import { RecordingLeaseModel } from '../models/RecordingLeaseModel';
 import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
-import { BlockedInteractionError, ContentTooLongError, RatingEligibilityError, ValidationError } from '../lib/errors/AppError';
+import { BlockedInteractionError, ConflictError, ContentTooLongError, RatingEligibilityError, ValidationError } from '../lib/errors/AppError';
 import { WatchService, WATCH_ELIGIBILITY_SECONDS } from '../lib/services/WatchService';
 
 /**
@@ -1722,6 +1722,12 @@ if (competition.opponent_id) {
                 return this.error(c, this.t('competition_errors.cannot_invite_self', c), 409);
             }
 
+            // UNIT41.1: synthetic (demo) accounts can never be invited —
+            // server-side, even on a crafted direct request.
+            if (await invitationModel.isSyntheticUser(body.invitee_id)) {
+                return this.error(c, this.t('competition_errors.cannot_invite_synthetic', c), 409);
+            }
+
             // H3: a pending join request from the same user+competition forbids
             // a parallel invitation — one path at a time.
             const requestModel = new CompetitionRequestModel(c.env.DB);
@@ -1775,6 +1781,11 @@ if (existing) return this.error(c, this.t('competition_errors.already_invited', 
 
             return this.success(c, { id: result.id, invited: true });
         } catch (error) {
+            // UNIT41.1 backstop: the model-level synthetic guard fires here if
+            // the race window produced one — report it as a conflict, not a 500.
+            if (error instanceof ConflictError) {
+                return this.error(c, this.t('competition_errors.cannot_invite_synthetic', c), 409);
+            }
             return this.serverError(c, error as Error);
         }
     }

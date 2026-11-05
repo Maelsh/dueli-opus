@@ -571,14 +571,14 @@ describe('D1 param-limit remediation: client-controlled page hydration (A3b/A5)'
             `INSERT INTO categories (id, slug, name_ar, name_en, parent_id) VALUES (10, 'dialogue', 'حوار', 'Dialogue', NULL)`
         ).run();
         await db.prepare(
-            `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at)
-             VALUES (6000, 'cap@local', 'cap', 'x', 'Captain', 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now'))`
+            `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at, is_fake)
+             VALUES (6000, 'cap@local', 'cap', 'x', 'Captain', 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now'), 0)`
         ).run();
         for (let k = 0; k < 150; k++) {
             const id = 6100 + k;
             await db.prepare(
-                `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at)
-                 VALUES (?, ?, ?, 'x', ?, 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now'))`
+                `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at, is_fake)
+                 VALUES (?, ?, ?, 'x', ?, 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now'), 0)`
             ).bind(id, `mm${id}@local`, `mm${id}`, `Mm ${id}`).run();
         }
         await db.prepare(`INSERT INTO sessions (id, user_id, expires_at) VALUES ('sess-mm-cap', 6000, datetime('now', '+1 day'))`).run();

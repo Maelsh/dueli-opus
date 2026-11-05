@@ -32,6 +32,9 @@ describe('post-R1: touched pages serve clean SSR shells (en+ar)', () => {
         for (const lang of ['en', 'ar']) {
             it(`${page}?lang=${lang} ⇒ 200, strict CSP, no [object Object]`, async () => {
                 const db = new SqliteD1();
+                // UNIT41.1: /earnings sits behind the public money/ads gate —
+                // open it here so this suite keeps testing the real shell.
+                await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
                 const res = await app.request(`${page}?lang=${lang}`, {}, env(db));
                 expect(res.status, page).toBe(200);
                 const html = await res.text();

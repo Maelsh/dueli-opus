@@ -35,6 +35,26 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
     }
 
     /**
+     * UNIT41.1: whether the user row is a synthetic (is_fake=1) account.
+     * Unknown/missing ids fail closed (treated as synthetic — the invite is
+     * refused) rather than inviting a ghost.
+     */
+    async isSyntheticUser(userId: number): Promise<boolean> {
+        const row = await this.db.prepare(
+            'SELECT COALESCE(is_fake, 0) AS fake FROM users WHERE id = ?'
+        ).bind(userId).first<{ fake: number }>();
+        if (!row) return true;
+        return Number(row.fake) === 1;
+    }
+
+    /** Server-side refusal of synthetic invitees (defense in depth). */
+    private async assertInviteeNotSynthetic(inviteeId: number): Promise<void> {
+        if (await this.isSyntheticUser(inviteeId)) {
+            throw new ConflictError('لا يمكن دعوة هذا المستخدم');
+        }
+    }
+
+    /**
      * Update - required by BaseModel
      */
     async update(id: number, data: Partial<CompetitionInvitation>): Promise<CompetitionInvitation | null> {
@@ -58,9 +78,11 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
         inviter_id: number;
         invitee_id: number;
     }): Promise<{ id: number }> {
+        await this.assertInviteeNotSynthetic(data.invitee_id);
+
         // Check if invitation already exists
         const existing = await this.db.prepare(`
-            SELECT id FROM competition_invitations 
+            SELECT id FROM competition_invitations
             WHERE competition_id = ? AND invitee_id = ? AND status = 'pending'
         `).bind(data.competition_id, data.invitee_id).first();
 
@@ -260,6 +282,9 @@ export class CompetitionInvitationModel extends BaseModel<CompetitionInvitation>
         inviteeId: number,
         message?: string
     ): Promise<{ id: number }> {
+        // UNIT41.1: synthetic accounts can never be invited — even by direct
+        // API calls (the UI never offers them; this stops a crafted request).
+        await this.assertInviteeNotSynthetic(inviteeId);
         const result = await this.db.prepare(`
             INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, message, status, expires_at, created_at, updated_at)
             VALUES (?, ?, ?, ?, 'pending', datetime('now', '+24 hours'), datetime('now'), datetime('now'))

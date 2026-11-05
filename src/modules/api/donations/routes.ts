@@ -13,6 +13,7 @@ import { PlatformSettingsModel } from '../../../models/PlatformSettingsModel';
 import { splitDonationCents } from '../../../models/DonationModel';
 import { EventPusher } from '../../../lib/services/EventPusher';
 import { authMiddleware } from '../../../middleware/auth';
+import { monetizationGate } from '../../../middleware/monetization';
 import { t } from '../../../i18n';
 import type { Language } from '../../../config/types';
 import type { StripeEventShape } from '../../../lib/services/StripeWebhookService';
@@ -25,6 +26,15 @@ const donationsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 // webhook (POST /api/donations/webhook) is the only payment completion
 // authority. No client may ever set payment_status → completed.
 donationsRoutes.use('*', authMiddleware({ required: false }));
+// UNIT41.1: public money gate — every donation surface answers 403 with the
+// owner's translated sentence while the gate is closed. The Stripe webhook
+// (POST /api/donations/webhook) is the payment-completion authority, not a
+// user surface, and is NEVER gated.
+donationsRoutes.use('*', async (c, next) => {
+    const path = c.req.path;
+    if (path === '/api/donations/webhook' || path.endsWith('/donations/webhook')) return next();
+    return monetizationGate()(c, next);
+});
 
 /**
  * GET /api/donations/top-supporters

@@ -48,8 +48,10 @@ async function seed(db: SqliteD1): Promise<string> {
 describe('SEC-02-G1 — dead /api/earnings routes are gone, live wallet/page unaffected', () => {
     let db: SqliteD1;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     it('1. the three deleted earnings endpoints return 404 and move no money', async () => {

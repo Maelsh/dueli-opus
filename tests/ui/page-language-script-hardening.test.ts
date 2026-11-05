@@ -76,6 +76,9 @@ const SURFACES = [
 ];
 
 async function seed(db: SqliteD1) {
+    // UNIT41.1: /earnings and /donate sit behind the public monetization
+    // gate; open it here (the gate itself is covered by its own suite).
+    await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     await db.prepare(
         `INSERT INTO users (id, email, username, display_name, password_hash, is_active)
          VALUES (901, 'lang@local', 'languser', 'Lang User', 'x', 1)`

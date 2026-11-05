@@ -53,7 +53,7 @@ const INVENTORY = JSON.parse(
 type Env = Parameters<typeof app.request>[2];
 const env = (): Env => ({ DB: new FakeD1() }) as unknown as Env;
 
-/** The eight sections of the center, in navigation order. */
+/** The nine sections of the center, in navigation order. */
 const SECTIONS = [
     'overview',
     'message',
@@ -63,6 +63,7 @@ const SECTIONS = [
     'terms',
     'contact',
     'support',
+    'charter',
 ] as const;
 
 /** Legacy anchors that must keep resolving inside the help body. */
@@ -98,7 +99,7 @@ describe('UNIT38 / R4-GUIDE-1 — the guide center is a set of independent pages
         const hub = await get('/guide?lang=en');
         expect(hub.status).toBe(200);
 
-        // The hub links to all eight sections, each on its own address.
+        // The hub links to all nine sections, each on its own address.
         for (const section of SECTIONS) {
             expect(hub.html, `hub link /guide/${section}`).toContain(`href="/guide/${section}?lang=en"`);
         }
@@ -332,7 +333,10 @@ describe('UNIT38 / R4-GUIDE-1 — global SEO head (real rendered HTML)', () => {
             ['/explore?lang=en', 'https://dueli.maelshpro.com/explore'],
             ['/docs?lang=en', 'https://dueli.maelshpro.com/docs'],
             ['/transparency?lang=en', 'https://dueli.maelshpro.com/transparency'],
-            ['/donate?lang=en', 'https://dueli.maelshpro.com/donate'],
+            // UNIT41.1: /donate serves 403 + noindex to ordinary visitors while
+            // the public monetization gate is closed, so it is no longer a
+            // sitemap-listed public page. /guide/charter is listed instead.
+            ['/guide/charter?lang=en', 'https://dueli.maelshpro.com/guide/charter'],
         ];
         for (const [path, expected] of cases) {
             const { html, status } = await get(path);

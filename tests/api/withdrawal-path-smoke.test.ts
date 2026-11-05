@@ -89,6 +89,8 @@ describe('SEC-02 smoke — withdrawal path end-to-end (Vitest only)', () => {
 
     beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         ledger = new LedgerService(db as unknown as D1Database);
         await seed(db);
     });

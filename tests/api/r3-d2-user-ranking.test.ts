@@ -67,9 +67,9 @@ function headers(token?: string, guest?: string): Record<string, string> {
 
 async function seedBase(db: SqliteD1): Promise<void> {
     await db.prepare(
-        `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at) VALUES
-          (2, 'creator@d2.local', 'creator', 'x', 'Creator C', 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now')),
-          (3, 'viewer@d2.local', 'viewer', 'x', 'Viewer V', 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now'))`
+        `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at, is_fake) VALUES
+          (2, 'creator@d2.local', 'creator', 'x', 'Creator C', 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now'), 0),
+          (3, 'viewer@d2.local', 'viewer', 'x', 'Viewer V', 1, 'ar', 'SA', 1, datetime('now'), 0, datetime('now'), 0)`
     ).run();
     await db.prepare(
         `INSERT INTO sessions (id, user_id, expires_at) VALUES ('sess-d2-user2', 2, datetime('now', '+1 day')), ('sess-d2-user3', 3, datetime('now', '+1 day'))`
@@ -92,8 +92,8 @@ async function addUser(
     }
 ): Promise<void> {
     await db.prepare(
-        `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at)
-          VALUES (?, ?, ?, 'x', ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country, is_online, last_seen_at, is_busy, created_at, is_fake)
+          VALUES (?, ?, ?, 'x', ?, ?, ?, ?, ?, ?, ?, ?, 0)`
     ).bind(
         opts.id, `${opts.username}@d2.local`, opts.username, opts.display ?? opts.username,
         opts.active === false ? 0 : 1, opts.lang ?? 'ar', opts.country ?? 'SA',

@@ -50,6 +50,11 @@ export class FakeD1 implements D1Database {
     invitationSeq = 0;
     notificationSeq = 0;
     commentSeq = 0;
+    // UNIT41.1: platform_settings (0045 seed: demo video URL set, money/ads gate closed).
+    platformSettings: Row[] = [
+        { id: 1, setting_key: 'demo_explainer_video_url', setting_value: 'https://maelshpro.com/ffmpeg/storage/live/match_fake/fake.mp4', description: 'UNIT41.1', updated_by: null, updated_at: new Date().toISOString() },
+        { id: 2, setting_key: 'public_monetization_enabled', setting_value: '0', description: 'UNIT41.1', updated_by: null, updated_at: new Date().toISOString() },
+    ];
 
     prepare(sql: string): FakeStmt {
         return new FakeStmt(this, sql);
@@ -115,6 +120,25 @@ class FakeStmt {
     async first(): Promise<Row | null> {
         const q = norm(this.sql);
         const p = this.params;
+
+        // --- platform_settings (UNIT41.1) ---
+        if (q.startsWith('select setting_value from platform_settings where setting_key = ?')) {
+            const row = this.db.platformSettings.find((r) => r.setting_key === p[0]);
+            return row ? { setting_value: row.setting_value } : null;
+        }
+        // --- synthetic marker (UNIT41.1): COALESCE(is_fake, 0) = 0 is a real row ---
+        if (q.startsWith('select coalesce(is_fake, 0) as fake from users where id = ?')) {
+            const user = this.db.users.find((u) => u.id === p[0]);
+            if (!user) return null;
+            return { fake: Number(user.is_fake ?? 0) };
+        }
+        if (q.startsWith('select id from platform_settings where setting_key = ?')) {
+            const row = this.db.platformSettings.find((r) => r.setting_key === p[0]);
+            return row ? { id: row.id } : null;
+        }
+        if (q.startsWith('select * from platform_settings where id = ?')) {
+            return this.db.platformSettings.find((r) => r.id === p[0]) ?? null;
+        }
 
         // --- sessions (create/find for auth in B5-2 error-path tests) ---
         if (q.startsWith('insert into sessions')) {
@@ -453,6 +477,23 @@ class FakeStmt {
         const q = norm(this.sql);
         const p = this.params;
 
+        // --- platform_settings (UNIT41.1) ---
+        if (q.startsWith('select * from platform_settings')) {
+            const rows = [...this.db.platformSettings];
+            if (q.includes('order by setting_key')) {
+                rows.sort((a, b) => String(a.setting_key).localeCompare(String(b.setting_key)));
+            }
+            return { results: rows };
+        }
+        // --- real (non-synthetic) active users (UNIT41.1) ---
+        if (q.startsWith('select id from users where is_active = 1 and coalesce(is_fake, 0) = 0')) {
+            return {
+                results: this.db.users
+                    .filter((u) => Number(u.is_active ?? 1) === 1 && Number(u.is_fake ?? 0) === 0)
+                    .map((u) => ({ id: u.id })),
+            };
+        }
+
         // --- comments (B2+B3: paged + replies_count + soft-delete aware) ---
         if (q.includes('from comments c') && q.includes('join users u')) {
             const hasParent = q.includes('c.parent_id = ?');
@@ -633,6 +674,43 @@ class FakeStmt {
         const q = norm(this.sql);
         const p = this.params;
 
+        // --- platform_settings (UNIT41.1) ---
+        if (q.startsWith('update platform_settings set setting_value = ? where setting_key = ?')) {
+            const row = this.db.platformSettings.find((r) => r.setting_key === p[1]);
+            if (!row) return ok({ last_row_id: null, changes: 0 });
+            row.setting_value = p[0];
+            row.updated_at = new Date().toISOString();
+            return ok({ last_row_id: null, changes: 1 });
+        }
+        if (q.startsWith('update platform_settings set') && q.includes(' where id = ?')) {
+            const id = p[p.length - 1];
+            const row = this.db.platformSettings.find((r) => r.id === id);
+            if (!row) return ok({ last_row_id: null, changes: 0 });
+            const setPart = q.slice('update platform_settings set'.length, q.indexOf(' where id = ?'));
+            const cols = [...setPart.matchAll(/(\w+)\s*=\s*\?/g)].map((m) => m[1]);
+            let idx = 0;
+            for (const col of cols) {
+                if (col === 'updated_at') continue; // datetime('now') keyword, not a bind
+                row[col] = p[idx];
+                idx += 1;
+            }
+            row.updated_at = new Date().toISOString();
+            return ok({ last_row_id: null, changes: 1 });
+        }
+        if (q.startsWith('insert into platform_settings')) {
+            const newId = this.db.platformSettings.reduce((max, r) => Math.max(max, Number(r.id) || 0), 0) + 1;
+            const row: Row = {
+                id: newId,
+                setting_key: p[0],
+                setting_value: p[1],
+                description: p[2] ?? null,
+                updated_by: p[3] ?? null,
+                updated_at: new Date().toISOString(),
+            };
+            this.db.platformSettings.push(row);
+            return ok({ last_row_id: newId, changes: 1 });
+        }
+
         // INSERT INTO users (email, username, display_name, password_hash,
         //  avatar_url, country, language, verification_token,
         //  verification_token_expires, oauth_provider, oauth_id, is_verified, ...)
@@ -652,6 +730,8 @@ class FakeStmt {
                 oauth_provider: p[9],
                 oauth_id: p[10],
                 is_verified: p[11] ?? 0,
+                // UNIT41.1: real accounts (UserModel.create writes is_fake = 0).
+                is_fake: 0,
                 is_active: 1,
                 total_competitions: 0,
                 total_wins: 0,

@@ -324,16 +324,6 @@ export class Modal {
     }
 
     /**
-     * Show coming soon modal
-     */
-    static showComingSoon(providerName: string): void {
-        const title = t('modals.coming_soon_title', State.lang);
-        const message = t('client.modal.coming_soon_provider', State.lang).replace('{provider}', providerName);
-        const btnText = t('general.ok', State.lang);
-        this.showCustom(title, message, btnText, 'rocket');
-    }
-
-    /**
      * Show OAuth error modal
      */
     static showOAuthError(errorCode: string): void {
