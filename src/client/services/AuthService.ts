@@ -651,20 +651,6 @@ export class AuthService {
      * Login with OAuth provider
      */
     static loginWith(provider: string): void {
-        const providerNames: Record<string, string> = {
-            google: 'Google',
-            facebook: 'Facebook',
-            microsoft: 'Microsoft',
-            tiktok: 'TikTok',
-            twitter: 'X (Twitter)',
-            snapchat: 'Snapchat'
-        };
-
-        if (provider === 'twitter' || provider === 'snapchat') {
-            Modal.showComingSoon(providerNames[provider]);
-            return;
-        }
-
         const width = 600;
         const height = 700;
         const left = (window.screen.width - width) / 2;

@@ -157,8 +157,10 @@ async function assertInvariantZero(db: SqliteD1): Promise<void> {
 describe('8.G F1/F2 — refund attempts under the non-refundable policy', () => {
     let db: SqliteD1;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     async function createCaptured10(donorToken: string, capTag: string): Promise<number> {
@@ -275,8 +277,10 @@ describe('8.G F1/F2 — refund attempts under the non-refundable policy', () => 
 describe('8.G F3 — donations are non-refundable (RED-FIRST)', () => {
     let db: SqliteD1;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     async function consentBody(extra: Record<string, unknown> = {}) {
@@ -437,8 +441,10 @@ describe('8.G F3 — donations are non-refundable (RED-FIRST)', () => {
 describe('8.G cross-stage money matrix (non-refundable policy)', () => {
     let db: SqliteD1;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     function consentCreate(token: string, dollars: number, tag: string) {

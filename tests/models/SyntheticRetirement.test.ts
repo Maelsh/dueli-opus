@@ -119,14 +119,86 @@ describe('C7 — synthetic user retirement', () => {
         expect(ids).toEqual([103, 104]);
     });
 
-    it('skips a synthetic user that still has dependents', async () => {
+    it('retires a synthetic user together with its fully-synthetic dependents (UNIT41.1)', async () => {
         await seedUsers();
         await db.prepare(
             `INSERT INTO sessions (id, user_id, expires_at) VALUES ('sess-dep', 101, datetime('now', '+1 day'))`
         ).run();
         const svc = new SyntheticRetirementService(db as unknown as D1Database);
-        expect(await svc.retireOneSyntheticUser()).toBe(102);
+        // UNIT41.1: fully-synthetic dependents retire WITH the candidate.
+        expect(await svc.retireOneSyntheticUser()).toBe(101);
         expect(await count(db, 'users')).toBe(3);
+        const orphanSessions = await db.prepare('SELECT COUNT(*) c FROM sessions WHERE user_id = 101').first<{ c: number }>();
+        expect(orphanSessions?.c).toBe(0);
+        // The next retirement takes the remaining dependency-free synthetic user.
+        expect(await svc.retireOneSyntheticUser()).toBe(102);
+        expect(await count(db, 'users')).toBe(2);
+    });
+
+    it('never retires a synthetic user linked to a REAL user (permanent, no deletion)', async () => {
+        await seedUsers();
+        // Real user 103 follows synthetic user 101 — a real interaction.
+        await db.prepare('INSERT INTO follows (follower_id, following_id) VALUES (103, 101)').run();
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        // 101 is permanently blocked; 102 retires instead.
+        expect(await svc.retireOneSyntheticUser()).toBe(102);
+        const survivor = await db.prepare('SELECT id FROM users WHERE id = 101').all();
+        expect((Array.isArray(survivor) ? survivor : (survivor as unknown as { results: { id: number }[] }).results)).toHaveLength(1);
+        // Permanent: repeating the attempt still cannot take 101.
+        expect(await svc.retireOneSyntheticUser()).toBeNull();
+        const still = await db.prepare('SELECT COUNT(*) c FROM users WHERE id = 101').first<{ c: number }>();
+        expect(still?.c).toBe(1);
+    });
+
+    it('never retires a synthetic user with a money trail (permanent)', async () => {
+        await seedUsers();
+        await db.prepare('INSERT INTO user_earnings (user_id, available, pending, total) VALUES (101, 5, 0, 5)').run();
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        expect(await svc.retireOneSyntheticUser()).toBe(102);
+        const earnings = await db.prepare('SELECT available FROM user_earnings WHERE user_id = 101').first<{ available: number }>();
+        expect(earnings?.available).toBe(5);
+        expect(await svc.retireOneSyntheticUser()).toBeNull();
+    });
+
+    it('retires a synthetic user with its synthetic competition subtree', async () => {
+        await seedUsers();
+        await db.prepare(`INSERT INTO categories (id, slug, name_ar, name_en) VALUES (1, 'c', 'C', 'C')`).run();
+        // 101 created TWO synthetic competitions; 102 commented on the first.
+        await db.prepare(
+            `INSERT INTO competitions (id, title, rules, category_id, creator_id, status, is_fake) VALUES
+             (301, 'Syn FromUser', 'r', 1, 101, 'completed', 1),
+             (302, 'Syn FromUser2', 'r', 1, 101, 'completed', 1)`
+        ).run();
+        await db.prepare(
+            `INSERT INTO comments (competition_id, user_id, content) VALUES (301, 102, 'demo'), (301, 101, 'self')`
+        ).run();
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        expect(await svc.retireOneSyntheticUser()).toBe(101);
+        const comps = await db.prepare('SELECT COUNT(*) c FROM competitions WHERE id IN (301, 302)').first<{ c: number }>();
+        expect(comps?.c).toBe(0);
+        const comments = await db.prepare('SELECT COUNT(*) c FROM comments WHERE competition_id = 301').first<{ c: number }>();
+        expect(comments?.c).toBe(0);
+        // The synthetic author 102 is still there — only the reviewed user + subtree retired.
+        const still102 = await db.prepare('SELECT COUNT(*) c FROM users WHERE id = 102').first<{ c: number }>();
+        expect(still102?.c).toBe(1);
+    });
+
+    it('blocks a synthetic user when its synthetic competition has REAL engagement', async () => {
+        await seedUsers();
+        await db.prepare(`INSERT INTO categories (id, slug, name_ar, name_en) VALUES (1, 'c', 'C', 'C')`).run();
+        await db.prepare(
+            `INSERT INTO competitions (id, title, rules, category_id, creator_id, status, is_fake) VALUES
+             (301, 'Syn WithReal', 'r', 1, 101, 'completed', 1)`
+        ).run();
+        // Real user 103 comments on the synthetic competition.
+        await db.prepare('INSERT INTO comments (competition_id, user_id, content) VALUES (301, 103, \'real engagement\')').run();
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        // 101 blocked forever (real engagement on its subtree) — 102 retires.
+        expect(await svc.retireOneSyntheticUser()).toBe(102);
+        const comp = await db.prepare('SELECT COUNT(*) c FROM competitions WHERE id = 301').first<{ c: number }>();
+        const comment = await db.prepare('SELECT COUNT(*) c FROM comments WHERE competition_id = 301').first<{ c: number }>();
+        expect(comp?.c).toBe(1);
+        expect(comment?.c).toBe(1);
     });
 
     it('returns null when no synthetic users exist', async () => {
@@ -198,13 +270,69 @@ describe('C7 — synthetic competition retirement', () => {
         ).run();
     }
 
-    it('retires the oldest dependency-free synthetic competition, never real ones', async () => {
+    it('retires the oldest synthetic competition with its synthetic subtree (UNIT41.1)', async () => {
         await seedComps();
+        // A fully-synthetic subtree on 301: a comment by synthetic user 102.
+        await db.prepare('INSERT INTO users (id, email, username, password_hash, display_name, is_fake) VALUES (202, \'syn2@local\', \'syn2\', \'x\', \'Syn 2\', 1)').run();
+        await db.prepare('INSERT INTO comments (competition_id, user_id, content) VALUES (301, 202, \'demo\')').run();
         const svc = new SyntheticRetirementService(db as unknown as D1Database);
         expect(await svc.retireOneSyntheticCompetition()).toBe(301);
+        // The subtree went with it.
+        const orphans = await db.prepare('SELECT COUNT(*) c FROM comments WHERE competition_id = 301').first<{ c: number }>();
+        expect(orphans?.c).toBe(0);
         expect(await svc.retireOneSyntheticCompetition()).toBe(302);
+        // Only the real competition remains.
         expect(await svc.retireOneSyntheticCompetition()).toBeNull();
         expect(await count(db, 'competitions')).toBe(1);
+    });
+
+    it('never retires a synthetic competition linked to a REAL competition-participant', async () => {
+        await seedComps();
+        // Real user 201 accepted to oppose synthetic competition 301.
+        await db.prepare('UPDATE competitions SET opponent_id = 201 WHERE id = 301').run();
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        // 301 permanently blocked (real participant) — 302 retires instead.
+        expect(await svc.retireOneSyntheticCompetition()).toBe(302);
+        const still = await db.prepare('SELECT COUNT(*) c FROM competitions WHERE id = 301').first<{ c: number }>();
+        expect(still?.c).toBe(1);
+    });
+
+    it('never retires a synthetic competition with a money trail (donation)', async () => {
+        await seedComps();
+        await db.prepare(
+            `INSERT INTO donations (user_id, competition_id, amount, payment_method, payment_status, created_at)
+             VALUES (201, 301, 500, 'stripe', 'completed', datetime('now'))`
+        ).run();
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        expect(await svc.retireOneSyntheticCompetition()).toBe(302);
+        const donation = await db.prepare('SELECT COUNT(*) c FROM donations WHERE competition_id = 301').first<{ c: number }>();
+        expect(donation?.c).toBe(1);
+    });
+
+    it('a failing dependent delete aborts the whole retirement atomically', async () => {
+        await seedComps();
+        // A synthetic subtree on 301, plus a trigger that makes the comment
+        // delete fail — nothing may be removed.
+        await db.prepare('INSERT INTO users (id, email, username, password_hash, display_name, is_fake) VALUES (202, \'syn2@local\', \'syn2\', \'x\', \'Syn 2\', 1)').run();
+        await db.prepare('INSERT INTO comments (competition_id, user_id, content) VALUES (301, 202, \'demo\')').run();
+        db.exec(`CREATE TRIGGER block_comment_delete BEFORE DELETE ON comments BEGIN SELECT RAISE(ABORT, 'locked'); END;`);
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        await expect(svc.retireOneSyntheticCompetition()).rejects.toThrow();
+        expect(await count(db, 'competitions')).toBe(3);
+        const comments = await db.prepare('SELECT COUNT(*) c FROM comments WHERE competition_id = 301').first<{ c: number }>();
+        expect(comments?.c).toBe(1);
+    });
+
+    it('a synthetic competition linked to a REAL watcher is never retired (permanent)', async () => {
+        await seedComps();
+        // Real user 201 watched synthetic competition 301.
+        await db.prepare(
+            `INSERT INTO watch_history (user_id, competition_id, watched_at) VALUES (201, 301, datetime('now'))`
+        ).run();
+        const svc = new SyntheticRetirementService(db as unknown as D1Database);
+        expect(await svc.retireOneSyntheticCompetition()).toBe(302);
+        const still = await db.prepare('SELECT COUNT(*) c FROM competitions WHERE id = 301').first<{ c: number }>();
+        expect(still?.c).toBe(1);
     });
 
     it('skips a synthetic competition that still has dependents', async () => {

@@ -12,7 +12,7 @@
 import type { Language } from '../../config/types';
 import { translations, getUILanguage } from '../../i18n';
 
-/** The eight sections of the guide center, in navigation order. */
+/** The sections of the guide center, in navigation order. */
 export const GUIDE_SECTION_SLUGS = [
     'overview',
     'message',
@@ -22,6 +22,7 @@ export const GUIDE_SECTION_SLUGS = [
     'terms',
     'contact',
     'support',
+    'charter',
 ] as const;
 
 export type GuideSectionSlug = (typeof GUIDE_SECTION_SLUGS)[number];

@@ -229,6 +229,8 @@ describe('9.A remediation — F-1 migration carry-over + F-3 admin workflow', ()
 
     it('F-3: admin-created ad completes draft → pending_review → active (no dead-end)', async () => {
         const db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         await db.prepare(
             `INSERT INTO users (id, email, username, password_hash, display_name, is_admin, is_active) VALUES
              (2, 'adv@9a.local', 'adv9a', 'x', 'Advertiser', 0, 1),
@@ -288,6 +290,8 @@ describe('9.A remediation — F-1 migration carry-over + F-3 admin workflow', ()
 
     it('F-2: advertiser portal renders the integer-cents contract (budget_cents form fields)', async () => {
         const db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         const res = await app.request('/advertiser?lang=en', {}, env(db));
         expect(res.status).toBe(200);
         const html = await res.text();

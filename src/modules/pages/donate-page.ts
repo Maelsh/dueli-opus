@@ -9,12 +9,24 @@ import { translations, getUILanguage, isRTL as checkRTL } from '../../i18n';
 import { getNavigation, getLoginModal, getFooter } from '../../shared/components';
 import { DUELI_CARD, DUELI_CARD_FLAT, DUELI_INPUT, DUELI_SECTION_TITLE } from '../../shared/constants';
 import { generateHTML } from '../../shared/templates/layout';
+import { t } from '../../i18n';
+import { canAccessMonetizationRequest } from '../../lib/services/MonetizationGate';
+import { renderMonetizationLocked } from '../../shared/components/monetization-locked';
 
 /**
  * Donate Page Handler
  */
 export const donatePage = async (c: Context<{ Bindings: Bindings; Variables: Variables }>) => {
     const lang = c.get('lang') as Language;
+    // UNIT41.1: public monetization gate — ordinary visitors get the friendly
+    // translated notice (403); admins/role holders and the open switch pass.
+    if (!(await canAccessMonetizationRequest(c))) {
+        const nonce403 = (c.get('cspNonce') as string) ?? '';
+        return c.html(
+            generateHTML(renderMonetizationLocked(lang), lang, t('monetization_locked', lang), nonce403, { path: '/donate', noindex: true }),
+            403
+        );
+    }
     const tr = translations[getUILanguage(lang)];
     const rtl = checkRTL(lang);
 

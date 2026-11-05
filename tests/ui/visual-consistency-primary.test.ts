@@ -27,13 +27,24 @@ const AUTH_GATED_PAGES = [
 ] as const;
 
 describe('canonical primary treatment on every auth-gated surface', () => {
+    // UNIT41.1: /earnings sits behind the public money/ads gate (closed by
+    // default in 0045) — open it here so this suite keeps testing the page.
+    async function openMoneyGate(db: FakeD1): Promise<void> {
+        await db.prepare('UPDATE platform_settings SET setting_value = ? WHERE setting_key = ?')
+            .bind('1', 'public_monetization_enabled').run();
+    }
+
     it.each(AUTH_GATED_PAGES)('%s drops the flat purple CTA for the shared token', async (path) => {
-        const html = await (await app.request(`${path}?lang=ar`, {}, { DB: new FakeD1() } as never)).text();
+        const db = new FakeD1();
+        await openMoneyGate(db);
+        const html = await (await app.request(`${path}?lang=ar`, {}, { DB: db } as never)).text();
         expect(html).not.toMatch(/class="[^"]*bg-purple-600 text-white rounded-full/);
     });
 
     it.each(AUTH_GATED_PAGES)('%s exposes the shared primary token to its script', async (path) => {
-        const html = await (await app.request(`${path}?lang=ar`, {}, { DB: new FakeD1() } as never)).text();
+        const db = new FakeD1();
+        await openMoneyGate(db);
+        const html = await (await app.request(`${path}?lang=ar`, {}, { DB: db } as never)).text();
         expect(html).toContain(DUELI_PRIMARY_BTN);
     });
 

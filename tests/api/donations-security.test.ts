@@ -25,8 +25,10 @@ function headers(sessionId?: string) {
 
 describe('donations payment methods', () => {
     let db: FakeD1;
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new FakeD1();
+        // UNIT41.1: open the public money/ads gate (business-logic tests).
+        await db.prepare('UPDATE platform_settings SET setting_value = ? WHERE setting_key = ?').bind('1', 'public_monetization_enabled').run();
     });
 
     it("rejects paypal until a real integration exists", async () => {
@@ -92,6 +94,8 @@ describe('POST /api/donations/:id/complete (SEC-01 — route deleted)', () => {
 
     beforeEach(async () => {
         db = new FakeD1();
+        // UNIT41.1: open the public money/ads gate (business-logic tests).
+        await db.prepare('UPDATE platform_settings SET setting_value = ? WHERE setting_key = ?').bind('1', 'public_monetization_enabled').run();
         const users = new UserModel(db as unknown as D1Database);
         const sessions = new SessionModel(db as unknown as D1Database);
 

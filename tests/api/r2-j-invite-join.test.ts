@@ -32,11 +32,11 @@ let db: SqliteD1;
 
 function seedBase(): void {
     db.exec(`
-        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active)
-        VALUES (${CREATOR}, 'r2j-creator@test.local', 'r2j_creator', 'x', 'R2J Creator', 1, 1),
-               (${OPPONENT}, 'r2j-b@test.local', 'r2j_b', 'x', 'R2J B', 1, 1),
-               (${THIRD}, 'r2j-c@test.local', 'r2j_c', 'x', 'R2J C', 1, 1),
-               (${FOURTH}, 'r2j-d@test.local', 'r2j_d', 'x', 'R2J D', 1, 1);
+        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active, is_fake)
+        VALUES (${CREATOR}, 'r2j-creator@test.local', 'r2j_creator', 'x', 'R2J Creator', 1, 1, 0),
+               (${OPPONENT}, 'r2j-b@test.local', 'r2j_b', 'x', 'R2J B', 1, 1, 0),
+               (${THIRD}, 'r2j-c@test.local', 'r2j_c', 'x', 'R2J C', 1, 1, 0),
+               (${FOURTH}, 'r2j-d@test.local', 'r2j_d', 'x', 'R2J D', 1, 1, 0);
         INSERT INTO categories (id, slug, name_ar, name_en) VALUES (7100, 'r2j-cat', 'R2J', 'R2J Cat');
         INSERT INTO sessions (id, user_id, expires_at) VALUES
             ('${CREATOR_SESSION}', ${CREATOR}, datetime('now', '+1 day')),

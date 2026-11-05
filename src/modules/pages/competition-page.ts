@@ -11,12 +11,24 @@ import { generateHTML } from '../../shared/templates/layout';
 import { getClientSharedScript } from './live/scripts/client/shared';
 import { getViewerScript } from './live/scripts/client/viewer';
 import { DUELI_PRIMARY_GRADIENT, DUELI_PRIMARY_GRADIENT_HOVER } from '../../shared/constants';
+import { PlatformSettingsModel } from '../../models/PlatformSettingsModel';
 
 export async function competitionPage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
   const lang = c.get('lang');
   const tr = translations[getUILanguage(lang)];
   const id = c.req.param('id');
   const rtl = isRTL(lang);
+
+  // UNIT41.1: unified explainer video for finished/demo competitions with no
+  // recording of their own. Read server-side; empty/missing setting keeps the
+  // exact behaviour of today (no video). Never replaces a real recording.
+  let demoExplainerVideoUrl = '';
+  try {
+    demoExplainerVideoUrl = (await new PlatformSettingsModel(c.env.DB).getByKey('demo_explainer_video_url')) ?? '';
+  } catch (settingsError) {
+    console.error('[competition] demo explainer setting read failed; keeping no-video behaviour:', settingsError);
+    demoExplainerVideoUrl = '';
+  }
 
   const content = `
     ${getNavigation(lang)}
@@ -45,6 +57,7 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
       const lang = ${JSON.stringify(getUILanguage(lang))};
       const isRTL = ${rtl};
       const competitionId = ${JSON.stringify(id ?? '')};
+      const demoExplainerVideoUrl = ${JSON.stringify(demoExplainerVideoUrl)};
       const tr = ${JSON.stringify(tr)};
       let competitionData = null;
       // A28-SURFACE: which completed surface has actually been PAINTED. State
@@ -381,8 +394,15 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                         </button>
                         <video id="embeddedVideoPlayer1" autoplay playsinline 
                                class="absolute inset-0 transition-opacity duration-300 opacity-100 z-[2] bg-black"></video>
-                        <video id="embeddedVideoPlayer2" autoplay playsinline 
+                        <video id="embeddedVideoPlayer2" autoplay playsinline
                                class="absolute inset-0 transition-opacity duration-300 opacity-0 z-[1] bg-black"></video>
+                        <!-- UNIT41.1: unified explainer for finished/demo
+                             competitions with no recording of their own.
+                             Shown INSTEAD of the empty state, never over a
+                             real recording or live stream. -->
+                        <video id="embeddedExplainerVideo" muted autoplay loop playsinline controls preload="metadata"
+                               class="hidden absolute inset-0 w-full h-full bg-black z-[3]"></video>
+                        <div id="embeddedExplainerBadge" class="hidden absolute bottom-16 left-1/2 -translate-x-1/2 z-[25] px-3 py-1 rounded-full bg-black/70 text-amber-300 text-xs font-bold border border-amber-500/40 whitespace-nowrap" role="status"></div>
                         
                         <!-- Status overlay: R2-L2 explicit media states
                              (waiting/playing/error/processing/ready/unavailable).
@@ -2144,6 +2164,42 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
         }
       }
       
+      // UNIT41.1: unified explainer for completed/demo competitions with no
+      // recording of their own (the server's terminal
+      // index_metadata.recording_state === 'none' verdict). Returns true when
+      // the explainer was shown (the caller must stop VOD init); false keeps
+      // today's behaviour exactly (no video).
+      function showDemoExplainer() {
+        try {
+          var url = (typeof demoExplainerVideoUrl === 'string' ? demoExplainerVideoUrl.trim() : '');
+          if (!url) return false;
+          var v = document.getElementById('embeddedExplainerVideo');
+          if (!v) return false;
+          if (v.getAttribute('src') !== url) v.setAttribute('src', url);
+          v.classList.remove('hidden');
+          var badge = document.getElementById('embeddedExplainerBadge');
+          if (badge) {
+            badge.textContent = tr.demo_explainer_badge || 'Platform explainer video';
+            badge.classList.remove('hidden');
+          }
+          var overlay = document.getElementById('embeddedStatusOverlay');
+          if (overlay) overlay.classList.add('hidden');
+          var vodControls = document.getElementById('embeddedVodControls');
+          if (vodControls) vodControls.classList.add('hidden');
+          var liveControls = document.getElementById('embeddedLiveControls');
+          if (liveControls) liveControls.classList.add('hidden');
+          var dlBtn = document.getElementById('embeddedDownloadBtn');
+          if (dlBtn) dlBtn.classList.add('hidden');
+          window.__mediaState = 'unavailable'; // honest mirror: no recording exists
+          var p = v.play ? v.play() : null;
+          if (p && typeof p.catch === 'function') p.catch(function() { /* autoplay blocked; the user presses play */ });
+          return true;
+        } catch (explainerError) {
+          console.error('[explainer] fallback failed; keeping default behaviour:', explainerError);
+          return false;
+        }
+      }
+
       // ===== Embedded Viewer: Auto-Start =====
 
       // One playback surface at a time. A status transition (SSE, end click,
@@ -2461,6 +2517,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                 // that does not exist, no false recorded badge/controls; the
                 // result page and competition details above stay available.
                 if (playlistData.index_metadata && playlistData.index_metadata.recording_state === 'none') {
+                    // UNIT41.1: unified explainer takes the slot when the
+                    // owner configured one; otherwise today's honest state.
+                    if (showDemoExplainer()) return;
                     setMediaState('unavailable');
                     showStatusOverlay(tr.recording_none || 'No recording for this competition');
                     return;

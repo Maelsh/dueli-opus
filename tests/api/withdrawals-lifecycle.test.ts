@@ -95,8 +95,10 @@ async function auditActions(db: SqliteD1, requestId: number): Promise<string[]> 
 describe('8.D withdrawals lifecycle (RED-FIRST) — route-level via real Hono app', () => {
     let db: SqliteD1;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     it('1. withdraw more than balance ⇒ rejected (422 + insufficient_balance), no hold, invariant 0', async () => {

@@ -2,7 +2,7 @@
  * UNIT38 / R4-GUIDE-1 — the /guide center (about + help in one place).
  *
  * Contract (plan 13 §5 "R4-GUIDE-1"):
- *   - /guide is the center. Its eight sections are INDEPENDENT pages, each
+ *   - /guide is the center. Its nine sections are INDEPENDENT pages, each
  *     with its own address and its own server-rendered body, so a deep
  *     link, a bookmark, a refresh and a search-engine crawl all work
  *     without an SPA and without shipping every section's content at once.
@@ -310,7 +310,87 @@ function supportBody(lang: Language, tr: Record<string, any>): string {
         </section>`;
 }
 
-/** /guide/terms — the seven owner-approved clauses and the policy links. */
+/** /guide/charter — the Founding Global Alliance & Continuity Charter (80/20 + Escrow). */
+function charterBody(lang: Language, tr: Record<string, any>): string {
+    const g = tr.guide;
+    const c = g.charter_content;
+
+    const continuityItems = c.continuity_items
+        .map((item: string) => `<li class="flex gap-3 text-gray-600 dark:text-gray-300"><span aria-hidden="true" class="text-purple-600 dark:text-purple-400">•</span><span>${item}</span></li>`)
+        .join('');
+    const tracks = c.tracks
+        .map(
+            (track: { name: string; body: string }) => `
+            <li class="p-5 rounded-2xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800">
+                <h3 class="font-bold text-gray-900 dark:text-white mb-2">${track.name}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">${track.body}</p>
+            </li>`
+        )
+        .join('');
+    const benefits = c.benefits
+        .map((item: string) => `<li class="flex gap-3 text-gray-600 dark:text-gray-300"><span aria-hidden="true" class="text-amber-600 dark:text-amber-400">•</span><span>${item}</span></li>`)
+        .join('');
+    const clarityItems = c.clarity_items
+        .map((item: string) => `<li class="flex gap-3 text-gray-600 dark:text-gray-300"><span aria-hidden="true" class="text-amber-600 dark:text-amber-400">•</span><span>${item}</span></li>`)
+        .join('');
+
+    return `
+        <p class="text-lg text-gray-600 dark:text-gray-300 leading-relaxed mb-8">${c.intro}</p>
+
+        <section aria-labelledby="charter-license" class="mb-10 p-6 rounded-2xl bg-gray-50 dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800">
+            <h2 id="charter-license" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${c.license_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${c.license_body}</p>
+        </section>
+
+        <section aria-labelledby="charter-continuity" class="mb-10">
+            <h2 id="charter-continuity" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${c.continuity_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-4">${c.continuity_body}</p>
+            <ul class="space-y-3">${continuityItems}</ul>
+        </section>
+
+        <section aria-labelledby="charter-economy" class="mb-10 p-6 rounded-2xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-900/40">
+            <p aria-hidden="true" class="text-5xl font-black text-purple-700 dark:text-purple-300 mb-2">80<span class="text-3xl align-top">/</span>20</p>
+            <h2 id="charter-economy" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${c.economy_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${c.economy_body}</p>
+        </section>
+
+        <section aria-labelledby="charter-alliance" class="mb-10">
+            <h2 id="charter-alliance" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${c.alliance_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">${c.alliance_body}</p>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">${c.tracks_title}</h3>
+            <ul class="grid grid-cols-1 md:grid-cols-2 gap-4">${tracks}</ul>
+        </section>
+
+        <section aria-labelledby="charter-custodian" class="mb-10 p-6 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/40">
+            <h2 id="charter-custodian" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${c.custodian_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed">${c.custodian_body}</p>
+        </section>
+
+        <section aria-labelledby="charter-benefits" class="mb-10">
+            <h2 id="charter-benefits" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${c.benefits_title}</h2>
+            <ul class="space-y-3">${benefits}</ul>
+        </section>
+
+        <section aria-labelledby="charter-clarity" class="mb-10 p-6 rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-900/10">
+            <h2 id="charter-clarity" class="text-2xl font-bold text-gray-900 dark:text-white mb-4">${c.clarity_title}</h2>
+            <ul class="space-y-3">${clarityItems}</ul>
+            <p class="mt-4 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">${c.clarity_note}</p>
+        </section>
+
+        <section aria-labelledby="charter-contact">
+            <h2 id="charter-contact" class="text-2xl font-bold text-gray-900 dark:text-white mb-3">${c.cta_title}</h2>
+            <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-6">${c.cta_body}</p>
+            ${linkPills(lang, [
+                { href: `/guide/contact?lang=${lang}`, label: g.sections.contact.title },
+                { href: `/guide/support?lang=${lang}`, label: g.sections.support.title },
+                { href: `/docs?lang=${lang}`, label: g.links.docs },
+            ])}
+        </section>`;
+}
+
+/**
+ * /guide/terms — the seven owner-approved clauses and the policy links.
+ */
 function termsBody(lang: Language, tr: Record<string, any>): string {
     const g = tr.guide;
     const t = g.terms_content;
@@ -447,6 +527,8 @@ function sectionBody(lang: Language, tr: Record<string, any>, section: GuideSect
             return contactBody(lang, tr);
         case 'support':
             return supportBody(lang, tr);
+        case 'charter':
+            return charterBody(lang, tr);
         default:
             return '';
     }

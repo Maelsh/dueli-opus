@@ -42,6 +42,8 @@ const ADV_B = 'sess-9d-b';
 const ADMIN = 'sess-9d-admin';
 
 async function seed(db: SqliteD1) {
+    // UNIT41.1: open the money/ads gate (closed by default in 0045).
+    await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     await db.prepare(
         `INSERT INTO users (id, email, username, password_hash, display_name, is_admin, is_active) VALUES
          (2, 'a@9d.local', 'adv9d_a', 'x', 'Advertiser A', 0, 1),

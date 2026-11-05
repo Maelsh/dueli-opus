@@ -58,8 +58,10 @@ async function seedUsers(db: SqliteD1) {
 
 describe('R2-F journeys', () => {
     let db: SqliteD1;
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     it('1. cross-user notification read ⇒ 404 and stays unread; own read ⇒ 200', async () => {

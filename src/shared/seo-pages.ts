@@ -40,10 +40,13 @@ export const PUBLIC_INDEXABLE_PAGES: PublicPageEntry[] = [
     { path: '/guide/terms', changefreq: 'yearly', priority: '0.5' },
     { path: '/guide/contact', changefreq: 'yearly', priority: '0.5' },
     { path: '/guide/support', changefreq: 'monthly', priority: '0.6' },
+    { path: '/guide/charter', changefreq: 'monthly', priority: '0.7' },
     { path: '/explore', changefreq: 'daily', priority: '0.8' },
     { path: '/docs', changefreq: 'weekly', priority: '0.6' },
     { path: '/transparency', changefreq: 'weekly', priority: '0.6' },
-    { path: '/donate', changefreq: 'monthly', priority: '0.5' },
+    // NOTE: /donate is deliberately absent while UNIT41.1's public
+    // monetization gate is closed — the page serves 403 + noindex to
+    // ordinary visitors. Re-add it to the sitemap if/when the gate opens.
 ];
 
 /** Paths that must never appear in the sitemap. */

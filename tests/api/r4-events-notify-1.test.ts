@@ -39,10 +39,10 @@ let db: SqliteD1;
 
 function seedBase(): void {
     db.exec(`
-        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active)
-        VALUES (${CREATOR}, 'r4n-creator@test.local', 'r4n_creator', 'x', 'R4N Creator', 1, 1),
-               (${REQUESTER}, 'r4n-requester@test.local', 'r4n_requester', 'x', 'R4N Requester', 1, 1),
-               (${INVITEE}, 'r4n-invitee@test.local', 'r4n_invitee', 'x', 'R4N Invitee', 1, 1);
+        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active, is_fake)
+        VALUES (${CREATOR}, 'r4n-creator@test.local', 'r4n_creator', 'x', 'R4N Creator', 1, 1, 0),
+               (${REQUESTER}, 'r4n-requester@test.local', 'r4n_requester', 'x', 'R4N Requester', 1, 1, 0),
+               (${INVITEE}, 'r4n-invitee@test.local', 'r4n_invitee', 'x', 'R4N Inviteee', 1, 1, 0);
         INSERT INTO categories (id, slug, name_ar, name_en) VALUES (8100, 'r4n-cat', 'R4N', 'R4N Cat');
         INSERT INTO sessions (id, user_id, expires_at) VALUES
             ('${CREATOR_SESSION}', ${CREATOR}, datetime('now', '+1 day')),

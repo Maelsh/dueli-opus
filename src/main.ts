@@ -229,7 +229,16 @@ app.route('/live', liveRoutes);
 // ============================================
 
 // Home Page - الصفحة الرئيسية
+// UNIT41.1: the companion domain dueli.win (and www.dueli.win) serves the
+// cinematic /welcome portal on the bare root — server-side hostname check.
+// The main domain and every other route are byte-identical to before; the
+// DNS/Custom-Domain binding itself is managed outside this codebase.
+const DUELI_WIN_HOSTS = new Set(['dueli.win', 'www.dueli.win']);
 app.get('/', (c) => {
+  const host = (c.req.header('host') ?? '').split(':')[0].trim().toLowerCase();
+  if (DUELI_WIN_HOSTS.has(host)) {
+    return welcomePage(c);
+  }
   const lang = c.get('lang');
   const tr = translations[getUILanguage(lang)];
   const rtl = isRTL(lang);

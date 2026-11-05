@@ -70,6 +70,8 @@ describe('SEC-08 HttpOnly browser session', () => {
     beforeEach(async () => {
         ipSequence = 0;
         db = new SqliteD1();
+        // UNIT41.1: open the money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
         await seed(db);
         (globalThis as any).__sec08Db = db;
     });

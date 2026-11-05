@@ -32,10 +32,10 @@ let db: SqliteD1;
 
 function seedBase(): void {
     db.exec(`
-        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active)
-        VALUES (${CREATOR}, 'f5a-creator@test.local', 'f5a_creator', 'x', 'F5A Creator', 1, 1),
-               (${OPPONENT}, 'f5a-opponent@test.local', 'f5a_opponent', 'x', 'F5A Opponent', 1, 1),
-               (${THIRD}, 'f5a-third@test.local', 'f5a_third', 'x', 'F5A Third', 1, 1);
+        INSERT INTO users (id, email, username, password_hash, display_name, is_verified, is_active, is_fake)
+        VALUES (${CREATOR}, 'f5a-creator@test.local', 'f5a_creator', 'x', 'F5A Creator', 1, 1, 0),
+               (${OPPONENT}, 'f5a-opponent@test.local', 'f5a_opponent', 'x', 'F5A Opponent', 1, 1, 0),
+               (${THIRD}, 'f5a-third@test.local', 'f5a_third', 'x', 'F5A Third', 1, 1, 0);
         INSERT INTO categories (id, slug, name_ar, name_en) VALUES (9100, 'f5a-cat', 'F5A', 'F5A Cat');
         INSERT INTO sessions (id, user_id, expires_at) VALUES
             ('${CREATOR_SESSION}', ${CREATOR}, datetime('now', '+1 day')),

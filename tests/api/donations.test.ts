@@ -148,8 +148,10 @@ async function ledgerCount(db: SqliteD1): Promise<number> {
 describe('8.E competitor donations (RED-FIRST) — route-level via real Hono app', () => {
     let db: SqliteD1;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the public money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     it('1. valid amount ⇒ balanced ledger entries (fee + net), invariant 0', async () => {
@@ -536,8 +538,10 @@ async function seedCompetition(db: SqliteD1, id: number, status: string, creator
 describe('8.E REMOTE corrections — five findings (RED-FIRST)', () => {
     let db: SqliteD1;
 
-    beforeEach(() => {
+    beforeEach(async () => {
         db = new SqliteD1();
+        // UNIT41.1: open the public money/ads gate (closed by default in 0045).
+        await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     });
 
     // ── R1: منع Double Capture ──────────────────────────────────────

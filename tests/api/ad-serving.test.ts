@@ -22,6 +22,8 @@ const VIEWER = 'sess-9b-viewer';
 
 /** competition 100: ar / EG / category 10 — competition 101: en / US / category 11 */
 async function seed(db: SqliteD1) {
+    // UNIT41.1: open the money/ads gate (closed by default in 0045).
+    await db.prepare(`UPDATE platform_settings SET setting_value = '1' WHERE setting_key = 'public_monetization_enabled'`).run();
     await db.prepare(
         `INSERT INTO users (id, email, username, password_hash, display_name, is_admin, is_active, language, country) VALUES
          (2, 'adv@9b.local', 'adv9b', 'x', 'Advertiser', 0, 1, 'ar', 'EG'),

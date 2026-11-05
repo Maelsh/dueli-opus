@@ -8,6 +8,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../../../config/types';
 import { authMiddleware } from '../../../middleware/auth';
+import { monetizationGate } from '../../../middleware/monetization';
 import { WithdrawalController } from '../../../controllers/WithdrawalController';
 
 const withdrawalsRoutes = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -15,6 +16,8 @@ const controller = new WithdrawalController();
 
 // All withdrawal routes require authentication
 withdrawalsRoutes.use('*', authMiddleware({ required: true }));
+// UNIT41.1: public money gate — closed ('0') for ordinary users; admins pass.
+withdrawalsRoutes.use('*', monetizationGate());
 
 /**
  * GET /api/withdrawals

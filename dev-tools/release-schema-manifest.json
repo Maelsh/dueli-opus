@@ -1,5 +1,5 @@
 {
-  "manifest_version": "R-RELEASE-1.baseline-0044",
+  "manifest_version": "R-RELEASE-1.baseline-0045",
   "target": {
     "pages_project": "project-8e7c178d",
     "database_name": "dueli-db"
@@ -52,6 +52,10 @@
     {
       "file": "0044_ad_pricing_control_house.sql",
       "sha256": "00b7b5c9277782f583d470700f6a95a7b8989198238d85b948e5c6a3a8908eac"
+    },
+    {
+      "file": "0045_monetization_gate_seed.sql",
+      "sha256": "eccb9568f61244a6f1e46b3c4e51e8c42991af3e1a55ce8ed2592117f7fef45b"
     }
   ],
   "known_history": [
@@ -99,7 +103,8 @@
     "0041_chunk_index.sql",
     "0042_chunk_key_binding.sql",
     "0043_competition_early_end.sql",
-    "0044_ad_pricing_control_house.sql"
+    "0044_ad_pricing_control_house.sql",
+    "0045_monetization_gate_seed.sql"
   ],
   "required_schema": {
     "tables": {
@@ -250,7 +255,7 @@
     "indexes": ["idx_explore_sessions_identity", "idx_explore_sessions_expiry", "idx_competition_views_day", "idx_managed_documents_slug", "idx_managed_documents_status", "idx_support_threads_user", "idx_support_threads_status", "idx_support_messages_thread", "idx_support_messages_unread", "idx_withdrawal_requests_payout_method", "idx_ratings_competitor", "idx_competitions_creator", "idx_competitions_opponent", "idx_users_active", "idx_user_blocks_blocked", "idx_sse_channel_id", "idx_recording_leases_holder", "idx_recording_chunks_order", "idx_recording_chunks_state", "idx_chunk_keys_lookup", "idx_chunk_keys_owner", "idx_chunk_keys_bound", "idx_competitions_result_source", "idx_result_credits_competitor", "idx_advertisements_house", "idx_ad_impressions_competition_charged", "idx_user_ad_grants_ad"]
   },
   "notes": [
-    "Baseline R-RELEASE-1.baseline-0044 requires migrations 0033 through 0044 applied with the pinned sha256 each (no post-apply rewrite). 0040 (recording_leases + idx_recording_leases_holder), 0041 (recording_chunks + recording_finals + order/state indexes) and 0042 (chunk_keys lease_generation/object_path/max_bytes + idx_chunk_keys_bound) close the ROW28 unsafe window. 0043 adds the server-authoritative early-end fields on competitions plus the separate competition_result_credits ledger (UNIQUE competition/competitor/source; stars 0/10 only), and its columns/table/indexes are now required by the gate. 0044 (UNIT36.1) adds the ad pricing/control/house surface: advertisements.is_house/media_kind/duration_sec, ad_impressions.charged_cents, and the user_ad_policy + user_ad_grants tables with their indexes; its columns/tables/indexes are now required by the gate.",
+    "Baseline R-RELEASE-1.baseline-0045 requires migrations 0033 through 0045 applied with the pinned sha256 each (no post-apply rewrite). 0040 (recording_leases + idx_recording_leases_holder), 0041 (recording_chunks + recording_finals + order/state indexes) and 0042 (chunk_keys lease_generation/object_path/max_bytes + idx_chunk_keys_bound) close the ROW28 unsafe window. 0043 adds the server-authoritative early-end fields on competitions plus the separate competition_result_credits ledger (UNIQUE competition/competitor/source; stars 0/10 only), and its columns/table/indexes are now required by the gate. 0044 (UNIT36.1) adds the ad pricing/control/house surface: advertisements.is_house/media_kind/duration_sec, ad_impressions.charged_cents, and the user_ad_policy + user_ad_grants tables with their indexes; its columns/tables/indexes are now required by the gate. 0045 (UNIT41.1) seeds two platform_settings keys only (INSERT OR IGNORE; no schema change): demo_explainer_video_url (owner-approved unified explainer for finished/demo competitions with no recording; empty disables it) and public_monetization_enabled ('0' closed to ordinary users, admins/role holders always pass; flipped from /admin without a deploy); deployment apply order is code-then-migration, and the key defaults preserve current behaviour until /admin flips them.",
     "known_history is membership-only (names the repo state at baseline); integrity hashes are enforced for required_migrations.",
     "The gate never applies migrations. Unexpected applied and pending migrations are recorded and FAIL the gate; neither is auto-applied."
   ]

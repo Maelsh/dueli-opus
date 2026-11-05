@@ -128,9 +128,9 @@ describe('release readiness gate', () => {
         expect(m.known_history).toContain(req.file);
     });
 
-    it('manifest baseline-0044 requires 0034 with a hash matching the repo file', () => {
+    it('manifest baseline-0045 requires 0034 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0034_competition_views.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -142,9 +142,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_competition_views_day');
     });
 
-    it('manifest baseline-0044 requires 0035 with a hash matching the repo file', () => {
+    it('manifest baseline-0045 requires 0035 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0035_comments_video_offset.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -153,9 +153,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.tables.comments).toEqual(expect.arrayContaining(['video_offset']));
     });
 
-    it('manifest baseline-0044 requires 0036 with a hash matching the repo file', () => {
+    it('manifest baseline-0045 requires 0036 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0036_managed_documents.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -168,9 +168,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_managed_documents_status');
     });
 
-    it('manifest baseline-0044 requires 0037 with a hash matching the repo file', () => {
+    it('manifest baseline-0045 requires 0037 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0037_support_messaging.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -186,9 +186,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_support_messages_thread');
     });
 
-    it('manifest baseline-0044 requires 0038 with a hash matching the repo file', () => {
+    it('manifest baseline-0045 requires 0038 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0038_withdrawal_payout_snapshot.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -200,9 +200,9 @@ describe('release readiness gate', () => {
         expect(m.required_schema.indexes).toContain('idx_withdrawal_requests_payout_method');
     });
 
-    it('manifest baseline-0044 requires 0039 with a hash matching the repo file', () => {
+    it('manifest baseline-0045 requires 0039 with a hash matching the repo file', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0039_r4_db_opt1_indexes.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -221,9 +221,9 @@ describe('release readiness gate', () => {
         }
     });
 
-    it('manifest baseline-0044 requires 0040/0041/0042 with hashes matching the repo files', () => {
+    it('manifest baseline-0045 requires 0040/0041/0042 with hashes matching the repo files', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         for (const file of ['0040_recording_leases.sql', '0041_chunk_index.sql', '0042_chunk_key_binding.sql']) {
             const req = m.required_migrations.find((x) => x.file === file);
             expect(req).toBeTruthy();
@@ -248,9 +248,9 @@ describe('release readiness gate', () => {
         }
     });
 
-    it('manifest baseline-0044 requires 0043 with hash and schema; applied state passes', () => {
+    it('manifest baseline-0045 requires 0043 with hash and schema; applied state passes', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0043_competition_early_end.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -277,9 +277,9 @@ describe('release readiness gate', () => {
         expect(r.unexpected.pending).toEqual([]);
     });
 
-    it('manifest baseline-0044 requires 0044 (UNIT36.1 ad pricing/control/house) with hash and schema', () => {
+    it('manifest baseline-0045 requires 0044 (UNIT36.1 ad pricing/control/house) with hash and schema', () => {
         const m = manifest();
-        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
         const req = m.required_migrations.find((x) => x.file === '0044_ad_pricing_control_house.sql');
         expect(req).toBeTruthy();
         expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
@@ -308,6 +308,46 @@ describe('release readiness gate', () => {
         expect(r.ok).toBe(true);
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
+    });
+
+    it('manifest baseline-0045 requires 0045 (UNIT41.1 settings seed, no schema change)', () => {
+        const m = manifest();
+        expect(m.manifest_version).toBe('R-RELEASE-1.baseline-0045');
+        const req = m.required_migrations.find((x) => x.file === '0045_monetization_gate_seed.sql');
+        expect(req).toBeTruthy();
+        expect(repoFileHash(req.file).toLowerCase()).toBe(String(req.sha256).toLowerCase());
+        expect(m.known_history).toContain(req.file);
+        // 0045 seeds platform_settings only: no new required tables/columns/indexes.
+        const r = evaluateReadiness(goodInput(m));
+        expect(r.ok).toBe(true);
+        expect(r.unexpected.applied).toEqual([]);
+        expect(r.unexpected.pending).toEqual([]);
+    });
+
+    it('0045 applied but absent from manifest => unexpected-applied FAIL (no blanket bypass)', () => {
+        const input = goodInput();
+        input.manifest.known_history = input.manifest.known_history.filter(
+            (f: string) => f !== '0045_monetization_gate_seed.sql'
+        );
+        input.manifest.required_migrations = input.manifest.required_migrations.filter(
+            (x: { file: string }) => x.file !== '0045_monetization_gate_seed.sql'
+        );
+        input.applied = [...input.manifest.known_history, '0045_monetization_gate_seed.sql'];
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.unexpected.applied).toEqual(['0045_monetization_gate_seed.sql']);
+    });
+
+    it('0045 hash tampered in manifest => required-integrity FAIL (history rewrite caught)', () => {
+        const input = goodInput();
+        input.manifest = JSON.parse(JSON.stringify(input.manifest));
+        const req = input.manifest.required_migrations.find(
+            (x: { file: string }) => x.file === '0045_monetization_gate_seed.sql'
+        );
+        req.sha256 = req.sha256.replace(/^./, (c: string) => (c === '0' ? '1' : '0'));
+        const r = evaluateReadiness(input);
+        expect(r.ok).toBe(false);
+        expect(r.checks.filter((c) => !c.ok && c.name === 'required-integrity').length).toBeGreaterThan(0);
     });
 
     it('0043 applied but absent from manifest => unexpected-applied FAIL (no blanket bypass)', () => {
@@ -369,7 +409,7 @@ describe('release readiness gate', () => {
         const r = evaluateReadiness(goodInput());
         expect(r.unexpected.applied).toEqual([]);
         expect(r.unexpected.pending).toEqual([]);
-        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0044');
+        expect(r.manifest_version).toBe('R-RELEASE-1.baseline-0045');
     });
 
     it('production-shape 0037 + manifest 0042 => required-pending FAIL (0038 not yet applied)', () => {
