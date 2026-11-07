@@ -10,8 +10,9 @@ import { buildSeoHead, type SeoInput } from './seo';
 
 /**
  * Font mapping per language — UNIT 42.1 (R4-GLOBAL-I18N-ALL-LANGS-1).
- * Every UNIT 42.1 language has a script-appropriate primary font; Latin and
- * Cyrillic languages share Inter. Unknown codes fall back to Inter.
+ * Every one of the 56 global languages has a script-appropriate primary
+ * font; Latin, Greek and Cyrillic languages share Inter. Unknown codes
+ * fall back to Inter.
  */
 const fontMap: Record<string, string> = {
   'ar': "'Cairo'",
@@ -29,10 +30,51 @@ const fontMap: Record<string, string> = {
   'id': "'Inter'",
   'fa': "'Noto Naskh Arabic'",
   'ur': "'Noto Nastaliq Urdu'",
+  'he': "'Noto Sans Hebrew'",
+  'it': "'Inter'",
+  'nl': "'Inter'",
+  'sv': "'Inter'",
+  'no': "'Inter'",
+  'da': "'Inter'",
+  'fi': "'Inter'",
+  'pl': "'Inter'",
+  'cs': "'Inter'",
+  'el': "'Inter'",
+  'ro': "'Inter'",
+  'hu': "'Inter'",
+  'bg': "'Inter'",
+  'hr': "'Inter'",
+  'sr': "'Inter'",
+  'uk': "'Inter'",
+  'th': "'Noto Sans Thai'",
+  'vi': "'Inter'",
+  'ms': "'Inter'",
+  'bn': "'Noto Sans Bengali'",
+  'my': "'Noto Sans Myanmar'",
+  'km': "'Noto Sans Khmer'",
+  'lo': "'Noto Sans Lao'",
+  'ne': "'Noto Sans Devanagari'",
+  'si': "'Noto Sans Sinhala'",
+  'az': "'Inter'",
+  'ka': "'Noto Sans Georgian'",
+  'hy': "'Noto Sans Armenian'",
+  'kk': "'Inter'",
+  'uz': "'Inter'",
+  'tk': "'Inter'",
+  'ky': "'Inter'",
+  'tg': "'Inter'",
+  'mn': "'Inter'",
+  'am': "'Noto Sans Ethiopic'",
+  'sw': "'Inter'",
+  'rw': "'Inter'",
+  'be': "'Inter'",
+  'is': "'Inter'",
+  'mt': "'Inter'",
+  'ca': "'Inter'",
 };
 
 /** Google Fonts families needed by the language set above (one request). */
-const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&display=swap';
+const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&family=Noto+Sans+Myanmar:wght@300;400;500;600;700&family=Noto+Sans+Khmer:wght@300;400;500;600;700&family=Noto+Sans+Lao:wght@300;400;500;600;700&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Noto+Sans+Georgian:wght@300;400;500;600;700&family=Noto+Sans+Armenian:wght@300;400;500;600;700&family=Noto+Sans+Ethiopic:wght@300;400;500;600;700&display=swap';
 
 /**
  * UNIT38 / R4-GUIDE-1 — per-page SEO overrides.

@@ -7,7 +7,8 @@
  *   - Twitter Cards (summary_large_image)
  *   - canonical (absolute, legal domain https://dueli.maelshpro.com)
  *   - hreflang for every enabled language of the central registry
- *     (UNIT 42.1: 15 languages: ar en es fr de pt ru zh ja ko tr hi id fa ur)
+ *     (UNIT 42.1+43: all 56 global languages — ar+en bundled, the other 54
+ *     shipped as runtime locale JSON)
  *     plus x-default. The set is DERIVED from LANGUAGES — a language added
  *     there with a translation pack is automatically part of SEO.
  *   - Schema.org JSON-LD (Organization + WebSite) that identifies Dueli as
@@ -27,7 +28,7 @@ import { Sanitize } from '../../lib/services/Sanitize';
 export const SITE_ORIGIN = 'https://dueli.maelshpro.com';
 
 /**
- * Languages that carry a translation pack today (UNIT 42.1: 15).
+ * Languages that carry a translation pack today (UNIT 42.1+43: all 56).
  * Derived from the central registry's ENABLED languages — `enabled: true`
  * means exactly "this language has a shipped dictionary" (bundled ar/en or
  * a static /static/locales/<lang>.json pack). The set is intentionally
@@ -43,7 +44,7 @@ export const DEFAULT_OG_IMAGE = `${SITE_ORIGIN}/static/dueli-icon.png`;
 
 /**
  * OpenGraph locale per language (facebook locale format ll_CC).
- * UNIT 42.1 — one entry per enabled language, en_US as fallback.
+ * UNIT 42.1+43 — one entry per enabled language (all 56), en_US as fallback.
  */
 const OG_LOCALE: Record<string, string> = {
     ar: 'ar_AR',
@@ -61,6 +62,47 @@ const OG_LOCALE: Record<string, string> = {
     id: 'id_ID',
     fa: 'fa_IR',
     ur: 'ur_PK',
+    he: 'he_IL',
+    it: 'it_IT',
+    nl: 'nl_NL',
+    sv: 'sv_SE',
+    no: 'nb_NO',
+    da: 'da_DK',
+    fi: 'fi_FI',
+    pl: 'pl_PL',
+    cs: 'cs_CZ',
+    el: 'el_GR',
+    ro: 'ro_RO',
+    hu: 'hu_HU',
+    bg: 'bg_BG',
+    hr: 'hr_HR',
+    sr: 'sr_RS',
+    uk: 'uk_UA',
+    th: 'th_TH',
+    vi: 'vi_VN',
+    ms: 'ms_MY',
+    bn: 'bn_BD',
+    my: 'my_MM',
+    km: 'km_KH',
+    lo: 'lo_LA',
+    ne: 'ne_NP',
+    si: 'si_LK',
+    az: 'az_AZ',
+    ka: 'ka_GE',
+    hy: 'hy_AM',
+    kk: 'kk_KZ',
+    uz: 'uz_UZ',
+    tk: 'tk_TM',
+    ky: 'ky_KG',
+    tg: 'tg_TJ',
+    mn: 'mn_MN',
+    am: 'am_ET',
+    sw: 'sw_KE',
+    rw: 'rw_RW',
+    be: 'be_BY',
+    is: 'is_IS',
+    mt: 'mt_MT',
+    ca: 'ca_ES',
 };
 
 export function ogLocaleFor(lang: Language): string {

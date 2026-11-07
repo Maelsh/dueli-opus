@@ -29,17 +29,15 @@ export interface LanguageMeta {
 /**
  * Central language registry — single source of truth.
  *
- * UNIT 42.1: 56 registered languages total.
- *   - 15 ENABLED global languages (3 RTL: ar/fa/ur + 12 LTR): every one
- *     carries a full dictionary pack (ar/en bundled, the other 13 as
- *     runtime-loaded static JSON under /static/locales/<code>.json).
- *   - 41 additional languages registered from src/countries.ts
- *     (nativeName + direction only, enabled: false until their
- *     dictionary ships). Any ?lang=<code> for them loads nothing and
- *     falls back to English gracefully — no file, no error.
+ * UNIT 42.1+43: 56 registered languages, ALL ENABLED. Every language carries
+ * a complete dictionary pack: ar/en bundled in the code, the other 54 as
+ * runtime-loaded static JSON under /static/locales/<code>.json via
+ * ensureLanguageLoaded(). RTL: ar/fa/ur/he; everything else is LTR.
+ * `enabled` means "has a usable dictionary pack" — the switcher shows exactly
+ * the languages whose pack is loaded in memory (getAvailableLanguages()).
  */
 export const LANGUAGES: LanguageMeta[] = [
-    // ── UNIT 42.1 — the 15 active global languages ──────────────────────────
+    // ── UNIT 42.1 — the base + first-wave global languages ───────────────────
     { code: 'ar', nativeName: 'العربية', dir: 'rtl', enabled: true },
     { code: 'en', nativeName: 'English', dir: 'ltr', enabled: true },
     { code: 'es', nativeName: 'Español', dir: 'ltr', enabled: true },
@@ -55,48 +53,48 @@ export const LANGUAGES: LanguageMeta[] = [
     { code: 'id', nativeName: 'Bahasa Indonesia', dir: 'ltr', enabled: true },
     { code: 'fa', nativeName: 'فارسی', dir: 'rtl', enabled: true },
     { code: 'ur', nativeName: 'اردو', dir: 'rtl', enabled: true },
-    // ── Registered-but-not-active languages (from src/countries.ts) ─────────
-    { code: 'he', nativeName: 'עברית', dir: 'rtl', enabled: false },
-    { code: 'it', nativeName: 'Italiano', dir: 'ltr', enabled: false },
-    { code: 'nl', nativeName: 'Nederlands', dir: 'ltr', enabled: false },
-    { code: 'sv', nativeName: 'Svenska', dir: 'ltr', enabled: false },
-    { code: 'no', nativeName: 'Norsk', dir: 'ltr', enabled: false },
-    { code: 'da', nativeName: 'Dansk', dir: 'ltr', enabled: false },
-    { code: 'fi', nativeName: 'Suomi', dir: 'ltr', enabled: false },
-    { code: 'pl', nativeName: 'Polski', dir: 'ltr', enabled: false },
-    { code: 'cs', nativeName: 'Čeština', dir: 'ltr', enabled: false },
-    { code: 'el', nativeName: 'Ελληνικά', dir: 'ltr', enabled: false },
-    { code: 'ro', nativeName: 'Română', dir: 'ltr', enabled: false },
-    { code: 'hu', nativeName: 'Magyar', dir: 'ltr', enabled: false },
-    { code: 'bg', nativeName: 'Български', dir: 'ltr', enabled: false },
-    { code: 'hr', nativeName: 'Hrvatski', dir: 'ltr', enabled: false },
-    { code: 'sr', nativeName: 'Српски', dir: 'ltr', enabled: false },
-    { code: 'uk', nativeName: 'Українська', dir: 'ltr', enabled: false },
-    { code: 'th', nativeName: 'ไทย', dir: 'ltr', enabled: false },
-    { code: 'vi', nativeName: 'Tiếng Việt', dir: 'ltr', enabled: false },
-    { code: 'ms', nativeName: 'Bahasa Melayu', dir: 'ltr', enabled: false },
-    { code: 'bn', nativeName: 'বাংলা', dir: 'ltr', enabled: false },
-    { code: 'my', nativeName: 'မြန်မာ', dir: 'ltr', enabled: false },
-    { code: 'km', nativeName: 'ខ្មែរ', dir: 'ltr', enabled: false },
-    { code: 'lo', nativeName: 'ລາວ', dir: 'ltr', enabled: false },
-    { code: 'ne', nativeName: 'नेपाली', dir: 'ltr', enabled: false },
-    { code: 'si', nativeName: 'සිංහල', dir: 'ltr', enabled: false },
-    { code: 'az', nativeName: 'Azərbaycan', dir: 'ltr', enabled: false },
-    { code: 'ka', nativeName: 'ქართული', dir: 'ltr', enabled: false },
-    { code: 'hy', nativeName: 'Հայերեն', dir: 'ltr', enabled: false },
-    { code: 'kk', nativeName: 'Қазақ', dir: 'ltr', enabled: false },
-    { code: 'uz', nativeName: 'Oʻzbek', dir: 'ltr', enabled: false },
-    { code: 'tk', nativeName: 'Türkmen', dir: 'ltr', enabled: false },
-    { code: 'ky', nativeName: 'Кыргызча', dir: 'ltr', enabled: false },
-    { code: 'tg', nativeName: 'Тоҷикӣ', dir: 'ltr', enabled: false },
-    { code: 'mn', nativeName: 'Монгол', dir: 'ltr', enabled: false },
-    { code: 'am', nativeName: 'አማርኛ', dir: 'ltr', enabled: false },
-    { code: 'sw', nativeName: 'Kiswahili', dir: 'ltr', enabled: false },
-    { code: 'rw', nativeName: 'Kinyarwanda', dir: 'ltr', enabled: false },
-    { code: 'be', nativeName: 'Беларуская', dir: 'ltr', enabled: false },
-    { code: 'is', nativeName: 'Íslenska', dir: 'ltr', enabled: false },
-    { code: 'mt', nativeName: 'Malti', dir: 'ltr', enabled: false },
-    { code: 'ca', nativeName: 'Català', dir: 'ltr', enabled: false },
+    // ── UNIT 42.1 completion — the remaining 41 global languages ────────────
+    { code: 'he', nativeName: 'עברית', dir: 'rtl', enabled: true },
+    { code: 'it', nativeName: 'Italiano', dir: 'ltr', enabled: true },
+    { code: 'nl', nativeName: 'Nederlands', dir: 'ltr', enabled: true },
+    { code: 'sv', nativeName: 'Svenska', dir: 'ltr', enabled: true },
+    { code: 'no', nativeName: 'Norsk', dir: 'ltr', enabled: true },
+    { code: 'da', nativeName: 'Dansk', dir: 'ltr', enabled: true },
+    { code: 'fi', nativeName: 'Suomi', dir: 'ltr', enabled: true },
+    { code: 'pl', nativeName: 'Polski', dir: 'ltr', enabled: true },
+    { code: 'cs', nativeName: 'Čeština', dir: 'ltr', enabled: true },
+    { code: 'el', nativeName: 'Ελληνικά', dir: 'ltr', enabled: true },
+    { code: 'ro', nativeName: 'Română', dir: 'ltr', enabled: true },
+    { code: 'hu', nativeName: 'Magyar', dir: 'ltr', enabled: true },
+    { code: 'bg', nativeName: 'Български', dir: 'ltr', enabled: true },
+    { code: 'hr', nativeName: 'Hrvatski', dir: 'ltr', enabled: true },
+    { code: 'sr', nativeName: 'Српски', dir: 'ltr', enabled: true },
+    { code: 'uk', nativeName: 'Українська', dir: 'ltr', enabled: true },
+    { code: 'th', nativeName: 'ไทย', dir: 'ltr', enabled: true },
+    { code: 'vi', nativeName: 'Tiếng Việt', dir: 'ltr', enabled: true },
+    { code: 'ms', nativeName: 'Bahasa Melayu', dir: 'ltr', enabled: true },
+    { code: 'bn', nativeName: 'বাংলা', dir: 'ltr', enabled: true },
+    { code: 'my', nativeName: 'မြန်မာ', dir: 'ltr', enabled: true },
+    { code: 'km', nativeName: 'ខ្មែរ', dir: 'ltr', enabled: true },
+    { code: 'lo', nativeName: 'ລາວ', dir: 'ltr', enabled: true },
+    { code: 'ne', nativeName: 'नेपाली', dir: 'ltr', enabled: true },
+    { code: 'si', nativeName: 'සිංහල', dir: 'ltr', enabled: true },
+    { code: 'az', nativeName: 'Azərbaycan', dir: 'ltr', enabled: true },
+    { code: 'ka', nativeName: 'ქართული', dir: 'ltr', enabled: true },
+    { code: 'hy', nativeName: 'Հայերեն', dir: 'ltr', enabled: true },
+    { code: 'kk', nativeName: 'Қазақ', dir: 'ltr', enabled: true },
+    { code: 'uz', nativeName: 'Oʻzbek', dir: 'ltr', enabled: true },
+    { code: 'tk', nativeName: 'Türkmen', dir: 'ltr', enabled: true },
+    { code: 'ky', nativeName: 'Кыргызча', dir: 'ltr', enabled: true },
+    { code: 'tg', nativeName: 'Тоҷикӣ', dir: 'ltr', enabled: true },
+    { code: 'mn', nativeName: 'Монгол', dir: 'ltr', enabled: true },
+    { code: 'am', nativeName: 'አማርኛ', dir: 'ltr', enabled: true },
+    { code: 'sw', nativeName: 'Kiswahili', dir: 'ltr', enabled: true },
+    { code: 'rw', nativeName: 'Kinyarwanda', dir: 'ltr', enabled: true },
+    { code: 'be', nativeName: 'Беларуская', dir: 'ltr', enabled: true },
+    { code: 'is', nativeName: 'Íslenska', dir: 'ltr', enabled: true },
+    { code: 'mt', nativeName: 'Malti', dir: 'ltr', enabled: true },
+    { code: 'ca', nativeName: 'Català', dir: 'ltr', enabled: true },
 ];
 
 export function getLanguageMeta(code: string): LanguageMeta | undefined {

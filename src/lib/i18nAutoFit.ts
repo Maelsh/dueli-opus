@@ -1,9 +1,11 @@
 /**
  * English-baseline proportional font scaling for constrained UI labels.
  * UNIT 35.2 — compares localized copy width to the English reference.
- * UNIT 42.1 — width heuristics for all 15 global languages:
- *   Latin/Cyrillic ≈ Inter metrics, Perso-Arabic ≈ Cairo/Naskh metrics,
- *   CJK glyphs ≈ 1em squares, Devanagari ≈ moderate width.
+ * UNIT 42.1 — width heuristics for ALL 56 global languages:
+ *   Latin/Cyrillic/Greek ≈ Inter metrics, Perso-Arabic ≈ Cairo/Naskh metrics,
+ *   CJK glyphs ≈ 1em squares, Devanagari/Bengali/Indic ≈ moderate width,
+ *   Thai/Lao/Khmer/Sinhala/Myanmar ≈ compact Brahmic forms, Georgian/
+ *   Armenian/Ethiopic ≈ Latin-ish.
  */
 
 export const I18N_FONT_SCALE_MIN = 0.74;
@@ -52,7 +54,18 @@ export function estimateTextWidthUnits(text: string, lang: string): number {
         else if (/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(ch)) units += 1; // Hanzi: full-width square
         else if (/[\u3040-\u30FF\u31F0-\u31FF]/.test(ch)) units += 1; // Kana: full-width square
         else if (/[\uAC00-\uD7AF\u1100-\u11FF]/.test(ch)) units += 0.95; // Hangul syllables
-        else if (/[\u0900-\u097F]/.test(ch)) units += 0.7 * factor; // Devanagari
+        else if (/[\u0900-\u097F]/.test(ch)) units += 0.7 * factor; // Devanagari (+ne)
+        else if (/[\u0980-\u09FF]/.test(ch)) units += 0.75; // Bengali (+ Assamese)
+        else if (/[\u0E00-\u0E7F]/.test(ch)) units += 0.7; // Thai (+neighbour scripts)
+        else if (/[\u0E80-\u0EFF]/.test(ch)) units += 0.7; // Lao
+        else if (/[\u1780-\u17FF]/.test(ch)) units += 0.8; // Khmer
+        else if (/[\u0D80-\u0DFF]/.test(ch)) units += 0.75; // Sinhala
+        else if (/[\u1000-\u109F]/.test(ch)) units += 0.8; // Myanmar
+        else if (/[\u05D0-\u05EA\u0591-\u05C7]/.test(ch)) units += 0.72; // Hebrew
+        else if (/[\u10A0-\u10FF\u2D00-\u2D2F]/.test(ch)) units += 0.62; // Georgian
+        else if (/[\u0530-\u058F]/.test(ch)) units += 0.58; // Armenian
+        else if (/[\u1200-\u137F\u1380-\u139F]/.test(ch)) units += 0.62; // Ethiopic
+        else if (/[\u0370-\u03FF\u1F00-\u1FFF]/.test(ch)) units += 0.55; // Greek ≈ Latin
         else if (/[A-Za-z]/.test(ch)) units += 0.55 * factor;
         else if (/[\u0400-\u04FF]/.test(ch)) units += 0.6 * factor; // Cyrillic
         else units += 0.65 * factor;
@@ -67,7 +80,7 @@ export function clampI18nFontScale(scale: number): number {
 
 /**
  * Scale down localized text when it is wider than the English baseline string.
- * UNIT 42.1: language-aware for all 15 global languages.
+ * UNIT 42.1: language-aware for all 56 global languages.
  */
 export function computeI18nFontScale(enText: string, localizedText: string, lang: string): number {
     if (!enText || !localizedText || lang === 'en') return 1;

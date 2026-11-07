@@ -22,17 +22,17 @@
  *                    never `any`, never `as any`, never `// ...`).
  *   6. `emit-json` — write the runtime dictionary as a static asset to
  *                    public/static/locales/<lang>.json (nested structure).
- *                    UNIT 42.1 ships each non-bundled language as this file
+ *                    UNIT 42.1 ships every non-bundled language as this file
  *                    and loads it at request time via ensureLanguageLoaded —
  *                    the code bundle never grows with new languages.
  *
  * Repository-change-policy note (docs/18): this tool lives inside the already
  * approved dev-tools/ path; no new top-level folder (e.g. scripts/) is created.
  * Runtime scratch data goes to dev-tools/i18n-work/ and is NOT required by the
- * app build — since UNIT 42.1 the committed runtime deliverables are the
- * static dictionaries public/static/locales/<lang>.json (made by `emit-json`);
- * src/i18n/<lang>.ts from `emit` is optional reference material and must
- * NEVER be imported into the code bundle.
+ * app build — since UNIT 42.1 the committed runtime deliverables are the static
+ * dictionaries public/static/locales/<lang>.json (made by `emit-json`);
+ * src/i18n/<lang>.ts from `emit` is optional reference material for the
+ * translation pipeline and must NEVER be imported into the code bundle.
  *
  * Usage:
  *   node dev-tools/i18n-global-generator.mjs extract
@@ -58,8 +58,43 @@ const TRANS_DIR = path.join(WORK_DIR, 'translations');
 /** UNIT 42.1: static runtime dictionaries served from /static/locales/<lang>.json. */
 const LOCALES_DIR = path.join(REPO_ROOT, 'public', 'static', 'locales');
 
-/** The 13 languages UNIT 42.1 adds (ar + en already exist). */
+/** All 54 UNIT 42.1 runtime-dictionary languages (ar + en already exist). */
 export const TARGET_LANGUAGES = [
+    // UNIT 43 (R5-GLOBAL-I18N-6) — second wave requested by the owner: it/nl/pl/uk/sv/da.
+    { code: 'it', native: 'Italiano', english: 'Italian', script: 'Latin' },
+    { code: 'nl', native: 'Nederlands', english: 'Dutch', script: 'Latin' },
+    { code: 'pl', native: 'Polski', english: 'Polish', script: 'Latin' },
+    { code: 'uk', native: 'Українська', english: 'Ukrainian', script: 'Cyrillic' },
+    { code: 'sv', native: 'Svenska', english: 'Swedish', script: 'Latin' },
+    { code: 'da', native: 'Dansk', english: 'Danish', script: 'Latin' },
+    // Third wave requested by the owner: no/fi/cs/ro/hu/el.
+    { code: 'no', native: 'Norsk', english: 'Norwegian', script: 'Latin' },
+    { code: 'fi', native: 'Suomi', english: 'Finnish', script: 'Latin' },
+    { code: 'cs', native: 'Čeština', english: 'Czech', script: 'Latin' },
+    { code: 'ro', native: 'Română', english: 'Romanian', script: 'Latin' },
+    { code: 'hu', native: 'Magyar', english: 'Hungarian', script: 'Latin' },
+    { code: 'el', native: 'Ελληνικά', english: 'Greek', script: 'Greek' },
+    // Fourth wave requested by the owner: bg/hr/sr/he/th/vi (he is RTL).
+    { code: 'bg', native: 'Български', english: 'Bulgarian', script: 'Cyrillic' },
+    { code: 'hr', native: 'Hrvatski', english: 'Croatian', script: 'Latin' },
+    { code: 'sr', native: 'Српски', english: 'Serbian', script: 'Cyrillic' },
+    { code: 'he', native: 'עברית', english: 'Hebrew', script: 'Hebrew' },
+    { code: 'th', native: 'ไทย', english: 'Thai', script: 'Thai' },
+    { code: 'vi', native: 'Tiếng Việt', english: 'Vietnamese', script: 'Latin' },
+    // Fifth wave requested by the owner: ms/bn/my/km/lo/ne.
+    { code: 'ms', native: 'Bahasa Melayu', english: 'Malay', script: 'Latin' },
+    { code: 'bn', native: 'বাংলা', english: 'Bengali', script: 'Bengali' },
+    { code: 'my', native: 'မြန်မာ', english: 'Burmese', script: 'Myanmar' },
+    { code: 'km', native: 'ខ្មែរ', english: 'Khmer', script: 'Khmer' },
+    { code: 'lo', native: 'ລາວ', english: 'Lao', script: 'Lao' },
+    { code: 'ne', native: 'नेपाली', english: 'Nepali', script: 'Devanagari' },
+    // Sixth wave requested by the owner: si/az/ka/hy/kk/uz.
+    { code: 'si', native: 'සිංහල', english: 'Sinhala', script: 'Sinhala' },
+    { code: 'az', native: 'Azərbaycan', english: 'Azerbaijani', script: 'Latin' },
+    { code: 'ka', native: 'ქართული', english: 'Georgian', script: 'Georgian' },
+    { code: 'hy', native: 'Հայերեն', english: 'Armenian', script: 'Armenian' },
+    { code: 'kk', native: 'Қазақша', english: 'Kazakh', script: 'Cyrillic' },
+    { code: 'uz', native: 'Oʻzbek', english: 'Uzbek', script: 'Latin' },
     { code: 'es', native: 'Español', english: 'Spanish', script: 'Latin' },
     { code: 'fr', native: 'Français', english: 'French', script: 'Latin' },
     { code: 'de', native: 'Deutsch', english: 'German', script: 'Latin' },
@@ -73,13 +108,26 @@ export const TARGET_LANGUAGES = [
     { code: 'id', native: 'Bahasa Indonesia', english: 'Indonesian', script: 'Latin' },
     { code: 'fa', native: 'فارسی', english: 'Persian', script: 'Perso-Arabic' },
     { code: 'ur', native: 'اردو', english: 'Urdu', script: 'Perso-Arabic (Nastaliq)' },
+    // Seventh wave requested by the owner: tk/ky/tg/mn/am/sw.
+    { code: 'tk', native: 'Türkmen', english: 'Turkmen', script: 'Latin' },
+    { code: 'ky', native: 'Кыргызча', english: 'Kyrgyz', script: 'Cyrillic' },
+    { code: 'tg', native: 'Тоҷикӣ', english: 'Tajik', script: 'Cyrillic' },
+    { code: 'mn', native: 'Монгол', english: 'Mongolian', script: 'Cyrillic' },
+    { code: 'am', native: 'አማርኛ', english: 'Amharic', script: 'Ethiopic' },
+    { code: 'sw', native: 'Kiswahili', english: 'Swahili', script: 'Latin' },
+    // Final wave requested by the owner: rw/be/is/mt/ca.
+    { code: 'rw', native: 'Ikinyarwanda', english: 'Kinyarwanda', script: 'Latin' },
+    { code: 'be', native: 'Беларуская', english: 'Belarusian', script: 'Cyrillic' },
+    { code: 'is', native: 'Íslenska', english: 'Icelandic', script: 'Latin' },
+    { code: 'mt', native: 'Malti', english: 'Maltese', script: 'Latin' },
+    { code: 'ca', native: 'Català', english: 'Catalan', script: 'Latin' },
 ];
 
 /** Full UNIT 42.1 registry (order defines the language switcher order). */
 export const ALL_LANGUAGE_CODES = ['ar', 'en', ...TARGET_LANGUAGES.map((l) => l.code)];
 
 /** Direction per language (mirror of src/i18n/languages.ts). */
-export const LANGUAGE_DIRS = { ar: 'rtl', fa: 'rtl', ur: 'rtl' };
+export const LANGUAGE_DIRS = { ar: 'rtl', fa: 'rtl', ur: 'rtl', he: 'rtl' };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Identity charter — protected terms that must survive translation verbatim.
@@ -162,6 +210,177 @@ export const MANDATED_COPY = {
     ur: {
         splash: ['بلندی حاصل کریں', 'سیکھیں', 'لطف اٹھائیں', 'کمائیں'],
         monetization_locked: 'یہ حصہ جلد ہی طریقہ کار مکمل ہونے کے بعد کھل جائے گا',
+    },
+    // UNIT 43 (R5-GLOBAL-I18N-6) — owner-approved official copy for the second wave.
+    it: {
+        splash: ['Elevati', 'Impara', 'Divertiti', 'Guadagna'],
+        monetization_locked: 'Questa sezione sarà aperta a breve al completamento delle procedure',
+    },
+    nl: {
+        splash: ['Stijg uit', 'Leer', 'Geniet', 'Verdien'],
+        monetization_locked: 'Deze sectie opent binnenkort zodra de procedures zijn afgerond',
+    },
+    pl: {
+        splash: ['Wznoś się', 'Ucz się', 'Ciesz się', 'Zarabiaj'],
+        monetization_locked: 'Ta sekcja zostanie wkrótce otwarta po zakończeniu procedur',
+    },
+    uk: {
+        splash: ['Підвищуйся', 'Пізнавай', 'Насолоджуйся', 'Заробляй'],
+        monetization_locked: 'Цей розділ буде незабаром відкрито після завершення процедур',
+    },
+    sv: {
+        splash: ['Lyft', 'Lär dig', 'Njut', 'Tjäna'],
+        monetization_locked: 'Denna sektion öppnar snart när procedurerna har slutförts',
+    },
+    da: {
+        splash: ['Løft', 'Lær', 'Nyd', 'Tjen'],
+        monetization_locked: 'Denne sektion åbner snart, når procedurerne er gennemført',
+    },
+    // Third wave (owner-approved official copy): no/fi/cs/ro/hu/el.
+    no: {
+        splash: ['Løft', 'Lær', 'Nyt', 'Tjen'],
+        monetization_locked: 'Denne seksjonen åpnes snart når prosedyrene er fullført',
+    },
+    fi: {
+        splash: ['Kohota', 'Opiskele', 'Nauti', 'Ansaitse'],
+        monetization_locked: 'Tämä osio avautuu pian, kun toimenpiteet on saatettu loppuun',
+    },
+    cs: {
+        splash: ['Povýš se', 'Uč se', 'Užívej si', 'Vydělávej'],
+        monetization_locked: 'Tato sekce bude brzy otevřena po dokončení procedur',
+    },
+    ro: {
+        splash: ['Evoluează', 'Învață', 'Bucură-te', 'Câștigă'],
+        monetization_locked: 'Această secțiune se va deschide în curând după finalizarea procedurilor',
+    },
+    hu: {
+        splash: ['Emelkedj', 'Tanulj', 'Élvezz', 'Keress'],
+        monetization_locked: 'Ez a szekció hamarosan megnyílik az eljárások befejezése után',
+    },
+    el: {
+        splash: ['Ανύψωσε', 'Μάθε', 'Απόλαυσε', 'Κέρδιζε'],
+        monetization_locked: 'Αυτή η ενότητα θα ανοίξει σύντομα μετά την ολοκλήρωση των διαδικασιών',
+    },
+    // Fourth wave (owner-approved official copy): bg/hr/sr/he/th/vi.
+    bg: {
+        splash: ['Издигай се', 'Учи се', 'Наслаждавай се', 'Печели'],
+        monetization_locked: 'Този раздел ще се отвори скоро след приключване на процедурите',
+    },
+    hr: {
+        splash: ['Uzdiži se', 'Uči', 'Uživaj', 'Zarađuj'],
+        monetization_locked: 'Ovaj će se odjeljak uskoro otvoriti nakon završetka postupaka',
+    },
+    sr: {
+        splash: ['Уздижи се', 'Учи', 'Уживај', 'Заражуј'],
+        monetization_locked: 'Овај део ће се ускоро отворити након завршетка процедура',
+    },
+    he: {
+        splash: ['התרומם', 'למד', 'תיהנה', 'הרוויח'],
+        monetization_locked: 'האזור הזה ייפתח בקרוב לאחר השלמת ההליכים',
+    },
+    th: {
+        splash: ['พัฒนา', 'เรียนรู้', 'สนุก', 'หารายได้'],
+        monetization_locked: 'ส่วนนี้จะเปิดให้ใช้งานเร็ว ๆ นี้ หลังจากขั้นตอนต่าง ๆ เสร็จสมบูรณ์',
+    },
+    vi: {
+        splash: ['Vươn cao', 'Học hỏi', 'Tận hưởng', 'Kiếm tiền'],
+        monetization_locked: 'Mục này sẽ sớm được mở sau khi hoàn tất các thủ tục',
+    },
+    // Fifth wave (owner-approved official copy): ms/bn/my/km/lo/ne.
+    ms: {
+        splash: ['Angkat', 'Belajar', 'Nikmati', 'Jana'],
+        monetization_locked: 'Bahagian ini akan dibuka tidak lama lagi setelah prosedur selesai',
+    },
+    bn: {
+        splash: ['উঠে আসো', 'শেখো', 'উপভোগ করো', 'আয় করো'],
+        monetization_locked: 'প্রক্রিয়াগুলো সম্পন্ন হওয়ার পর এই সেকশনটি শীঘ্রই খুলে যাবে',
+    },
+    my: {
+        splash: ['မြှင့်တင်ပါ', 'လေ့လာပါ', 'ပျော်ရွှင်ပါ', 'ဝင်ငွေရှာပါ'],
+        monetization_locked: 'လုပ်ထုံးလုပ်စဉ်များ ပြီးစီးပါက ဤကဏ္ဍသည် မကြာမီ ဖွင့်ပါမည်',
+    },
+    km: {
+        splash: ['លើកខ្លួន', 'រៀនសូត្រ', 'រីករាយ', 'រកចំណូល'],
+        monetization_locked: 'ផ្នែកនេះនឹងត្រូវបើកក្នុងពេលឆាប់ៗ បន្ទាប់ពីនីតិវិធីត្រូវបានបញ្ចប់',
+    },
+    lo: {
+        splash: ['ຍົກລະດັບ', 'ຮຽນຮູ້', 'ມ່ວນຊື່ນ', 'ສ້າງລາຍໄດ້'],
+        monetization_locked: 'ພາກສ່ວນນີ້ຈະເປີດໃນໄວໆນີ້ ຫຼັງຈາກຂັ້ນຕອນຕ່າງໆສຳເລັດແລ້ວ',
+    },
+    ne: {
+        splash: ['उक्ल', 'सिक', 'रमाइलो गर', 'कमाउ'],
+        monetization_locked: 'प्रक्रियाहरू सम्पन्न भएपछि यो खण्ड चाँडै खुल्नेछ',
+    },
+    // Sixth wave (owner-approved official copy): si/az/ka/hy/kk/uz.
+    si: {
+        splash: ['ඔසවා ගන්න', 'ඉගෙන ගන්න', 'භුක්ති විඳින්න', 'ඉපයන්න'],
+        monetization_locked: 'පියවරයන් සම්පූර්ණ වූ පසු මෙම කොටස ඉක්මනින් විවෘත වේවි',
+    },
+    az: {
+        splash: ['Yüksəl', 'Öyrən', 'Zövq al', 'Qazan'],
+        monetization_locked: 'Bu bölmə prosedurlar başa çatdıqdan sonra tezliklə açılacaq',
+    },
+    ka: {
+        splash: ['ამაღლდი', 'ისწავლე', 'ტკბი', 'იშოვე'],
+        monetization_locked: 'ეს განყოფილება მალე გაიხსნება პროცედურების დასრულების შემდეგ',
+    },
+    hy: {
+        splash: ['Բարձրացիր', 'Սովորիր', 'Վայելիր', 'Վաստակիր'],
+        monetization_locked: 'Այս բաժինը շուտով կբացվի ընթացակարգերի ավարտից հետո',
+    },
+    kk: {
+        splash: ['Көтеріл', 'Үйрен', 'Ләззат ал', 'Тап'],
+        monetization_locked: 'Бұл бөлім рәсімдер аяқталғаннан кейін жақын арада ашылады',
+    },
+    uz: {
+        splash: ['Koʻtaril', 'Oʻrgan', 'Bahramand boʻl', 'Yut'],
+        monetization_locked: 'Bu boʻlim protseduralar yakunlangandan soʻng tez orada ochiladi',
+    },
+    // Seventh wave (owner-approved official copy): tk/ky/tg/mn/am/sw.
+    tk: {
+        splash: ['Ýüksel', 'Öwren', 'Lezzet al', 'Kazan'],
+        monetization_locked: 'Bu bölüm prosedurlar tamamlanandan soňra gysga möhletde açylar',
+    },
+    ky: {
+        splash: ['Көтөрүл', 'Үйрөн', 'Ырахат ал', 'Тап'],
+        monetization_locked: 'Бул бөлүм жол-жобалар аяктагандан кийин жакында ачылат',
+    },
+    tg: {
+        splash: ['Баланд шав', 'Омӯз', 'Ләззат бар', 'Касб кун'],
+        monetization_locked: 'Ин бахш ба зудӣ пас аз анҷоми расмиёт кушода мешавад',
+    },
+    mn: {
+        splash: ['Дээшлэ', 'Сур', 'Амтла', 'Олзло'],
+        monetization_locked: 'Энэ хэсэг нь процедур дууссаны дараа удахгүй нээгдэх болно',
+    },
+    am: {
+        splash: ['ተነሳ', 'ተማር', 'ደስ በል', 'አትርፍ'],
+        monetization_locked: 'ይህ ክፍል የሂደቶቹ አሰራር ከተጠናቀቀ በኋላ በቅርቡ ይከፈታል',
+    },
+    sw: {
+        splash: ['Panda', 'Jifunze', 'Furahia', 'Kazana'],
+        monetization_locked: 'Sehemu hii itafunguliwa hivi karibuni baada ya taratibu kukamilika',
+    },
+    // Final wave (owner-approved official copy): rw/be/is/mt/ca.
+    rw: {
+        splash: ['Zamura', 'Iga', 'Ishimire', 'Injiza'],
+        monetization_locked: 'Iyi igice kizafungurwa vuba aha nyuma yo kurangiza ibikorwa byagenwe.',
+    },
+    be: {
+        splash: ['Узвішся', 'Вучыся', 'Смакуй', 'Зарабляй'],
+        monetization_locked: 'Гэта раздзел неўзабаве адкрыецца пасля завяршэння ўсіх працэдур',
+    },
+    is: {
+        splash: ['Lyftu', 'Lærðu', 'Njóttu', 'Þénaðu'],
+        monetization_locked: 'Þessi hluti opnast fljótlega þegar ferlið er lokið',
+    },
+    mt: {
+        splash: ['Ogħla', 'Tgħallem', 'Gawdi', 'Irbaħ'],
+        monetization_locked: 'Din is-sezzjoni se tkun disponibli fil-qrib wara li jispiċċaw il-proċeduri.',
+    },
+    ca: {
+        splash: ['Supera', 'Aprèn', 'Gaudeix', 'Guanya'],
+        monetization_locked: "Aquesta secció s'obrirà aviat un cop completats els tràmites",
     },
 };
 
@@ -945,8 +1164,31 @@ function modeEmit(args) {
         return;
     }
 
-    // nested tree: EN structure with translated strings (+ EN non-string scalars)
-    const tree = buildNestedTree(langMeta.code, merged, enFlat);
+    // build plain tree: EN structure with translated strings; scalars that are
+    // not strings (numbers/booleans if ever) come from EN untouched.
+    const enPlain = astToPlain(loadObjectLiteral(path.join(I18N_DIR, 'en.ts')));
+    const tree = rebuildTree(flatFromMerged(merged, enFlat), enFlat);
+    // keep EN values for non-string scalars. FIX (UNIT 43): the previous
+    // condition `typeof v !== 'object' || Array.isArray(v)` routed ARRAYS into
+    // this branch, overwriting whole translated arrays with the EN source
+    // (audit-visible as copied guide.*/charter/term leaves). Arrays must fall
+    // through to the element-wise recursion below.
+    (function copyNonStrings(enNode, outNode) {
+        for (const [k, v] of Object.entries(enNode)) {
+            if (v === null || typeof v !== 'object') {
+                if (typeof v !== 'string') outNode[k] = v;
+            } else if (Array.isArray(v)) {
+                for (let i = 0; i < v.length; i++) {
+                    const el = v[i];
+                    if (el !== null && typeof el === 'object' && !Array.isArray(el) && outNode[k]?.[i]) {
+                        copyNonStrings(el, outNode[k][i]);
+                    }
+                }
+            } else if (outNode[k]) {
+                copyNonStrings(v, outNode[k]);
+            }
+        }
+    })(enPlain, tree);
 
     const dir = LANGUAGE_DIRS[langMeta.code] ?? 'ltr';
     const header = [
@@ -983,10 +1225,15 @@ function flatFromMerged(merged, enFlat) {
 function buildNestedTree(lang, merged, enFlat) {
     const tree = rebuildTree(flatFromMerged(merged, enFlat), enFlat);
     const enPlain = astToPlain(loadObjectLiteral(path.join(I18N_DIR, 'en.ts')));
-    // keep EN values for non-string scalars (en.ts is string-only today)
+    // keep EN values for non-string scalars (en.ts is string-only today).
+    // FIX (UNIT 43): the previous condition routed ARRAYS into this branch,
+    // overwriting whole translated arrays with the EN source (audit-visible as
+    // copied guide.* leaves). Arrays must fall through to the element-wise
+    // recursion below — exactly the modeEmit fix, kept in sync here so a
+    // regenerated emit-json never resurrects the copied-array regression.
     (function copyNonStrings(enNode, outNode) {
         for (const [k, v] of Object.entries(enNode)) {
-            if (v === null || typeof v !== 'object' || Array.isArray(v)) {
+            if (v === null || typeof v !== 'object') {
                 if (typeof v !== 'string') outNode[k] = v;
             } else if (Array.isArray(v)) {
                 for (let i = 0; i < v.length; i++) {
