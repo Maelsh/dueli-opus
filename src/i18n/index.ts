@@ -1,15 +1,43 @@
 /**
  * Dueli Internationalization (i18n) - Modular Design
  * نظام الترجمة والتعريب - التصميم المعياري
+ *
+ * UNIT 42.1 (R4-GLOBAL-I18N-ALL-LANGS-1) — lazy-loading architecture:
+ *   - Only `ar`/`en` are bundled inside the code package (`_worker.js` +
+ *     `app.js`). Their size stays constant no matter how many languages
+ *     are added later.
+ *   - Every further language ships as a NESTED static dictionary under
+ *     `/static/locales/<lang>.json` (written by the generator's
+ *     `emit-json` command) and is lazily fetched exactly once per Isolate
+ *     by `ensureLanguageLoaded()`, then kept in memory via
+ *     `registerLanguage()`.
+ *   - `getUILanguage()` resolves ONLY languages actually loaded in memory;
+ *     anything else — including a language registered without a dictionary
+ *     file yet — falls back to English instantly and never throws.
+ *   - On the browser side the server injects the already-resolved pack into
+ *     the document head as `window.__DUELI_LOCALE_PACK__` (layout.ts); this
+ *     module registers it synchronously on load so the client bundle needs
+ *     no dictionary of its own and no extra network round trip.
  */
 
-// Import language translations
+// Bundled language translations (the ONLY dictionaries inside the code bundle)
 import { ar } from './ar';
 import { en } from './en';
 import { LANGUAGES, getLanguageMeta } from './languages';
-export { LANGUAGES, getLanguageMeta, type LanguageMeta } from './languages';
+export { LANGUAGES, getLanguageMeta, isKnownLanguage, type LanguageMeta } from './languages';
 
-// Languages with available translations (can be extended)
+/**
+ * Languages whose translation pack is embedded in the code bundle itself.
+ * UNIT 42.1: exactly `ar` + `en`. All further languages load lazily from
+ * `/static/locales/<lang>.json` and must never be imported here as
+ * TypeScript — that is what keeps `_worker.js`/`app.js` from growing.
+ *
+ * NOTE: `TRANSLATED_LANGUAGES` no longer means "languages with a
+ * translation" (the runtime registry decides that now); it means exactly
+ * "languages compiled into the bundle". The DB content-language boundary
+ * (`normalizeContentLanguage`) still uses this list on purpose: the
+ * database only backs ar/en columns.
+ */
 export const TRANSLATED_LANGUAGES = ['ar', 'en'] as const;
 export type TranslatedLanguage = typeof TRANSLATED_LANGUAGES[number];
 
@@ -22,6 +50,16 @@ export const DEFAULT_LANGUAGE: TranslatedLanguage = 'en'; // English as global f
 // T3.1: typed as Record so new languages can be registered at runtime
 export const translations: Record<string, any> = { ar, en };
 
+/** True when `lang` has a pack registered in the current Isolate/page. */
+export function isLanguageLoaded(lang: string): boolean {
+    if (!lang || typeof lang !== 'string') return false;
+    // Own property only: inherited names (`toString`, `constructor`, …) must
+    // never count as a translation pack.
+    return Object.prototype.hasOwnProperty.call(translations, lang)
+        && typeof translations[lang] === 'object'
+        && translations[lang] !== null;
+}
+
 /**
  * T3.1: Register a translation pack at runtime (used when adding languages).
  * registerLanguage('fr', fr) — then getUILanguage/t/isRTL work immediately.
@@ -31,7 +69,29 @@ export function registerLanguage(code: string, pack: Record<string, any>): void 
 }
 
 /**
- * T3.1: Languages available in the switcher =
+ * UNIT 42.1 — Browser: the server rendered this page in a language it had
+ * already resolved, and layout.ts embedded that pack in the head. Register
+ * it synchronously at bundle-load time (the inline script runs before the
+ * deferred `app.js`), so every client render matches the SSR markup.
+ */
+if (typeof window !== 'undefined' && (window as unknown as { __DUELI_LOCALE_PACK__?: unknown }).__DUELI_LOCALE_PACK__) {
+    try {
+        const injected = (window as unknown as { __DUELI_LOCALE_PACK__?: { code?: unknown; pack?: unknown } }).__DUELI_LOCALE_PACK__;
+        if (
+            typeof injected?.code === 'string'
+            && injected.code
+            && typeof injected.pack === 'object'
+            && injected.pack !== null
+        ) {
+            registerLanguage(injected.code, injected.pack as Record<string, any>);
+        }
+    } catch {
+        // Never break the client over an injected pack; English stays active.
+    }
+}
+
+/**
+ * Languages available in the switcher =
  * enabled in the registry AND having a loaded translation pack.
  */
 export function getAvailableLanguages() {
@@ -52,13 +112,17 @@ export function getLanguageFromCountry(countryCode: string): Language {
 }
 
 /**
- * Get the UI language for a given language code
- * Falls back to English (global fallback) if no translation available
+ * Get the UI language for a given language code.
+ *
+ * UNIT 42.1: `lang` is returned only when its pack is actually loaded in
+ * memory (bundled ar/en, or lazily joined via ensureLanguageLoaded any code).
+ * Anything else — unknown code, registered-but-fileless language, junk —
+ * falls back instantly and safely to English. This is the internal
+ * synchronous resolver; the middleware loads packs BEFORE any consumer
+ * calls this for the request language.
  */
-export function getUILanguage(lang: Language): TranslatedLanguage {
-    if (TRANSLATED_LANGUAGES.includes(lang as TranslatedLanguage)) {
-        return lang as TranslatedLanguage;
-    }
+export function getUILanguage(lang: Language): Language {
+    if (isLanguageLoaded(lang)) return lang;
     return DEFAULT_LANGUAGE; // English fallback
 }
 
@@ -101,9 +165,11 @@ export function t(key: string, lang: Language): string {
 
 // RTL detection — T3.1: derived from the central registry (dir field),
 // with a static fallback list for languages not yet in the registry.
+// UNIT 42.1: ar/fa/ur (+he) are registered as rtl, so the registry decides.
 const RTL_FALLBACK: string[] = ['fa', 'he', 'ur', 'ps', 'sd', 'ug', 'yi'];
 
 export function isRTL(lang: Language): boolean {
+    if (!lang || typeof lang !== 'string') return false;
     const meta = getLanguageMeta(lang);
     if (meta) return meta.dir === 'rtl';
     return RTL_FALLBACK.includes(lang);
@@ -113,21 +179,133 @@ export function getDir(lang: Language): 'rtl' | 'ltr' {
     return isRTL(lang) ? 'rtl' : 'ltr';
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// UNIT 42.1 — lazy dictionary loading engine (static locale packs)
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Locale-declared languages whose /static/locales/<lang>.json request failed. */
+const localeMisses = new Set<string>();
+
+/** `/static/locales/<lang>.json` — the canonical asset URL of a pack. */
+export function localeAssetUrl(lang: string): string {
+    return `/static/locales/${encodeURIComponent(lang)}.json`;
+}
+
 /**
- * Post-R1 acceptance (E) — canonical content-language normalization.
- * Only 'ar' and 'en' have backing data (e.g. `categories.name_ar/name_en`).
- * Any other value (fr, ca, xx, malformed, …) MUST fall back to the
- * application default instead of ever reaching SQL as a column identifier.
- * This is the single boundary every dynamic column selection must use.
+ * Read a locale pack asset. Order:
+ *   1. Cloudflare Pages/Workers — the provided `assetsFetcher` (built in
+ *      main.ts from `c.env.ASSETS`, the platform's asset store).
+ *   2. Node/Vitest (or when ASSETS is unavailable) — the repository copy
+ *      `public/static/locales/<lang>.json` on disk via a guarded dynamic
+ *      import. The computed specifier keeps `node:fs` out of both bundles
+ *      (esbuild/rollup never statically resolve it), and the code path is
+ *      unreachable in the browser/Workers runtimes (misses → English).
+ * Missing/invalid data returns `null` — never throws.
  */
-export function normalizeContentLanguage(lang: unknown): TranslatedLanguage {
-    if (typeof lang === 'string') {
-        const code = lang.trim().toLowerCase().split(/[^a-z]/)[0];
-        if (TRANSLATED_LANGUAGES.includes(code as TranslatedLanguage)) {
-            return code as TranslatedLanguage;
+async function readLocaleAsset(
+    lang: string,
+    assetsFetcher?: (url: string) => Promise<Response | null>
+): Promise<string | null> {
+    if (assetsFetcher) {
+        try {
+            const res = await assetsFetcher(localeAssetUrl(lang));
+            if (res && res.ok) return await res.text();
+        } catch {
+            // fall through to the filesystem fallback
         }
     }
-    return DEFAULT_LANGUAGE;
+    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+        try {
+            const fsId = 'node' + ':fs';
+            const fs = (await import(/* @vite-ignore */ fsId)) as { default: { readFileSync: (p: string, e: string) => string } };
+            const cwd = process.cwd().replace(/\\/g, '/');
+            return fs.default.readFileSync(`${cwd}/public/static/locales/${lang}.json`, 'utf8');
+        } catch {
+            // not found / not Node — caller falls back to English
+        }
+    }
+    return null;
+}
+
+/** Parse + structural sanity-check a raw locale file body. */
+function parseLocalePack(raw: string): Record<string, any> | null {
+    try {
+        const parsed = JSON.parse(raw);
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        const keys = Object.keys(parsed);
+        if (keys.length === 0) return null;
+        // The canonical pack must be a nested dictionary of strings/objects
+        // starting with the brand key — one cheap discriminator against any
+        // garbled/foreign file on the asset route.
+        if (typeof parsed.app_title !== 'string') return null;
+        return parsed as Record<string, any>;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * UNIT 42.1 — lazy-load engine. Loads `/static/locales/<lang>.json` exactly
+ * once per Isolate/page and registers it in memory so the synchronous
+ * `getUILanguage()`/`t()` resolvers work for this request and every later
+ * one — with NO code-bundle growth, no build-time dictionary imports.
+ *
+ * Semantics:
+ *   - `ar`/`en` are bundled from code → instant no-op.
+ *   - Unknown/unregistered codes (everything outside the 56-language
+ *     registry) are refused silently — the allow-list also keeps cache
+ *     polluters and arbitrary junk paths off the asset store.
+ *   - A known language whose pack file is not shipped yet → single negative
+ *     cache entry (`localeMisses`), no error, no retry storm: every consumer
+ *     simply continues in English (graceful degradation by design).
+ *   - Invalid/garbled JSON is treated like a missing file.
+ */
+export async function ensureLanguageLoaded(
+    lang: Language,
+    assetsFetcher?: (url: string) => Promise<Response | null>
+): Promise<void> {
+    if (!lang || typeof lang !== 'string') return;
+    if (lang === 'ar' || lang === 'en') return;         // bundled — nothing to load
+    if (isLanguageLoaded(lang)) return;                 // already registered in memory
+    if (localeMisses.has(lang)) return;                 // known miss — keep silent
+    if (!getLanguageMeta(lang)) {
+        localeMisses.add(lang);                         // not in the registry → allow-list miss
+        return;
+    }
+
+    const raw = await readLocaleAsset(lang, assetsFetcher);
+    const pack = raw ? parseLocalePack(raw) : null;
+    if (pack) {
+        registerLanguage(lang, pack);
+        return;
+    }
+    // No valid pack on the asset route → every later request reuses this
+    // miss and the platform stays on the English fallback, error-free.
+    localeMisses.add(lang);
+}
+
+/**
+ * Post-R1 acceptance (E) — canonical content-language normalization.
+ *
+ * UNIT 42.1 keeps this boundary STRICTLY ar/en on purpose: the database only
+ * has backing data for those two content languages (e.g.
+ * `categories.name_ar/name_en`). The 13 new UI languages do NOT change the
+ * SQL-facing content language — any other value (fr, zh, xx, malformed, …)
+ * MUST fall back to the application default instead of ever reaching SQL as
+ * a column identifier. This is the single boundary every dynamic column
+ * selection must use.
+ */
+export const CONTENT_LANGUAGES = ['ar', 'en'] as const;
+export type ContentLanguage = typeof CONTENT_LANGUAGES[number];
+
+export function normalizeContentLanguage(lang: unknown): ContentLanguage {
+    if (typeof lang === 'string') {
+        const code = lang.trim().toLowerCase().split(/[^a-z]/)[0];
+        if (CONTENT_LANGUAGES.includes(code as ContentLanguage)) {
+            return code as ContentLanguage;
+        }
+    }
+    return DEFAULT_LANGUAGE as ContentLanguage; // always 'en'
 }
 
 /**
@@ -232,4 +410,3 @@ export function getCategoryName(category: Record<string, any>, lang: Language): 
 
     return '';
 }
-

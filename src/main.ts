@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import type { Bindings, Variables, Language } from './config/types';
-import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE } from './i18n';
+import { translations, getDir, getUILanguage, isRTL, DEFAULT_LANGUAGE, ensureLanguageLoaded } from './i18n';
 import { rateLimit, csrfProtection, securityHeaders } from './middleware/security';
 import { requestContextMiddleware } from './middleware/request-context';
 import { logStructuredServerError } from './lib/services/structured-server-log';
@@ -165,6 +165,28 @@ app.use('*', async (c, next) => {
     lang = langParam;
   } else if (cookieLang) {
     lang = cookieLang as Language;
+  }
+
+  // UNIT 42.1 (R4-GLOBAL-I18N-ALL-LANGS-1): resolve the language pack BEFORE
+  // any consumer renders/answers. `ar`/`en` are bundled in the code package;
+  // every other language joins lazily through its static
+  // /static/locales/<lang>.json asset exactly once per Isolate (then lives in
+  // `translations[lang]`). A language whose pack is not shipped yet — or any
+  // unknown code — stays silently on the safe English fallback (no error,
+  // no retry storm; UNIT 42.1 lazy-loading contract).
+  const assets = c.env?.ASSETS;
+  if (assets) {
+    await ensureLanguageLoaded(lang, async (url) => {
+      try {
+        return await assets.fetch(new Request(new URL(url, c.req.url)));
+      } catch {
+        return null;
+      }
+    });
+  } else {
+    // Node/Vitest (or a runtime without the Pages asset store): repository
+    // public/static/locales/<lang>.json fallback inside ensureLanguageLoaded.
+    await ensureLanguageLoaded(lang);
   }
 
   c.set('lang', lang);

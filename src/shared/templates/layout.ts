@@ -8,11 +8,73 @@ import { translations, getUILanguage, getDir, isRTL } from '../../i18n';
 import { Sanitize } from '../../lib/services/Sanitize';
 import { buildSeoHead, type SeoInput } from './seo';
 
-// Font mapping per language
+/**
+ * Font mapping per language — UNIT 42.1 (R4-GLOBAL-I18N-ALL-LANGS-1).
+ * Every one of the 56 global languages has a script-appropriate primary
+ * font; Latin, Greek and Cyrillic languages share Inter. Unknown codes
+ * fall back to Inter.
+ */
 const fontMap: Record<string, string> = {
   'ar': "'Cairo'",
   'en': "'Inter'",
+  'es': "'Inter'",
+  'fr': "'Inter'",
+  'de': "'Inter'",
+  'pt': "'Inter'",
+  'ru': "'Inter'",
+  'zh': "'Noto Sans SC'",
+  'ja': "'Noto Sans JP'",
+  'ko': "'Noto Sans KR'",
+  'tr': "'Inter'",
+  'hi': "'Noto Sans Devanagari'",
+  'id': "'Inter'",
+  'fa': "'Noto Naskh Arabic'",
+  'ur': "'Noto Nastaliq Urdu'",
+  'he': "'Noto Sans Hebrew'",
+  'it': "'Inter'",
+  'nl': "'Inter'",
+  'sv': "'Inter'",
+  'no': "'Inter'",
+  'da': "'Inter'",
+  'fi': "'Inter'",
+  'pl': "'Inter'",
+  'cs': "'Inter'",
+  'el': "'Inter'",
+  'ro': "'Inter'",
+  'hu': "'Inter'",
+  'bg': "'Inter'",
+  'hr': "'Inter'",
+  'sr': "'Inter'",
+  'uk': "'Inter'",
+  'th': "'Noto Sans Thai'",
+  'vi': "'Inter'",
+  'ms': "'Inter'",
+  'bn': "'Noto Sans Bengali'",
+  'my': "'Noto Sans Myanmar'",
+  'km': "'Noto Sans Khmer'",
+  'lo': "'Noto Sans Lao'",
+  'ne': "'Noto Sans Devanagari'",
+  'si': "'Noto Sans Sinhala'",
+  'az': "'Inter'",
+  'ka': "'Noto Sans Georgian'",
+  'hy': "'Noto Sans Armenian'",
+  'kk': "'Inter'",
+  'uz': "'Inter'",
+  'tk': "'Inter'",
+  'ky': "'Inter'",
+  'tg': "'Inter'",
+  'mn': "'Inter'",
+  'am': "'Noto Sans Ethiopic'",
+  'sw': "'Inter'",
+  'rw': "'Inter'",
+  'be': "'Inter'",
+  'is': "'Inter'",
+  'mt': "'Inter'",
+  'ca': "'Inter'",
 };
+
+/** Google Fonts families needed by the language set above (one request). */
+const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@300;400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;500;600;700&family=Noto+Sans+Hebrew:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&family=Noto+Sans+Myanmar:wght@300;400;500;600;700&family=Noto+Sans+Khmer:wght@300;400;500;600;700&family=Noto+Sans+Lao:wght@300;400;500;600;700&family=Noto+Sans+Sinhala:wght@300;400;500;600;700&family=Noto+Sans+Georgian:wght@300;400;500;600;700&family=Noto+Sans+Armenian:wght@300;400;500;600;700&family=Noto+Sans+Ethiopic:wght@300;400;500;600;700&display=swap';
 
 /**
  * UNIT38 / R4-GUIDE-1 — per-page SEO overrides.
@@ -25,6 +87,25 @@ const fontMap: Record<string, string> = {
 export type SeoOptions = Partial<Omit<SeoInput, 'lang' | 'title'>>;
 
 /**
+ * UNIT 42.1 — head inline injection of the resolved locale pack.
+ *
+ * When the SSR isolate resolved a non-bundled language (lazy-loaded from
+ * /static/locales/<lang>.json), the exact pack is embedded here so the
+ * client bundle needs NO dictionary of its own and no extra fetch:
+ * src/i18n/index.ts registers it synchronously on load. `ar`/`en` are
+ * bundled in app.js and injected for them is intentionally skipped.
+ * `<` is escaped (\u003c) so the serialized pack can never close or spoof
+ * the script tag in which it is served.
+ */
+function localePackScript(uiLang: string, nonce: string): string {
+    if (!uiLang || uiLang === 'ar' || uiLang === 'en') return '';
+    const pack = translations[uiLang];
+    if (!pack) return ''; // never reached via getUILanguage — pure safety net
+    const payload = JSON.stringify({ code: uiLang, pack }).replace(/</g, '\\u003c');
+    return `<script nonce="${nonce}">window.__DUELI_LOCALE_PACK__ = ${payload};</script>`;
+}
+
+/**
  * Generate base HTML wrapper - توليد غلاف HTML الأساسي
  */
 export function generateHTML(
@@ -35,7 +116,11 @@ export function generateHTML(
   seo?: SeoOptions
 ): string {
   const dir = getDir(lang);
-  const tr = translations[getUILanguage(lang)];
+  // UNIT 42.1: resolve ONCE — `uiLang` is `lang` when its pack is loaded in
+  // memory, otherwise safe-fast English; everything below renders in uiLang
+  // and the same pack travels into the head for the client.
+  const uiLang = getUILanguage(lang);
+  const tr = translations[uiLang];
   const fontFamily = fontMap[lang] || "'Inter'";
   const seoHead = buildSeoHead({ lang, title, ...(seo ?? {}) }, nonce);
   // UNIT39 owner revision: a page may supply the complete localized meta
@@ -44,6 +129,7 @@ export function generateHTML(
   const documentTitle = seo?.metaTitle
     ? Sanitize.escapeHtml(seo.metaTitle)
     : `${Sanitize.escapeHtml(title)} - ${Sanitize.escapeHtml(tr.app_title)}`;
+  const localePack = localePackScript(uiLang, nonce);
 
   return `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}" class="scroll-smooth">
@@ -56,8 +142,9 @@ export function generateHTML(
     <meta name="apple-mobile-web-app-title" content="Dueli">
     <title>${documentTitle}</title>
     ${seoHead}
+    ${localePack}
     <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="${GOOGLE_FONTS_URL}" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <!-- Owner acceptance (post-#71): the shared competition-card centre logo

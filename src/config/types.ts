@@ -64,6 +64,11 @@ export type Bindings = {
   // /api/*, comma-separated origins (e.g. "https://dueli.maelshpro.com").
   // Unset in local dev falls back to a small localhost default in main.ts.
   ALLOWED_ORIGINS?: string;
+  // UNIT 42.1 (R4-GLOBAL-I18N-ALL-LANGS-1): Cloudflare Pages asset store
+  // binding (auto-provided by the Pages runtime in advanced `_worker.js`
+  // mode; optional here because tests build plain env objects). The i18n
+  // lazy loader resolves `/static/locales/<lang>.json` through it.
+  ASSETS?: { fetch(request: Request): Promise<Response> };
 }
 
 /** Language code type (supports all country languages) */

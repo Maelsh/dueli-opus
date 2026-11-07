@@ -12,9 +12,10 @@
  *    as SAFE ALIASES that keep the language and every legacy anchor while
  *    pointing their canonical at the guide section.
  * 3. Global SEO: description, OpenGraph, Twitter Cards, canonical,
- *    hreflang (ar/en + x-default) and Schema.org JSON-LD that identifies
- *    Dueli and Maelsh Pro — present in the REAL rendered HTML, not only
- *    in a source string.
+ *    hreflang for every enabled language of the central registry
+ *    (UNIT 42.1+43: all 56 global languages + x-default) and Schema.org
+ *    JSON-LD that identifies Dueli and Maelsh Pro — present in the REAL
+ *    rendered HTML, not only in a source string.
  * 4. /robots.txt and /sitemap.xml are public, carry the right content
  *    type, and EVERY URL in the sitemap is a real public route (compared
  *    against the generated route inventory — an invented URL would be a
@@ -37,6 +38,7 @@ import app from '../../src/main';
 import { FakeD1 } from '../helpers/fake-d1';
 import { ar } from '../../src/i18n/ar';
 import { en } from '../../src/i18n/en';
+import { LANGUAGES } from '../../src/i18n';
 
 const SRC = (p: string) => readFileSync(resolve(__dirname, '../../src', p), 'utf-8');
 
@@ -286,15 +288,22 @@ describe('UNIT38 / R4-GUIDE-1 — global SEO head (real rendered HTML)', () => {
         }
     });
 
-    it('12. the head carries a canonical and the ar/en + x-default hreflang set', async () => {
+    it('12. the head carries a canonical and the UNIT42.1+43 56-language + x-default hreflang set', async () => {
         const { html } = await get('/guide/help?lang=en');
         expect(link(html, 'canonical')).toBe('https://dueli.maelshpro.com/guide/help');
 
         const alternates = [...html.matchAll(/<link\s+rel="alternate"\s+hreflang="([^"]+)"\s+href="([^"]*)"/g)];
         const byLang = new Map(alternates.map((m) => [m[1], m[2]]));
-        expect([...byLang.keys()].sort()).toEqual(['ar', 'en', 'x-default']);
+        // UNIT 42.1+43: every one of the 56 registry languages ships a pack,
+        // so hreflang covers ALL of them + x-default (15 until wave 1).
+        const expectedCodes = [...LANGUAGES.filter((l) => l.enabled).map((l) => l.code), 'x-default'].sort();
+        expect(byLang.size, 'one hreflang per language + x-default, no duplicates').toBe(expectedCodes.length);
+        expect([...byLang.keys()].sort()).toEqual(expectedCodes);
         expect(byLang.get('en')).toBe('https://dueli.maelshpro.com/guide/help');
         expect(byLang.get('ar')).toBe('https://dueli.maelshpro.com/guide/help?lang=ar');
+        expect(byLang.get('fr')).toBe('https://dueli.maelshpro.com/guide/help?lang=fr');
+        expect(byLang.get('ur')).toBe('https://dueli.maelshpro.com/guide/help?lang=ur');
+        expect(byLang.get('he')).toBe('https://dueli.maelshpro.com/guide/help?lang=he');
         expect(byLang.get('x-default')).toBe('https://dueli.maelshpro.com/guide/help');
     });
 
