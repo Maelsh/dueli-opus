@@ -399,7 +399,15 @@ app.get('/faq', helpPage);
 // never intercepts the main domain or an existing route.
 app.get('/welcome', welcomePage);
 app.route('/', seoRoutes);
-app.get('/docs', docsIndexPage);
+// UNIT41.2-P1 (G9): the standalone /docs index is retired. It redirects to
+// the guide center (302) so old links and the footer never surface a second
+// documentation surface. Published documents keep their canonical
+// /docs/:slug reader route below.
+app.get('/docs', (c) => {
+  const lang = c.req.query('lang');
+  const suffix = lang ? `?lang=${encodeURIComponent(lang)}` : '';
+  return c.redirect(`/guide${suffix}`, 302);
+});
 app.get('/docs/:slug', docReaderPage);
 app.get('/verify', verifyPage);
 app.get('/competition/:id', competitionPage);

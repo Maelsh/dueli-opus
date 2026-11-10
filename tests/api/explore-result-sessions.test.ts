@@ -93,6 +93,11 @@ async function readPage(
 }
 
 /** Seeds users/sessions/categories + a large eligible set with ties + branches. */
+/** UNIT41.2-P1 (G5): a pending instant fixture must stay inside the 1-hour window. */
+function freshStamp(): string {
+    return new Date(Date.now() - 15 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 async function seedBig(db: SqliteD1, total: number): Promise<{ eligibleIds: number[] }> {
     await db.prepare(
         `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country) VALUES
@@ -122,7 +127,12 @@ async function seedBig(db: SqliteD1, total: number): Promise<{ eligibleIds: numb
     );
     const eligibleIds: number[] = [];
     for (let i = 1; i <= total; i++) {
-        const created = `2026-05-${String((i % 28) + 1).padStart(2, '0')} 10:00:00`;
+        const status = statuses[i % statuses.length];
+        // UNIT41.2-P1 (G5): pending instant rows must stay inside the 1-hour
+        // window or the new public-read expiry law would hide them.
+        const created = status === 'pending'
+            ? freshStamp()
+            : `2026-05-${String((i % 28) + 1).padStart(2, '0')} 10:00:00`;
         const cat = cats[i % cats.length] as number;
         const sub = cat === 13 ? 13 : null;
         const realCat = cat === 13 ? 11 : cat;
@@ -382,7 +392,13 @@ describe('R3-B7 — stable result session over >1000 eligible rows', () => {
 
     it('14. ties on created_at traverse exactly once in frozen order', async () => {
         const stamp = '2026-06-01 12:00:00';
-        await db.prepare(`UPDATE competitions SET created_at = ?`).bind(stamp).run();
+        // UNIT41.2-P1 (G5): pinning every row to one historical stamp would
+        // make the instant pending rows >1h old without an opponent — the
+        // new public-read expiry law would then hide them and the tie set
+        // would shrink to 800. This test's subject is created_at ties, not
+        // the expiry law, so the pending rows are re-typed as scheduled
+        // (instant expiry only applies to unopposed instant pending rows).
+        await db.prepare(`UPDATE competitions SET competition_type = 'scheduled', created_at = ?`).bind(stamp).run();
         const created = await createSession(db, {}, { token: 'sess-b7-user2' });
         const sid = created.data?.session.id as string;
         const { ids } = await traverseAll(db, sid, 100, { token: 'sess-b7-user2' });

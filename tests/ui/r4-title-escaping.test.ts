@@ -58,7 +58,11 @@ describe('R4: generateHTML escapes <title> centrally', () => {
 
     it('2. quotes/ampersands escape, plain i18n titles render unchanged', () => {
         const html = generateHTML('<p>x</p>', 'en', `A&B "Q" 'S' <T>`);
-        expect(titleTag(html)).toContain('A&amp;B &quot;Q&quot; &#39;S&#39; &lt;T&gt;');
+        // UNIT41.2-P1 (G8): <title> is TEXT content — the four breakout
+        // characters escape, the apostrophe stays literal (no visible
+        // `&#39;` entity in the document title).
+        expect(titleTag(html)).toContain('A&amp;B &quot;Q&quot; \'S\' &lt;T&gt;');
+        expect(titleTag(html)).not.toContain('&#39;');
         const plain = generateHTML('<p>x</p>', 'ar', 'Help');
         expect(plain).toContain('<title>Help - ');
         expect(plain).not.toContain('&amp;amp;');

@@ -2215,6 +2215,9 @@
   .p-12 {
     padding: calc(var(--spacing) * 12);
   }
+  .px-0\.5 {
+    padding-inline: calc(var(--spacing) * 0.5);
+  }
   .px-1 {
     padding-inline: var(--spacing);
   }
@@ -2295,6 +2298,9 @@
   }
   .pe-10 {
     padding-inline-end: calc(var(--spacing) * 10);
+  }
+  .pt-2 {
+    padding-top: calc(var(--spacing) * 2);
   }
   .pt-3 {
     padding-top: calc(var(--spacing) * 3);
@@ -2432,6 +2438,10 @@
   .leading-5 {
     --tw-leading: calc(var(--spacing) * 5);
     line-height: calc(var(--spacing) * 5);
+  }
+  .leading-none {
+    --tw-leading: 1;
+    line-height: 1;
   }
   .leading-relaxed {
     --tw-leading: var(--leading-relaxed);
@@ -2779,6 +2789,9 @@
   }
   .opacity-80 {
     opacity: 80%;
+  }
+  .opacity-90 {
+    opacity: 90%;
   }
   .opacity-95 {
     opacity: 95%;
@@ -3169,6 +3182,9 @@
     }
     .hover\:bg-red-50:hover {
       background-color: var(--color-red-50);
+    }
+    .hover\:bg-red-100:hover {
+      background-color: var(--color-red-100);
     }
     .hover\:bg-red-600:hover {
       background-color: var(--color-red-600);
@@ -4150,6 +4166,14 @@
         background-color: color-mix(in oklab, var(--color-red-900) 20%, transparent);
       }
     }
+    .dark\:hover\:bg-red-900\/40:where(.dark, .dark *):hover {
+      background-color: color-mix(in srgb, oklch(39.6% 0.141 25.723) 40%, transparent);
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .dark\:hover\:bg-red-900\/40:where(.dark, .dark *):hover {
+        background-color: color-mix(in oklab, var(--color-red-900) 40%, transparent);
+      }
+    }
     .dark\:hover\:bg-white\/5:where(.dark, .dark *):hover {
       background-color: color-mix(in srgb, #fff 5%, transparent);
     }
@@ -4896,8 +4920,14 @@ body.dark .user-menu {
   transition: background 0.2s ease;
   cursor: pointer;
 }
+.user-menu-item.hidden {
+  display: none !important;
+}
 .user-menu-item:hover {
   background: #f3f4f6;
+}
+.dueli-auto-scrolling {
+  scroll-snap-type: none !important;
 }
 body.dark .user-menu-item:hover {
   background: #2d2d2d;

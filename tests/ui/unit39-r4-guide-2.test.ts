@@ -79,6 +79,12 @@ const link = (html: string, rel: string): string | undefined => {
 const title = (html: string): string | undefined => /<title>([\s\S]*?)<\/title>/.exec(html)?.[1];
 
 const esc = (value: string) => Sanitize.escapeHtml(value);
+/**
+ * UNIT41.2-P1 (G8): <title> and meta content= are TEXT/attribute sinks with
+ * the four-character contract (& < > ") — the apostrophe stays literal, so
+ * meta_title ("The World's First Platform") must be expected that way.
+ */
+const escText = (value: string) => Sanitize.escapeHtmlText(value);
 
 /** Recurses through objects AND arrays so ar/en shapes must match exactly. */
 function shape(value: unknown): unknown {
@@ -460,28 +466,28 @@ describe('UNIT39 / R4-GUIDE-2 — terms and contact', () => {
 describe('UNIT39 / R4-GUIDE-2 — meta, SEO contract and i18n parity', () => {
     it('15. meta title and description come from i18n in both languages', async () => {
         const home = await get('/?lang=en');
-        expect(title(home.html), 'home <title>').toBe(esc((en as Record<string, any>).seo.meta_title));
+        expect(title(home.html), 'home <title>').toBe(escText((en as Record<string, any>).seo.meta_title));
         expect(meta(home.html, 'description'), 'home meta description').toBe(
-            esc((en as Record<string, any>).seo.default_description),
+            escText((en as Record<string, any>).seo.default_description),
         );
-        expect(meta(home.html, 'og:title'), 'home og:title').toBe(esc((en as Record<string, any>).seo.meta_title));
+        expect(meta(home.html, 'og:title'), 'home og:title').toBe(escText((en as Record<string, any>).seo.meta_title));
         expect(meta(home.html, 'twitter:title'), 'home twitter:title').toBe(
-            esc((en as Record<string, any>).seo.meta_title),
+            escText((en as Record<string, any>).seo.meta_title),
         );
 
         const homeAr = await get('/?lang=ar');
-        expect(title(homeAr.html), 'home AR <title>').toBe(esc((ar as Record<string, any>).seo.meta_title));
+        expect(title(homeAr.html), 'home AR <title>').toBe(escText((ar as Record<string, any>).seo.meta_title));
         expect(meta(homeAr.html, 'description'), 'home AR meta description').toBe(
-            esc((ar as Record<string, any>).seo.default_description),
+            escText((ar as Record<string, any>).seo.default_description),
         );
 
         const guide = await get('/guide?lang=en');
-        expect(title(guide.html), 'guide <title>').toBe(esc(guideContent(en).title));
-        expect(meta(guide.html, 'description'), 'guide description').toBe(esc(guideContent(en).subtitle));
+        expect(title(guide.html), 'guide <title>').toBe(escText(guideContent(en).title));
+        expect(meta(guide.html, 'description'), 'guide description').toBe(escText(guideContent(en).subtitle));
 
         const guideAr = await get('/guide?lang=ar');
-        expect(title(guideAr.html), 'guide AR <title>').toBe(esc(guideContent(ar).title));
-        expect(meta(guideAr.html, 'description'), 'guide AR description').toBe(esc(guideContent(ar).subtitle));
+        expect(title(guideAr.html), 'guide AR <title>').toBe(escText(guideContent(ar).title));
+        expect(meta(guideAr.html, 'description'), 'guide AR description').toBe(escText(guideContent(ar).subtitle));
 
         // Every guide section has an AR/EN description rendered in its head.
         for (const [lang, pack] of PACKS) {
@@ -489,7 +495,7 @@ describe('UNIT39 / R4-GUIDE-2 — meta, SEO contract and i18n parity', () => {
                 const desc = guideContent(pack).sections[section]?.desc;
                 expect(desc, `${lang}.${section}.desc`).toBeTruthy();
                 const { html } = await get(`/guide/${section}?lang=${lang}`);
-                expect(meta(html, 'description'), `${lang} rendered ${section} description`).toBe(esc(desc));
+                expect(meta(html, 'description'), `${lang} rendered ${section} description`).toBe(escText(desc));
             }
         }
 

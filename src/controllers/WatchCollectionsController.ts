@@ -129,6 +129,43 @@ export class WatchCollectionsController extends BaseController {
     }
 
     /**
+     * DELETE /api/watch/history/:competitionId
+     * UNIT41.2-P1 (G6): owner-only single-entry removal.
+     */
+    async removeHistory(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            const competitionId = this.competitionId(c);
+            if (!competitionId) {
+                return this.validationError(c, this.t('errors.invalid_id', c));
+            }
+            const removed = await new WatchHistoryModel(c.env.DB).deleteEntry(user.id, competitionId);
+            return this.success(c, {
+                competition_id: competitionId,
+                removed,
+            });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
+     * DELETE /api/watch/history
+     * UNIT41.2-P1 (G6): owner-only full clear.
+     */
+    async clearHistory(c: AppContext) {
+        try {
+            if (!this.requireAuth(c)) return this.unauthorized(c);
+            const user = this.getCurrentUser(c);
+            await new WatchHistoryModel(c.env.DB).clearHistory(user.id);
+            return this.success(c, { cleared: true });
+        } catch (error) {
+            return this.serverError(c, error as Error);
+        }
+    }
+
+    /**
      * POST /api/watch/history/:competitionId
      *
      * Client signal for a REAL VOD playback event (the competition page calls

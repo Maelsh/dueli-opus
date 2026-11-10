@@ -13,6 +13,52 @@ import { SyntheticRetirementService } from '../lib/services/SyntheticRetirementS
 export const COMPETITION_EARLY_END_SECONDS = 300;
 
 /**
+ * UNIT41.2-P1 (G5): an instant competition that is still pending without an
+ * opponent one hour after creation is expired. It must never appear in a
+ * public read (search/explore/home rails) even before the lifecycle sweep
+ * deletes it.
+ */
+export const EXPIRED_INSTANT_PENDING_SQL = `NOT (
+    c.competition_type = 'instant'
+    AND c.status = 'pending'
+    AND c.opponent_id IS NULL
+    AND c.created_at < datetime('now', '-1 hour')
+)`;
+
+/**
+ * UNIT41.2-P1 (G3): the unified recorded-eligibility predicate.
+ *
+ * A completed competition is publicly watchable when it has ANY real
+ * recording evidence — a trimmed `vod_url`, a trimmed `youtube_video_url`,
+ * at least one `recording_chunks` row, a `recording_finals` marker — or when
+ * it is eligible for the unified demo explainer (`is_fake = 1`, or the
+ * platform setting `demo_explainer_video_url` is configured).
+ */
+export const RECORDED_MEDIA_SQL = `(
+    NULLIF(TRIM(c.vod_url), '') IS NOT NULL
+    OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL
+    OR EXISTS (SELECT 1 FROM recording_chunks rc WHERE rc.competition_id = c.id)
+    OR EXISTS (SELECT 1 FROM recording_finals rf WHERE rf.competition_id = c.id)
+    OR COALESCE(c.is_fake, 0) = 1
+    OR EXISTS (
+        SELECT 1 FROM platform_settings ps
+        WHERE ps.setting_key = 'demo_explainer_video_url'
+          AND NULLIF(TRIM(ps.setting_value), '') IS NOT NULL
+          AND TRIM(ps.setting_value) <> '0'
+    )
+)`;
+
+/** Row shape needed by the recorded-eligibility predicate. */
+export interface RecordedEligibilityRow {
+    vod_url?: string | null;
+    youtube_video_url?: string | null;
+    is_fake?: number | null;
+    has_recording_chunks?: boolean | number | null;
+    has_recording_final?: boolean | number | null;
+    demo_explainer_enabled?: boolean | number | null;
+}
+
+/**
  * Competition filter options
  */
 export interface CompetitionFilters {
@@ -78,6 +124,47 @@ export class CompetitionModel extends BaseModel<Competition> {
     protected readonly tableName = 'competitions';
 
     /**
+     * UNIT41.2-P1 (G5): row-side mirror of {@link EXPIRED_INSTANT_PENDING_SQL}
+     * for read-time eligibility re-checks.
+     */
+    static isExpiredInstantPending(row: {
+        competition_type?: string | null;
+        status?: string | null;
+        opponent_id?: number | null;
+        created_at?: string | null;
+    }): boolean {
+        if (!row || row.competition_type !== 'instant' || row.status !== 'pending') return false;
+        if (row.opponent_id !== null && row.opponent_id !== undefined) return false;
+        if (!row.created_at) return false;
+        // D1/SQLite `datetime('now')` stores UTC as `YYYY-MM-DD HH:MM:SS`.
+        // `new Date(...)` without a zone would parse it as LOCAL time and make
+        // the 1-hour boundary timezone-dependent — normalize to UTC first.
+        const raw = String(row.created_at);
+        const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+        const withZone = normalized.endsWith('Z') ? normalized : `${normalized}Z`;
+        const createdAt = new Date(withZone).getTime();
+        if (!Number.isFinite(createdAt)) return false;
+        return Date.now() - createdAt > 60 * 60 * 1000;
+    }
+
+    /**
+     * UNIT41.2-P1 (G3): row-side mirror of {@link RECORDED_MEDIA_SQL}.
+     * Shared by the Home rails, Suggested/Recorded slices, Explore re-checks
+     * and the Search hydration so all four gates agree on "playable".
+     */
+    static hasPlayableRecording(row: RecordedEligibilityRow): boolean {
+        const vod = typeof row?.vod_url === 'string' ? row.vod_url.trim() : '';
+        if (vod !== '') return true;
+        const yt = typeof row?.youtube_video_url === 'string' ? row.youtube_video_url.trim() : '';
+        if (yt !== '') return true;
+        if (Number(row?.has_recording_chunks) > 0) return true;
+        if (Number(row?.has_recording_final) > 0) return true;
+        if (Number(row?.is_fake) === 1) return true;
+        if (Number(row?.demo_explainer_enabled) > 0) return true;
+        return false;
+    }
+
+    /**
      * Find competition with all details
      */
     async findWithDetails(id: number): Promise<CompetitionWithDetails | null> {
@@ -118,6 +205,11 @@ export class CompetitionModel extends BaseModel<Competition> {
         let clause = '';
         const params: Array<string | number> = [];
 
+        // UNIT41.2-P1 (G5): an instant pending competition past its 1-hour
+        // no-opponent window is expired and never appears in a public read,
+        // even before the lifecycle sweep deletes it.
+        clause += ` AND ${EXPIRED_INSTANT_PENDING_SQL}`;
+
         // Status filter
         if (filters.status) {
             if (filters.status === 'recorded' || filters.status === 'completed') {
@@ -156,7 +248,7 @@ export class CompetitionModel extends BaseModel<Competition> {
         // Playable-recording gate (recorded slices only — see findHomeRailIds
         // for the rail twin of this predicate).
         if (filters.playableRecording) {
-            clause += ` AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL)`;
+            clause += ` AND ${RECORDED_MEDIA_SQL}`;
         }
 
         // Country filter
@@ -210,7 +302,17 @@ export class CompetitionModel extends BaseModel<Competition> {
                    creator.username as creator_username,
                    opponent.display_name as opponent_name,
                    opponent.avatar_url as opponent_avatar,
-                   opponent.username as opponent_username
+                   opponent.username as opponent_username,
+                   -- UNIT41.2-P1 (G3): recorded-eligibility evidence for the
+                   -- row-side re-check (SQL twin: RECORDED_MEDIA_SQL).
+                   EXISTS (SELECT 1 FROM recording_chunks rc WHERE rc.competition_id = c.id) AS has_recording_chunks,
+                   EXISTS (SELECT 1 FROM recording_finals rf WHERE rf.competition_id = c.id) AS has_recording_final,
+                   EXISTS (
+                       SELECT 1 FROM platform_settings ps
+                       WHERE ps.setting_key = 'demo_explainer_video_url'
+                         AND NULLIF(TRIM(ps.setting_value), '') IS NOT NULL
+                         AND TRIM(ps.setting_value) <> '0'
+                   ) AS demo_explainer_enabled
             FROM competitions c
             JOIN categories cat ON c.category_id = cat.id
             LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
@@ -302,7 +404,7 @@ export class CompetitionModel extends BaseModel<Competition> {
         const extraParams: Array<string | number> = [];
         let extra = '';
         if (options.status === 'recorded') {
-            extra += ` AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL)`;
+            extra += ` AND ${RECORDED_MEDIA_SQL}`;
         }
         const excluded = [...new Set((options.excludeCreatorIds ?? []).filter((id) => Number.isInteger(id) && id > 0))];
         const excludeUserId = options.excludeUserId;
@@ -443,13 +545,32 @@ export class CompetitionModel extends BaseModel<Competition> {
 
     /**
      * Create competition
+     *
+     * UNIT41.2-P1 (G4): atomic server-side dedup. One
+     * `INSERT ... SELECT ... WHERE NOT EXISTS` statement is serialized by D1,
+     * so two concurrent identical creates — or a double click before the
+     * redirect — can never insert two pending rows for the same creator,
+     * title and category inside the no-repeat window. The loser of the race
+     * reads back the row the winner inserted and returns it as-is.
      */
     async create(data: CreateCompetitionData): Promise<Competition> {
+        const competitionType = data.competition_type || 'instant';
+
         const result = await this.db.prepare(`
             INSERT INTO competitions (
                 title, description, rules, category_id, subcategory_id,
                 creator_id, language, country, scheduled_at, competition_type, status, is_fake, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, datetime('now'))
+            )
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, datetime('now')
+            WHERE NOT EXISTS (
+                SELECT 1 FROM competitions
+                WHERE creator_id = ?
+                  AND title = ?
+                  AND category_id = ?
+                  AND status = 'pending'
+                  AND opponent_id IS NULL
+                  AND created_at > datetime('now', '-10 minutes')
+            )
         `).bind(
             data.title,
             data.description || null,
@@ -460,10 +581,57 @@ export class CompetitionModel extends BaseModel<Competition> {
             data.language,
             data.country || null,
             data.scheduled_at || null,
-            data.competition_type || 'instant'
+            competitionType,
+            data.creator_id,
+            data.title,
+            data.category_id
         ).run();
 
-        const created = (await this.findById(result.meta.last_row_id as number))!;
+        let competitionId: number;
+        if (Number(result.meta?.changes ?? 0) > 0) {
+            competitionId = result.meta.last_row_id as number;
+        } else {
+            // Dedup hit: return the existing pending competition.
+            const existing = await this.db.prepare(`
+                SELECT id FROM competitions
+                WHERE creator_id = ?
+                  AND title = ?
+                  AND category_id = ?
+                  AND status = 'pending'
+                  AND opponent_id IS NULL
+                  AND created_at > datetime('now', '-10 minutes')
+                ORDER BY id ASC
+                LIMIT 1
+            `).bind(data.creator_id, data.title, data.category_id).first<{ id: number }>();
+
+            if (!existing) {
+                // Extremely unlikely: the guard window lapsed between the
+                // INSERT and the read. Fall back to a direct insert so the
+                // user is never blocked by the dedup guard.
+                const retry = await this.db.prepare(`
+                    INSERT INTO competitions (
+                        title, description, rules, category_id, subcategory_id,
+                        creator_id, language, country, scheduled_at, competition_type, status, is_fake, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, datetime('now'))
+                `).bind(
+                    data.title,
+                    data.description || null,
+                    data.rules,
+                    data.category_id,
+                    data.subcategory_id || null,
+                    data.creator_id,
+                    data.language,
+                    data.country || null,
+                    data.scheduled_at || null,
+                    competitionType
+                ).run();
+                competitionId = retry.meta.last_row_id as number;
+            } else {
+                return (await this.findById(existing.id))!;
+            }
+        }
+
+        const created = (await this.findById(competitionId))!;
         // C7 synthetic lifecycle: a real competition retires one dependency-free
         // synthetic competition. Best-effort (see UserModel.create).
         try {

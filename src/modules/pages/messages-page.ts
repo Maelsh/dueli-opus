@@ -220,6 +220,17 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                     showAuthPending();
                 } else {
                     showLoginRequired();
+                    // UNIT41.2-P1 (G9): a guest landing on ?tab=admin is
+                    // dropped back on the personal tab (which now carries the
+                    // login gate) and the admin deep-link is removed from the
+                    // URL so it cannot be replayed from history.
+                    if (pageParams().get('tab') === 'admin') {
+                        try {
+                            const url = new URL(window.location.href);
+                            url.searchParams.delete('tab');
+                            window.history.replaceState({}, '', url.toString());
+                        } catch (e) {}
+                    }
                 }
             }
             async function bootMessaging() {
@@ -276,6 +287,29 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
                         </button>
                     </div>
                 \`;
+                // UNIT41.2-P1 (G9): a guest must never see the admin-message
+                // surface either. Render the same login gate in the support
+                // pane and hide its composer/threads until authenticated.
+                showSupportLoginRequired();
+            }
+
+            function showSupportLoginRequired() {
+                const box = document.getElementById('supportThreadsList');
+                if (box) {
+                    box.innerHTML = \`
+                        <div class="p-8 text-center text-gray-400">
+                            <i class="fas fa-lock text-4xl mb-4"></i>
+                            <p>\${tr.login_required || 'Please login to view messages'}</p>
+                            <button data-csp-on="click" data-csp-fn="showLoginModal" data-csp-args='[]' class="mt-4 px-6 py-2 \${PRIMARY_BTN}">
+                                \${tr.login || 'Login'}
+                            </button>
+                        </div>
+                    \`;
+                }
+                const newThreadBtn = document.querySelector('#supportThreadsPane [data-csp-fn="toggleNewSupportThread"]');
+                if (newThreadBtn) newThreadBtn.classList.add('hidden');
+                const newThreadForm = document.getElementById('newSupportThreadForm');
+                if (newThreadForm) newThreadForm.classList.add('hidden');
             }
             
             async function loadConversations() {
@@ -847,6 +881,13 @@ export const messagesPage = async (c: Context<{ Bindings: Bindings; Variables: V
             // R2-M: tabs + independent unreads
             // ============================
             function setMsgTab(tab, silent) {
+                // UNIT41.2-P1 (G9): the admin surface is authenticated-only.
+                // A guest who clicks the tab (or replays ?tab=admin) sees the
+                // login gate instead of the support threads/composer.
+                if (tab === 'admin' && !window.currentUser) {
+                    showSupportLoginRequired();
+                    return;
+                }
                 const personal = tab !== 'admin';
                 document.getElementById('personalPane').classList.toggle('hidden', !personal);
                 document.getElementById('supportPane').classList.toggle('hidden', personal);

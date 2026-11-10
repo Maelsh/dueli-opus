@@ -13,6 +13,7 @@ import { ApiClient } from '../core/ApiClient';
 import { State } from '../core/State';
 import { t } from '../../i18n';
 import { getCompetitionCard, CompetitionCardProps } from '../../shared/components/competition-card';
+import { attachEdgeHoverScroll } from './edge-hover-scroll';
 
 interface CarouselOptions {
     containerId: string;
@@ -33,6 +34,7 @@ export class RecommendationCarousel {
     private hasMore: boolean = true;
     private loadedIds: Set<number> = new Set();
     private scrollContainer: HTMLElement | null = null;
+    private isRTL: boolean = false;
 
     private constructor(options: CarouselOptions) {
         this.containerId = options.containerId;
@@ -57,6 +59,7 @@ export class RecommendationCarousel {
         if (!container) return;
 
         const isRtl = State.lang === 'ar' || State.lang === 'fa' || State.lang === 'he' || State.lang === 'ur';
+        this.isRTL = isRtl;
         const lang = State.lang;
 
         container.innerHTML = `
@@ -87,6 +90,12 @@ export class RecommendationCarousel {
         `;
 
         this.scrollContainer = document.getElementById(`${this.containerId}-scroll`);
+        // UNIT41.2-P1 (G7): bind edge-hover auto-scroll to the fresh scroller
+        // (the wrapper is new after innerHTML, so the helper's once-per-wrapper
+        // mark does not block it).
+        if (this.scrollContainer) {
+            attachEdgeHoverScroll(this.scrollContainer, { isRTL: this.isRTL });
+        }
         this.offset = 0;
         this.loadedIds.clear();
         this.hasMore = true;
@@ -140,6 +149,12 @@ export class RecommendationCarousel {
                         this.scrollContainer!.appendChild(wrapper);
                     });
 
+                    // UNIT41.2-P1 (G7): keep the edge-hover binding on the
+                    // live scroller after new cards land (no-op if bound).
+                    if (this.scrollContainer) {
+                        attachEdgeHoverScroll(this.scrollContainer, { isRTL: this.isRTL });
+                    }
+
                     this.offset += items.length;
                 }
             }
@@ -156,14 +171,20 @@ export class RecommendationCarousel {
     scroll(direction: -1 | 1): void {
         if (!this.scrollContainer) return;
         const scrollAmount = 300;
+        // UNIT41.2-P1 (G7): direction=+1 means NEXT (forward). In RTL the
+        // inline axis is reversed, so forward is a negative scrollLeft.
+        const delta = this.isRTL ? -direction : direction;
         this.scrollContainer.scrollBy({
-            left: direction * scrollAmount,
+            left: delta * scrollAmount,
             behavior: 'smooth'
         });
 
         if (direction > 0 && this.hasMore) {
-            const scrollRight = this.scrollContainer.scrollWidth - this.scrollContainer.scrollLeft - this.scrollContainer.clientWidth;
-            if (scrollRight < 400) {
+            const maxScroll = this.scrollContainer.scrollWidth - this.scrollContainer.clientWidth;
+            const current = this.scrollContainer.scrollLeft;
+            // Direction-agnostic remaining distance to the overflow end.
+            const remaining = this.isRTL ? maxScroll - Math.abs(current) : maxScroll - current;
+            if (remaining < 400) {
                 this.fetchRecommendations();
             }
         }

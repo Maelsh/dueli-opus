@@ -6,6 +6,7 @@
 
 import { D1Database } from '@cloudflare/workers-types';
 import { Competition, User } from '../config/types';
+import { EXPIRED_INSTANT_PENDING_SQL } from './CompetitionModel';
 
 /**
  * Search Filters Interface
@@ -19,6 +20,12 @@ export interface SearchFilters {
     country?: string;
     limit?: number;
     offset?: number;
+    /**
+     * UNIT41.2-P1 (G7): UI language used only to project the localized
+     * `category_name` for the search-result card. Content filtering still
+     * uses `language`; this never widens or narrows the result set.
+     */
+    lang?: string;
 }
 
 /**
@@ -88,7 +95,11 @@ export class SearchModel {
             params.push(filters.country);
         }
 
-        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+        // UNIT41.2-P1 (G5): an expired instant pending row is never a public
+        // search result (mirrors CompetitionModel.buildFilterWhere).
+        const whereClause = conditions.length > 0
+            ? `WHERE ${conditions.join(' AND ')} AND ${EXPIRED_INSTANT_PENDING_SQL}`
+            : `WHERE ${EXPIRED_INSTANT_PENDING_SQL}`;
 
         // Eligible id set first (no ORDER/LIMIT here).
         const idRows = await this.db.prepare(
@@ -150,21 +161,31 @@ export class SearchModel {
             return { items: [], total, hasMore: offset < total };
         }
         const placeholders = pageIds.map(() => '?').join(',');
+        // UNIT41.2-P1 (G7): the search-result card shows BOTH competitors and
+        // the category identity (color/icon/name), not just the host.
         const itemsQuery = `
             SELECT
                 c.*,
                 u.username as creator_username,
                 u.display_name as creator_name,
                 u.avatar_url as creator_avatar,
+                u2.username as opponent_username,
+                u2.display_name as opponent_name,
+                u2.avatar_url as opponent_avatar,
                 cat.name_ar as category_name_ar,
                 cat.name_en as category_name_en,
-                cat.slug as category_slug
+                CASE WHEN ? = 'ar' THEN cat.name_ar ELSE cat.name_en END as category_name,
+                cat.slug as category_slug,
+                cat.icon as category_icon,
+                COALESCE(subcat.color, cat.color) as category_color
             FROM competitions c
             LEFT JOIN users u ON c.creator_id = u.id
+            LEFT JOIN users u2 ON c.opponent_id = u2.id
             LEFT JOIN categories cat ON c.category_id = cat.id
+            LEFT JOIN categories subcat ON c.subcategory_id = subcat.id
             WHERE c.id IN (${placeholders})
         `;
-        const itemsResult = await this.db.prepare(itemsQuery).bind(...pageIds).all<Competition>();
+        const itemsResult = await this.db.prepare(itemsQuery).bind(filters.lang ?? 'en', ...pageIds).all<Competition>();
         const byId = new Map<number, Competition>();
         for (const item of (itemsResult.results || [])) byId.set((item as Competition & { id: number }).id, item);
         const items = pageIds.map((id) => byId.get(id)).filter((r): r is Competition => !!r);
@@ -409,7 +430,8 @@ export class SearchModel {
 
         const idRows = await this.db.prepare(
             `SELECT c.id as id FROM competitions c
-             WHERE c.status IN ('pending', 'accepted', 'live')`
+             WHERE c.status IN ('pending', 'accepted', 'live')
+               AND ${EXPIRED_INSTANT_PENDING_SQL}`
         ).all<{ id: number }>();
         const ids = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);
         const ranked = await this.h7RankIds(ids, userId, userLanguage, userCountry, 'mixed');
@@ -539,7 +561,9 @@ export class SearchModel {
      */
     async getPendingCompetitions(limit: number = 20, offset: number = 0): Promise<SearchResult<Competition>> {
         const idRows = await this.db.prepare(
-            `SELECT c.id as id FROM competitions c WHERE c.status = 'pending' AND c.opponent_id IS NULL`
+            `SELECT c.id as id FROM competitions c
+             WHERE c.status = 'pending' AND c.opponent_id IS NULL
+               AND ${EXPIRED_INSTANT_PENDING_SQL}`
         ).all<{ id: number }>();
         const ids = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);
         const ranked = await this.h7RankIds(ids, null, null, null, 'upcoming');

@@ -2,8 +2,8 @@
  * R3-C2 — public /docs pages render published+public managed documents.
  *
  * Rendered-output contract (real HTTP, not source strings):
- * - /docs lists published+public titles with links; drafts/private absent;
- *   exactly one skip target; no duplicate ids; footer entry present.
+ * - UNIT41.2-P1 (G9): the standalone /docs index is retired — it 302s to
+ *   /guide (lang carried); /guide is the ONE documentation surface.
  * - /docs/:slug renders title + escaped body ar/en with RTL/LTR + dark;
  *   draft/private/missing slugs are 404 (same no-oracle rule as the API).
  * - Admin-authored markup (e.g. <script>) is escaped, never executed.
@@ -71,19 +71,27 @@ describe('R3-C2 public docs pages', () => {
         return { status: res.status, html: await res.text() };
     };
 
-    it('1. /docs index lists public titles with links, hides drafts, stays valid HTML', async () => {
-        const { status, html } = await get('/docs?lang=en');
-        expect(status).toBe(200);
-        expect(html).toContain('Project message');
-        expect(html).toContain('Engineering notes');
-        expect(html).toContain('/docs/project-message?lang=en');
-        expect(html).not.toContain('Hidden draft');
-        expect(html).toContain('href="#main-content"');
-        expect(html).toContain('id="main-content"');
-        const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+    it('1. /docs redirects to the guide center — one documentation surface', async () => {
+        // UNIT41.2-P1 (G9): the standalone /docs index is retired. Old links
+        // bounce (302, lang carried) to the one guide center; the published
+        // reader keeps its canonical /docs/:slug route (covered by tests 2-3).
+        const res = await app.request('/docs?lang=en', { headers: headers() }, env(db));
+        expect(res.status).toBe(302);
+        expect(res.headers.get('location')).toBe('/guide?lang=en');
+
+        const bare = await app.request('/docs', { headers: headers() }, env(db));
+        expect(bare.status).toBe(302);
+        expect(bare.headers.get('location')).toBe('/guide');
+
+        // The single remaining documentation surface (the guide center)
+        // stays a valid, skip-targeted, dark-mode page.
+        const guide = await get('/guide?lang=en');
+        expect(guide.status).toBe(200);
+        expect(guide.html).toContain('href="#main-content"');
+        expect(guide.html).toContain('id="main-content"');
+        const ids = [...guide.html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
         expect(new Set(ids).size, 'duplicate ids').toBe(ids.length);
-        expect(html).toContain('dark:');
-        expect(html).toContain('/docs?lang=en');
+        expect(guide.html).toContain('dark:');
     });
 
     it('2. /docs/:slug renders the published doc ar/en with direction, 404s otherwise', async () => {

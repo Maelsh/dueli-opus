@@ -52,4 +52,16 @@ watchRoutes.get('/history', (c) => controller.listHistory(c));
  */
 watchRoutes.post('/history/:competitionId', (c) => controller.recordHistory(c));
 
+/**
+ * DELETE /api/watch/history/:competitionId
+ * UNIT41.2-P1 (G6): owner-only single-entry removal.
+ */
+watchRoutes.delete('/history/:competitionId', (c) => controller.removeHistory(c));
+
+/**
+ * DELETE /api/watch/history
+ * UNIT41.2-P1 (G6): owner-only full clear.
+ */
+watchRoutes.delete('/history', (c) => controller.clearHistory(c));
+
 export default watchRoutes;

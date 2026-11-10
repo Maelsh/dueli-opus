@@ -118,16 +118,35 @@ async function seed(db: SqliteD1): Promise<{ eligible: number[] }> {
     await db.prepare(
         `INSERT INTO categories (id, slug, name_ar, name_en) VALUES (10, 'dialogue', 'حوار', 'Dialogue')`,
     ).run();
+    // UNIT41.2-P1 (G3): the platform demo explainer (migrations 0045 seed)
+    // is itself recorded-eligibility evidence, so with it configured every
+    // completed row — including the 4 completed-without-recording rows —
+    // would be playable. This suite predates the unified gate and tests the
+    // SCARCITY branch (completed rows without any recording stay out of the
+    // rail), so the explainer setting is removed for its fixtures. The
+    // unified/demo-expander branch has a dedicated G3 suite.
+    await db.prepare(
+        `DELETE FROM platform_settings WHERE setting_key = 'demo_explainer_video_url'`,
+    ).run();
     const stmt = db.prepare(
         `INSERT INTO competitions
-            (title, description, rules, category_id, creator_id, language, status, created_at, total_views, vod_url)
-         VALUES (?, 'd', 'r', 10, 2, ?, ?, ?, ?, ?)`,
+            (title, description, rules, category_id, creator_id, language, status, created_at, total_views, vod_url, is_fake)
+         VALUES (?, 'd', 'r', 10, 2, ?, ?, ?, ?, ?, 0)`,
     );
     const eligible: number[] = [];
     let i = 0;
     const add = async (status: string, lang: string, ageH: number, views: number, vod: string | null, want: boolean) => {
         i += 1;
-        const created = `2026-04-${String((i % 27) + 1).padStart(2, '0')} 10:00:00`;
+        // UNIT41.2-P1 (G5): an instant pending competition older than 1 hour
+        // without an opponent is expired and no longer public. Keep pending
+        // fixtures inside the window so this test exercises eligibility/order
+        // (its actual subject), not the new expiry law.
+        // UNIT41.2-P1 (G3): is_fake is pinned to 0 (schema default is 1) so the
+        // completed-without-recording rows stay out of the rail — the
+        // unified/demo branch has a dedicated G3 suite.
+        const created = status === 'pending'
+            ? utcHoursAgo(0.25)
+            : `2026-04-${String((i % 27) + 1).padStart(2, '0')} 10:00:00`;
         const r = await stmt.bind(`G1 probe ${i}`, lang, status, created, views, vod).run();
         if (want) eligible.push(Number(r.meta.last_row_id));
     };

@@ -20,6 +20,11 @@
  *   The user NEVER hits a hard "0 results" wall unless the DB is empty.
  */
 
+import {
+    EXPIRED_INSTANT_PENDING_SQL,
+    RECORDED_MEDIA_SQL,
+} from '../../models/CompetitionModel';
+
 export interface RecommendationResult {
     id: number;
     score: number;
@@ -85,8 +90,10 @@ export class RecommendationEngine {
         params.push(userId, userId, userId);
         const idRows = await this.db.prepare(
             `SELECT c.id as id FROM competitions c
-             WHERE (c.status IN ('pending', 'accepted', 'live')
-                OR (c.status = 'completed' AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL)))
+             WHERE (
+                 (c.status IN ('pending', 'accepted', 'live') AND ${EXPIRED_INSTANT_PENDING_SQL})
+                 OR (c.status = 'completed' AND ${RECORDED_MEDIA_SQL})
+             )
              ${extra}`
         ).bind(...params).all<{ id: number }>();
         const eligible = ((idRows.results ?? []) as Array<{ id: number }>).map((r) => r.id);

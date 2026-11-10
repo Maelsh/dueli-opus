@@ -136,7 +136,7 @@ export async function handleCron(event: { cron: string }, env: CronEnv): Promise
  * - Rule B: Scheduled competitions cancelled 1 hour post-schedule w/o starting
  * - Rule C: Live competitions auto-terminated after 2 hours
  */
-async function handleLifecycleTimers(env: CronEnv): Promise<void> {
+export async function handleLifecycleTimers(env: CronEnv): Promise<void> {
     const db = env.DB;
     const taskService = new ScheduledTaskService(db);
 

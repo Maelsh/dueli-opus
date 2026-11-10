@@ -395,6 +395,15 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                                     class="hidden text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline">
                                     ${tr.watch_collections.retry}
                                 </button>
+                                <!-- UNIT41.2-P1 (G6): owner-only full clear. The
+                                     label reuses the existing delete key (no
+                                     new i18n keys); the title names the list. -->
+                                <button id="collectionHistoryClear" type="button"
+                                    title="${tr.watch_collections.tab_history}"
+                                    aria-label="${tr.watch_collections.tab_history}"
+                                    class="hidden px-3 py-1.5 text-sm rounded-full bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 font-semibold transition-colors disabled:opacity-60">
+                                    <i class="fas fa-trash-alt ${rtl ? 'ml-1' : 'mr-1'}"></i>${tr.delete}
+                                </button>
                             </div>
                             <div id="collectionHistoryList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                             <div class="text-center mt-6">
@@ -1047,20 +1056,43 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     for (let i = 0; i < data.items.length; i += 1) {
                         const item = data.items[i];
                         const card = window.renderCompetitionCard ? window.renderCompetitionCard(item, lang) : '';
+                        const itemId = String(item.id);
                         if (kind === 'later') {
-                            html += card;
+                            // UNIT41.2-P1 (G6): per-card remove control.
+                            html += '<div class="flex flex-col" data-collection-item="' + itemId + '">' + card
+                                + '<div class="mt-2 flex justify-end">'
+                                + '<button type="button" data-collection-remove="later" data-id="' + itemId + '"'
+                                + ' class="px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-60">'
+                                + '<i class="fas fa-trash ' + (isRTL ? 'ml-1' : 'mr-1') + '"></i>' + tr.watch_collections.remove
+                                + '</button></div></div>';
                         } else {
                             const seconds = Math.max(0, Number(item.watch_duration_seconds) || 0);
                             const duration = seconds < 60
                                 ? tr.watch_collections.less_than_minute
                                 : Math.round(seconds / 60) + ' ' + tr.watch_collections.minutes_short;
-                            html += '<div data-history-entry="' + item.id + '">' + card
+                            // UNIT41.2-P1 (G6): per-card delete control.
+                            html += '<div class="flex flex-col" data-collection-item="' + itemId + '" data-history-entry="' + itemId + '">' + card
                                 + '<div class="mt-1 text-xs text-gray-500 dark:text-gray-400">'
                                 + tr.watch_collections.watched_for + ': ' + duration
-                                + '</div></div>';
+                                + '</div>'
+                                + '<div class="mt-2 flex justify-end">'
+                                + '<button type="button" data-collection-remove="history" data-id="' + itemId + '"'
+                                + ' class="px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-60">'
+                                + '<i class="fas fa-trash ' + (isRTL ? 'ml-1' : 'mr-1') + '"></i>' + tr.delete
+                                + '</button></div></div>';
                         }
                     }
-                    if (html) els.list.insertAdjacentHTML('beforeend', html);
+                    if (html) {
+                        els.list.insertAdjacentHTML('beforeend', html);
+                        wireCollectionRemoveButtons(els.list);
+                    }
+
+                    // UNIT41.2-P1 (G6): the clear-history action is available
+                    // only when the owner actually has history rows.
+                    if (kind === 'history') {
+                        const clearBtn = document.getElementById('collectionHistoryClear');
+                        if (clearBtn) clearBtn.classList.toggle('hidden', data.items.length === 0);
+                    }
 
                     state.cursor = data.nextCursor || null;
                     state.loaded = true;
@@ -1101,6 +1133,104 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                 return loadCollection(kind, !state.cursor);
             }
 
+            // UNIT41.2-P1 (G6): bind one click handler per rendered card.
+            // The data-dueli-bound mark prevents double-binding when more
+            // pages are appended to the same list.
+            function wireCollectionRemoveButtons(root) {
+                if (!root || typeof root.querySelectorAll !== 'function') return;
+                root.querySelectorAll('[data-collection-remove]:not([data-dueli-bound])').forEach(function(btn) {
+                    btn.setAttribute('data-dueli-bound', '1');
+                    btn.addEventListener('click', function() {
+                        removeCollectionItem(btn.getAttribute('data-collection-remove'), btn.getAttribute('data-id'), btn);
+                    });
+                });
+            }
+
+            async function removeCollectionItem(kind, id, btn) {
+                if (!id) return;
+                const wrap = document.querySelector('[data-collection-item="' + id + '"]');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.setAttribute('aria-busy', 'true');
+                }
+                try {
+                    const res = await fetch('/api/watch/' + (kind === 'later' ? 'later' : 'history') + '/' + encodeURIComponent(id), {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json().catch(function() { return null; });
+                    if (res.ok && data && data.success) {
+                        if (wrap) wrap.remove();
+                        const list = document.getElementById(kind === 'later' ? 'collectionLaterList' : 'collectionHistoryList');
+                        if (list && !list.querySelector('[data-collection-item]')) {
+                            const state = document.getElementById(kind === 'later' ? 'collectionLaterState' : 'collectionHistoryState');
+                            if (state) {
+                                state.textContent = kind === 'later' ? tr.watch_collections.empty_later : tr.watch_collections.empty_history;
+                                state.classList.remove('hidden');
+                            }
+                            const more = document.getElementById(kind === 'later' ? 'collectionLaterMore' : 'collectionHistoryMore');
+                            if (more) more.classList.add('hidden');
+                            if (kind === 'history') {
+                                const clearBtn = document.getElementById('collectionHistoryClear');
+                                if (clearBtn) clearBtn.classList.add('hidden');
+                            }
+                        }
+                        window.dueli?.showToast?.(kind === 'later' ? tr.watch_collections.removed : tr.delete, 'success');
+                        return;
+                    }
+                    window.dueli?.showToast?.(tr.watch_collections.error, 'error');
+                } catch (err) {
+                    console.error('Collection item removal failed:', err);
+                    window.dueli?.showToast?.(tr.watch_collections.error, 'error');
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.removeAttribute('aria-busy');
+                    }
+                }
+            }
+
+            async function clearWatchHistory() {
+                if (!window.currentUser) return;
+                if (!confirm(tr.confirm_delete || 'Are you sure?')) return;
+                const btn = document.getElementById('collectionHistoryClear');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.setAttribute('aria-busy', 'true');
+                }
+                try {
+                    const res = await fetch('/api/watch/history', { method: 'DELETE' });
+                    const data = await res.json().catch(function() { return null; });
+                    if (res.ok && data && data.success) {
+                        const list = document.getElementById('collectionHistoryList');
+                        if (list) list.innerHTML = '';
+                        const state = document.getElementById('collectionHistoryState');
+                        if (state) {
+                            state.textContent = tr.watch_collections.empty_history;
+                            state.classList.remove('hidden');
+                        }
+                        const more = document.getElementById('collectionHistoryMore');
+                        if (more) more.classList.add('hidden');
+                        const retry = document.getElementById('collectionHistoryRetry');
+                        if (retry) retry.classList.add('hidden');
+                        if (btn) btn.classList.add('hidden');
+                        collectionsState.history.cursor = null;
+                        collectionsState.history.loaded = false;
+                        collectionsState.history.attempted = false;
+                        window.dueli?.showToast?.(tr.delete, 'success');
+                        return;
+                    }
+                    window.dueli?.showToast?.(tr.watch_collections.error, 'error');
+                } catch (err) {
+                    console.error('History clear failed:', err);
+                    window.dueli?.showToast?.(tr.watch_collections.error, 'error');
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.removeAttribute('aria-busy');
+                    }
+                }
+            }
+
             // A confirmed removal from any card reloads the authoritative list
             // instead of trusting local DOM state (pagination stays coherent).
             window.addEventListener('dueli:watch-later-changed', function(event) {
@@ -1109,6 +1239,13 @@ export const profilePage = async (c: Context<{ Bindings: Bindings; Variables: Va
                     loadCollection('later', true);
                 }
             });
+
+            // UNIT41.2-P1 (G6): clear-history action (owner-only; the server
+            // re-checks identity on DELETE /api/watch/history).
+            const collectionHistoryClearBtn = document.getElementById('collectionHistoryClear');
+            if (collectionHistoryClearBtn) {
+                collectionHistoryClearBtn.addEventListener('click', clearWatchHistory);
+            }
         </script>
     `;
 

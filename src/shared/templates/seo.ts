@@ -229,7 +229,10 @@ export function buildSeoHead(input: SeoInput, nonce = ''): string {
     const path = input.path || input.canonicalPath;
     const canonical = path ? canonicalUrl(input.canonicalPath || input.path || '/', input.lang) : '';
 
-    const esc = (v: string) => Sanitize.escapeHtml(v);
+    // UNIT41.2-P1 (G8): every meta value below is a DOUBLE-QUOTED attribute
+    // (`content="..."`). Escape the four breakout characters but keep `'`
+    // literal so `World's` is not shown as `World&#39;s`.
+    const esc = (v: string) => Sanitize.escapeHtmlAttr(v);
 
     const parts: string[] = [];
 

@@ -171,17 +171,38 @@ type RailMediaRow = {
     status: string;
     vod_url?: string | null;
     youtube_video_url?: string | null;
+    competition_type?: string | null;
+    opponent_id?: number | null;
+    created_at?: string | null;
+    is_fake?: number | null;
+    has_recording_chunks?: boolean | number | null;
+    has_recording_final?: boolean | number | null;
+    demo_explainer_enabled?: boolean | number | null;
 };
 
 function railMediaOf(row: CompetitionWithDetails): RailMediaRow {
     const record = row as CompetitionWithDetails & {
         vod_url?: string | null;
         youtube_video_url?: string | null;
+        competition_type?: string | null;
+        opponent_id?: number | null;
+        created_at?: string | null;
+        is_fake?: number | null;
+        has_recording_chunks?: boolean | number | null;
+        has_recording_final?: boolean | number | null;
+        demo_explainer_enabled?: boolean | number | null;
     };
     return {
         status: String(row.status),
         vod_url: record.vod_url ?? null,
         youtube_video_url: record.youtube_video_url ?? null,
+        competition_type: record.competition_type ?? null,
+        opponent_id: record.opponent_id ?? null,
+        created_at: record.created_at ?? null,
+        is_fake: record.is_fake ?? null,
+        has_recording_chunks: record.has_recording_chunks ?? null,
+        has_recording_final: record.has_recording_final ?? null,
+        demo_explainer_enabled: record.demo_explainer_enabled ?? null,
     };
 }
 

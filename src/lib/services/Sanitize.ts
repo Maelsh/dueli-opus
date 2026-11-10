@@ -22,6 +22,33 @@ export class Sanitize {
     }
 
     /**
+     * UNIT41.2-P1 (G8): escape a TEXT-content sink (`<title>`, element text).
+     *
+     * Escapes the four characters that can break out of text or a
+     * double-quoted attribute — `&`, `<`, `>`, `"` — and deliberately leaves
+     * the apostrophe untouched. A natural apostrophe in a title such as
+     * `World's` must not be rendered as the visible entity `&#39;`.
+     */
+    static escapeHtmlText(input: string): string {
+        if (!input) return '';
+        return input
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    /**
+     * UNIT41.2-P1 (G8): escape a DOUBLE-QUOTED attribute value
+     * (`content="..."`, `href="..."`). Same four characters as
+     * {@link escapeHtmlText}; `'` is safe inside double quotes and stays
+     * literal so meta content reads naturally.
+     */
+    static escapeHtmlAttr(input: string): string {
+        return Sanitize.escapeHtmlText(input);
+    }
+
+    /**
      * Exact inverse of escapeHtml (reverse order, &amp; decoded LAST).
      *
      * Boundary use ONLY: decoding a value that escapeHtml/cleanTitle

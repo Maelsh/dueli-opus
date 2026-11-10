@@ -151,6 +151,12 @@ export function getNavigation(lang: Language): string {
                   <i class="fas fa-trophy text-gray-500"></i>
                   <span>${tr.my_competitions || 'My Competitions'}</span>
                 </a>
+                <!-- UNIT41.2-P1 (G6): quick link to the owner-only viewing
+                     collections section on /profile (Watch Later + History). -->
+                <a href="/profile?lang=${lang}#profileCollections" class="user-menu-item" title="${tr.watch_collections?.title || 'My collections'}">
+                  <i class="fas fa-history text-gray-500"></i>
+                  <span>${tr.watch_collections?.tab_history || 'Viewing History'}</span>
+                </a>
                 <a href="/my-requests?lang=${lang}" class="user-menu-item" title="${tr.my_requests || 'My Requests'}">
                   <i class="fas fa-inbox text-gray-500"></i>
                   <span>${tr.my_requests || 'My Requests'}</span>
