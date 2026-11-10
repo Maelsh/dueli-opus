@@ -141,6 +141,31 @@ export class ScheduledTaskService {
     }
 
     /**
+     * UNIT41.2-P1 (G4 supplemental): idempotent scheduling. A dedup-hit
+     * create() re-enters the create path for an already-pending competition;
+     * a plain INSERT would add a second `auto_delete_if_not_live` row and
+     * double-schedule the same sweep. The insert only applies when no
+     * pending row for the same (competition_id, task_type) exists — one
+     * atomic statement, the same NOT EXISTS shape the G4 create dedup uses.
+     */
+    async scheduleIfAbsent(
+        competitionId: number,
+        taskType: string,
+        executeAt: Date
+    ): Promise<number> {
+        const result = await this.db.prepare(`
+            INSERT INTO competition_scheduled_tasks
+                (competition_id, task_type, execute_at, status, created_at)
+            SELECT ?, ?, ?, 'pending', datetime('now')
+            WHERE NOT EXISTS (
+                SELECT 1 FROM competition_scheduled_tasks
+                WHERE competition_id = ? AND task_type = ? AND status = 'pending'
+            )
+        `).bind(competitionId, taskType, executeAt.toISOString(), competitionId, taskType).run();
+        return result.meta.last_row_id as number;
+    }
+
+    /**
      * Cancel a pending task
      */
     async cancel(competitionId: number, taskType: string): Promise<void> {
@@ -274,36 +299,48 @@ export class ScheduledTaskService {
         if (!competition) return;
 
         // Dependent rows are removed only while the competition is still the
-        // pending/opponent-less row this call claimed.
-        await this.db.prepare(`
-            DELETE FROM competition_requests
-            WHERE competition_id = ?
-              AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
-        `).bind(competitionId, competitionId).run();
+        // pending/opponent-less row this call claimed. UNIT41.2-P1 (G5/C-1):
+        // the four deletes ride ONE `db.batch` — D1 executes a batch inside a
+        // single serialized transaction, so no external request (an opponent
+        // joining) can interleave between the statements. The race window the
+        // sequential deletes used to leave open (task already deleted, then
+        // the join lands, then the competition delete fails and the row
+        // survives WITHOUT its task/dependencies) is gone: either the batch
+        // enters with the competition still pending and opponent-less and
+        // every statement applies as one unit, or the opponent joined before
+        // the batch and ALL FOUR guarded statements match 0 rows — the
+        // competition, its requests/invitations and its scheduled task
+        // survive 100%.
+        const batchResults = await this.db.batch([
+            this.db.prepare(`
+                DELETE FROM competition_requests
+                WHERE competition_id = ?
+                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
+            `).bind(competitionId, competitionId),
+            this.db.prepare(`
+                DELETE FROM competition_invitations
+                WHERE competition_id = ?
+                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
+            `).bind(competitionId, competitionId),
+            // Clean up any scheduled tasks before deleting the competition
+            // (necessary when FK enforcement is ON: competition_scheduled_tasks
+            // references competitions.id without ON DELETE CASCADE)
+            this.db.prepare(`
+                DELETE FROM competition_scheduled_tasks
+                WHERE competition_id = ?
+                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
+            `).bind(competitionId, competitionId),
+            this.db.prepare(`
+                DELETE FROM competitions
+                WHERE id = ? AND status = 'pending' AND opponent_id IS NULL
+            `).bind(competitionId),
+        ]);
 
-        await this.db.prepare(`
-            DELETE FROM competition_invitations
-            WHERE competition_id = ?
-              AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
-        `).bind(competitionId, competitionId).run();
-
-        // Clean up any scheduled tasks before deleting the competition
-        // (necessary when FK enforcement is ON: competition_scheduled_tasks
-        // references competitions.id without ON DELETE CASCADE)
-        await this.db.prepare(`
-            DELETE FROM competition_scheduled_tasks
-            WHERE competition_id = ?
-              AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
-        `).bind(competitionId, competitionId).run();
-
-        const deleted = await this.db.prepare(`
-            DELETE FROM competitions
-            WHERE id = ? AND status = 'pending' AND opponent_id IS NULL
-        `).bind(competitionId).run();
-
-        // A concurrent join won the race: nothing was deleted, so do not free
-        // the creator or notify them about a competition that still exists.
-        if (Number(deleted.meta?.changes ?? 0) === 0) return;
+        // A concurrent join won the race: the 4th statement is the
+        // competitions delete, so anything other than exactly one deleted row
+        // means the competition still exists — do not free the creator or
+        // notify them about a deletion that did not happen.
+        if (Number(batchResults[3]?.meta?.changes ?? 0) !== 1) return;
 
         await this.db.prepare(`
             UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL

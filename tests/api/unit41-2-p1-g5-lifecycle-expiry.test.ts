@@ -69,6 +69,24 @@ async function exists(db: SqliteD1, id: number, status?: string): Promise<boolea
     return status ? row.status === status : true;
 }
 
+/**
+ * C-1: a competition whose opponent joins AFTER the lifecycle read but
+ * BEFORE the deletion batch. The join is applied inside `batch()` — i.e.
+ * exactly inside the race window the four sequential deletes used to leave
+ * open (task deleted, join lands, competition delete fails, the row survives
+ * WITHOUT its scheduled task and dependencies).
+ */
+function joinBeforeBatch(base: SqliteD1, competitionId: number, opponentId = 4): D1Database {
+    const racing = {
+        prepare: (sql: string) => base.prepare(sql),
+        batch: (statements: unknown[]) =>
+            base.prepare(
+                `UPDATE competitions SET status = 'accepted', opponent_id = ? WHERE id = ?`,
+            ).bind(opponentId, competitionId).run().then(() => base.batch(statements as never[])),
+    };
+    return racing as unknown as D1Database;
+}
+
 describe('UNIT41.2-P1 G5 — guarded lifecycle transitions', () => {
     let db: SqliteD1;
 
@@ -207,5 +225,110 @@ describe('UNIT41.2-P1 G5 — guarded lifecycle transitions', () => {
     it('8. every public read/create path triggers the opportunistic sweep', () => {
         const src = readFileSync(join(process.cwd(), 'src/controllers/CompetitionController.ts'), 'utf-8');
         expect((src.match(/LifecycleSweep\.trigger\(/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('9. (C-1) an opponent joining BEFORE the deletion batch leaves EVERYTHING intact', async () => {
+        const id = await insertPending(db, { ageH: 2 });
+        await db.prepare(
+            `INSERT INTO competition_requests (competition_id, requester_id, status)
+             VALUES (?, 4, 'pending')`,
+        ).bind(id).run();
+        await db.prepare(
+            `INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, status)
+             VALUES (?, 2, 4, 'pending')`,
+        ).bind(id).run();
+        await db.prepare(
+            `INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status, created_at)
+             VALUES (?, 'auto_delete_if_not_live', ?, 'pending', datetime('now'))`,
+        ).bind(id, new Date(Date.now() + 3600_000).toISOString()).run();
+        await db.prepare(`UPDATE users SET is_busy = 1, current_competition_id = ? WHERE id = 2`).bind(id).run();
+
+        // The opponent joins AFTER the lifecycle read, BEFORE the deletion
+        // batch — exactly the race window the sequential deletes left open.
+        await new ScheduledTaskService(joinBeforeBatch(db, id)).expireInstantWithoutOpponent(id);
+
+        // The competition (and its opponent) survive the expiry attempt.
+        const comp = await db.prepare(`SELECT status, opponent_id FROM competitions WHERE id = ?`)
+            .bind(id).first<{ status: string; opponent_id: number | null }>();
+        expect(comp?.status).toBe('accepted');
+        expect(comp?.opponent_id).toBe(4);
+        // EVERY dependency survives too — not one row was deleted.
+        for (const table of ['competition_requests', 'competition_invitations', 'competition_scheduled_tasks']) {
+            const n = await db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE competition_id = ?`)
+                .bind(id).first<{ n: number }>();
+            expect(n?.n).toBe(1);
+        }
+        // The creator is NOT freed and NO delete notification is sent.
+        const creator = await db.prepare(`SELECT is_busy, current_competition_id FROM users WHERE id = 2`)
+            .first<{ is_busy: number; current_competition_id: number | null }>();
+        expect(creator?.is_busy).toBe(1);
+        expect(creator?.current_competition_id).toBe(id);
+        const notes = await db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = 2 AND reference_id = ?`)
+            .bind(id).first<{ n: number }>();
+        expect(notes?.n).toBe(0);
+    });
+
+    it('10. (C-1) expiry wins: dependencies, scheduled task and competition die as ONE unit', async () => {
+        const id = await insertPending(db, { ageH: 2 });
+        await db.prepare(
+            `INSERT INTO competition_requests (competition_id, requester_id, status)
+             VALUES (?, 4, 'pending')`,
+        ).bind(id).run();
+        await db.prepare(
+            `INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id, status)
+             VALUES (?, 2, 4, 'pending')`,
+        ).bind(id).run();
+        await db.prepare(
+            `INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status, created_at)
+             VALUES (?, 'auto_delete_if_not_live', ?, 'pending', datetime('now'))`,
+        ).bind(id, new Date(Date.now() + 3600_000).toISOString()).run();
+        await db.prepare(`UPDATE users SET is_busy = 1, current_competition_id = ? WHERE id = 2`).bind(id).run();
+
+        await new ScheduledTaskService(d1(db)).expireInstantWithoutOpponent(id);
+
+        // The competition is gone…
+        expect(await exists(db, id)).toBe(false);
+        // …and so is EVERY dependency: no partial remnant survives.
+        for (const table of ['competition_requests', 'competition_invitations', 'competition_scheduled_tasks']) {
+            const n = await db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE competition_id = ?`)
+                .bind(id).first<{ n: number }>();
+            expect(n?.n).toBe(0);
+        }
+        // The creator is freed and notified exactly once.
+        const creator = await db.prepare(`SELECT is_busy FROM users WHERE id = 2`).first<{ is_busy: number }>();
+        expect(creator?.is_busy).toBe(0);
+        const notes = await db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE user_id = 2 AND reference_id = ?`)
+            .bind(id).first<{ n: number }>();
+        expect(notes?.n).toBe(1);
+    });
+
+    it('11. (C-1) the expiry sweep rides ONE guarded db.batch, not sequential deletes', () => {
+        const src = readFileSync(join(process.cwd(), 'src/lib/services/ScheduledTaskService.ts'), 'utf-8');
+        const start = src.indexOf('async expireInstantWithoutOpponent');
+        const end = src.indexOf('async cancelScheduledWithoutOpponent');
+        expect(start).toBeGreaterThan(-1);
+        expect(end).toBeGreaterThan(start);
+        const body = src.slice(start, end);
+
+        // ONE atomic batch instead of four sequential .run() deletes.
+        expect((body.match(/await this\.db\.batch\(/g) ?? []).length).toBe(1);
+        // The four statements ride the batch in dependency order.
+        const requests = body.indexOf('DELETE FROM competition_requests');
+        const invitations = body.indexOf('DELETE FROM competition_invitations');
+        const tasks = body.indexOf('DELETE FROM competition_scheduled_tasks');
+        const competitions = body.indexOf('DELETE FROM competitions');
+        expect(requests).toBeGreaterThan(-1);
+        expect(invitations).toBeGreaterThan(requests);
+        expect(tasks).toBeGreaterThan(invitations);
+        expect(competitions).toBeGreaterThan(tasks);
+        // Each dependency delete keeps the same pending/opponent-less guard.
+        const guard = /AND EXISTS \(SELECT 1 FROM competitions WHERE id = \? AND status = 'pending' AND opponent_id IS NULL\)/g;
+        expect((body.match(guard) ?? []).length).toBe(3);
+        // The competition delete keeps its direct guard.
+        expect(body).toMatch(/DELETE FROM competitions\s+WHERE id = \? AND status = 'pending' AND opponent_id IS NULL/);
+        // Freeing the creator + notifying ride the 4th statement's change count.
+        expect(body).toMatch(/batchResults\[3\]\?\.meta\?\.changes/);
+        // No direct .run() left besides the creator UPDATE and the notification INSERT.
+        expect((body.match(/\.run\(\)/g) ?? []).length).toBe(2);
     });
 });

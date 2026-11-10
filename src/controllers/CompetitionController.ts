@@ -464,13 +464,17 @@ export class CompetitionController extends BaseController {
 
             const taskService = new ScheduledTaskService(c.env.DB);
 
+            // UNIT41.2-P1 (G4 supplemental): a dedup-hit returns an
+            // already-pending competition that was scheduled on its first
+            // create — the idempotent scheduler must not add a second
+            // auto_delete_if_not_live row for it.
             if (body.competition_type === 'instant' || !body.competition_type) {
                 const deleteAt = new Date(Date.now() + 60 * 60 * 1000);
-                await taskService.schedule(competition.id!, 'auto_delete_if_not_live', deleteAt);
+                await taskService.scheduleIfAbsent(competition.id!, 'auto_delete_if_not_live', deleteAt);
             } else if (body.competition_type === 'scheduled' && body.scheduled_at) {
                 const scheduledTime = new Date(body.scheduled_at).getTime();
                 const deleteAt = new Date(scheduledTime + 60 * 60 * 1000);
-                await taskService.schedule(competition.id!, 'auto_delete_if_not_live', deleteAt);
+                await taskService.scheduleIfAbsent(competition.id!, 'auto_delete_if_not_live', deleteAt);
             }
 
             return this.success(c, competition, 201);

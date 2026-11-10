@@ -13,13 +13,20 @@
  *   the host alone; colors ride data-csp-style (zero inline `style="`).
  * - SearchModel hydrates the card contract from the DB: opponent + category
  *   color/icon/name join (lang-aware).
+ * - (C-2) Card titles/names are stored ESCAPED by the T1.4 contract, so the
+ *   renderer decodes the five standard entities EXACTLY ONCE and re-escapes
+ *   them once — no double-escaping, no XSS. The markup is interpreted by a
+ *   REAL DOM (happy-dom's Window), so the assertions read what the browser
+ *   really shows the user (textContent), not the raw template.
  */
 import { describe, expect, it, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Window } from 'happy-dom';
 import app from '../../src/main';
 import { createSqliteD1, SqliteD1 } from '../helpers/sqlite-d1';
 import { edgeScrollDirection } from '../../src/client/ui/edge-hover-scroll';
+import { HomePage } from '../../src/client/pages/HomePage';
 
 const env = (db: SqliteD1) => ({ DB: db }) as unknown as Parameters<typeof app.request>[2];
 const read = (p: string): string => readFileSync(join(process.cwd(), p), 'utf-8');
@@ -136,5 +143,100 @@ describe('UNIT41.2-P1 G7 — search result cards carry the duel identity', () =>
         expect(model).toMatch(/as category_name/);
         // The hydrated card honors the caller language (?lang), localized.
         expect(model).toMatch(/filters\.lang \?\? 'en'/);
+    });
+});
+
+describe('UNIT41.2-P1 G7 — search cards decode stored entities exactly once (C-2)', () => {
+    it('8. store-escaped AND raw card values render with the right characters, no double-escape, no XSS', () => {
+        // A REAL DOM interprets the markup the card template produced: the
+        // assertions below read what the browser actually shows the user.
+        const window = new Window({ url: 'http://localhost/' });
+        const dom = window.document;
+        dom.body.innerHTML = '<input id="searchInput" value="audit">';
+        const container = dom.createElement('div');
+
+        // The card template reads the live search box off the global document.
+        const globals = globalThis as unknown as { document?: unknown };
+        const previousDocument = globals.document;
+        globals.document = dom;
+        try {
+            HomePage.showSearchResults(
+                [
+                    {
+                        // T1.4 store-escape contract: the entities arrive PRE-ENCODED.
+                        id: 41,
+                        title: 'QA Audit Duel &lt;B&gt; &amp; Co',
+                        creator_name: 'World&#39;s',
+                        opponent_name: 'A &amp; B',
+                        category_color: '#8b5cf6',
+                        category_icon: 'fa-comments',
+                        category_name: 'حوار',
+                    },
+                    {
+                        // RAW (never store-escaped) values must stay esc-protected.
+                        id: 42,
+                        title: '<img src=x onerror=alert(1)>',
+                        creator_name: "World's",
+                        opponent_name: 'A & B',
+                        category_color: '#8b5cf6',
+                        category_icon: 'fa-comments',
+                        category_name: 'حوار',
+                    },
+                ],
+                [{ username: 'audit_user', display_name: '<img src=x onerror=alert(1)>', avatar_url: '' }],
+                container as unknown as HTMLElement,
+            );
+        } finally {
+            if (previousDocument === undefined) {
+                Reflect.deleteProperty(globalThis, 'document');
+            } else {
+                globals.document = previousDocument;
+            }
+        }
+
+        // DOM interpretation — what the browser really shows the user.
+        const text = container.textContent ?? '';
+        expect(text).toContain("World's");
+        expect(text).toContain('A & B');
+        expect(text).toContain('QA Audit Duel <B> & Co');
+        // The injection attempt is shown as inert TEXT, never as markup.
+        expect(text).toContain('<img src=x onerror=alert(1)>');
+        // No entity smuggled through — the double-escape bug is gone.
+        expect(text).not.toContain('&amp;');
+        expect(text).not.toContain('&lt;');
+        expect(text).not.toContain('&gt;');
+        expect(text).not.toContain('&quot;');
+        expect(text).not.toContain('&#39;');
+
+        // No element was materialized out of any title/name value.
+        expect(container.querySelectorAll('b')).toHaveLength(0);
+        const images = Array.from(container.querySelectorAll('img'));
+        expect(images.length).toBeGreaterThan(0);
+        for (const img of images) {
+            expect(img.hasAttribute('onerror')).toBe(false);
+            const src = img.getAttribute('src') ?? '';
+            expect(src.startsWith('/static/') || src.startsWith('https://api.dicebear')).toBe(true);
+        }
+
+        // Serialized markup: exactly ONE escape layer.
+        const html = container.innerHTML;
+        expect(html).toContain('QA Audit Duel &lt;B&gt; &amp; Co');
+        expect(html).not.toContain('&amp;lt;');
+        expect(html).not.toContain('&amp;amp;');
+        expect(html).not.toContain('&amp;#39;');
+
+        window.happyDOM.close();
+    });
+
+    it('9. the four T1.4 store-escaped card sites ride the one-decode/one-encode helper', () => {
+        const home = read('src/client/pages/HomePage.ts');
+        expect(home).toMatch(/static escStored\(/);
+        // The helper decodes exactly the five standard entities, in ONE pass.
+        expect(home).toMatch(/&amp;\|&lt;\|&gt;\|&quot;\|&#39;/);
+        // title + creator + opponent (competition card) + users display_name.
+        const scoped = home.slice(home.indexOf('static showSearchResults'));
+        expect((scoped.match(/HomePage\.escStored\(/g) ?? []).length).toBe(4);
+        // The raw-text escaper is untouched (still the XSS backstop).
+        expect(home).toMatch(/static esc\(value: unknown\)/);
     });
 });

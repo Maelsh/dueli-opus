@@ -193,4 +193,37 @@ describe('UNIT41.2-P1 G4 — atomic create dedup keeps ONE pending row', () => {
         // A late auth event never wipes an already-rendered form.
         expect(src).toMatch(/if \(formRendered && document\.getElementById\('createForm'\)\)/);
     });
+
+    it('11. a dedup-hit create does not duplicate the auto_delete_if_not_live task row', async () => {
+        const body = { title: 'G4 task dedup probe', rules: 'r', category_id: 10, language: 'ar' };
+        const first = await postCreate(db, body, 'sess-g4-user2');
+        expect(first.status).toBe(201);
+        expect(first.data?.id).toBeTruthy();
+
+        // The duplicate is a dedup-hit: the SAME pending competition is
+        // returned, so its lifecycle task must not be scheduled twice.
+        const second = await postCreate(db, body, 'sess-g4-user2');
+        expect(second.status).toBe(201);
+        expect(second.data?.id).toBe(first.data?.id);
+        expect(await countRows(db, 'G4 task dedup probe')).toBe(1);
+
+        const tasks = await db.prepare(
+            `SELECT COUNT(*) AS n FROM competition_scheduled_tasks
+             WHERE competition_id = ? AND task_type = 'auto_delete_if_not_live' AND status = 'pending'`,
+        ).bind(first.data?.id).first<{ n: number }>();
+        expect(tasks?.n).toBe(1);
+    });
+
+    it('12. the create path schedules the lifecycle task idempotently', () => {
+        const service = readFileSync(join(process.cwd(), 'src/lib/services/ScheduledTaskService.ts'), 'utf-8');
+        // The idempotent scheduler inserts only when no pending row exists.
+        expect(service).toMatch(/scheduleIfAbsent\(/);
+        expect(service).toMatch(/INSERT INTO competition_scheduled_tasks[\s\S]*?WHERE NOT EXISTS/);
+
+        const controller = readFileSync(join(process.cwd(), 'src/controllers/CompetitionController.ts'), 'utf-8');
+        // create() schedules auto_delete_if_not_live through it (both branches).
+        expect((controller.match(/taskService\.scheduleIfAbsent\(/g) ?? []).length).toBe(2);
+        // The explicit lifecycle transitions keep the plain scheduler.
+        expect((controller.match(/taskService\.schedule\(/g) ?? []).length).toBe(2);
+    });
 });

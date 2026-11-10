@@ -849,6 +849,32 @@ export class HomePage {
             .replace(/'/g, '&#39;');
     }
 
+    /**
+     * UNIT41.2-P1 (G7 / C-2): values persisted under the T1.4 store-escape
+     * contract (Sanitize.cleanTitle / cleanText) arrive with the five
+     * standard HTML entities already encoded (`&amp;`, `&lt;`, `&gt;`,
+     * `&quot;`, `&#39;`). Running them through esc() a second time would
+     * smuggle the entity through (`&lt;` → `&amp;lt;`) and render literal
+     * `&lt;` to the user. Decode the stored entities EXACTLY ONCE, then
+     * re-escape ONCE. A raw (never store-escaped) value contains no entities,
+     * so the decode is a no-op and it still lands in esc() — XSS-safe either
+     * way. The single-pass alternation is the whole trick: replace() never
+     * rescans its own output, so a stored `&amp;lt;` decodes one layer to
+     * `&lt;` (NOT to `<`), keeping the contract exactly one decode deep.
+     */
+    static escStored(value: unknown): string {
+        const stored: Record<string, string> = {
+            '&amp;': '&',
+            '&lt;': '<',
+            '&gt;': '>',
+            '&quot;': '"',
+            '&#39;': "'",
+        };
+        return HomePage.esc(
+            String(value ?? '').replace(/&amp;|&lt;|&gt;|&quot;|&#39;/g, (entity) => stored[entity] ?? entity),
+        );
+    }
+
     static showSearchResults(competitions: any[], users: any[], container: HTMLElement) {
         const lang = State.lang;
         const tr = translations[getUILanguage(lang)];
@@ -873,7 +899,7 @@ export class HomePage {
               <a href="/profile/${user.username}?lang=${lang}" class="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
                 <img src="${user.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + user.username}" alt="" class="w-10 h-10 rounded-full border-2 border-gray-200 dark:border-gray-700">
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-gray-900 dark:text-white truncate">${user.display_name || user.username}</p>
+                  <p class="text-sm font-medium text-gray-900 dark:text-white truncate">${HomePage.escStored(user.display_name || user.username)}</p>
                   <p class="text-xs text-gray-500">@${user.username}</p>
                 </div>
               </a>
@@ -887,9 +913,11 @@ export class HomePage {
                 // UNIT41.2-P1 (G7): show BOTH competitors (creator vs
                 // opponent), the category identity (color/icon/name) and the
                 // Dueli logo — not the orange trophy box + host name alone.
-                const creatorLabel = HomePage.esc(item.creator_name || item.creator_display_name || item.creator_username || '');
-                const opponentLabel = HomePage.esc(item.opponent_name || item.opponent_username || '');
-                const title = HomePage.esc(item.title);
+                // C-2: T1.4 store-escaped values are decoded once + re-escaped
+                // once (escStored); raw values stay esc-protected.
+                const creatorLabel = HomePage.escStored(item.creator_name || item.creator_display_name || item.creator_username || '');
+                const opponentLabel = HomePage.escStored(item.opponent_name || item.opponent_username || '');
+                const title = HomePage.escStored(item.title);
                 const categoryColor = HomePage.esc(item.category_color || '#8B5CF6');
                 const categoryIcon = HomePage.esc(item.category_icon || 'fas fa-trophy');
                 const categoryName = HomePage.esc(item.category_name || '');
