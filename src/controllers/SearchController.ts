@@ -40,7 +40,9 @@ export class SearchController extends BaseController {
                 language: this.getQuery(c, 'language') || undefined,
                 country: this.getQuery(c, 'country') || undefined,
                 limit: this.getQueryInt(c, 'limit') || 20,
-                offset: this.getQueryInt(c, 'offset') || 0
+                offset: this.getQueryInt(c, 'offset') || 0,
+                // UNIT41.2-P1 (G7): localized category name for the result card.
+                lang: this.getLanguage(c),
             };
 
             const result = await searchModel.searchCompetitions(filters);

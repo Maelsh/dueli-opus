@@ -423,6 +423,9 @@ export class ExploreSessionService {
      * skipped and the batch fills from later snapshot positions.
      */
     static matchesFilters(row: CompetitionWithDetails, filters: ExploreCanonicalFilters): boolean {
+        // UNIT41.2-P1 (G5): an expired instant pending row is never eligible,
+        // mirroring the SQL predicate in CompetitionModel.buildFilterWhere.
+        if (CompetitionModel.isExpiredInstantPending(row)) return false;
         if (filters.status !== '') {
             const s = row.status;
             if (filters.status === 'recorded') {
@@ -464,14 +467,10 @@ export class ExploreSessionService {
      * OR youtube_video_url. Null/empty/whitespace-only never counts.
      */
     static hasPlayableRecording(row: CompetitionWithDetails): boolean {
-        const media = row as CompetitionWithDetails & {
-            vod_url?: string | null;
-            youtube_video_url?: string | null;
-        };
-        return (
-            String(media.vod_url ?? '').trim() !== '' ||
-            String(media.youtube_video_url ?? '').trim() !== ''
-        );
+        // UNIT41.2-P1 (G3): delegate to the single SQL/row twin so Explore,
+        // Home rails, Suggested and Search agree on recorded eligibility
+        // (vod/youtube + recording chunks/finals + is_fake + demo explainer).
+        return CompetitionModel.hasPlayableRecording(row);
     }
 
     // ------------------------------------------------------------------

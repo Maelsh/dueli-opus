@@ -123,10 +123,21 @@ async function seedTaxonomy(db: SqliteD1): Promise<void> {
          (14, 'sects', 'مذاهب', 'Sects', 10),
          (15, 'politics', 'سياسة', 'Politics', 10)`,
     ).run();
+    // UNIT41.2-P1 (G3): the platform demo explainer (migrations 0045 seed)
+    // is itself recorded-eligibility evidence — with it configured every
+    // completed row (novod/emptyvod/blankvod included) would count as
+    // playable and the media boundary this suite tests would vanish. The
+    // explainer setting is removed so the fixture keeps exercising the
+    // scarce-media branch; the unified/demo-expander branch has a
+    // dedicated G3 suite.
+    await db.prepare(
+        `DELETE FROM platform_settings WHERE setting_key = 'demo_explainer_video_url'`,
+    ).run();
     const stmt = db.prepare(
         `INSERT INTO competitions
-            (title, description, rules, category_id, subcategory_id, creator_id, language, status, vod_url, youtube_video_url, created_at)
-         VALUES (?, 'd', 'r', ?, ?, 2, 'ar', ?, ?, ?, ?)`,
+            (title, description, rules, category_id, subcategory_id, creator_id, language, status,
+             vod_url, youtube_video_url, created_at, is_fake)
+         VALUES (?, 'd', 'r', ?, ?, 2, 'ar', ?, ?, ?, ?, 0)`,
     );
     let n = 0;
     const add = async (
@@ -134,7 +145,12 @@ async function seedTaxonomy(db: SqliteD1): Promise<void> {
         vod: string | null = null, yt: string | null = null,
     ): Promise<void> => {
         n += 1;
-        const created = `2026-05-${String((n % 28) + 1).padStart(2, '0')} 10:00:00`;
+        // UNIT41.2-P1 (G5): pending instant rows must stay inside the 1-hour
+        // window. is_fake is pinned to 0 so this fixture keeps testing the
+        // playable-media contract (is_fake=1 eligibility has its own suite).
+        const created = status === 'pending'
+            ? new Date(Date.now() - 15 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ')
+            : `2026-05-${String((n % 28) + 1).padStart(2, '0')} 10:00:00`;
         await stmt.bind(title, cat, sub, status, vod, yt, created).run();
     };
     // dialogue + sects: the main traversal block (8 live, 4 pending, 2 accepted,

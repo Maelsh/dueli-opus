@@ -53,13 +53,22 @@ async function seedL2(db: SqliteD1): Promise<void> {
         `INSERT INTO categories (id, slug, name_ar, name_en, parent_id) VALUES
          (20, 'dialogue', 'حوار', 'Dialogue', NULL)`,
     ).run();
+    // UNIT41.2-P1 (G3): the platform demo explainer (migrations 0045 seed) is
+    // itself recorded-eligibility evidence, and the competitions.is_fake
+    // schema default is 1. This suite's subject is the completed-WITHOUT-
+    // recording boundary ("bare" is NOT recorded), so both extra evidence
+    // channels are neutralized for its fixtures; the unified/demo branch has
+    // a dedicated G3 suite.
     await db.prepare(
-        `INSERT INTO competitions (id, title, description, rules, category_id, creator_id, opponent_id, language, status, vod_url, total_views, total_comments, likes_count, dislikes_count)
+        `DELETE FROM platform_settings WHERE setting_key = 'demo_explainer_video_url'`,
+    ).run();
+    await db.prepare(
+        `INSERT INTO competitions (id, title, description, rules, category_id, creator_id, opponent_id, language, status, vod_url, total_views, total_comments, likes_count, dislikes_count, is_fake)
          VALUES
-         (10, 'L2 live finals', 'd', 'r', 20, 2, 3, 'ar', 'live', NULL, 0, 0, 0, 0),
-         (11, 'L2 recorded finals', 'd', 'r', 20, 2, 3, 'ar', 'completed', 'https://vod.local/match_11.mp4', 0, 0, 0, 0),
-         (12, 'L2 bare finals', 'd', 'r', 20, 2, 3, 'ar', 'completed', NULL, 0, 0, 0, 0),
-         (13, 'L2 accepted finals', 'd', 'r', 20, 2, 3, 'ar', 'accepted', NULL, 0, 0, 0, 0)`,
+         (10, 'L2 live finals', 'd', 'r', 20, 2, 3, 'ar', 'live', NULL, 0, 0, 0, 0, 0),
+         (11, 'L2 recorded finals', 'd', 'r', 20, 2, 3, 'ar', 'completed', 'https://vod.local/match_11.mp4', 0, 0, 0, 0, 0),
+         (12, 'L2 bare finals', 'd', 'r', 20, 2, 3, 'ar', 'completed', NULL, 0, 0, 0, 0, 0),
+         (13, 'L2 accepted finals', 'd', 'r', 20, 2, 3, 'ar', 'accepted', NULL, 0, 0, 0, 0, 0)`,
     ).run();
 }
 

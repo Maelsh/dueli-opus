@@ -18,7 +18,12 @@
  */
 import { RecommendationEngine } from '../lib/services/RecommendationEngine';
 import type { ResultSessionProvider } from '../lib/services/ExploreSessionService';
-import type { CompetitionWithDetails } from './CompetitionModel';
+import {
+    CompetitionModel,
+    EXPIRED_INSTANT_PENDING_SQL,
+    RECORDED_MEDIA_SQL,
+    type CompetitionWithDetails,
+} from './CompetitionModel';
 import { H7SignalsModel } from './H7SignalsModel';
 import { h7ApplyDiscoveryDiversityByTier, h7OrderScored, h7ScoreCard } from '../lib/services/H7RankingService';
 import {
@@ -67,8 +72,11 @@ export class RecommendationModel {
      * never patched by repeating rows or by showing an unplayable card.
      */
     static readonly PUBLIC_SUGGESTED_WHERE = `(
-        c.status IN ('pending', 'accepted', 'live')
-        OR (c.status = 'completed' AND (NULLIF(TRIM(c.vod_url), '') IS NOT NULL OR NULLIF(TRIM(c.youtube_video_url), '') IS NOT NULL))
+        (
+            c.status IN ('pending', 'accepted', 'live')
+            AND ${EXPIRED_INSTANT_PENDING_SQL}
+        )
+        OR (c.status = 'completed' AND ${RECORDED_MEDIA_SQL})
     )`;
 
     /**
@@ -91,10 +99,23 @@ export class RecommendationModel {
      * playable-recording mirrors the SQL above (either media column).
      */
     static isPublicSuggested(
-        row: { status: string; vod_url?: string | null; youtube_video_url?: string | null },
+        row: {
+            status: string;
+            vod_url?: string | null;
+            youtube_video_url?: string | null;
+            competition_type?: string | null;
+            opponent_id?: number | null;
+            created_at?: string | null;
+            is_fake?: number | null;
+            has_recording_chunks?: boolean | number | null;
+            has_recording_final?: boolean | number | null;
+            demo_explainer_enabled?: boolean | number | null;
+        },
         status = ''
     ): boolean {
         const s = row.status;
+        // UNIT41.2-P1 (G5): an expired instant pending row is never public.
+        if (CompetitionModel.isExpiredInstantPending(row)) return false;
         let inSlice: boolean;
         if (status === 'live') {
             inSlice = s === 'live';
@@ -111,14 +132,20 @@ export class RecommendationModel {
     }
 
     /**
-     * R3-RAILS-1A: playable-recording predicate shared by every rail
-     * (SQL above is the store-side mirror; this is the row-side mirror).
+     * UNIT41.2-P1 (G3): playable-recording predicate shared by every rail.
+     * Delegates to the single SQL/row twin in CompetitionModel so the four
+     * gates can never drift (chunks/finals, is_fake and the unified demo
+     * explainer are all eligible evidence now).
      */
-    static hasPlayableRecording(row: { vod_url?: string | null; youtube_video_url?: string | null }): boolean {
-        const vod = typeof row.vod_url === 'string' ? row.vod_url.trim() : '';
-        if (vod !== '') return true;
-        const yt = typeof row.youtube_video_url === 'string' ? row.youtube_video_url.trim() : '';
-        return yt !== '';
+    static hasPlayableRecording(row: {
+        vod_url?: string | null;
+        youtube_video_url?: string | null;
+        is_fake?: number | null;
+        has_recording_chunks?: boolean | number | null;
+        has_recording_final?: boolean | number | null;
+        demo_explainer_enabled?: boolean | number | null;
+    }): boolean {
+        return CompetitionModel.hasPlayableRecording(row);
     }
 
     /** Score expression — legacy pinned arithmetic (kept for reference only; D1 ranks via H7). */

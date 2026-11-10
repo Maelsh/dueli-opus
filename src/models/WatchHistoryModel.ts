@@ -197,11 +197,16 @@ export class WatchHistoryModel {
     /**
      * Delete watch history entry
      * حذف من سجل المشاهدة
+     *
+     * UNIT41.2-P1 (G6): returns whether a row was actually deleted, so the
+     * controller's `removed` flag is an honest boolean (true when the
+     * caller's entry existed, false for an idempotent no-op never a lie).
      */
-    async deleteEntry(userId: number, competitionId: number): Promise<void> {
-        await this.db.prepare(`
+    async deleteEntry(userId: number, competitionId: number): Promise<boolean> {
+        const result = await this.db.prepare(`
             DELETE FROM watch_history WHERE user_id = ? AND competition_id = ?
         `).bind(userId, competitionId).run();
+        return Number(result.meta?.changes ?? 0) > 0;
     }
 
     /**

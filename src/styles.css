@@ -966,8 +966,20 @@ body.dark .user-menu {
     cursor: pointer;
 }
 
+/* UNIT41.2-P1 (G1): the admin entry is hidden for non-admins via the shared
+   `hidden` class. Without this guard the `display: flex` above wins (same
+   specificity, later rule) and the item leaks into every account menu. */
+.user-menu-item.hidden {
+    display: none !important;
+}
+
 .user-menu-item:hover {
     background: #f3f4f6;
+}
+
+/* UNIT41.2-P1 (G7): edge-hover auto-scroll must not fight scroll-snap. */
+.dueli-auto-scrolling {
+    scroll-snap-type: none !important;
 }
 
 body.dark .user-menu-item:hover {

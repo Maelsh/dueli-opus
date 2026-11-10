@@ -71,7 +71,9 @@ export function getGuideNav(lang: Language, active?: GuideSectionSlug): string {
     }).join('');
 
     return `
-        <nav aria-label="${label}" class="mb-10">
+        <!-- UNIT41.2-P1 (G1): mt-6/pt-2 separates the guide tab bar from the
+             sticky header on desktop, mobile and RTL/LTR alike. -->
+        <nav aria-label="${label}" class="mt-6 pt-2 mb-10">
             <ul class="flex flex-wrap justify-center gap-2">${items}</ul>
         </nav>`;
 }

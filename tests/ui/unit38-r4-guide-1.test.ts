@@ -340,7 +340,6 @@ describe('UNIT38 / R4-GUIDE-1 — global SEO head (real rendered HTML)', () => {
         const cases: Array<[string, string]> = [
             ['/', 'https://dueli.maelshpro.com/'],
             ['/explore?lang=en', 'https://dueli.maelshpro.com/explore'],
-            ['/docs?lang=en', 'https://dueli.maelshpro.com/docs'],
             ['/transparency?lang=en', 'https://dueli.maelshpro.com/transparency'],
             // UNIT41.1: /donate serves 403 + noindex to ordinary visitors while
             // the public monetization gate is closed, so it is no longer a
@@ -352,6 +351,12 @@ describe('UNIT38 / R4-GUIDE-1 — global SEO head (real rendered HTML)', () => {
             expect(status, path).toBe(200);
             expect(link(html, 'canonical'), `canonical ${path}`).toBe(expected);
         }
+        // UNIT41.2-P1 (G9): the standalone /docs index is retired — the legacy
+        // sitemap address bounces (302, lang carried) to the one guide center
+        // instead of serving a second documentation surface.
+        const docs = await get('/docs?lang=en');
+        expect(docs.status).toBe(302);
+        expect(docs.headers.get('location')).toBe('/guide?lang=en');
     });
 
     it('16. the private/error surfaces are not indexable', async () => {
@@ -480,11 +485,16 @@ describe('UNIT38 / R4-GUIDE-1 — the /welcome splash portal', () => {
     });
 
     it('27. the splash never intercepts an existing route', async () => {
-        for (const path of ['/', '/guide?lang=en', '/help?lang=en', '/about?lang=en', '/docs?lang=en']) {
+        for (const path of ['/', '/guide?lang=en', '/help?lang=en', '/about?lang=en']) {
             const res = await get(path);
             expect(res.status, path).toBe(200);
             expect(res.html, `${path} is not the splash`).not.toContain('id="splashSkip"');
         }
+        // UNIT41.2-P1 (G9): /docs is now a 302 bounce to the guide center —
+        // no HTML is served there at all, so the splash cannot intercept it.
+        const docs = await get('/docs?lang=en');
+        expect(docs.status).toBe(302);
+        expect(docs.headers.get('location')).toBe('/guide?lang=en');
     });
 });
 
@@ -529,10 +539,15 @@ describe('UNIT38 / R4-GUIDE-1 — accessibility, RTL and dark mode', () => {
 
 describe('UNIT38 / R4-GUIDE-1 — regressions and i18n parity', () => {
     it('32. the about/help/docs surfaces keep working', async () => {
-        for (const path of ['/about?lang=en', '/help?lang=en', '/faq?lang=en', '/docs?lang=en']) {
+        for (const path of ['/about?lang=en', '/help?lang=en', '/faq?lang=en']) {
             const res = await get(path);
             expect(res.status, path).toBe(200);
         }
+        // UNIT41.2-P1 (G9): /docs retired — it redirects to the guide center,
+        // which is the one documentation surface.
+        const docs = await get('/docs?lang=en');
+        expect(docs.status).toBe(302);
+        expect(docs.headers.get('location')).toBe('/guide?lang=en');
     });
 
     it('33. every new string exists in ar and en and differs', () => {

@@ -54,6 +54,12 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
         }
 
         if (window.currentUser) {
+          // UNIT41.2-P1 (G4): a late auth event (or a duplicate init) must
+          // never wipe an already-rendered form — that re-enabled the submit
+          // button and allowed a second create while the first was in flight.
+          if (formRendered && document.getElementById('createForm')) {
+            return;
+          }
           // Load categories
           const catRes = await fetch('/api/categories');
           const catData = await catRes.json();
@@ -94,6 +100,8 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
       window.retryPageAuth = initCreatePage;
       
       function renderCreateForm() {
+        formRendered = true;
+        ensureCreateIdempotencyKey();
         const mainCats = categories.filter(c => !c.parent_id);
         
         document.getElementById('createFormContainer').innerHTML = \`
@@ -154,10 +162,32 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
       }
       
       let createSubmitting = false;
+      // UNIT41.2-P1 (G4): set as soon as a create succeeds and the redirect
+      // starts. The finally block must NOT re-enable the submit button in
+      // that case — otherwise a double click before navigation creates a
+      // second competition.
+      let createRedirecting = false;
+      let createIdempotencyKey = '';
+      let createKeySeq = 0;
+      let formRendered = false;
+
+      // Stable per-form-attempt key: the same key rides every retry of this
+      // exact form, so the server can tie a duplicate submission to one
+      // logical operation. WebCrypto when available (SEC-06: no Math.random).
+      function ensureCreateIdempotencyKey() {
+        if (createIdempotencyKey) return createIdempotencyKey;
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+          createIdempotencyKey = crypto.randomUUID();
+        } else {
+          createKeySeq += 1;
+          createIdempotencyKey = 'create-' + Date.now().toString(36) + '-' + createKeySeq.toString(36);
+        }
+        return createIdempotencyKey;
+      }
 
       async function handleCreate(e) {
         e.preventDefault();
-        if (createSubmitting) return;
+        if (createSubmitting || createRedirecting) return;
         const form = e.target;
         const submitBtn = form.querySelector('button[type="submit"]');
         
@@ -177,7 +207,9 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           const res = await fetch('/api/competitions', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              // UNIT41.2-P1 (G4): stable per-attempt operation key.
+              'Idempotency-Key': ensureCreateIdempotencyKey()
             },
             body: JSON.stringify({
               title: form.title.value,
@@ -194,6 +226,10 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           
           const data = await res.json();
           if (data.success && (res.status === 201 || res.status === 200)) {
+            // UNIT41.2-P1 (G4): freeze the form BEFORE the redirect. The
+            // finally block checks this flag and leaves the button disabled
+            // while the page is navigating away.
+            createRedirecting = true;
             // T2.1: redirect with invite=1 so the invite panel auto-opens
             window.location.href = '/competition/' + data.data.id + '?lang=' + lang + '&invite=1';
             return;
@@ -203,6 +239,7 @@ export function createPage(c: Context<{ Bindings: Bindings; Variables: Variables
           console.error(err);
           alert(tr.error_occurred || 'An error occurred');
         } finally {
+          if (createRedirecting) return;
           createSubmitting = false;
           if (submitBtn) {
             submitBtn.disabled = false;

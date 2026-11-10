@@ -126,9 +126,11 @@ export function generateHTML(
   // UNIT39 owner revision: a page may supply the complete localized meta
   // title (from i18n). It is used verbatim; otherwise the page title keeps
   // the existing localized site suffix.
+  // UNIT41.2-P1 (G8): <title> is TEXT content, not an attribute — escape the
+  // four breakout characters but keep `'` literal (no visible `&#39;`).
   const documentTitle = seo?.metaTitle
-    ? Sanitize.escapeHtml(seo.metaTitle)
-    : `${Sanitize.escapeHtml(title)} - ${Sanitize.escapeHtml(tr.app_title)}`;
+    ? Sanitize.escapeHtmlText(seo.metaTitle)
+    : `${Sanitize.escapeHtmlText(title)} - ${Sanitize.escapeHtmlText(tr.app_title)}`;
   const localePack = localePackScript(uiLang, nonce);
 
   return `<!DOCTYPE html>

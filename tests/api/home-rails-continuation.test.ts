@@ -100,6 +100,11 @@ interface Seed {
     pendingSample: number;
 }
 
+/** UNIT41.2-P1 (G5): a pending instant fixture must stay inside the 1-hour window. */
+function freshStamp(): string {
+    return new Date(Date.now() - 15 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 async function seed(db: SqliteD1): Promise<Seed> {
     await db.prepare(
         `INSERT INTO users (id, email, username, password_hash, display_name, is_active, language, country) VALUES
@@ -118,6 +123,17 @@ async function seed(db: SqliteD1): Promise<Seed> {
          (13, 'physics', 'فيزياء', 'Physics', 11),
          (14, 'religions', 'أديان', 'Religions', 10)`,
     ).run();
+    // UNIT41.2-P1 (G3): the platform demo explainer (migrations 0045 seed)
+    // is itself recorded-eligibility evidence — with it configured every
+    // completed row (incl. the invalid/empty-vod rows) would count as
+    // playable and the physics Recorded rail would hold all completed rows,
+    // dissolving the boundary under test ("invalid recordings never
+    // enter"). The explainer setting is removed so the fixture keeps
+    // testing the media gate; the unified/demo-expander branch has a
+    // dedicated G3 suite.
+    await db.prepare(
+        `DELETE FROM platform_settings WHERE setting_key = 'demo_explainer_video_url'`,
+    ).run();
     // user3 ↔ user4 block (either direction excludes from user rails).
     await db.prepare(
         `INSERT INTO user_blocks (blocker_id, blocked_id, reason) VALUES (3, 4, 't')`,
@@ -125,8 +141,8 @@ async function seed(db: SqliteD1): Promise<Seed> {
 
     const stmt = db.prepare(
         `INSERT INTO competitions
-            (title, description, rules, category_id, subcategory_id, creator_id, language, status, created_at, total_views, vod_url, youtube_video_url)
-         VALUES (?, 'd', 'r', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (title, description, rules, category_id, subcategory_id, creator_id, language, status, created_at, total_views, vod_url, youtube_video_url, is_fake)
+         VALUES (?, 'd', 'r', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     );
     let n = 0;
     const add = async (
@@ -134,7 +150,13 @@ async function seed(db: SqliteD1): Promise<Seed> {
         vod: string | null, yt: string | null, views = 5,
     ): Promise<number> => {
         n += 1;
-        const created = `2026-03-${String((n % 27) + 1).padStart(2, '0')} 10:00:00`;
+        // UNIT41.2-P1 (G5): keep pending instant rows inside the 1-hour window.
+        // UNIT41.2-P1 (G3): is_fake is pinned to 0 (schema default is 1) so
+        // this fixture keeps testing the playable-media contract — the
+        // unified/demo branch has a dedicated G3 suite.
+        const created = status === 'pending'
+            ? freshStamp()
+            : `2026-03-${String((n % 27) + 1).padStart(2, '0')} 10:00:00`;
         const r = await stmt.bind(`HR probe ${n}`, cat, sub, creator, lang, status, created, views, vod, yt).run();
         return Number(r.meta.last_row_id);
     };

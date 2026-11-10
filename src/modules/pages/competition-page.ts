@@ -2494,6 +2494,11 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             // 28.5: the playlist may lag the end while the authorized drain
             // tail lands — bounded poll instead of dead-ending.
             if (!playlistRes.ok) {
+                // UNIT41.2-P1 (G2): completed competition with no real
+                // playable chunks — the configured unified explainer takes
+                // the slot (when the owner enabled one) instead of the
+                // processing/retry spinner.
+                if (showDemoExplainer()) return;
                 handleVodNotReady();
                 return;
             }
@@ -2504,6 +2509,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
             // processing spinner; only a valid-but-empty list polls as
             // processing → unavailable.
             if (playlistData.upstream === 'error' || playlistData.upstream === 'invalid') {
+                // UNIT41.2-P1 (G2): an upstream failure with no real chunks
+                // is still a no-recording slot for the unified explainer.
+                if (showDemoExplainer()) return;
                 setMediaState('error');
                 showStatusOverlay(tr.recording_not_ready || 'Recording not available');
                 return;
@@ -2524,6 +2532,9 @@ export async function competitionPage(c: Context<{ Bindings: Bindings; Variables
                     showStatusOverlay(tr.recording_none || 'No recording for this competition');
                     return;
                 }
+                // UNIT41.2-P1 (G2): empty chunk list with a non-terminal
+                // index state — the explainer still wins when configured.
+                if (showDemoExplainer()) return;
                 handleVodNotReady();
                 return;
             }

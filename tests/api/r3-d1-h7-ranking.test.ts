@@ -113,14 +113,19 @@ async function addCompetition(
         `INSERT INTO competitions
             (title, description, rules, category_id, subcategory_id, creator_id, opponent_id,
              language, country, status, created_at, started_at, scheduled_at, ended_at,
-             total_views, likes_count, dislikes_count, vod_url)
-         VALUES (?, ?, 'r', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+             total_views, likes_count, dislikes_count, vod_url, is_fake, competition_type)
+         VALUES (?, ?, 'r', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`
     ).bind(
         opts.title, opts.desc ?? 'd', opts.categoryId ?? 10, opts.subcategoryId ?? null,
         opts.creatorId ?? 2, opts.opponentId ?? null, opts.lang ?? 'ar', opts.country ?? null,
         opts.status ?? 'live', opts.createdAt ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
         opts.startedAt ?? null, opts.scheduledAt ?? null, opts.endedAt ?? null,
-        opts.views ?? 0, opts.likes ?? 0, opts.dislikes ?? 0, opts.vod ?? null
+        opts.views ?? 0, opts.likes ?? 0, opts.dislikes ?? 0, opts.vod ?? null,
+        // UNIT41.2-P1 (G5/G3): pending fixtures are written as scheduled rows
+        // (an instant pending row >1h without an opponent is EXPIRED public
+        // state now) and is_fake is pinned to 0 so the recorded-eligibility
+        // gate stays governed by the vod_url the fixture sets explicitly.
+        opts.status === 'pending' ? 'scheduled' : 'instant',
     ).run();
     return Number(r.meta.last_row_id);
 }

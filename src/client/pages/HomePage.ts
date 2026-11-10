@@ -13,6 +13,7 @@ import {
 } from '../../shared/components/home-rail';
 import { SUBCATEGORY_COLORS, CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_SUBCATEGORIES, SUBCATEGORY_ICONS } from '../../shared/constants';
 import { translations, getUILanguage } from '../../i18n';
+import { attachEdgeHoverScroll } from '../ui/edge-hover-scroll';
 
 type RailKind = 'suggested' | 'category';
 type RailStatus = 'live' | 'recorded' | 'upcoming';
@@ -206,6 +207,11 @@ export class HomePage {
                     lang,
                 }),
             });
+
+            // UNIT41.2-P1 (G7): the section was just replaced — bind the
+            // edge-hover auto-scroll to the fresh scroller/wrapper now that
+            // rows exist (not only to the placeholder shell).
+            this.setupAllHoverScroll();
 
             if (generation !== this.railGeneration) return;
 
@@ -568,6 +574,9 @@ export class HomePage {
                     .map((item) => getCompetitionCard(item as unknown as CompetitionCardProps, State.lang))
                     .join('');
                 sentinel.insertAdjacentHTML('beforebegin', html);
+                // UNIT41.2-P1 (G7): keep the edge-hover binding attached to
+                // the live scroller after new cards land.
+                this.setupAllHoverScroll();
             }
             state.cursor = page.nextCursor;
             state.done = !page.hasMore;
@@ -639,6 +648,10 @@ export class HomePage {
         const sentinelHtml = sentinel ? sentinel.outerHTML : '';
         scroller.innerHTML = cards.join('') + sentinelHtml;
         this.paintSentinel(key, state.done ? 'end' : 'idle');
+        // UNIT41.2-P1 (G7): innerHTML replaced the scroller's children —
+        // re-bind edge-hover (the wrapper is the same, so this is a no-op
+        // unless the wrapper itself was replaced).
+        this.setupAllHoverScroll();
         // innerHTML replaced the observed sentinel node: the old observer
         // watches a detached node, so drop it and observe the fresh one.
         if (state.observer) {
@@ -822,9 +835,24 @@ export class HomePage {
         }
     }
 
+    /**
+     * UNIT41.2-P1 (G7): escape a value interpolated into the search-result
+     * card markup. Titles/names are store-escaped already, but category
+     * color/icon arrive from joined rows and must still be neutralized.
+     */
+    static esc(value: unknown): string {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     static showSearchResults(competitions: any[], users: any[], container: HTMLElement) {
         const lang = State.lang;
         const tr = translations[getUILanguage(lang)];
+        const isRTL = lang === 'ar' || lang === 'he';
 
         if ((!competitions || competitions.length === 0) && (!users || users.length === 0)) {
             container.innerHTML = `
@@ -856,18 +884,31 @@ export class HomePage {
         if (competitions && competitions.length > 0) {
             html += `<div class="p-2 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase ${users?.length ? 'border-t border-gray-200 dark:border-gray-700 mt-1' : ''}">${tr.competitions || 'Competitions'}</div>`;
             html += competitions.slice(0, 5).map((item: any) => {
-                const creatorLabel = item.creator_name || item.creator_display_name || item.creator_username;
-                const creatorLine = creatorLabel
-                    ? `<p class="text-xs text-gray-500 truncate">${creatorLabel}</p>`
+                // UNIT41.2-P1 (G7): show BOTH competitors (creator vs
+                // opponent), the category identity (color/icon/name) and the
+                // Dueli logo — not the orange trophy box + host name alone.
+                const creatorLabel = HomePage.esc(item.creator_name || item.creator_display_name || item.creator_username || '');
+                const opponentLabel = HomePage.esc(item.opponent_name || item.opponent_username || '');
+                const title = HomePage.esc(item.title);
+                const categoryColor = HomePage.esc(item.category_color || '#8B5CF6');
+                const categoryIcon = HomePage.esc(item.category_icon || 'fas fa-trophy');
+                const categoryName = HomePage.esc(item.category_name || '');
+                const namesLine = opponentLabel
+                    ? `<p class="text-xs text-gray-500 truncate">${creatorLabel} <span class="text-gray-400">vs</span> ${opponentLabel}</p>`
+                    : `<p class="text-xs text-gray-500 truncate">${creatorLabel}</p>`;
+                const categoryLine = categoryName
+                    ? `<p class="text-[11px] truncate" data-csp-style="color: ${categoryColor}">${categoryName}</p>`
                     : '';
                 return `
               <a href="/competition/${item.id}?lang=${lang}" class="flex items-center gap-3 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-                <div class="w-12 h-8 rounded bg-gradient-to-br ${item.category_id === 1 ? 'from-purple-500 to-indigo-600' : item.category_id === 2 ? 'from-cyan-500 to-blue-600' : 'from-amber-500 to-orange-600'} flex items-center justify-center">
-                  <i class="fas fa-trophy text-white text-xs"></i>
+                <div class="relative w-12 h-8 rounded overflow-hidden flex items-center justify-center flex-shrink-0 bg-gray-100 dark:bg-gray-800">
+                  <img src="/static/dueli-icon.png" alt="" class="w-4 h-4 object-contain opacity-90">
+                  <span class="absolute bottom-0 ${isRTL ? 'left-0' : 'right-0'} px-0.5 leading-none" data-csp-style="color: ${categoryColor}"><i class="${categoryIcon} text-[9px]"></i></span>
                 </div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-gray-900 dark:text-white truncate">${item.title}</p>
-                  ${creatorLine}
+                  <p class="text-sm font-medium text-gray-900 dark:text-white truncate">${title}</p>
+                  ${namesLine}
+                  ${categoryLine}
                 </div>
               </a>
             `;
@@ -897,58 +938,17 @@ export class HomePage {
     }
 
     /**
-     * Setup hover scroll for all section containers
-     * Enables edge-hover scrolling on desktop
+     * Setup hover scroll for all section containers.
+     * UNIT41.2-P1 (G7): delegates to the shared direction-aware helper, which
+     * binds once per wrapper and disables scroll-snap while auto-scrolling.
+     * Safe to call after every render — already-bound wrappers are skipped.
      */
     static setupAllHoverScroll() {
         const scrollContainers = document.querySelectorAll('[id$="-scroll"]');
         const isRTL = State.lang === 'ar' || State.lang === 'he';
 
         scrollContainers.forEach((container) => {
-            const wrapper = container.parentElement;
-            if (!wrapper) return;
-
-            let scrollInterval: ReturnType<typeof setInterval> | null = null;
-            const scrollSpeed = 8; // Pixels per frame
-
-            wrapper.addEventListener('mousemove', (e: Event) => {
-                const mouseEvent = e as MouseEvent;
-                const rect = wrapper.getBoundingClientRect();
-                const x = mouseEvent.clientX - rect.left;
-                const width = rect.width;
-
-                // Clear any existing interval
-                if (scrollInterval) {
-                    clearInterval(scrollInterval);
-                    scrollInterval = null;
-                }
-
-                // Edge zone is 10% of width on each side
-                const edgeZone = width * 0.1;
-
-                if (x > width - edgeZone) {
-                    // Mouse is in RIGHT edge zone
-                    // LTR: scroll right (positive) to see more
-                    // RTL: scroll left (positive, toward start)
-                    scrollInterval = setInterval(() => {
-                        (container as HTMLElement).scrollBy({ left: scrollSpeed });
-                    }, 16);
-                } else if (x < edgeZone) {
-                    // Mouse is in LEFT edge zone
-                    // LTR: scroll left (negative) to go back
-                    // RTL: scroll right (negative) to see more content
-                    scrollInterval = setInterval(() => {
-                        (container as HTMLElement).scrollBy({ left: -scrollSpeed });
-                    }, 16);
-                }
-            });
-
-            wrapper.addEventListener('mouseleave', () => {
-                if (scrollInterval) {
-                    clearInterval(scrollInterval);
-                    scrollInterval = null;
-                }
-            });
+            attachEdgeHoverScroll(container as HTMLElement, { isRTL });
         });
     }
 }

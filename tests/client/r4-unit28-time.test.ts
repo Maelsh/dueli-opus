@@ -841,7 +841,14 @@ describe('A28-TIME-3 — finalized snapshot must not hide the drain tail', () =>
             playlistRefreshMaxAttempts: 5,
         });
         await player.start();
-        await wait(80);
+        // The bounded window closes asynchronously; under full-suite worker
+        // load a fixed 80ms sleep read the timer mid-cycle (flaky). The
+        // contract is an EVENTUAL stop, so poll for the settled state with
+        // a generous deadline before pinning the settled call count.
+        await vi.waitFor(() => {
+            expect(player.playlistRefreshTimer).toBeNull();
+            expect(player.playlistRefreshInFlight).toBe(false);
+        }, { timeout: 2_000, interval: 20 });
 
         const settled = calls();
         expect(settled).toBeGreaterThanOrEqual(1);

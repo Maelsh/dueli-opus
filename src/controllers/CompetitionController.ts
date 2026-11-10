@@ -28,6 +28,7 @@ import { Sanitize } from '../lib/services/Sanitize';
 import { RateLimitService } from '../lib/services/RateLimitService';
 import { BlockedInteractionError, ConflictError, ContentTooLongError, RatingEligibilityError, ValidationError } from '../lib/errors/AppError';
 import { WatchService, WATCH_ELIGIBILITY_SECONDS } from '../lib/services/WatchService';
+import { LifecycleSweep } from '../lib/services/LifecycleSweep';
 
 /**
  * Competition Controller Class
@@ -48,6 +49,10 @@ export class CompetitionController extends BaseController {
      */
     async list(c: AppContext) {
         try {
+            // UNIT41.2-P1 (G5): opportunistic lifecycle sweep — non-blocking,
+            // throttled per isolate, so pending-expiry law runs even without
+            // an external cron hit.
+            void LifecycleSweep.trigger(c.env.DB, c);
             const model = new CompetitionModel(c.env.DB);
             const filters: CompetitionFilters = {
                 status: this.getQuery(c, 'status') as any || undefined,
@@ -351,6 +356,8 @@ export class CompetitionController extends BaseController {
      */
     async show(c: AppContext) {
         try {
+            // UNIT41.2-P1 (G5): opportunistic lifecycle sweep (see list()).
+            void LifecycleSweep.trigger(c.env.DB, c);
             const model = new CompetitionModel(c.env.DB);
             const commentModel = new CommentModel(c.env.DB);
             const requestModel = new CompetitionRequestModel(c.env.DB);
@@ -422,6 +429,8 @@ export class CompetitionController extends BaseController {
      */
     async create(c: AppContext) {
         try {
+            // UNIT41.2-P1 (G5): opportunistic lifecycle sweep (see list()).
+            void LifecycleSweep.trigger(c.env.DB, c);
             if (!this.requireAuth(c)) return this.unauthorized(c);
             const user = this.getCurrentUser(c);
 
