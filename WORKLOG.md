@@ -1,3 +1,11 @@
+## 2026-11-11 — UNIT41.2-P3 — GPU-accelerated Three.js 3-scene welcome showcase (matching the 3 reference MP4 clips) · branch feat/unit41-2-p3-welcome-webgl-three-scenes
+
+- ✅ **CODE + TESTS / LOCAL & BROWSER VERIFIED.** BASE `origin/main` @ `161a7c81718d70476afd4359dede21d2259de23d`. Replaces the slow multi-canvas welcome page with the owner-supplied `dueli.html` 60fps GPU-accelerated Three.js WebGL showcase after stripping all manual control bars/modals/audio prompts, restoring the official Dueli emblem (`/static/dueli-icon.png`) + bevelled `Dueli` wordmark (`Du` purple -> `eli` warm gold), and tuning the three 4-second scenes in exact sequence:
+  1. **Scene 1 (0–4s):** Dense organic swirling golden stardust S-curve / infinity trail + 4-point star glares + purple/gold bokeh behind the Dueli lockup & `By Maelsh Pro`.
+  2. **Scene 2 (4–8s):** Billowing purple/magenta cosmic nebula tunnel + deep starfield framing the metallic golden brand phrase (`sp.word_1..4`) with a sweeping starlight flare.
+  3. **Scene 3 (8–12s):** Luxurious draped rippling black satin/silk backdrop lit by directional/rim lights + raining golden spark streaks from top-center + floating purple ember cluster above the Dueli lockup & `BY MAELSH PRO`, followed by automatic redirect to `https://dueli.maelshpro.com/`.
+- **GATES:** Zero i18n keys added/changed (`41/41` parity across all 56 languages), strict CSP nonces (`https://cdnjs.cloudflare.com` already allow-listed), `npx tsc --noEmit` clean, `npm run build` green, and targeted UI/API suites `146/146 PASS`.
+
 ## 2026-11-11 — UNIT41.2-P2 — crisp CSS-3D + three-layer Canvas welcome portal · branch feat/unit41-2-p2-welcome-3d-cinematic
 
 - ✅ **CODE + TESTS / LOCAL VERIFIED / REMOTE PENDING.** BASE `origin/main` @ `6b6efe9d88f14c367602391abea1c64233315fe1`; PLAN SHA `138600326a168c4ab9b66a0556d4dd204a0874a4`. **ZERO i18n file/key changes**; no migration, route change, deploy or production write. The three governing suites started green (97/97, including 41/41 language parity); the new P2 contract then failed in 5 discriminating cases before implementation and passed afterwards.
