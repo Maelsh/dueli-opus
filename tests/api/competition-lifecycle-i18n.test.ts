@@ -219,7 +219,7 @@ describe('F-7 — competition lifecycle notification i18n', () => {
 
         it('Rule A stores the i18n English snapshot', async () => {
             await exec(
-                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at) VALUES (101, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', datetime('now', '-2 hours'));`
+                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at, is_fake) VALUES (101, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', datetime('now', '-2 hours'), 0);`
             );
             await svc.expireInstantWithoutOpponent(101);
             const notes = await notesFor(9001);
@@ -230,7 +230,7 @@ describe('F-7 — competition lifecycle notification i18n', () => {
 
         it('Rule B (no opponent) stores the i18n English snapshot', async () => {
             await exec(
-                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at) VALUES (102, 's', 'r', 9001, 9001, NULL, 'pending', 'scheduled', datetime('now', '-2 hours'), datetime('now', '-2 hours'));`
+                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at, is_fake) VALUES (102, 's', 'r', 9001, 9001, NULL, 'pending', 'scheduled', datetime('now', '-2 hours'), datetime('now', '-2 hours'), 0);`
             );
             await svc.cancelScheduledWithoutOpponent(102);
             const notes = await notesFor(9001);
@@ -241,7 +241,7 @@ describe('F-7 — competition lifecycle notification i18n', () => {
 
         it('Rule B (not started) notifies both users with the i18n snapshot', async () => {
             await exec(
-                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at) VALUES (103, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', datetime('now', '-2 hours'), datetime('now', '-2 hours'));`
+                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at, is_fake) VALUES (103, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', datetime('now', '-2 hours'), datetime('now', '-2 hours'), 0);`
             );
             await svc.cancelScheduledNotStarted(103);
             for (const userId of [9001, 9002]) {
@@ -254,7 +254,7 @@ describe('F-7 — competition lifecycle notification i18n', () => {
 
         it('Rule C notifies both users with the i18n snapshot', async () => {
             await exec(
-                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at) VALUES (104, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', datetime('now', '-2 hours', '-5 minutes'), datetime('now', '-3 hours'));`
+                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at, is_fake) VALUES (104, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', datetime('now', '-2 hours', '-5 minutes'), datetime('now', '-3 hours'), 0);`
             );
             const ended = await svc.endLiveMaxDuration(104, 2);
             expect(ended).toBe(true);
@@ -268,7 +268,7 @@ describe('F-7 — competition lifecycle notification i18n', () => {
 
         it('reminder task stores the i18n English snapshot', async () => {
             await exec(
-                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at) VALUES (105, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', datetime('now', '+1 hour'), datetime('now'));`
+                `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at, is_fake) VALUES (105, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', datetime('now', '+1 hour'), datetime('now'), 0);`
             );
             await exec(
                 `INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status, created_at) VALUES (105, 'send_reminder', datetime('now', '-1 minute'), 'pending', datetime('now'));`

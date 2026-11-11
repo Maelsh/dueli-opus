@@ -51,6 +51,12 @@ async function seedBase(d: D1Database) {
     await exec(d, `INSERT INTO categories (id, slug, name_ar, name_en) VALUES (9001, 'c', 'C', 'C');`);
 }
 
+/* UNIT41.2-P4: every competition fixture below pins is_fake = 0 (real record).
+ * The schema default is 1 (synthetic), and the lifecycle engine now exempts
+ * synthetic competitions — an unpinned row would silently stop exercising the
+ * rules these tests exist to prove. */
+
+
 /* safely past the 1h boundary */
 const PAST_1H = `datetime('now', '-2 hours')`;
 /* safely past the 2h boundary */
@@ -68,7 +74,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
 
     /* ---------- RULE A ---------- */
     it('Rule A cron: instant pending >1h w/o opponent deleted + cleaned + notified', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at) VALUES (1, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', ${PAST_1H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at, is_fake) VALUES (1, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', ${PAST_1H}, 0);`);
         await exec(d, `INSERT INTO competition_requests (competition_id, requester_id) VALUES (1, 9002);`);
         await exec(d, `INSERT INTO competition_invitations (competition_id, inviter_id, invitee_id) VALUES (1, 9001, 9002);`);
 
@@ -82,7 +88,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     });
 
     it('Rule A task path: auto_delete task produces the same result', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at) VALUES (2, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', ${PAST_1H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at, is_fake) VALUES (2, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', ${PAST_1H}, 0);`);
         await exec(d, `INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status, created_at) VALUES (2, 'auto_delete_if_not_live', ${PAST_1H}, 'pending', datetime('now'));`);
 
         const r = await svc.processPendingTasks();
@@ -92,14 +98,14 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     });
 
     it('Rule A: instant pending <1h untouched by cron', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at) VALUES (3, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', datetime('now', '-30 minutes'));`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at, is_fake) VALUES (3, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', datetime('now', '-30 minutes'), 0);`);
         await runMinuteMaintenance({ DB: d } as CronEnv);
         expect(await statusOf(d, 3)).toBe('pending');
     });
 
     /* ---------- RULE B ---------- */
     it('Rule B cron: scheduled w/o opponent >1h past scheduled_at cancelled + cleaned + notified', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at) VALUES (4, 's', 'r', 9001, 9001, NULL, 'pending', 'scheduled', ${PAST_1H}, ${PAST_1H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at, is_fake) VALUES (4, 's', 'r', 9001, 9001, NULL, 'pending', 'scheduled', ${PAST_1H}, ${PAST_1H}, 0);`);
 
         await runMinuteMaintenance({ DB: d } as CronEnv);
 
@@ -110,7 +116,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     });
 
     it('Rule B cron: scheduled WITH opponent cancels + frees both users + dual notify', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at) VALUES (5, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', ${PAST_1H}, ${PAST_1H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at, is_fake) VALUES (5, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', ${PAST_1H}, ${PAST_1H}, 0);`);
         await runMinuteMaintenance({ DB: d } as CronEnv);
         expect(await statusOf(d, 5)).toBe('cancelled');
         expect(await isBusy(d, 9001)).toBe(false);
@@ -120,7 +126,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     });
 
     it('Rule B: fresh scheduled (within 1h) untouched', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at) VALUES (6, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', datetime('now', '-30 minutes'), datetime('now'));`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, scheduled_at, created_at, is_fake) VALUES (6, 's', 'r', 9001, 9001, 9002, 'accepted', 'scheduled', datetime('now', '-30 minutes'), datetime('now'), 0);`);
         await runMinuteMaintenance({ DB: d } as CronEnv);
         expect(await statusOf(d, 6)).toBe('accepted');
     });
@@ -129,7 +135,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     it('Rule C cron: live >=2h auto-ended, users freed, drain keys preserved', async () => {
         // SUPERSEDED by R4-CHUNK-UPLOAD-SAFE-1 (same drain-tail rule as
         // the controller path): auto-end no longer bulk-wipes keys.
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at) VALUES (7, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at, is_fake) VALUES (7, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H}, 0);`);
         await exec(d, `INSERT INTO chunk_keys (competition_id, chunk_index, chunk_key) VALUES (7, 1, 'k1');`);
 
         await runMinuteMaintenance({ DB: d } as CronEnv);
@@ -143,7 +149,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     });
 
     it('Rule C task path: auto_end_live (1.9h threshold) ends live competition', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at) VALUES (8, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at, is_fake) VALUES (8, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H}, 0);`);
         await exec(d, `INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status, created_at) VALUES (8, 'auto_end_live', ${PAST_1H}, 'pending', datetime('now'));`);
 
         await svc.processPendingTasks();
@@ -153,7 +159,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
 
     /* ---------- EQUIVALENCE / IDEMPOTENCY ---------- */
     it('scan path catches competitions the task engine never fires for', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at) VALUES (9, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at, is_fake) VALUES (9, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H}, 0);`);
         await svc.processPendingTasks();
         expect(await statusOf(d, 9)).toBe('live');
         await runMinuteMaintenance({ DB: d } as CronEnv);
@@ -161,7 +167,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
     });
 
     it('cron is idempotent: second run does not duplicate notifications', async () => {
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at) VALUES (10, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', ${PAST_1H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, created_at, is_fake) VALUES (10, 'i', 'r', 9001, 9001, NULL, 'pending', 'instant', ${PAST_1H}, 0);`);
         await runMinuteMaintenance({ DB: d } as CronEnv);
         await runMinuteMaintenance({ DB: d } as CronEnv);
         expect((await notesFor(d, 9001)).filter(n => n.title === 'Competition Deleted').length).toBe(1);
@@ -172,7 +178,7 @@ describe('F-6 lifecycle consolidation (real SQLite + real migrations)', () => {
         // survives and executeTask can mark it 'completed'. Proves that a
         // second processPendingTasks() call leaves the row as 'completed'
         // (status != 'pending' → skipped by the query) and no duplicate action.
-        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at) VALUES (11, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H});`);
+        await exec(d, `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, status, competition_type, started_at, created_at, is_fake) VALUES (11, 'l', 'r', 9001, 9001, 9002, 'live', 'scheduled', ${PAST_2H}, ${PAST_2H}, 0);`);
         await exec(d, `INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status, created_at) VALUES (11, 'auto_end_live', ${PAST_1H}, 'pending', datetime('now'));`);
 
         await svc.processPendingTasks();

@@ -277,6 +277,10 @@ export class ScheduledTaskService {
      * Rule A (Instant): delete an instant competition that never got an
      * opponent. Order: requests → invitations → competition → free creator
      * → notify creator.
+     *
+     * UNIT41.2-P4 (incident remediation): synthetic competitions are exempt —
+     * the read guard and every delete statement carry the real-record
+     * predicate, so a demo row can never be deleted or hidden by this path.
      */
     async expireInstantWithoutOpponent(competitionId: number): Promise<void> {
         // UNIT41.2-P1 (G5): the guard is part of the READ too. A competitor
@@ -287,6 +291,7 @@ export class ScheduledTaskService {
             SELECT id, creator_id, opponent_id, competition_type, status, created_at
             FROM competitions
             WHERE id = ? AND status = 'pending' AND opponent_id IS NULL
+              AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).first<{
             id: number;
             creator_id: number;
@@ -315,12 +320,12 @@ export class ScheduledTaskService {
             this.db.prepare(`
                 DELETE FROM competition_requests
                 WHERE competition_id = ?
-                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
+                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL AND COALESCE(is_fake, 0) = 0)
             `).bind(competitionId, competitionId),
             this.db.prepare(`
                 DELETE FROM competition_invitations
                 WHERE competition_id = ?
-                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
+                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL AND COALESCE(is_fake, 0) = 0)
             `).bind(competitionId, competitionId),
             // Clean up any scheduled tasks before deleting the competition
             // (necessary when FK enforcement is ON: competition_scheduled_tasks
@@ -328,11 +333,11 @@ export class ScheduledTaskService {
             this.db.prepare(`
                 DELETE FROM competition_scheduled_tasks
                 WHERE competition_id = ?
-                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL)
+                  AND EXISTS (SELECT 1 FROM competitions WHERE id = ? AND status = 'pending' AND opponent_id IS NULL AND COALESCE(is_fake, 0) = 0)
             `).bind(competitionId, competitionId),
             this.db.prepare(`
                 DELETE FROM competitions
-                WHERE id = ? AND status = 'pending' AND opponent_id IS NULL
+                WHERE id = ? AND status = 'pending' AND opponent_id IS NULL AND COALESCE(is_fake, 0) = 0
             `).bind(competitionId),
         ]);
 
@@ -364,6 +369,10 @@ export class ScheduledTaskService {
      * Rule B (Scheduled, no opponent): free the creator, cancel with reason
      * 'scheduled_no_opponent_1hr', delete requests/invitations and notify the
      * creator. No-op if scheduled_at is missing or less than 1 hour past.
+     *
+     * UNIT41.2-P4 (incident remediation): synthetic competitions are exempt;
+     * both the read guard and the cancellation UPDATE carry the real-record
+     * predicate.
      */
     async cancelScheduledWithoutOpponent(competitionId: number): Promise<void> {
         // UNIT41.2-P1 (G5): only a still-pending, still-opponent-less row may
@@ -372,6 +381,7 @@ export class ScheduledTaskService {
             SELECT id, creator_id, scheduled_at
             FROM competitions
             WHERE id = ? AND status = 'pending' AND opponent_id IS NULL
+              AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).first<{ id: number; creator_id: number; scheduled_at: string | null }>();
 
         if (!competition || !competition.scheduled_at) return;
@@ -396,7 +406,7 @@ export class ScheduledTaskService {
         const cancelled = await this.db.prepare(`
             UPDATE competitions
             SET status = 'cancelled', auto_deleted_reason = 'scheduled_no_opponent_1hr', updated_at = datetime('now')
-            WHERE id = ? AND status = 'pending' AND opponent_id IS NULL
+            WHERE id = ? AND status = 'pending' AND opponent_id IS NULL AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).run();
 
         if (Number(cancelled.meta?.changes ?? 0) === 0) return;
@@ -430,10 +440,15 @@ export class ScheduledTaskService {
      * Rule B (Scheduled, has opponent but not started): free all bound users,
      * cancel with reason 'scheduled_not_started_1hr' and notify both
      * participants. No-op if scheduled_at is missing or less than 1 hour past.
+     *
+     * UNIT41.2-P4 (incident remediation): synthetic competitions are exempt;
+     * the read guard and the cancellation UPDATE carry the real-record
+     * predicate.
      */
     async cancelScheduledNotStarted(competitionId: number): Promise<void> {
         const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, scheduled_at FROM competitions WHERE id = ?
+            SELECT id, creator_id, opponent_id, scheduled_at FROM competitions
+            WHERE id = ? AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).first() as any;
 
         if (!competition || !competition.scheduled_at) return;
@@ -447,7 +462,8 @@ export class ScheduledTaskService {
         `).bind(competitionId).run();
 
         await this.db.prepare(`
-            UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_not_started_1hr', updated_at = datetime('now') WHERE id = ?
+            UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_not_started_1hr', updated_at = datetime('now')
+            WHERE id = ? AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).run();
 
         const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
@@ -472,13 +488,23 @@ export class ScheduledTaskService {
      * Returns true if the competition was ended. The threshold is supplied by
      * the trigger (scan path: 2h exact; scheduled-task path: 1.9h skew
      * tolerance) — the operation itself is shared.
+     *
+     * UNIT41.2-P4 (incident remediation): synthetic competitions
+     * (`is_fake = 1`) are demo content and must never be auto-ended. The
+     * check is doubled — a read-side guard returns before ANY side effect,
+     * and the final UPDATE carries the same real-record predicate so a
+     * bypassed/mis-sequenced selection can still never write a synthetic row.
      */
     async endLiveMaxDuration(competitionId: number, minLiveHours: number = 2): Promise<boolean> {
         const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, started_at FROM competitions WHERE id = ?
+            SELECT id, creator_id, opponent_id, started_at, is_fake FROM competitions WHERE id = ?
         `).bind(competitionId).first() as any;
 
         if (!competition) return false;
+
+        // Synthetic/demo competitions are exempt from the automatic live
+        // limit: no cutoff, no ELO/payout finalization, no notifications.
+        if (Number(competition.is_fake) === 1) return false;
 
         if (competition.started_at) {
             const startedAt = new Date(competition.started_at).getTime();
@@ -504,7 +530,7 @@ export class ScheduledTaskService {
                 end_reason = 'auto_end',
                 result_source = 'AUTO',
                 result_version = 1
-            WHERE id = ? AND status = 'live'
+            WHERE id = ? AND status = 'live' AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).run();
         if (Number(cutoff?.meta?.changes ?? 1) === 0) return false;
 
@@ -594,11 +620,15 @@ export class ScheduledTaskService {
         }
 
         const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, competition_type, status, created_at
+            SELECT id, creator_id, opponent_id, competition_type, status, created_at, is_fake
             FROM competitions WHERE id = ?
         `).bind(task.competition_id).first() as any;
 
         if (!competition) return;
+
+        // UNIT41.2-P4 (incident remediation): synthetic competitions are demo
+        // content and are never auto-deleted/cancelled by the task engine.
+        if (Number(competition.is_fake) === 1) return;
 
         if (competition.competition_type === 'instant' && !competition.opponent_id) {
             // Rule A: Instant competition without opponent for 1 hour -> DELETE entirely
@@ -612,7 +642,8 @@ export class ScheduledTaskService {
         } else {
             // Generic: cancel old pending competitions
             await this.db.prepare(`
-                UPDATE competitions SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?
+                UPDATE competitions SET status = 'cancelled', updated_at = datetime('now')
+                WHERE id = ? AND COALESCE(is_fake, 0) = 0
             `).bind(task.competition_id).run();
 
             const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);

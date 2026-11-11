@@ -17,12 +17,17 @@ export const COMPETITION_EARLY_END_SECONDS = 300;
  * opponent one hour after creation is expired. It must never appear in a
  * public read (search/explore/home rails) even before the lifecycle sweep
  * deletes it.
+ *
+ * UNIT41.2-P4 (incident remediation): synthetic/demo competitions are exempt —
+ * the real-record predicate rides the same NOT(...) so a demo row is never
+ * hidden by the pending-expiry law.
  */
 export const EXPIRED_INSTANT_PENDING_SQL = `NOT (
     c.competition_type = 'instant'
     AND c.status = 'pending'
     AND c.opponent_id IS NULL
     AND c.created_at < datetime('now', '-1 hour')
+    AND COALESCE(c.is_fake, 0) = 0
 )`;
 
 /**
@@ -132,8 +137,12 @@ export class CompetitionModel extends BaseModel<Competition> {
         status?: string | null;
         opponent_id?: number | null;
         created_at?: string | null;
+        is_fake?: number | null;
     }): boolean {
         if (!row || row.competition_type !== 'instant' || row.status !== 'pending') return false;
+        // UNIT41.2-P4: synthetic competitions are demo content and are never
+        // treated as expired/hidden by this read-time law.
+        if (Number(row.is_fake) === 1) return false;
         if (row.opponent_id !== null && row.opponent_id !== undefined) return false;
         if (!row.created_at) return false;
         // D1/SQLite `datetime('now')` stores UTC as `YYYY-MM-DD HH:MM:SS`.
