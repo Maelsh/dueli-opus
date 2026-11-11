@@ -321,11 +321,13 @@ describe('UNIT41.2-P1 G5 — guarded lifecycle transitions', () => {
         expect(invitations).toBeGreaterThan(requests);
         expect(tasks).toBeGreaterThan(invitations);
         expect(competitions).toBeGreaterThan(tasks);
-        // Each dependency delete keeps the same pending/opponent-less guard.
-        const guard = /AND EXISTS \(SELECT 1 FROM competitions WHERE id = \? AND status = 'pending' AND opponent_id IS NULL\)/g;
+        // Each dependency delete keeps the same pending/opponent-less guard,
+        // extended by the UNIT41.2-P4 real-record predicate (synthetic rows are
+        // never deleted by this sweep).
+        const guard = /AND EXISTS \(SELECT 1 FROM competitions WHERE id = \? AND status = 'pending' AND opponent_id IS NULL AND COALESCE\(is_fake, 0\) = 0\)/g;
         expect((body.match(guard) ?? []).length).toBe(3);
-        // The competition delete keeps its direct guard.
-        expect(body).toMatch(/DELETE FROM competitions\s+WHERE id = \? AND status = 'pending' AND opponent_id IS NULL/);
+        // The competition delete keeps its direct guard + the same predicate.
+        expect(body).toMatch(/DELETE FROM competitions\s+WHERE id = \? AND status = 'pending' AND opponent_id IS NULL AND COALESCE\(is_fake, 0\) = 0/);
         // Freeing the creator + notifying ride the 4th statement's change count.
         expect(body).toMatch(/batchResults\[3\]\?\.meta\?\.changes/);
         // No direct .run() left besides the creator UPDATE and the notification INSERT.

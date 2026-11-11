@@ -63,13 +63,13 @@ async function seed(db: SqliteD1): Promise<void> {
         `INSERT INTO categories (id, slug, name_ar, name_en) VALUES (51, 'end-rem1', 'قسم', 'Category')`
     ).run();
     await db.prepare(
-        `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, language, status, started_at)
+        `INSERT INTO competitions (id, title, rules, category_id, creator_id, opponent_id, language, status, started_at, is_fake)
          VALUES
-          (7001, 'creator end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-10 minutes')),
-          (7002, 'opponent end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-10 minutes')),
-          (7003, 'idempotent end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-10 minutes')),
-          (7004, 'not live end', 'r', 51, 201, 202, 'en', 'pending', NULL),
-          (7005, 'auto end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-3 hours'))`
+          (7001, 'creator end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-10 minutes'), 0),
+          (7002, 'opponent end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-10 minutes'), 0),
+          (7003, 'idempotent end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-10 minutes'), 0),
+          (7004, 'not live end', 'r', 51, 201, 202, 'en', 'pending', NULL, 0),
+          (7005, 'auto end', 'r', 51, 201, 202, 'en', 'live', datetime('now', '-3 hours'), 0)`
     ).run();
 }
 

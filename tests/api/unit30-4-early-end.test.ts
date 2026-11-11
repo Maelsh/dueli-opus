@@ -57,9 +57,9 @@ async function addLiveCompetition(startedExpr: string): Promise<number> {
     const res = await db.prepare(
         `INSERT INTO competitions
             (title, description, rules, category_id, creator_id, opponent_id, status,
-             language, country, created_at, started_at, stream_status)
+             language, country, created_at, started_at, stream_status, is_fake)
          VALUES ('Early end fixture', 'd', 'r', 1, 1, 2, 'live',
-                 'ar', 'SA', datetime('now'), ${startedExpr}, 'live')`
+                 'ar', 'SA', datetime('now'), ${startedExpr}, 'live', 0)`
     ).run();
     return Number(res.meta.last_row_id);
 }

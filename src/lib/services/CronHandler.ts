@@ -135,6 +135,12 @@ export async function handleCron(event: { cron: string }, env: CronEnv): Promise
  * - Rule A: Instant competitions deleted after 1 hour without an opponent
  * - Rule B: Scheduled competitions cancelled 1 hour post-schedule w/o starting
  * - Rule C: Live competitions auto-terminated after 2 hours
+ *
+ * UNIT41.2-P4 (incident remediation): every scan below is real-record only
+ * (`COALESCE(is_fake, 0) = 0`). Synthetic/demo competitions are demo content
+ * and must never be auto-deleted, auto-cancelled or auto-ended by the
+ * lifecycle engine — including the opportunistic LifecycleSweep path that
+ * calls this function from public reads/creates.
  */
 export async function handleLifecycleTimers(env: CronEnv): Promise<void> {
     const db = env.DB;
@@ -148,6 +154,7 @@ export async function handleLifecycleTimers(env: CronEnv): Promise<void> {
             AND status = 'pending'
             AND opponent_id IS NULL
             AND created_at < datetime('now', '-1 hour')
+            AND COALESCE(is_fake, 0) = 0
         `).all();
 
         for (const comp of (instantExpired.results || []) as any[]) {
@@ -166,6 +173,7 @@ export async function handleLifecycleTimers(env: CronEnv): Promise<void> {
             AND status IN ('pending', 'accepted')
             AND scheduled_at IS NOT NULL
             AND scheduled_at < datetime('now', '-1 hour')
+            AND COALESCE(is_fake, 0) = 0
         `).all();
 
         for (const comp of (scheduledExpired.results || []) as any[]) {
@@ -186,6 +194,7 @@ export async function handleLifecycleTimers(env: CronEnv): Promise<void> {
             SELECT id FROM competitions
             WHERE status = 'live'
             AND started_at < datetime('now', '-2 hours')
+            AND COALESCE(is_fake, 0) = 0
         `).all();
 
         for (const comp of (liveExpired.results || []) as any[]) {
