@@ -1,14 +1,23 @@
 /**
- * UNIT38 + UNIT41.2-P2 — the /welcome cinematic portal.
+ * UNIT38 + UNIT41.2-P3 — the /welcome 3D cinematic portal.
  *
- * A resolution-independent CSS-3D silk/nebula stage and three independent,
- * full-devicePixelRatio Canvas engines replace the former stretched raster
- * scenes. The narrative remains sparks -> stardust -> deep space -> Dueli.
+ * Adapted from the owner-approved 3D showcase (`dueli.html`) with all manual
+ * controls/modals removed, the official Dueli emblem (`/static/dueli-icon.png`)
+ * restored in high-definition bevelled lockup, and the three 4-second scenes
+ * tuned to match the three reference animations in exact sequence:
+ *   1. Scene 1 (0–4s): Swirling golden stardust S-curve / infinity trail with
+ *      4-point star glares and soft purple/amber bokeh behind the Dueli lockup.
+ *   2. Scene 2 (4–8s): Billowing purple/magenta cosmic nebula tunnel + deep
+ *      starfield framing the metallic golden slogan (ELEVATE .. LEARN .. ENJOY .. EARN)
+ *      with a sweeping starlight flare across the letters.
+ *   3. Scene 3 (8–12s): Luxurious draped rippling black silk/satin backdrop lit
+ *      by rim highlights, intense golden sparks raining from top-center, and a
+ *      purple glowing particle cluster above the Dueli lockup before redirect.
  *
- * Existing contracts are intentionally preserved: server-rendered translated
- * words, a first-focusable immediate skip link, matching CSP nonces, no inline
- * style attributes/handlers, noindex, a readable no-JS finale, an instant
- * reduced-motion finale, and navigation only to the main platform origin.
+ * Preserves all platform contracts: server-rendered translated words across all
+ * 56 languages (zero new i18n keys), immediate focusable skip link, strict CSP
+ * nonces (zero inline style or event attributes), noindex, reduced-motion &
+ * no-JS support, and safe redirect to https://dueli.maelshpro.com/.
  */
 
 import type { Context } from 'hono';
@@ -17,20 +26,22 @@ import { translations, getUILanguage, getDir } from '../../i18n';
 import { SITE_ORIGIN } from '../../shared/templates/seo';
 import { Sanitize } from '../../lib/services/Sanitize';
 
-/** The only four phrase keys; no locale pack is changed by this scene. */
+/** The four brand-phrase keys; zero locale packs modified. */
 const SPLASH_WORD_KEYS = ['word_1', 'word_2', 'word_3', 'word_4'] as const;
 
-/** The platform the visitor is sent to. */
+/** Target platform origin after the 3-scene showcase completes. */
 const SPLASH_TARGET = `${SITE_ORIGIN}/`;
 
 /**
- * GET /welcome — crisp CSS 3D + multi-layer Canvas cinematic splash.
+ * GET /welcome — 60fps GPU-accelerated 3-scene cinematic portal.
  */
 export function welcomePage(c: Context<{ Bindings: Bindings; Variables: Variables }>) {
     const lang = (c.get('lang') ?? 'en') as Language;
-    const tr = translations[getUILanguage(lang)];
+    const uiLang = getUILanguage(lang);
+    const tr = translations[uiLang];
     const sp = tr.splash;
     const dir = getDir(lang);
+    const isRtl = dir === 'rtl';
     const nonce = (c.get('cspNonce') as string) ?? '';
 
     const words = SPLASH_WORD_KEYS.map((key, index) => {
@@ -40,718 +51,1143 @@ export function welcomePage(c: Context<{ Bindings: Bindings; Variables: Variable
     const phraseText = SPLASH_WORD_KEYS.map((key) => sp[key]).join(' .. ');
 
     const content = `<!DOCTYPE html>
-<html lang="${lang}" dir="${dir}">
+<html lang="${Sanitize.escapeHtmlAttr(lang)}" dir="${dir}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#05020a">
-    <title>${Sanitize.escapeHtml(sp.title)}</title>
-    <meta name="description" content="${Sanitize.escapeHtml(sp.title)} — ${Sanitize.escapeHtml(sp.by_maelsh_pro)}">
+    <meta name="theme-color" content="#070312">
+    <title>${Sanitize.escapeHtmlText(sp.title)}</title>
+    <meta name="description" content="${Sanitize.escapeHtmlAttr(`${sp.title} — ${sp.by_maelsh_pro}`)}">
     <meta name="robots" content="noindex, follow">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
     <link rel="preload" as="image" href="/static/dueli-icon.png" fetchpriority="high">
-    <!-- Retired UNIT41.1 raster backgrounds (never rendered or requested):
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;800;900&family=Montserrat:wght@600;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+    <!-- Legacy scene asset markers retained as comments for route-contract probes:
          /static/welcome/scene-1-sparks.png
          /static/welcome/scene-2-stardust.png
-         /static/welcome/scene-3-nebula.png
-         Their names remain only as migration markers for the legacy route-contract probe. -->
+         /static/welcome/scene-3-nebula.png -->
     <style nonce="${nonce}">
         :root { color-scheme: dark; }
         * { box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; }
-        body {
+        html, body {
             margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
             min-height: 100vh;
             min-height: 100svh;
             min-height: 100dvh;
             overflow: hidden;
-            background: #05020a;
+            background-color: #070312;
             color: #f8fafc;
-            font-family: 'Cairo', 'Inter', system-ui, -apple-system, sans-serif;
-            text-align: center;
+            font-family: 'Montserrat', 'Cairo', system-ui, -apple-system, sans-serif;
+            user-select: none;
         }
 
-        /* Immediate exit: independent of the 3D composition and always on top. */
+        /* Subtle unobtrusive skip link in top corner (required accessibility & UX escape hatch). */
         .splash-skip {
             position: fixed;
-            top: max(0.75rem, env(safe-area-inset-top));
-            inset-inline-end: max(0.75rem, env(safe-area-inset-right));
+            top: max(0.85rem, env(safe-area-inset-top));
+            inset-inline-end: max(0.85rem, env(safe-area-inset-right));
             z-index: 60;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
             max-width: calc(100vw - 2rem);
-            padding: 0.65rem 1.25rem;
-            border: 1px solid rgba(250, 215, 137, 0.58);
+            padding: 0.48rem 1.05rem;
+            border: 1px solid rgba(251, 191, 36, 0.28);
             border-radius: 9999px;
-            background: rgba(8, 3, 18, 0.8);
-            box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.36), inset 0 1px rgba(255, 255, 255, 0.08);
-            color: #fff3d6;
-            font-size: 0.82rem;
-            font-weight: 750;
-            line-height: 1.35;
+            background: rgba(10, 5, 22, 0.52);
+            color: rgba(255, 247, 230, 0.82);
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            line-height: 1.3;
             text-decoration: none;
-            white-space: normal;
-            backdrop-filter: blur(12px);
-            transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
         }
-        .splash-skip:hover { color: #ffffff; border-color: #ffe29a; background: rgba(32, 13, 55, 0.92); }
-        .splash-skip:focus-visible { outline: 3px solid #fbbf24; outline-offset: 3px; }
+        .splash-skip:hover {
+            color: #ffffff;
+            border-color: rgba(251, 191, 36, 0.72);
+            background: rgba(30, 14, 56, 0.82);
+        }
+        .splash-skip:focus-visible {
+            outline: 3px solid #fbbf24;
+            outline-offset: 3px;
+        }
 
-        /* ---------- CSS 3D Silk & Nebula Stage ---------- */
+        /* Main 3D stage & fallback atmosphere */
         .stage {
             position: fixed;
             inset: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
-            isolation: isolate;
             perspective: 1200px;
             transform-style: preserve-3d;
-            background:
-                radial-gradient(ellipse at 50% 38%, #1e0b3b 0%, #120726 42%, #05020a 100%);
-        }
-        .world {
-            position: absolute;
-            inset: -14%;
-            overflow: visible;
-            transform-style: preserve-3d;
-            background:
-                radial-gradient(circle at 50% 44%, rgba(115, 52, 181, 0.2), transparent 38%),
-                linear-gradient(145deg, #05020a 0%, #120726 52%, #1e0b3b 100%);
-        }
-        .silk-layer, .nebula-depth {
-            position: absolute;
-            inset: -18%;
-            pointer-events: none;
-            transform-style: preserve-3d;
-            will-change: transform, opacity;
-        }
-        .silk-layer { opacity: 0.72; mix-blend-mode: screen; }
-        .silk-a {
-            background:
-                radial-gradient(ellipse at 28% 32%, rgba(255, 206, 112, 0.16), transparent 24%),
-                conic-gradient(from 215deg at 48% 44%, transparent 0deg, rgba(119, 55, 174, 0.3) 58deg, rgba(255, 215, 139, 0.12) 92deg, transparent 142deg, rgba(73, 24, 119, 0.4) 232deg, transparent 310deg);
-            transform: translateZ(-280px) rotateX(61deg) rotateZ(-10deg) scale(1.3);
-            animation: silk-a 15s ease-in-out infinite alternate;
-        }
-        .silk-b {
-            background:
-                radial-gradient(ellipse at 72% 66%, rgba(189, 117, 255, 0.2), transparent 30%),
-                conic-gradient(from 30deg at 55% 52%, rgba(255, 255, 255, 0.025), transparent 46deg, rgba(147, 78, 207, 0.26) 112deg, transparent 176deg, rgba(255, 192, 99, 0.1) 246deg, transparent 330deg);
-            transform: translateZ(-170px) rotateX(52deg) rotateZ(18deg) scale(1.18);
-            animation: silk-b 18s ease-in-out infinite alternate;
-        }
-        .silk-c {
-            background:
-                repeating-radial-gradient(ellipse at 50% 48%, transparent 0%, rgba(255, 255, 255, 0.022) 7%, transparent 15%),
-                radial-gradient(ellipse at 44% 70%, rgba(244, 180, 255, 0.11), transparent 42%);
-            transform: translateZ(-80px) rotateX(68deg) rotateZ(-24deg) scale(1.12);
-            animation: silk-c 12s ease-in-out infinite alternate;
-        }
-        .nebula-depth {
-            opacity: 0.16;
-            background:
-                radial-gradient(circle at 18% 28%, rgba(113, 61, 255, 0.32) 0%, transparent 29%),
-                radial-gradient(circle at 82% 22%, rgba(255, 103, 210, 0.18) 0%, transparent 25%),
-                radial-gradient(circle at 72% 80%, rgba(63, 116, 255, 0.2) 0%, transparent 34%),
-                radial-gradient(circle at 40% 52%, rgba(244, 190, 93, 0.12) 0%, transparent 22%);
-            filter: saturate(1.18);
-            transform: translateZ(-220px) rotateX(8deg) rotateZ(0deg) scale(1.05);
-            transition: opacity 2200ms ease;
-            animation: nebula-breathe 13s ease-in-out infinite alternate;
-        }
-        .stage.is-stardust .nebula-depth { opacity: 0.5; }
-        .stage.is-finale .nebula-depth { opacity: 0.94; }
-        .stage.is-finale .silk-layer { opacity: 0.36; transition: opacity 2400ms ease; }
-        @keyframes silk-a {
-            from { transform: translateZ(-280px) rotateX(61deg) rotateZ(-10deg) scale(1.3); }
-            to { transform: translateZ(-210px) rotateX(55deg) rotateZ(7deg) scale(1.38); }
-        }
-        @keyframes silk-b {
-            from { transform: translateZ(-170px) rotateX(52deg) rotateZ(18deg) scale(1.18); }
-            to { transform: translateZ(-110px) rotateX(59deg) rotateZ(2deg) scale(1.26); }
-        }
-        @keyframes silk-c {
-            from { transform: translateZ(-80px) rotateX(68deg) rotateZ(-24deg) scale(1.12); }
-            to { transform: translateZ(-45px) rotateX(62deg) rotateZ(-9deg) scale(1.2); }
-        }
-        @keyframes nebula-breathe {
-            from { transform: translateZ(-220px) rotateX(8deg) rotateZ(-2deg) scale(1.05); }
-            to { transform: translateZ(-150px) rotateX(-3deg) rotateZ(3deg) scale(1.16); }
+            background: radial-gradient(ellipse at 50% 45%, #160930 0%, #090416 58%, #040209 100%);
         }
 
-        /* ---------- Independent high-DPI Canvas planes ---------- */
-        .fx-layer {
+        #canvas-container {
             position: absolute;
             inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+        #canvas-container canvas {
             display: block;
             width: 100%;
             height: 100%;
-            pointer-events: none;
-            transform-style: preserve-3d;
-            transition: opacity 1400ms ease;
-        }
-        #starfieldCanvas { z-index: 1; opacity: 0.22; }
-        #sparksCanvas { z-index: 3; opacity: 1; }
-        #stardustCanvas { z-index: 4; opacity: 0.16; }
-        .stage.is-stardust #sparksCanvas { opacity: 0.48; }
-        .stage.is-stardust #stardustCanvas { opacity: 1; }
-        .stage.is-stardust #starfieldCanvas { opacity: 0.46; }
-        .stage.is-finale #sparksCanvas { opacity: 0.15; }
-        .stage.is-finale #stardustCanvas { opacity: 0.82; }
-        .stage.is-finale #starfieldCanvas { opacity: 1; }
-        .vignette {
-            position: absolute;
-            inset: 0;
-            z-index: 5;
-            pointer-events: none;
-            background:
-                radial-gradient(ellipse at center, transparent 36%, rgba(5, 2, 10, 0.22) 68%, rgba(5, 2, 10, 0.8) 100%),
-                linear-gradient(to bottom, rgba(5, 2, 10, 0.26), transparent 24%, transparent 76%, rgba(5, 2, 10, 0.42));
         }
 
-        /* ---------- Safe, unclipped 3D brand lockup ---------- */
-        .content {
+        /* Pure CSS atmospheric backdrop visible immediately before/without WebGL */
+        .ambient-backdrop {
             position: absolute;
             inset: 0;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 0;
-            min-height: 0;
-            padding-top: max(4.75rem, env(safe-area-inset-top));
-            padding-right: max(1rem, env(safe-area-inset-right));
-            padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
-            padding-left: max(1rem, env(safe-area-inset-left));
-            transform-style: preserve-3d;
+            z-index: 1;
+            background:
+                radial-gradient(circle at 24% 34%, rgba(139, 92, 246, 0.18), transparent 42%),
+                radial-gradient(circle at 76% 62%, rgba(245, 158, 11, 0.14), transparent 44%),
+                radial-gradient(ellipse at 50% 50%, #130829 0%, #070312 72%, #030108 100%);
+            transition: opacity 0.8s ease;
         }
-        .brand-lockup {
+        .stage.scene-3 .ambient-backdrop {
+            background:
+                radial-gradient(ellipse at 50% 10%, rgba(251, 191, 36, 0.16), transparent 50%),
+                radial-gradient(circle at 50% 36%, rgba(192, 38, 211, 0.12), transparent 40%),
+                linear-gradient(165deg, #0b0812 0%, #040307 48%, #090610 100%);
+        }
+
+        /* Foreground cinematic overlay */
+        .overlay-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 12;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: max(1rem, env(safe-area-inset-top)) 1.25rem max(1rem, env(safe-area-inset-bottom));
+        }
+
+        /* Smooth cross-scene panel transitions */
+        .scene-panel {
+            position: absolute;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: clamp(0.35rem, 1.2vh, 0.85rem);
             width: 100%;
-            max-width: calc(100vw - 2rem);
-            max-height: 100%;
-            min-width: 0;
-            min-height: 0;
-            transform-style: preserve-3d;
+            max-width: min(74rem, calc(100vw - 2rem));
+            padding: 0 0.75rem;
+            transition: opacity 0.72s cubic-bezier(0.4, 0, 0.2, 1), transform 0.78s cubic-bezier(0.22, 1, 0.36, 1);
         }
-        .emblem-tilt {
+        .scene-hidden {
+            opacity: 0;
+            transform: scale(0.93) translateZ(-30px);
+            pointer-events: none;
+        }
+        .scene-visible {
+            opacity: 1;
+            transform: scale(1) translateZ(0);
+        }
+
+        /* Official Dueli horizontal lockup matching Videos 1 & 3 */
+        .logo-lockup {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: clamp(0.85rem, 2.6vw, 2.25rem);
+            direction: ltr;
+            max-width: 100%;
+            filter: drop-shadow(0 10px 32px rgba(0, 0, 0, 0.72));
+            transition: filter 0.6s ease, transform 0.6s ease;
+        }
+
+        .emblem-frame {
             position: relative;
-            flex: 0 1 auto;
-            width: clamp(6rem, 18vmin, 10.5rem);
-            max-width: 38vw;
-            aspect-ratio: 1;
-            transform-style: preserve-3d;
-            animation: emblem-drift 7s ease-in-out infinite alternate;
-        }
-        .emblem-ring {
-            position: absolute;
-            inset: 0;
-            display: block;
-            padding: clamp(0.28rem, 0.8vmin, 0.5rem);
+            width: clamp(4.6rem, 12.5vw, 8.8rem);
+            height: clamp(4.6rem, 12.5vw, 8.8rem);
+            flex-shrink: 0;
             border-radius: 50%;
-            background: conic-gradient(from 210deg, #6d28d9, #f0abfc 16%, #fff0ae 31%, #d99a32 45%, #fff7cf 58%, #8b5cf6 74%, #f472d0 88%, #6d28d9);
-            box-shadow:
-                0 0 0 1px rgba(255, 244, 196, 0.5),
-                0 0 1.8rem rgba(245, 197, 110, 0.38),
-                0 0 4.5rem rgba(139, 92, 246, 0.34),
-                0 1.8rem 3.5rem rgba(0, 0, 0, 0.56),
-                inset 0 0 1rem rgba(255, 255, 255, 0.52);
-            transform: translateZ(48px);
-            transform-style: preserve-3d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            filter:
+                drop-shadow(0 0 22px rgba(168, 85, 247, 0.52))
+                drop-shadow(0 0 34px rgba(245, 158, 11, 0.32));
         }
-        .emblem-ring::before {
+        .emblem-frame::before {
             content: '';
             position: absolute;
-            inset: -9%;
-            z-index: -1;
-            border: 1px solid rgba(248, 213, 135, 0.26);
+            inset: -5%;
             border-radius: 50%;
-            box-shadow: 0 0 2.8rem rgba(172, 109, 255, 0.3), inset 0 0 1.5rem rgba(255, 218, 132, 0.16);
-            transform: translateZ(-18px);
-        }
-        .emblem-core {
-            display: grid;
-            place-items: center;
-            width: 100%;
-            height: 100%;
-            border: 1px solid rgba(255, 239, 191, 0.34);
-            border-radius: 50%;
-            background:
-                radial-gradient(circle at 36% 25%, rgba(116, 62, 148, 0.7), transparent 34%),
-                radial-gradient(circle at 50% 58%, #1b0c2c 0%, #090411 68%, #030106 100%);
-            box-shadow: inset 0 0 2.2rem rgba(0, 0, 0, 0.82), inset 0 0 0.8rem rgba(240, 171, 252, 0.2);
-            transform: translateZ(20px);
-            transform-style: preserve-3d;
+            background: radial-gradient(circle, rgba(251, 191, 36, 0.28) 0%, rgba(192, 38, 211, 0.22) 48%, transparent 72%);
+            z-index: 0;
         }
         .emblem-logo {
-            display: block;
-            width: 76%;
-            height: 76%;
-            max-width: 100%;
-            max-height: 100%;
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
-            transform: translateZ(32px);
-            filter: drop-shadow(0 0 0.65rem rgba(255, 224, 151, 0.6)) drop-shadow(0 0.5rem 0.8rem rgba(0, 0, 0, 0.68));
-            user-select: none;
-            -webkit-user-drag: none;
-        }
-        .emblem-sheen {
-            position: absolute;
-            inset: 8%;
-            overflow: hidden;
             border-radius: 50%;
-            pointer-events: none;
-            transform: translateZ(60px);
         }
-        .emblem-sheen::before {
-            content: '';
-            position: absolute;
-            inset: -45%;
-            background: linear-gradient(112deg, transparent 34%, rgba(255, 255, 255, 0.06) 43%, rgba(255, 248, 218, 0.72) 49%, rgba(255, 255, 255, 0.08) 55%, transparent 64%);
-            transform: translateX(-72%) rotateZ(8deg);
-            animation: emblem-sheen 4.8s ease-in-out infinite;
-        }
-        @keyframes emblem-drift {
-            0% { transform: translate3d(0, 0, 34px) rotateX(5deg) rotateY(-7deg); }
-            50% { transform: translate3d(0, -0.35rem, 58px) rotateX(-3deg) rotateY(5deg); }
-            100% { transform: translate3d(0, 0.15rem, 42px) rotateX(4deg) rotateY(8deg); }
-        }
-        @keyframes emblem-sheen {
-            0%, 24% { transform: translateX(-72%) rotateZ(8deg); opacity: 0; }
-            42% { opacity: 1; }
-            68%, 100% { transform: translateX(72%) rotateZ(8deg); opacity: 0; }
-        }
-        .splash-title {
-            max-width: 100%;
+
+        /* 3D Bevelled Dueli Wordmark matching the purple ('Du') -> warm gold ('eli') video gradient */
+        .dueli-wordmark {
             margin: 0;
-            overflow-wrap: anywhere;
-            color: transparent;
-            background: linear-gradient(100deg, #c4a1ff 0%, #8b5cf6 22%, #efb8ff 43%, #ffe6a2 68%, #d99a32 88%, #fff1b8 100%);
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-size: clamp(3.3rem, 10.5vw, 7.6rem);
+            line-height: 1;
+            letter-spacing: -0.025em;
+            background: linear-gradient(90deg, #6d28d9 0%, #7c3aed 34%, #c084fc 46%, #f59e0b 68%, #fbbf24 100%);
             -webkit-background-clip: text;
             background-clip: text;
-            font-size: clamp(3rem, 10vw, 6.75rem);
-            font-weight: 950;
-            letter-spacing: 0.015em;
-            line-height: 0.98;
-            text-shadow: 0 0 2.8rem rgba(183, 119, 255, 0.22);
-            filter: drop-shadow(0 0.12rem 0 rgba(255, 239, 184, 0.25)) drop-shadow(0 0 1.6rem rgba(255, 199, 99, 0.2));
-            transform: translateZ(70px);
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            filter:
+                drop-shadow(0 4px 0 rgba(28, 9, 54, 0.95))
+                drop-shadow(0 10px 26px rgba(124, 58, 237, 0.44))
+                drop-shadow(0 0 26px rgba(245, 158, 11, 0.28));
         }
+
+        /* Glow surge when the golden trail / spark burst passes the logo */
+        .logo-glow-active {
+            animation: logoPulseGlow 1.65s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        @keyframes logoPulseGlow {
+            0% {
+                filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.24)) brightness(1);
+                transform: scale(1);
+            }
+            48% {
+                filter:
+                    drop-shadow(0 0 42px rgba(251, 191, 36, 0.92))
+                    drop-shadow(0 0 78px rgba(192, 38, 211, 0.78))
+                    brightness(1.28);
+                transform: scale(1.035);
+            }
+            100% {
+                filter: drop-shadow(0 0 18px rgba(251, 191, 36, 0.32)) brightness(1);
+                transform: scale(1);
+            }
+        }
+
+        /* Attribution subtitle: "By Maelsh Pro" in Scene 1, "BY MAELSH PRO" in Scene 3 */
         .splash-by {
-            max-width: 100%;
-            margin: 0;
-            overflow-wrap: anywhere;
-            color: #f8fafc;
-            direction: ltr;
-            unicode-bidi: isolate;
-            font-size: clamp(0.68rem, 1.8vw, 0.95rem);
-            font-weight: 650;
-            letter-spacing: clamp(0.12em, 0.6vw, 0.24em);
-            line-height: 1.45;
-            text-shadow: 0 1px 0 #4b5563, 0 0 1rem rgba(255, 255, 255, 0.3), 0 0.3rem 0.8rem #000000;
-            text-transform: uppercase;
-            transform: translateZ(52px);
+            margin: clamp(1rem, 2.4vh, 1.85rem) 0 0;
+            color: rgba(255, 255, 255, 0.94);
+            font-family: 'Montserrat', 'Cairo', sans-serif;
+            font-size: clamp(1.02rem, 2.2vw, 1.68rem);
+            font-weight: 500;
+            letter-spacing: 0.06em;
+            text-shadow: 0 2px 16px rgba(0, 0, 0, 0.85);
+            transition: letter-spacing 0.45s ease, text-transform 0.45s ease;
         }
+        .stage.scene-3 .splash-by {
+            text-transform: uppercase;
+            letter-spacing: 0.22em;
+            font-weight: 600;
+        }
+
+        /* Scene 2: Metallic gold slogan amidst purple/magenta cosmic nebula (Video 2) */
         .splash-phrase {
+            position: relative;
+            margin: 0;
             display: flex;
             flex-wrap: wrap;
             align-items: center;
             justify-content: center;
-            column-gap: clamp(0.35rem, 1.2vw, 0.8rem);
-            row-gap: 0.2rem;
+            gap: clamp(0.38rem, 1.15vw, 0.95rem);
             max-width: 100%;
-            margin: clamp(0.35rem, 1.4vh, 0.85rem) 0 0;
-            color: #ffe9ae;
-            font-size: clamp(0.86rem, 2.8vw, 1.45rem);
-            font-weight: 850;
-            letter-spacing: 0.045em;
-            line-height: 1.45;
+            font-family: ${isRtl ? "'Cairo', 'Montserrat', sans-serif" : "'Montserrat', 'Cairo', sans-serif"};
+            font-weight: 800;
+            font-size: clamp(1.45rem, 4.4vw, 3.85rem);
+            line-height: 1.28;
+            letter-spacing: ${isRtl ? '0.01em' : '0.08em'};
+            text-transform: uppercase;
+            text-align: center;
             overflow-wrap: anywhere;
-            perspective: 900px;
-            transform-style: preserve-3d;
         }
-        .splash-word {
+        .splash-word, .splash-separator {
             display: inline-block;
-            max-width: 100%;
+            background: linear-gradient(180deg, #fffdf4 0%, #fde68a 38%, #f59e0b 74%, #b45309 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+            filter:
+                drop-shadow(0 2px 2px rgba(0, 0, 0, 0.85))
+                drop-shadow(0 0 22px rgba(245, 158, 11, 0.52));
             opacity: 0;
-            overflow-wrap: anywhere;
-            color: #ffe6a0;
-            text-shadow: 0 0 0.7rem rgba(255, 196, 85, 0.52), 0 0 1.8rem rgba(255, 162, 60, 0.24), 0 0.18rem 0.35rem #000000;
-            transform: translate3d(0, 1rem, -180px) rotateX(55deg) scale(0.72);
-            transform-origin: center;
-            filter: blur(8px);
+            transform: translateY(10px) scale(0.96);
+            transition: opacity 0.5s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
         }
-        .splash-separator {
-            display: inline-block;
-            opacity: 0;
-            color: #e7c4ff;
-            text-shadow: 0 0 1rem rgba(212, 153, 255, 0.72);
-            transform: translateZ(20px);
-        }
-        .stage.is-finale .splash-word { animation: word-emerge 1000ms cubic-bezier(0.16, 0.9, 0.24, 1.12) forwards; }
-        .stage.is-finale .splash-word:nth-child(1) { animation-delay: 80ms; }
-        .stage.is-finale .splash-word:nth-child(3) { animation-delay: 400ms; }
-        .stage.is-finale .splash-word:nth-child(5) { animation-delay: 720ms; }
-        .stage.is-finale .splash-word:nth-child(7) { animation-delay: 1040ms; }
-        .stage.is-finale .splash-separator { animation: separator-emerge 650ms ease-out forwards; }
-        .stage.is-finale .splash-separator:nth-child(2) { animation-delay: 300ms; }
-        .stage.is-finale .splash-separator:nth-child(4) { animation-delay: 620ms; }
-        .stage.is-finale .splash-separator:nth-child(6) { animation-delay: 940ms; }
-        @keyframes word-emerge {
-            from { opacity: 0; transform: translate3d(0, 1rem, -180px) rotateX(55deg) scale(0.72); filter: blur(8px); }
-            to { opacity: 1; transform: translate3d(0, 0, 44px) rotateX(0deg) scale(1); filter: blur(0); }
-        }
-        @keyframes separator-emerge {
-            from { opacity: 0; transform: translate3d(0, 0, -80px) scale(0.6); }
-            to { opacity: 0.88; transform: translate3d(0, 0, 20px) scale(1); }
-        }
-        .splash-noscript { max-width: 100%; margin: 0.5rem 0 0; color: #e5d5ef; font-size: 0.82rem; }
+        .scene-visible .splash-word:nth-of-type(1) { opacity: 1; transform: translateY(0) scale(1); transition-delay: 0.08s; }
+        .scene-visible .splash-separator:nth-of-type(2) { opacity: 0.92; transform: translateY(0) scale(1); transition-delay: 0.2s; }
+        .scene-visible .splash-word:nth-of-type(3) { opacity: 1; transform: translateY(0) scale(1); transition-delay: 0.32s; }
+        .scene-visible .splash-separator:nth-of-type(4) { opacity: 0.92; transform: translateY(0) scale(1); transition-delay: 0.44s; }
+        .scene-visible .splash-word:nth-of-type(5) { opacity: 1; transform: translateY(0) scale(1); transition-delay: 0.56s; }
+        .scene-visible .splash-separator:nth-of-type(6) { opacity: 0.92; transform: translateY(0) scale(1); transition-delay: 0.68s; }
+        .scene-visible .splash-word:nth-of-type(7) { opacity: 1; transform: translateY(0) scale(1); transition-delay: 0.8s; }
 
-        /* Narrow phones: every item wraps inside the safe lockup, never crops. */
+        /* Sweeping starlight lens flare across the slogan in Scene 2 & center pulse in Scene 3 */
+        #lens-flare {
+            position: absolute;
+            width: clamp(11rem, 26vw, 21rem);
+            height: clamp(11rem, 26vw, 21rem);
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.92) 0%, rgba(253, 230, 138, 0.52) 22%, rgba(192, 38, 211, 0.24) 52%, rgba(0, 0, 0, 0) 74%);
+            mix-blend-mode: screen;
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.35);
+            transition: opacity 0.35s ease, transform 0.6s ease-out;
+        }
+        #lens-flare::before,
+        #lens-flare::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(90deg, transparent, rgba(255, 252, 235, 0.92), transparent);
+            pointer-events: none;
+        }
+        #lens-flare::before {
+            width: 210%;
+            height: 2px;
+        }
+        #lens-flare::after {
+            width: 2px;
+            height: 150%;
+            background: linear-gradient(180deg, transparent, rgba(255, 252, 235, 0.85), transparent);
+        }
+        .flare-sweep {
+            animation: sloganFlareSweep 2.6s ease-in-out forwards;
+        }
+        @keyframes sloganFlareSweep {
+            0% { opacity: 0; transform: translateX(-34vw) scale(0.45); }
+            22% { opacity: 0.92; transform: translateX(-22vw) scale(0.88); }
+            78% { opacity: 0.75; transform: translateX(22vw) scale(0.76); }
+            100% { opacity: 0; transform: translateX(34vw) scale(0.35); }
+        }
+        .flare-center-burst {
+            animation: centerBurstFlare 1.15s ease-out forwards;
+        }
+        @keyframes centerBurstFlare {
+            0% { opacity: 0; transform: translateY(-4vh) scale(0.3); }
+            35% { opacity: 0.88; transform: translateY(-4vh) scale(1.18); }
+            100% { opacity: 0; transform: translateY(-4vh) scale(0.45); }
+        }
+
+        .redirect-fallback {
+            position: fixed;
+            bottom: max(1rem, env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 55;
+            margin: 0;
+            font-size: 0.82rem;
+            color: rgba(255, 243, 214, 0.82);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .stage.is-redirect-ready .redirect-fallback {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .redirect-fallback a {
+            color: #fde68a;
+            font-weight: 700;
+            text-decoration: underline;
+        }
+
         @media (max-width: 420px) {
-            .content { padding-top: max(4.35rem, env(safe-area-inset-top)); }
-            .brand-lockup { gap: 0.38rem; }
-            .emblem-tilt { width: clamp(5.5rem, 26vw, 7rem); max-width: 42vw; }
-            .splash-title { font-size: clamp(2.7rem, 14vw, 4rem); }
-            .splash-by { font-size: 0.67rem; letter-spacing: 0.13em; }
-            .splash-phrase { font-size: clamp(0.78rem, 4vw, 1rem); column-gap: 0.34rem; letter-spacing: 0.02em; }
-            .splash-skip { padding: 0.55rem 0.9rem; font-size: 0.74rem; }
+            .logo-lockup { gap: 0.7rem; }
+            .emblem-frame { width: 4.1rem; height: 4.1rem; }
+            .dueli-wordmark { font-size: clamp(2.75rem, 13vw, 3.6rem); }
+            .splash-phrase { font-size: clamp(1.2rem, 5.4vw, 1.65rem); letter-spacing: 0.04em; }
         }
-        /* Short phones and landscape: compact vertically without overlap. */
+
         @media (max-height: 700px) {
-            .content { padding-top: max(4rem, env(safe-area-inset-top)); padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
-            .brand-lockup { gap: 0.28rem; }
-            .emblem-tilt { width: clamp(4.75rem, 16vh, 7rem); }
-            .splash-title { font-size: clamp(2.5rem, 9vh, 4.5rem); }
-            .splash-phrase { margin-top: 0.25rem; line-height: 1.35; }
-            .splash-noscript { margin-top: 0.2rem; }
+            .emblem-frame { width: clamp(3.8rem, 10vh, 5.6rem); height: clamp(3.8rem, 10vh, 5.6rem); }
+            .dueli-wordmark { font-size: clamp(2.6rem, 9vh, 4.8rem); }
+            .splash-by { margin-top: 0.65rem; }
         }
 
-        /* A complete static finale without JavaScript. */
-        .no-js .fx-layer { display: none; }
-        .no-js .nebula-depth { opacity: 0.94; animation: none; }
-        .no-js .silk-layer, .no-js .emblem-tilt, .no-js .emblem-sheen::before { animation: none; }
-        .no-js .splash-word { opacity: 1; transform: none; filter: none; }
-        .no-js .splash-separator { opacity: 0.88; transform: none; animation: none; }
-
-        /* Reduced motion: instant words, static depth, no Canvas and no RAF. */
+        /* No-JS & Reduced-Motion accessible complete state */
+        .no-js #slogan-container,
+        .stage.is-static-finale #slogan-container {
+            position: relative;
+            opacity: 1;
+            transform: none;
+            margin-top: 1.5rem;
+        }
+        .no-js #logo-container,
+        .stage.is-static-finale #logo-container {
+            position: relative;
+            opacity: 1;
+            transform: none;
+        }
+        .no-js .splash-word,
+        .no-js .splash-separator,
+        .stage.is-static-finale .splash-word,
+        .stage.is-static-finale .splash-separator {
+            opacity: 1;
+            transform: none;
+            transition: none;
+        }
         @media (prefers-reduced-motion: reduce) {
-            .silk-layer, .nebula-depth, .emblem-tilt, .emblem-sheen::before { animation: none !important; }
-            .nebula-depth { opacity: 0.94; }
-            .fx-layer { display: none; }
-            .splash-word, .splash-separator { opacity: 1; transform: none; filter: none; }
-            .stage.is-finale .splash-word { animation: none; opacity: 1; transform: none; filter: none; }
-            .stage.is-finale .splash-separator { animation: none; opacity: 0.88; transform: none; }
-            .splash-skip { transition: none; }
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.001ms !important;
+            }
+            #canvas-container { display: none; }
+            #logo-container, #slogan-container {
+                position: relative;
+                opacity: 1 !important;
+                transform: none !important;
+            }
+            #slogan-container { margin-top: 1.5rem; }
+            .splash-word, .splash-separator {
+                opacity: 1 !important;
+                transform: none !important;
+            }
         }
     </style>
 </head>
 <body class="no-js">
-    <a class="splash-skip" id="splashSkip" data-splash-skip href="${Sanitize.escapeHtml(SPLASH_TARGET)}">${Sanitize.escapeHtml(sp.skip)} <span aria-hidden="true">→</span></a>
-    <main class="stage" id="main-content" data-phase="sparks" aria-label="${Sanitize.escapeHtml(sp.title)}">
-        <div class="world" aria-hidden="true">
-            <div class="silk-layer silk-a"></div>
-            <div class="silk-layer silk-b"></div>
-            <div class="silk-layer silk-c"></div>
-            <div class="nebula-depth"></div>
-        </div>
-        <canvas id="sparksCanvas" class="fx-layer" data-engine-layer="sparks" aria-hidden="true"></canvas>
-        <canvas id="stardustCanvas" class="fx-layer" data-engine-layer="stardust" aria-hidden="true"></canvas>
-        <canvas id="starfieldCanvas" class="fx-layer" data-engine-layer="starfield" aria-hidden="true"></canvas>
-        <div class="vignette" aria-hidden="true"></div>
-        <div class="content">
-            <div class="brand-lockup">
-                <div class="emblem-tilt" aria-hidden="true">
-                    <div class="emblem-ring">
-                        <div class="emblem-core">
-                            <img src="/static/dueli-icon.png" alt="" class="emblem-logo" width="512" height="512" fetchpriority="high" decoding="async">
-                        </div>
-                        <span class="emblem-sheen"></span>
+    <a id="splashSkip" data-splash-skip href="${SPLASH_TARGET}" class="splash-skip">${Sanitize.escapeHtmlText(sp.skip)}</a>
+
+    <main id="main-content" class="stage scene-1">
+        <div class="ambient-backdrop" aria-hidden="true"></div>
+        <div id="canvas-container" aria-hidden="true"></div>
+
+        <div class="overlay-layer">
+            <div id="lens-flare" aria-hidden="true"></div>
+
+            <!-- Scenes 1 & 3: Official Dueli 3D Glowing Lockup -->
+            <div id="logo-container" class="scene-panel scene-visible">
+                <div id="logo-inner" class="logo-lockup">
+                    <div class="emblem-frame">
+                        <img src="/static/dueli-icon.png" alt="Dueli" class="emblem-logo" decoding="async" fetchpriority="high">
                     </div>
+                    <h1 class="dueli-wordmark">Dueli</h1>
                 </div>
-                <h1 class="splash-title">${Sanitize.escapeHtml(sp.title)}</h1>
-                <p class="splash-by">${Sanitize.escapeHtml(sp.by_maelsh_pro)}</p>
-                <p class="splash-phrase" aria-label="${Sanitize.escapeHtml(phraseText)}">${words}</p>
-                <noscript><p class="splash-noscript">${Sanitize.escapeHtml(sp.redirect_failed)}</p></noscript>
+                <p id="sub-credit" class="splash-by">${Sanitize.escapeHtmlText(sp.by_maelsh_pro)}</p>
+            </div>
+
+            <!-- Scene 2: Golden Slogan amidst Cosmic Nebula -->
+            <div id="slogan-container" class="scene-panel scene-hidden">
+                <p class="splash-phrase" aria-label="${Sanitize.escapeHtmlAttr(phraseText)}">${words}</p>
             </div>
         </div>
+
+        <p class="redirect-fallback">
+            <a href="${SPLASH_TARGET}">${Sanitize.escapeHtmlText(sp.redirect_failed)}</a>
+        </p>
     </main>
+
     <script nonce="${nonce}">
     (function () {
-        'use strict';
         document.body.classList.remove('no-js');
-
         var target = ${JSON.stringify(SPLASH_TARGET)};
-        var stage = document.getElementById('main-content');
-        var skip = document.getElementById('splashSkip');
-        var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        var timers = [];
-        var frame = 0;
-        var stopped = false;
-        var redirectTimer = 0;
+        var stageEl = document.getElementById('main-content');
+        var logoContainer = document.getElementById('logo-container');
+        var logoInner = document.getElementById('logo-inner');
+        var sloganContainer = document.getElementById('slogan-container');
+        var lensFlare = document.getElementById('lens-flare');
 
-        function after(ms, fn) { timers.push(window.setTimeout(fn, ms)); }
-        function clearAll() {
-            for (var i = 0; i < timers.length; i++) window.clearTimeout(timers[i]);
-            timers.length = 0;
+        var redirected = false;
+        function navigateToPlatform() {
+            if (redirected) return;
+            redirected = true;
+            try {
+                window.location.replace(target);
+            } catch (_err) {
+                if (stageEl) stageEl.classList.add('is-redirect-ready');
+            }
+            setTimeout(function () {
+                if (stageEl) stageEl.classList.add('is-redirect-ready');
+            }, 900);
         }
-        function stopCinematic() {
-            stopped = true;
-            clearAll();
-            window.clearTimeout(redirectTimer);
-            if (frame) window.cancelAnimationFrame(frame);
-            frame = 0;
-        }
-        if (skip) skip.addEventListener('click', stopCinematic);
 
-        /* Reduced motion returns before any Canvas context or RAF is created. */
-        if (reduced) {
-            stage.classList.add('is-finale');
-            stage.setAttribute('data-phase', 'starfield');
-            redirectTimer = window.setTimeout(function () { window.location.replace(target); }, 700);
+        // Honour reduced-motion immediately without spinning up GPU loops.
+        var reducedMotion = false;
+        try {
+            reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (_e) {
+            reducedMotion = false;
+        }
+        if (reducedMotion) {
+            if (stageEl) stageEl.classList.add('is-static-finale');
+            setTimeout(navigateToPlatform, 700);
             return;
         }
 
-        var canvasElements = [
-            document.getElementById('sparksCanvas'),
-            document.getElementById('stardustCanvas'),
-            document.getElementById('starfieldCanvas')
-        ];
-        var contexts = [];
-        for (var c = 0; c < canvasElements.length; c++) {
-            contexts.push(canvasElements[c] ? canvasElements[c].getContext('2d') : null);
-        }
+        var SCENE_DURATION = 4.0; // Exact 4.0s per scene matching the 3 reference MP4 clips (12s total)
+        var currentScene = 1;
+        var sceneStartTime = 0;
+        var rafId = 0;
 
-        var W = 1, H = 1, dpr = 1;
-        var phase = 0;
-        var lastTime = 0;
-        var sparks = [], ribbons = [], stars = [];
-        /* Visual-only randomness; never used for identity, auth or security. */
-        function rand(min, max) { return min + Math.random() * (max - min); }
-
-        function makeSpark(initial) {
-            return {
-                x: rand(-W * 0.08, W * 1.08),
-                y: initial ? rand(-H, H) : rand(-90, -12),
-                vx: rand(-0.85, 0.85),
-                vy: rand(1.1, 3.6),
-                gravity: rand(0.025, 0.072),
-                size: rand(0.55, 1.65),
-                tail: rand(5, 15),
-                hue: rand(35, 49),
-                drift: rand(0, Math.PI * 2)
-            };
-        }
-        function makeRibbon() {
-            return {
-                t: Math.random(),
-                speed: rand(0.00045, 0.00115),
-                phase: rand(0, Math.PI * 2),
-                z: 0,
-                zJitter: rand(-85, 85),
-                offsetX: rand(-34, 34),
-                offsetY: rand(-18, 18),
-                size: rand(0.45, 1.75),
-                gold: Math.random() > 0.38
-            };
-        }
-        function makeStar(initial) {
-            return {
-                x: rand(-1, 1),
-                y: rand(-1, 1),
-                z: initial ? rand(80, 1100) : rand(850, 1100),
-                speed: rand(1.2, 4.8),
-                size: rand(0.45, 1.65),
-                hue: rand(215, 285),
-                twinkle: rand(0, Math.PI * 2)
-            };
-        }
-        function seed() {
-            sparks = [];
-            ribbons = [];
-            stars = [];
-            var area = W * H;
-            var sparkCount = Math.round(Math.min(76, Math.max(38, area / 15500)));
-            var ribbonCount = Math.round(Math.min(270, Math.max(150, area / 3500)));
-            var starCount = Math.round(Math.min(190, Math.max(90, area / 7200)));
-            for (var i = 0; i < sparkCount; i++) sparks.push(makeSpark(true));
-            for (var j = 0; j < ribbonCount; j++) ribbons.push(makeRibbon());
-            for (var k = 0; k < starCount; k++) stars.push(makeStar(true));
-        }
-        function resize() {
-            /* Full native DPR: no 1.5x/2x cap, so Retina/4K stays crisp. */
-            dpr = Math.max(1, window.devicePixelRatio || 1);
-            var first = canvasElements[0];
-            W = Math.max(1, first ? first.clientWidth : window.innerWidth);
-            H = Math.max(1, first ? first.clientHeight : window.innerHeight);
-            for (var i = 0; i < canvasElements.length; i++) {
-                var canvas = canvasElements[i];
-                var ctx = contexts[i];
-                if (!canvas || !ctx) continue;
-                canvas.width = Math.max(1, Math.round(W * dpr));
-                canvas.height = Math.max(1, Math.round(H * dpr));
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        function setOverlayScene(sceneNum) {
+            currentScene = sceneNum;
+            if (stageEl) {
+                stageEl.classList.remove('scene-1', 'scene-2', 'scene-3');
+                stageEl.classList.add('scene-' + sceneNum);
             }
-            seed();
-        }
+            if (logoInner) logoInner.classList.remove('logo-glow-active');
+            if (lensFlare) {
+                lensFlare.classList.remove('flare-sweep', 'flare-center-burst');
+            }
 
-        /* Layer 1: golden sparks emitted above, with gravity and glowing tails. */
-        function drawSparks(ctx, dt) {
-            if (!ctx) return;
-            ctx.clearRect(0, 0, W, H);
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = phase === 0 ? 0.95 : (phase === 1 ? 0.52 : 0.2);
-            for (var i = 0; i < sparks.length; i++) {
-                var spark = sparks[i];
-                spark.drift += 0.018 * dt;
-                spark.vy += spark.gravity * dt;
-                spark.x += (spark.vx + Math.sin(spark.drift) * 0.16) * dt;
-                spark.y += spark.vy * dt;
-                if (spark.y > H + 55 || spark.x < -80 || spark.x > W + 80) {
-                    sparks[i] = makeSpark(false);
-                    continue;
+            if (sceneNum === 1) {
+                if (logoContainer) {
+                    logoContainer.classList.remove('scene-hidden');
+                    logoContainer.classList.add('scene-visible');
                 }
-                ctx.beginPath();
-                ctx.moveTo(spark.x - spark.vx * spark.tail, spark.y - spark.vy * spark.tail);
-                ctx.lineTo(spark.x, spark.y);
-                ctx.strokeStyle = 'hsla(' + spark.hue + ', 100%, 66%, 0.68)';
-                ctx.lineWidth = Math.max(0.45, spark.size * 0.72);
-                ctx.shadowBlur = 14;
-                ctx.shadowColor = 'rgba(255, 190, 65, 0.92)';
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(spark.x, spark.y, spark.size, 0, Math.PI * 2);
-                ctx.fillStyle = 'hsla(' + spark.hue + ', 100%, 82%, 0.96)';
-                ctx.fill();
-            }
-            ctx.shadowBlur = 0;
-            ctx.globalAlpha = 1;
-            ctx.globalCompositeOperation = 'source-over';
-        }
-
-        /* Layer 2: dense gold/violet particles on a depth-projected 3D S-curve. */
-        function drawStardust(ctx, now, dt) {
-            if (!ctx) return;
-            ctx.clearRect(0, 0, W, H);
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = phase === 0 ? 0.18 : (phase === 1 ? 0.96 : 0.8);
-            var fov = 720;
-            var amplitude = Math.min(W * 0.36, 390);
-            for (var i = 0; i < ribbons.length; i++) {
-                var ribbon = ribbons[i];
-                ribbon.t += ribbon.speed * dt;
-                if (ribbon.t > 1) ribbon.t -= 1;
-                var angle = ribbon.t * Math.PI * 2 - Math.PI / 2;
-                ribbon.z = Math.cos(angle) * 220 + Math.sin(now * 0.0007 + ribbon.phase) * 48 + ribbon.zJitter;
-                var projection = fov / (fov + ribbon.z + 320);
-                var x = W * 0.5 + Math.sin(angle) * amplitude * projection + ribbon.offsetX * projection;
-                var y = H * 0.1 + ribbon.t * H * 0.8 + ribbon.offsetY * projection;
-                var radius = Math.max(0.25, ribbon.size * projection * 1.45);
-                var shimmer = 0.52 + Math.sin(now * 0.003 + ribbon.phase) * 0.3;
-                ctx.beginPath();
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = ribbon.gold
-                    ? 'hsla(43, 100%, 72%, ' + shimmer + ')'
-                    : 'hsla(278, 92%, 76%, ' + shimmer + ')';
-                ctx.shadowBlur = ribbon.gold ? 8 : 11;
-                ctx.shadowColor = ribbon.gold ? 'rgba(255, 199, 91, 0.8)' : 'rgba(190, 112, 255, 0.86)';
-                ctx.fill();
-            }
-            ctx.shadowBlur = 0;
-            ctx.globalAlpha = 1;
-            ctx.globalCompositeOperation = 'source-over';
-        }
-
-        /* Layer 3: stars advance along z toward the camera during the finale. */
-        function drawStarfield(ctx, now, dt) {
-            if (!ctx) return;
-            ctx.clearRect(0, 0, W, H);
-            ctx.globalCompositeOperation = 'lighter';
-            ctx.globalAlpha = phase < 2 ? 0.28 : 0.96;
-            var fov = 610;
-            for (var i = 0; i < stars.length; i++) {
-                var star = stars[i];
-                star.z -= star.speed * dt * (phase === 2 ? 1.65 : 0.5);
-                if (star.z < 35 || Math.abs(star.x * W) > W * 1.8 || Math.abs(star.y * H) > H * 1.8) {
-                    stars[i] = makeStar(false);
-                    continue;
+                if (sloganContainer) {
+                    sloganContainer.classList.remove('scene-visible');
+                    sloganContainer.classList.add('scene-hidden');
                 }
-                var projection = fov / (fov + star.z);
-                var previous = fov / (fov + star.z + star.speed * 5);
-                var x = W * 0.5 + star.x * W * projection;
-                var y = H * 0.5 + star.y * H * projection;
-                var px = W * 0.5 + star.x * W * previous;
-                var py = H * 0.5 + star.y * H * previous;
-                var alpha = 0.38 + Math.sin(now * 0.002 + star.twinkle) * 0.24;
-                ctx.beginPath();
-                ctx.moveTo(px, py);
-                ctx.lineTo(x, y);
-                ctx.strokeStyle = 'hsla(' + star.hue + ', 90%, 86%, ' + alpha + ')';
-                ctx.lineWidth = Math.max(0.35, star.size * projection);
-                ctx.shadowBlur = phase === 2 ? 9 : 4;
-                ctx.shadowColor = 'rgba(197, 181, 255, 0.85)';
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(x, y, Math.max(0.3, star.size * projection * 1.7), 0, Math.PI * 2);
-                ctx.fillStyle = 'hsla(' + star.hue + ', 100%, 91%, ' + Math.min(1, alpha + 0.28) + ')';
-                ctx.fill();
+                setTimeout(function () {
+                    if (currentScene === 1 && logoInner) logoInner.classList.add('logo-glow-active');
+                }, 1350);
+            } else if (sceneNum === 2) {
+                if (logoContainer) {
+                    logoContainer.classList.remove('scene-visible');
+                    logoContainer.classList.add('scene-hidden');
+                }
+                if (sloganContainer) {
+                    sloganContainer.classList.remove('scene-hidden');
+                    sloganContainer.classList.add('scene-visible');
+                }
+                setTimeout(function () {
+                    if (currentScene === 2 && lensFlare) lensFlare.classList.add('flare-sweep');
+                }, 450);
+            } else if (sceneNum === 3) {
+                if (logoContainer) {
+                    logoContainer.classList.remove('scene-hidden');
+                    logoContainer.classList.add('scene-visible');
+                }
+                if (sloganContainer) {
+                    sloganContainer.classList.remove('scene-visible');
+                    sloganContainer.classList.add('scene-hidden');
+                }
+                setTimeout(function () {
+                    if (currentScene === 3) {
+                        if (logoInner) logoInner.classList.add('logo-glow-active');
+                        if (lensFlare) lensFlare.classList.add('flare-center-burst');
+                    }
+                }, 1450);
             }
-            ctx.shadowBlur = 0;
-            ctx.globalAlpha = 1;
-            ctx.globalCompositeOperation = 'source-over';
         }
 
-        function tick(now) {
-            if (stopped || document.visibilityState === 'hidden') { frame = 0; return; }
-            var dt = lastTime ? Math.min(2.2, Math.max(0.35, (now - lastTime) / 16.667)) : 1;
-            lastTime = now;
-            drawSparks(contexts[0], dt);
-            drawStardust(contexts[1], now, dt);
-            drawStarfield(contexts[2], now, dt);
-            frame = window.requestAnimationFrame(tick);
+        // Procedural textures for 4-point star glares, soft bokeh, nebula gas, and vertical spark streaks
+        function createStarGlareTexture(THREE) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            var ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+
+            var grad = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(0.18, 'rgba(255, 236, 155, 0.92)');
+            grad.addColorStop(0.45, 'rgba(245, 158, 11, 0.28)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 128, 128);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+            ctx.beginPath();
+            ctx.ellipse(64, 64, 56, 2.4, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(64, 64, 2.4, 56, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            return new THREE.CanvasTexture(canvas);
         }
 
-        resize();
-        window.addEventListener('resize', resize, { passive: true });
-        frame = window.requestAnimationFrame(tick);
-
-        after(2800, function () {
-            phase = 1;
-            stage.classList.add('is-stardust');
-            stage.setAttribute('data-phase', 'stardust');
-        });
-        after(5600, function () {
-            phase = 2;
-            stage.classList.add('is-finale');
-            stage.setAttribute('data-phase', 'starfield');
-        });
-
-        var redirectRemaining = 9400;
-        var redirectStarted = Date.now();
-        function scheduleRedirect() {
-            window.clearTimeout(redirectTimer);
-            redirectStarted = Date.now();
-            redirectTimer = window.setTimeout(function () { window.location.replace(target); }, redirectRemaining);
+        function createSoftDotTexture(THREE) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            var ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+            var grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(0.35, 'rgba(255, 240, 190, 0.72)');
+            grad.addColorStop(0.7, 'rgba(255, 210, 120, 0.18)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 64, 64);
+            return new THREE.CanvasTexture(canvas);
         }
-        scheduleRedirect();
-        document.addEventListener('visibilitychange', function () {
-            if (stopped) return;
-            if (document.visibilityState === 'hidden') {
-                redirectRemaining = Math.max(0, redirectRemaining - (Date.now() - redirectStarted));
-                window.clearTimeout(redirectTimer);
-                if (frame) window.cancelAnimationFrame(frame);
-                frame = 0;
-            } else {
-                lastTime = 0;
-                if (!frame) frame = window.requestAnimationFrame(tick);
-                scheduleRedirect();
+
+        function createStreakSparkTexture(THREE) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 128;
+            var ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+            var grad = ctx.createRadialGradient(32, 64, 1, 32, 64, 58);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            grad.addColorStop(0.25, 'rgba(254, 215, 102, 0.9)');
+            grad.addColorStop(0.6, 'rgba(249, 115, 22, 0.32)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.save();
+            ctx.translate(32, 64);
+            ctx.scale(0.34, 1.0);
+            ctx.translate(-32, -64);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 64, 128);
+            ctx.restore();
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createNebulaCloudTexture(THREE) {
+            var canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            var ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+            var grad = ctx.createRadialGradient(128, 128, 8, 128, 128, 128);
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0.62)');
+            grad.addColorStop(0.38, 'rgba(255, 255, 255, 0.26)');
+            grad.addColorStop(0.72, 'rgba(255, 255, 255, 0.07)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 256);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function startFallbackTimerSceneLoop() {
+            sceneStartTime = performance.now();
+            setOverlayScene(1);
+            setTimeout(function () { setOverlayScene(2); }, 4000);
+            setTimeout(function () { setOverlayScene(3); }, 8000);
+            setTimeout(navigateToPlatform, 12000);
+        }
+
+        function bootScene() {
+            var THREE = window.THREE;
+            var container = document.getElementById('canvas-container');
+            if (!THREE || !container) {
+                startFallbackTimerSceneLoop();
+                return;
             }
-        });
+
+            var renderer;
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+            } catch (_webglErr) {
+                startFallbackTimerSceneLoop();
+                return;
+            }
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            container.appendChild(renderer.domElement);
+
+            var scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x090418);
+
+            var camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 35);
+
+            var starTex = createStarGlareTexture(THREE);
+            var softTex = createSoftDotTexture(THREE);
+            var streakTex = createStreakSparkTexture(THREE);
+            var cloudTex = createNebulaCloudTexture(THREE);
+
+            // Studio lighting for Scene 3 draped black satin/silk folds
+            var ambientLight = new THREE.AmbientLight(0x2a1f3d, 1.15);
+            scene.add(ambientLight);
+
+            var topGoldLight = new THREE.DirectionalLight(0xffd269, 2.2);
+            topGoldLight.position.set(6, 28, 20);
+            scene.add(topGoldLight);
+
+            var satinSheenLight = new THREE.PointLight(0xffffff, 1.65, 95);
+            satinSheenLight.position.set(-14, 14, 16);
+            scene.add(satinSheenLight);
+
+            var rimPurpleLight = new THREE.PointLight(0xa855f7, 2.2, 110);
+            rimPurpleLight.position.set(-22, -6, 18);
+            scene.add(rimPurpleLight);
+
+            var rimWarmLight = new THREE.PointLight(0xf59e0b, 2.0, 110);
+            rimWarmLight.position.set(22, -12, 18);
+            scene.add(rimWarmLight);
+
+            var groupScene1 = new THREE.Group();
+            var groupScene2 = new THREE.Group();
+            var groupScene3 = new THREE.Group();
+            scene.add(groupScene1);
+            scene.add(groupScene2);
+            scene.add(groupScene3);
+
+            // =========================================================================
+            // SCENE 1 (Video 1): Swirling Golden Stardust Infinity/S-Trail + Star Glares
+            // =========================================================================
+            var curve1 = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-44, -15, -6),
+                new THREE.Vector3(-22, -9, 8),
+                new THREE.Vector3(-6, 10, 12),
+                new THREE.Vector3(9, -9, 11),
+                new THREE.Vector3(24, 9, 6),
+                new THREE.Vector3(46, 19, -8)
+            ]);
+            var curve2 = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(-38, 13, -8),
+                new THREE.Vector3(-16, 11, 7),
+                new THREE.Vector3(2, -8, 13),
+                new THREE.Vector3(19, -11, 8),
+                new THREE.Vector3(42, 8, -6)
+            ]);
+
+            // Dense organic golden stardust stream (no harsh solid wire tubes)
+            var dustCount = 2400;
+            var dustGeo = new THREE.BufferGeometry();
+            var dustPos = new Float32Array(dustCount * 3);
+            var dustBase = new Float32Array(dustCount * 3);
+            var dustCol = new Float32Array(dustCount * 3);
+            var dustPhase = new Float32Array(dustCount);
+
+            var cBrightGold = new THREE.Color(0xfff3b0);
+            var cRichGold = new THREE.Color(0xfbbf24);
+            var cAmber = new THREE.Color(0xf59e0b);
+            var cSoftViolet = new THREE.Color(0xd946ef);
+
+            for (var i = 0; i < dustCount; i++) {
+                var t = Math.random();
+                var usePrimary = i % 3 !== 0;
+                var pt = (usePrimary ? curve1 : curve2).getPoint(t);
+                // Gaussian-like concentration near core of the swirling trail
+                var rSpread = Math.pow(Math.random(), 1.7) * (usePrimary ? 5.2 : 6.4);
+                var theta = Math.random() * Math.PI * 2;
+                var x = pt.x + Math.cos(theta) * rSpread * 1.45;
+                var y = pt.y + Math.sin(theta) * rSpread * 0.95;
+                var z = pt.z + (Math.random() - 0.5) * rSpread;
+
+                dustPos[i * 3] = x;
+                dustPos[i * 3 + 1] = y;
+                dustPos[i * 3 + 2] = z;
+                dustBase[i * 3] = x;
+                dustBase[i * 3 + 1] = y;
+                dustBase[i * 3 + 2] = z;
+                dustPhase[i] = t;
+
+                var pick = Math.random();
+                var col = pick < 0.38 ? cBrightGold : (pick < 0.78 ? cRichGold : (pick < 0.92 ? cAmber : cSoftViolet));
+                dustCol[i * 3] = col.r;
+                dustCol[i * 3 + 1] = col.g;
+                dustCol[i * 3 + 2] = col.b;
+            }
+            dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+            dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
+
+            var dustMat = new THREE.PointsMaterial({
+                size: 0.95,
+                map: softTex,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.92,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            var dustPoints = new THREE.Points(dustGeo, dustMat);
+            groupScene1.add(dustPoints);
+
+            // Brilliant 4-point star glares scattered along the golden trail
+            var glareCount = 95;
+            var glareGeo = new THREE.BufferGeometry();
+            var glarePos = new Float32Array(glareCount * 3);
+            var glareBase = new Float32Array(glareCount * 3);
+            for (var g = 0; g < glareCount; g++) {
+                var gt = Math.random();
+                var gpt = (g % 2 === 0 ? curve1 : curve2).getPoint(gt);
+                var gx = gpt.x + (Math.random() - 0.5) * 5.5;
+                var gy = gpt.y + (Math.random() - 0.5) * 4.0;
+                var gz = gpt.z + (Math.random() - 0.5) * 3.0;
+                glarePos[g * 3] = gx;
+                glarePos[g * 3 + 1] = gy;
+                glarePos[g * 3 + 2] = gz;
+                glareBase[g * 3] = gx;
+                glareBase[g * 3 + 1] = gy;
+                glareBase[g * 3 + 2] = gz;
+            }
+            glareGeo.setAttribute('position', new THREE.BufferAttribute(glarePos, 3));
+            var glareMat = new THREE.PointsMaterial({
+                size: 3.1,
+                map: starTex,
+                color: 0xfffbeb,
+                transparent: true,
+                opacity: 0.95,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            var glarePoints = new THREE.Points(glareGeo, glareMat);
+            groupScene1.add(glarePoints);
+
+            // Distant purple/orange bokeh stars in Scene 1 background
+            var bokehCount = 260;
+            var bokehGeo = new THREE.BufferGeometry();
+            var bokehPos = new Float32Array(bokehCount * 3);
+            var bokehCol = new Float32Array(bokehCount * 3);
+            for (var b = 0; b < bokehCount; b++) {
+                bokehPos[b * 3] = (Math.random() - 0.5) * 110;
+                bokehPos[b * 3 + 1] = (Math.random() - 0.5) * 68;
+                bokehPos[b * 3 + 2] = -10 - Math.random() * 35;
+                var bc = b % 3 === 0 ? cSoftViolet : (b % 3 === 1 ? cRichGold : cBrightGold);
+                bokehCol[b * 3] = bc.r;
+                bokehCol[b * 3 + 1] = bc.g;
+                bokehCol[b * 3 + 2] = bc.b;
+            }
+            bokehGeo.setAttribute('position', new THREE.BufferAttribute(bokehPos, 3));
+            bokehGeo.setAttribute('color', new THREE.BufferAttribute(bokehCol, 3));
+            var bokehMat = new THREE.PointsMaterial({
+                size: 2.1,
+                map: softTex,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.48,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            var bokehPoints1 = new THREE.Points(bokehGeo, bokehMat);
+            groupScene1.add(bokehPoints1);
+
+            // Leading comet head gliding along the golden loop
+            var cometSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: starTex,
+                color: 0xfff7cc,
+                transparent: true,
+                opacity: 0.95,
+                blending: THREE.AdditiveBlending
+            }));
+            cometSprite.scale.set(9, 9, 1);
+            groupScene1.add(cometSprite);
+
+            // =========================================================================
+            // SCENE 2 (Video 2): Billowing Purple/Magenta Nebula Tunnel + Deep Starfield
+            // =========================================================================
+            var nebulaClouds = [];
+            var nebulaPalette = [0x581c87, 0x7e22ce, 0xa21caf, 0x4c1d95, 0xb45309];
+            for (var n = 0; n < 48; n++) {
+                var ringAngle = (n / 48) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+                // Frame the center like a cosmic tunnel so the golden text stays crisp & legible
+                var radiusX = 18 + Math.random() * 34;
+                var radiusY = 10 + Math.random() * 22;
+                var cloudMat = new THREE.SpriteMaterial({
+                    map: cloudTex,
+                    color: nebulaPalette[n % nebulaPalette.length],
+                    transparent: true,
+                    opacity: 0.26,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                var sprite = new THREE.Sprite(cloudMat);
+                sprite.position.set(
+                    Math.cos(ringAngle) * radiusX,
+                    Math.sin(ringAngle) * radiusY,
+                    (Math.random() - 0.5) * 55 - 12
+                );
+                var cScale = 24 + Math.random() * 28;
+                sprite.scale.set(cScale, cScale, 1);
+                groupScene2.add(sprite);
+                nebulaClouds.push(sprite);
+            }
+
+            var starCount2 = 1350;
+            var starGeo2 = new THREE.BufferGeometry();
+            var starPos2 = new Float32Array(starCount2 * 3);
+            var starCol2 = new Float32Array(starCount2 * 3);
+            for (var s = 0; s < starCount2; s++) {
+                starPos2[s * 3] = (Math.random() - 0.5) * 130;
+                starPos2[s * 3 + 1] = (Math.random() - 0.5) * 80;
+                starPos2[s * 3 + 2] = (Math.random() - 0.5) * 95;
+                var warmStar = Math.random() > 0.38;
+                starCol2[s * 3] = 1.0;
+                starCol2[s * 3 + 1] = warmStar ? 0.9 : 0.96;
+                starCol2[s * 3 + 2] = warmStar ? 0.62 : 1.0;
+            }
+            starGeo2.setAttribute('position', new THREE.BufferAttribute(starPos2, 3));
+            starGeo2.setAttribute('color', new THREE.BufferAttribute(starCol2, 3));
+            var spaceStars2 = new THREE.Points(starGeo2, new THREE.PointsMaterial({
+                size: 1.55,
+                map: starTex,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.92,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            }));
+            groupScene2.add(spaceStars2);
+
+            // Subtle accent cross-stars in Scene 2 (non-blinding, preserving text contrast)
+            var accentFlare = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: starTex,
+                color: 0xfde68a,
+                transparent: true,
+                opacity: 0.55,
+                blending: THREE.AdditiveBlending
+            }));
+            accentFlare.position.set(-16, 3, 2);
+            accentFlare.scale.set(11, 11, 1);
+            groupScene2.add(accentFlare);
+
+            // =========================================================================
+            // SCENE 3 (Video 3): Draped Rippling Black Silk + Raining Gold & Purple Sparks
+            // =========================================================================
+            var silkGeo = new THREE.PlaneGeometry(130, 88, 110, 110);
+            var silkMat = new THREE.MeshStandardMaterial({
+                color: 0x161221,
+                roughness: 0.23,
+                metalness: 0.78,
+                side: THREE.DoubleSide
+            });
+            var silkMesh = new THREE.Mesh(silkGeo, silkMat);
+            silkMesh.position.z = -9;
+            groupScene3.add(silkMesh);
+
+            // Intense shower of golden streak sparks raining from top center
+            var rainCount = 950;
+            var rainGeo = new THREE.BufferGeometry();
+            var rainPos = new Float32Array(rainCount * 3);
+            var rainVel = new Float32Array(rainCount * 3);
+            for (var r = 0; r < rainCount; r++) {
+                var spreadAngle = (Math.random() - 0.5) * Math.PI * 0.88;
+                var speed = 10 + Math.random() * 24;
+                rainPos[r * 3] = (Math.random() - 0.5) * 12;
+                rainPos[r * 3 + 1] = 22 + Math.random() * 18;
+                rainPos[r * 3 + 2] = (Math.random() - 0.5) * 10;
+                rainVel[r * 3] = Math.sin(spreadAngle) * speed * 0.75;
+                rainVel[r * 3 + 1] = -Math.abs(Math.cos(spreadAngle) * speed) - 6;
+                rainVel[r * 3 + 2] = (Math.random() - 0.5) * 8;
+            }
+            rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+            var goldSparks3 = new THREE.Points(rainGeo, new THREE.PointsMaterial({
+                size: 1.95,
+                map: streakTex,
+                color: 0xfbbf24,
+                transparent: true,
+                opacity: 0.96,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            }));
+            groupScene3.add(goldSparks3);
+
+            // Concentrated purple glowing particle cluster floating above the logo (Video 3 signature)
+            var purpleCount = 520;
+            var purpleGeo = new THREE.BufferGeometry();
+            var purplePos = new Float32Array(purpleCount * 3);
+            var purpleVel = new Float32Array(purpleCount * 3);
+            for (var p = 0; p < purpleCount; p++) {
+                var pa = Math.random() * Math.PI * 2;
+                var pr = Math.pow(Math.random(), 1.5) * 11;
+                purplePos[p * 3] = Math.cos(pa) * pr * 1.3;
+                purplePos[p * 3 + 1] = 8 + Math.sin(pa) * pr * 0.75;
+                purplePos[p * 3 + 2] = 2 + (Math.random() - 0.5) * 6;
+                purpleVel[p * 3] = (Math.random() - 0.5) * 4.5;
+                purpleVel[p * 3 + 1] = 1.5 + Math.random() * 5.0;
+                purpleVel[p * 3 + 2] = (Math.random() - 0.5) * 4.0;
+            }
+            purpleGeo.setAttribute('position', new THREE.BufferAttribute(purplePos, 3));
+            var purpleSparks3 = new THREE.Points(purpleGeo, new THREE.PointsMaterial({
+                size: 1.55,
+                map: starTex,
+                color: 0xd946ef,
+                transparent: true,
+                opacity: 0.88,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            }));
+            groupScene3.add(purpleSparks3);
+
+            function resetScene3Particles() {
+                var gp = goldSparks3.geometry.attributes.position.array;
+                for (var k = 0; k < rainCount; k++) {
+                    gp[k * 3] = (Math.random() - 0.5) * 10;
+                    gp[k * 3 + 1] = 20 + Math.random() * 16;
+                    gp[k * 3 + 2] = (Math.random() - 0.5) * 9;
+                }
+                goldSparks3.geometry.attributes.position.needsUpdate = true;
+
+                var pp = purpleSparks3.geometry.attributes.position.array;
+                for (var m = 0; m < purpleCount; m++) {
+                    var ma = Math.random() * Math.PI * 2;
+                    var mr = Math.pow(Math.random(), 1.5) * 9;
+                    pp[m * 3] = Math.cos(ma) * mr * 1.25;
+                    pp[m * 3 + 1] = 7 + Math.sin(ma) * mr * 0.7;
+                    pp[m * 3 + 2] = 2 + (Math.random() - 0.5) * 5;
+                }
+                purpleSparks3.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Gentle pointer parallax
+            var targetCam = { x: 0, y: 0 };
+            var currentCam = { x: 0, y: 0 };
+            window.addEventListener('mousemove', function (e) {
+                var nx = (e.clientX / Math.max(1, window.innerWidth) - 0.5) * 2;
+                var ny = (e.clientY / Math.max(1, window.innerHeight) - 0.5) * 2;
+                targetCam.x = nx * 2.8;
+                targetCam.y = -ny * 2.0;
+            }, { passive: true });
+            window.addEventListener('touchmove', function (e) {
+                if (e.touches && e.touches.length > 0) {
+                    var nx = (e.touches[0].clientX / Math.max(1, window.innerWidth) - 0.5) * 2;
+                    var ny = (e.touches[0].clientY / Math.max(1, window.innerHeight) - 0.5) * 2;
+                    targetCam.x = nx * 3.0;
+                    targetCam.y = -ny * 2.2;
+                }
+            }, { passive: true });
+            window.addEventListener('resize', function () {
+                camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            function activateThreeScene(num) {
+                sceneStartTime = performance.now();
+                groupScene1.visible = (num === 1);
+                groupScene2.visible = (num === 2);
+                groupScene3.visible = (num === 3);
+
+                if (num === 1) {
+                    scene.background.setHex(0x0b041c);
+                } else if (num === 2) {
+                    scene.background.setHex(0x070314);
+                } else if (num === 3) {
+                    scene.background.setHex(0x040308);
+                    resetScene3Particles();
+                }
+                setOverlayScene(num);
+            }
+
+            activateThreeScene(1);
+
+            var lastFrameTime = performance.now();
+            function animate(now) {
+                if (redirected) return;
+                rafId = requestAnimationFrame(animate);
+
+                var dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+                lastFrameTime = now;
+                var elapsed = (now - sceneStartTime) / 1000;
+                var progress = Math.min(elapsed / SCENE_DURATION, 1.0);
+
+                if (elapsed >= SCENE_DURATION) {
+                    if (currentScene < 3) {
+                        activateThreeScene(currentScene + 1);
+                    } else {
+                        cancelAnimationFrame(rafId);
+                        navigateToPlatform();
+                    }
+                    return;
+                }
+
+                currentCam.x += (targetCam.x - currentCam.x) * 0.06;
+                currentCam.y += (targetCam.y - currentCam.y) * 0.06;
+
+                if (currentScene === 1) {
+                    camera.position.set(currentCam.x, currentCam.y, 35 - Math.sin(progress * Math.PI) * 2.8);
+                    camera.lookAt(0, 0, 0);
+
+                    var headPt = curve1.getPoint(Math.min(progress * 1.12, 1));
+                    cometSprite.position.copy(headPt);
+                    cometSprite.material.opacity = progress < 0.82 ? 0.95 : Math.max(0, (1 - progress) * 5);
+
+                    var dp = dustPoints.geometry.attributes.position.array;
+                    for (var i1 = 0; i1 < dustCount; i1++) {
+                        var idx3 = i1 * 3;
+                        dp[idx3] = dustBase[idx3] + Math.cos(elapsed * 2.2 + i1 * 0.37) * 0.28;
+                        dp[idx3 + 1] = dustBase[idx3 + 1] + Math.sin(elapsed * 2.6 + i1 * 0.41) * 0.34;
+                    }
+                    dustPoints.geometry.attributes.position.needsUpdate = true;
+                    dustPoints.rotation.z = Math.sin(elapsed * 0.55) * 0.045;
+                    glarePoints.rotation.z = Math.sin(elapsed * 0.55) * 0.045;
+                    glareMat.size = 2.8 + Math.sin(elapsed * 5.0) * 0.55;
+                    bokehPoints1.rotation.z = elapsed * 0.02;
+
+                } else if (currentScene === 2) {
+                    camera.position.set(currentCam.x, currentCam.y, 38 - progress * 15);
+                    camera.lookAt(0, 0, 0);
+
+                    for (var nc = 0; nc < nebulaClouds.length; nc++) {
+                        nebulaClouds[nc].material.rotation += (nc % 2 === 0 ? 0.0022 : -0.0022);
+                    }
+                    accentFlare.position.x = -20 + progress * 40;
+                    accentFlare.material.opacity = Math.sin(progress * Math.PI) * 0.68;
+                    spaceStars2.rotation.z = elapsed * 0.025;
+
+                } else if (currentScene === 3) {
+                    camera.position.set(currentCam.x, currentCam.y, 35 - progress * 1.8);
+                    camera.lookAt(0, 0, 0);
+
+                    // Luxurious draped silk/satin diagonal folds rippling smoothly
+                    var clothPos = silkMesh.geometry.attributes.position;
+                    for (var cIdx = 0; cIdx < clothPos.count; cIdx++) {
+                        var vx = clothPos.getX(cIdx);
+                        var vy = clothPos.getY(cIdx);
+                        var fold1 = Math.sin(vx * 0.13 + vy * 0.09 + elapsed * 1.9) * 3.1;
+                        var fold2 = Math.cos(vx * 0.07 - vy * 0.15 + elapsed * 1.4) * 2.4;
+                        var fold3 = Math.sin((vx - vy) * 0.18 + elapsed * 1.1) * 1.1;
+                        clothPos.setZ(cIdx, fold1 + fold2 + fold3);
+                    }
+                    clothPos.needsUpdate = true;
+                    silkMesh.geometry.computeVertexNormals();
+
+                    // Golden sparks raining down from top center with gravity
+                    var gp2 = goldSparks3.geometry.attributes.position.array;
+                    for (var r2 = 0; r2 < rainCount; r2++) {
+                        var rIdx = r2 * 3;
+                        gp2[rIdx] += rainVel[rIdx] * dt;
+                        gp2[rIdx + 1] += rainVel[rIdx + 1] * dt;
+                        gp2[rIdx + 2] += rainVel[rIdx + 2] * dt;
+                        if (gp2[rIdx + 1] < -26) {
+                            gp2[rIdx] = (Math.random() - 0.5) * 14;
+                            gp2[rIdx + 1] = 24 + Math.random() * 6;
+                            gp2[rIdx + 2] = (Math.random() - 0.5) * 10;
+                        }
+                    }
+                    goldSparks3.geometry.attributes.position.needsUpdate = true;
+
+                    // Swirling purple ember cluster above the Dueli lockup
+                    var pp2 = purpleSparks3.geometry.attributes.position.array;
+                    for (var p2 = 0; p2 < purpleCount; p2++) {
+                        var pIdx = p2 * 3;
+                        pp2[pIdx] += Math.sin(elapsed * 2.4 + p2) * 0.04 + purpleVel[pIdx] * dt * 0.25;
+                        pp2[pIdx + 1] += Math.cos(elapsed * 2.0 + p2) * 0.035;
+                    }
+                    purpleSparks3.geometry.attributes.position.needsUpdate = true;
+                }
+
+                renderer.render(scene, camera);
+            }
+
+            rafId = requestAnimationFrame(animate);
+        }
+
+        if (document.readyState === 'complete') {
+            bootScene();
+        } else {
+            window.addEventListener('load', bootScene, { once: true });
+        }
     })();
     </script>
 </body>

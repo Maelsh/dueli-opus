@@ -267,11 +267,11 @@ describe('UNIT41.1 — /welcome cinematic gate (UNIT38 contract kept)', () => {
         for (const w of ['ارتقِ', 'تثقف', 'استمتع', 'اربح']) expect(ar).toContain(w);
     });
 
-    it('no external 3D library is shipped; the canvas particle layer is local', async () => {
+    it('the 3-scene showcase mounts a local canvas container without control-bar bloat', async () => {
         const html = await (await get('/welcome?lang=en')).text();
-        expect(html).toContain('<canvas');
-        expect(html.toLowerCase()).not.toContain('three.js');
-        expect(html.toLowerCase()).not.toContain('webgl');
+        expect(html).toContain('id="canvas-container"');
+        expect(html).not.toContain('id="start-modal"');
+        expect(html).not.toContain('id="btn-scene-1"');
         expect(html.toLowerCase()).not.toContain('babylon');
     });
 });
