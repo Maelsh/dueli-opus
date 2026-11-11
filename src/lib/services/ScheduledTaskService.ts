@@ -437,17 +437,27 @@ export class ScheduledTaskService {
     }
 
     /**
-     * Rule B (Scheduled, has opponent but not started): free all bound users,
-     * cancel with reason 'scheduled_not_started_1hr' and notify both
+     * Rule B (Scheduled, has opponent but not started): cancel with reason
+     * 'scheduled_not_started_1hr', then free all bound users and notify both
      * participants. No-op if scheduled_at is missing or less than 1 hour past.
      *
      * UNIT41.2-P4 (incident remediation): synthetic competitions are exempt;
      * the read guard and the cancellation UPDATE carry the real-record
      * predicate.
+     *
+     * UNIT41.2-P4 hardening (PR #163 review): the cancellation transition is
+     * the FIRST side effect and is compare-and-swapped against the eligible
+     * pre-start state — 'pending'/'accepted' with an opponent still bound and
+     * the real-record predicate. A row that concurrently moved to 'live',
+     * 'completed' or 'cancelled' between the read above and now matches zero
+     * rows, and unless the UPDATE changed exactly one row the operation
+     * returns with NO side effect at all (no user release, no notifications).
+     * Previously the users were released and notifications were sent even
+     * when the cancellation itself never happened.
      */
     async cancelScheduledNotStarted(competitionId: number): Promise<void> {
         const competition = await this.db.prepare(`
-            SELECT id, creator_id, opponent_id, scheduled_at FROM competitions
+            SELECT id, creator_id, opponent_id, status, scheduled_at FROM competitions
             WHERE id = ? AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).first() as any;
 
@@ -456,14 +466,21 @@ export class ScheduledTaskService {
         const scheduledTime = new Date(competition.scheduled_at).getTime();
         if ((Date.now() - scheduledTime) / (1000 * 60 * 60) < 1) return;
 
+        // Transition first, compare-and-swapped on the eligible pre-start
+        // state. Zero changes ⇒ the row concurrently left the eligible state ⇒
+        // stop here with zero side effects.
+        const cancelled = await this.db.prepare(`
+            UPDATE competitions
+            SET status = 'cancelled', auto_deleted_reason = 'scheduled_not_started_1hr', updated_at = datetime('now')
+            WHERE id = ? AND status IN ('pending', 'accepted') AND opponent_id IS NOT NULL
+              AND COALESCE(is_fake, 0) = 0
+        `).bind(competitionId).run();
+
+        if (Number(cancelled?.meta?.changes ?? 0) !== 1) return;
+
         await this.db.prepare(`
             UPDATE users SET is_busy = 0, current_competition_id = NULL, busy_since = NULL
             WHERE current_competition_id = ?
-        `).bind(competitionId).run();
-
-        await this.db.prepare(`
-            UPDATE competitions SET status = 'cancelled', auto_deleted_reason = 'scheduled_not_started_1hr', updated_at = datetime('now')
-            WHERE id = ? AND COALESCE(is_fake, 0) = 0
         `).bind(competitionId).run();
 
         const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
@@ -640,11 +657,29 @@ export class ScheduledTaskService {
             // Has opponent but hasn't started - cancel after 1 hour post-schedule
             await this.cancelScheduledNotStarted(competition.id);
         } else {
-            // Generic: cancel old pending competitions
-            await this.db.prepare(`
+            // Generic fallback. The dispatch above consumes every pre-start
+            // shape (Rule A: instant w/o opponent; Rule B: scheduled w/o
+            // opponent; cancelScheduledNotStarted: opponent bound + pre-start
+            // status), so what reaches here is an opponent-bearing row whose
+            // CURRENT status is no longer pre-start — a stale task that raced
+            // a transition to 'live'/'completed'.
+            //
+            // UNIT41.2-P4 hardening (PR #163 review): such a task must never
+            // cancel the row. The transition is compare-and-swapped on the
+            // exact pre-start status read above with the real-record
+            // predicate; unless it changes exactly one row the operation
+            // stops with NO side effects (no notifications, no user release).
+            // A stale task can therefore never cancel a competition that
+            // already moved to 'live' or 'completed'.
+            const expectedStatus = String(competition.status ?? '');
+            if (expectedStatus !== 'pending' && expectedStatus !== 'accepted') return;
+
+            const transitioned = await this.db.prepare(`
                 UPDATE competitions SET status = 'cancelled', updated_at = datetime('now')
-                WHERE id = ? AND COALESCE(is_fake, 0) = 0
-            `).bind(task.competition_id).run();
+                WHERE id = ? AND status = ? AND COALESCE(is_fake, 0) = 0
+            `).bind(task.competition_id, expectedStatus).run();
+
+            if (Number(transitioned?.meta?.changes ?? 0) !== 1) return;
 
             const userIds = [competition.creator_id, competition.opponent_id].filter(Boolean);
             for (const userId of userIds) {

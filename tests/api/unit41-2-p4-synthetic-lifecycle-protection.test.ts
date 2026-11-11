@@ -12,6 +12,12 @@
  * - The final UPDATE in the shared live-limit operation carries the
  *   real-record predicate, so a bypassed read guard still cannot write a
  *   synthetic row.
+ * - PR #163 review hardening: `cancelScheduledNotStarted` performs the
+ *   cancellation transition FIRST (compare-and-swap on the eligible
+ *   pre-start state) and gates every side effect on `meta.changes === 1`;
+ *   the generic `handleAutoDelete` fallback is compare-and-swapped on the
+ *   exact pre-start status read, so a stale task can never cancel a row
+ *   that concurrently moved to 'live'/'completed'.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import app from '../../src/main';
@@ -98,6 +104,103 @@ function stripIsFakeFromRead(base: SqliteD1): D1Database {
         },
         batch: (statements: never[]) => base.batch(statements as never),
     } as unknown as D1Database;
+}
+
+/**
+ * Simulates a concurrent transition between a function's read and its UPDATE:
+ * the intercepted SELECT returns the row exactly as it was read, and the
+ * stored row is flipped to 'live' immediately afterwards — before the
+ * caller's next write runs. `matchSql` must uniquely identify the read.
+ */
+function flipToLiveAfterRead(base: SqliteD1, matchSql: string, competitionId: number): D1Database {
+    const original = base.prepare.bind(base);
+    const flip = async (): Promise<void> => {
+        await base.prepare(`UPDATE competitions SET status = 'live' WHERE id = ?`)
+            .bind(competitionId).run();
+    };
+    return {
+        prepare(sql: string) {
+            const stmt = original(sql);
+            if (sql.includes(matchSql)) {
+                return {
+                    async first<T = any>(): Promise<T | null> {
+                        const value = await stmt.first<T>();
+                        await flip();
+                        return value as T | null;
+                    },
+                    bind(...params: unknown[]) {
+                        const bound = stmt.bind(...params);
+                        return {
+                            async first<T = any>(): Promise<T | null> {
+                                const value = await bound.first<T>();
+                                await flip();
+                                return value as T | null;
+                            },
+                        };
+                    },
+                };
+            }
+            return stmt;
+        },
+        batch: (statements: never[]) => base.batch(statements as never),
+    } as unknown as D1Database;
+}
+
+/**
+ * Same race, end-to-end through the task engine: the pending-task scan reads
+ * the row (and its status snapshot) as it was, then the row flips to 'live'
+ * before `handleAutoDelete` re-reads it.
+ */
+function flipToLiveAfterTaskScan(base: SqliteD1, competitionId: number): D1Database {
+    const original = base.prepare.bind(base);
+    const flip = async (): Promise<void> => {
+        await base.prepare(`UPDATE competitions SET status = 'live' WHERE id = ?`)
+            .bind(competitionId).run();
+    };
+    return {
+        prepare(sql: string) {
+            const stmt = original(sql);
+            if (sql.includes('FROM competition_scheduled_tasks t')) {
+                return {
+                    async all<T = any>(): Promise<{ results: T[]; success: boolean; meta: Record<string, unknown> }> {
+                        const value = await stmt.all<T>();
+                        await flip();
+                        return value;
+                    },
+                    bind(...params: unknown[]) {
+                        const bound = stmt.bind(...params);
+                        return {
+                            async all<T = any>(): Promise<{ results: T[]; success: boolean; meta: Record<string, unknown> }> {
+                                const value = await bound.all<T>();
+                                await flip();
+                                return value;
+                            },
+                        };
+                    },
+                };
+            }
+            return stmt;
+        },
+        batch: (statements: never[]) => base.batch(statements as never),
+    } as unknown as D1Database;
+}
+
+async function bindUser(db: SqliteD1, userId: number, competitionId: number): Promise<void> {
+    await db.prepare(
+        `UPDATE users SET is_busy = 1, current_competition_id = ?, busy_since = datetime('now') WHERE id = ?`,
+    ).bind(competitionId, userId).run();
+}
+
+async function boundCompetition(db: SqliteD1, userId: number): Promise<number | null> {
+    const u = await db.prepare(`SELECT current_competition_id FROM users WHERE id = ?`)
+        .bind(userId).first<{ current_competition_id: number | null }>();
+    return u?.current_competition_id ?? null;
+}
+
+async function notificationCount(db: SqliteD1, competitionId: number): Promise<number> {
+    const n = await db.prepare(`SELECT COUNT(*) AS n FROM notifications WHERE reference_id = ?`)
+        .bind(competitionId).first<{ n: number }>();
+    return n?.n ?? 0;
 }
 
 describe('UNIT41.2-P4 — synthetic lifecycle protection', () => {
@@ -294,5 +397,145 @@ describe('UNIT41.2-P4 — synthetic lifecycle protection', () => {
         await handleLifecycleTimers({ DB: d1(db) });
         // NULL ⇒ real ⇒ the 2h live limit still applies.
         expect((await row(db, nullFake))?.status).toBe('completed');
+    });
+
+    it('8. not-started path race: status flips to live between read and UPDATE ⇒ zero side effects', async () => {
+        const comp = await insertCompetition(db, {
+            title: 'P4 race not-started', status: 'accepted', type: 'scheduled',
+            isFake: 0, opponent: 4, createdAt: hoursAgo(3), scheduledAt: hoursAgo(2),
+        });
+        await bindUser(db, 4, comp);
+
+        // The function reads the row as 'accepted', then the row concurrently
+        // flips to 'live' before the cancellation UPDATE runs: the
+        // compare-and-swap must match zero rows and the operation must stop
+        // with no side effects at all.
+        const svc = new ScheduledTaskService(
+            flipToLiveAfterRead(db, 'status, scheduled_at FROM competitions', comp),
+        );
+        await svc.cancelScheduledNotStarted(comp);
+
+        const r = await row(db, comp);
+        expect(r.status).toBe('live');
+        expect(r.auto_deleted_reason).toBeNull();
+        expect(await notificationCount(db, comp)).toBe(0);
+        expect(await boundCompetition(db, 4)).toBe(comp);
+    });
+
+    it('9. not-started path: real eligible still cancels (behavior preserved); already-live real stays untouched', async () => {
+        const eligible = await insertCompetition(db, {
+            title: 'P4 real eligible not-started', status: 'accepted', type: 'scheduled',
+            isFake: 0, opponent: 4, createdAt: hoursAgo(3), scheduledAt: hoursAgo(2),
+        });
+        await bindUser(db, 4, eligible);
+
+        const svc = new ScheduledTaskService(d1(db));
+        await svc.cancelScheduledNotStarted(eligible);
+
+        const e = await row(db, eligible);
+        expect(e.status).toBe('cancelled');
+        expect(e.auto_deleted_reason).toBe('scheduled_not_started_1hr');
+        expect(await notificationCount(db, eligible)).toBe(2);
+        expect(await boundCompetition(db, 4)).toBeNull();
+
+        // A real competition whose live transition completed BEFORE the
+        // trigger ran is never cancelled by it (stale trigger protection).
+        const live = await insertCompetition(db, {
+            title: 'P4 real already-live', status: 'live', type: 'scheduled',
+            isFake: 0, opponent: 4, createdAt: hoursAgo(5), startedAt: hoursAgo(3),
+            scheduledAt: hoursAgo(2),
+        });
+        await svc.cancelScheduledNotStarted(live);
+        const l = await row(db, live);
+        expect(l.status).toBe('live');
+        expect(l.auto_deleted_reason).toBeNull();
+        expect(await notificationCount(db, live)).toBe(0);
+    });
+
+    it('10. generic path: stale task never cancels a competition that moved to live/completed', async () => {
+        const svc = new ScheduledTaskService(d1(db));
+        for (const status of ['live', 'completed']) {
+            const comp = await insertCompetition(db, {
+                title: `P4 stale task ${status}`, status, type: 'scheduled',
+                isFake: 0, opponent: 4, createdAt: hoursAgo(5), startedAt: hoursAgo(3),
+            });
+            await bindUser(db, 4, comp);
+
+            // Stale task snapshot: competition_status still says 'pending'.
+            await (svc as any).handleAutoDelete({
+                competition_id: comp, competition_status: 'pending',
+                creator_id: 2, opponent_id: 4,
+            });
+
+            const r = await row(db, comp);
+            expect(r.status).toBe(status);
+            expect(r.auto_deleted_reason).toBeNull();
+            expect(await notificationCount(db, comp)).toBe(0);
+            expect(await boundCompetition(db, 4)).toBe(comp);
+        }
+    });
+
+    it('11. engine race: row flips after the task scan ⇒ stale task has zero lifecycle effects', async () => {
+        const comp = await insertCompetition(db, {
+            title: 'P4 engine race', status: 'accepted', type: 'scheduled',
+            isFake: 0, opponent: 4, createdAt: hoursAgo(3), scheduledAt: hoursAgo(2),
+        });
+        await db.prepare(
+            `INSERT INTO competition_scheduled_tasks (competition_id, task_type, execute_at, status, created_at)
+             VALUES (?, 'auto_delete_if_not_live', datetime('now', '-1 minute'), 'pending', datetime('now'))`,
+        ).bind(comp).run();
+        await bindUser(db, 4, comp);
+
+        // The task scan reads the row as 'accepted'; the row flips to 'live'
+        // before handleAutoDelete re-reads it. The stale task must not cancel.
+        const result = await new ScheduledTaskService(flipToLiveAfterTaskScan(db, comp)).processPendingTasks();
+        expect(result.errors).toBe(0);
+
+        const r = await row(db, comp);
+        expect(r.status).toBe('live');
+        expect(r.auto_deleted_reason).toBeNull();
+        expect(await notificationCount(db, comp)).toBe(0);
+        expect(await boundCompetition(db, 4)).toBe(comp);
+
+        // The task itself is consumed (engine bookkeeping) but produced no
+        // lifecycle effect.
+        const task = await db.prepare(
+            `SELECT status FROM competition_scheduled_tasks WHERE competition_id = ? AND task_type = 'auto_delete_if_not_live'`,
+        ).bind(comp).first<{ status: string }>();
+        expect(task?.status).toBe('completed');
+    });
+
+    it('12. hardened paths: synthetic stays protected; NULL is_fake is still honored as real', async () => {
+        const svc = new ScheduledTaskService(d1(db));
+
+        const syntheticAccepted = await insertCompetition(db, {
+            title: 'P4 synthetic not-started', status: 'accepted', type: 'scheduled',
+            isFake: 1, opponent: 4, createdAt: hoursAgo(3), scheduledAt: hoursAgo(2),
+        });
+        await svc.cancelScheduledNotStarted(syntheticAccepted);
+        expect((await row(db, syntheticAccepted))?.status).toBe('accepted');
+        expect(await notificationCount(db, syntheticAccepted)).toBe(0);
+
+        const syntheticLive = await insertCompetition(db, {
+            title: 'P4 synthetic generic', status: 'live', type: 'scheduled',
+            isFake: 1, opponent: 4, createdAt: hoursAgo(5), startedAt: hoursAgo(3),
+        });
+        await (svc as any).handleAutoDelete({
+            competition_id: syntheticLive, competition_status: 'pending',
+            creator_id: 2, opponent_id: 4,
+        });
+        expect((await row(db, syntheticLive))?.status).toBe('live');
+        expect(await notificationCount(db, syntheticLive)).toBe(0);
+
+        // NULL is_fake ⇒ real ⇒ the not-started rules still apply.
+        const nullFake = await insertCompetition(db, {
+            title: 'P4 null not-started', status: 'accepted', type: 'scheduled',
+            isFake: 0, opponent: 4, createdAt: hoursAgo(3), scheduledAt: hoursAgo(2),
+        });
+        await db.prepare(`UPDATE competitions SET is_fake = NULL WHERE id = ?`).bind(nullFake).run();
+        await svc.cancelScheduledNotStarted(nullFake);
+        const nf = await row(db, nullFake);
+        expect(nf.status).toBe('cancelled');
+        expect(nf.auto_deleted_reason).toBe('scheduled_not_started_1hr');
     });
 });
